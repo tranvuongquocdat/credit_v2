@@ -43,19 +43,24 @@ export function calculatePaymentPeriods(credit: Credit): CreditPaymentPeriod[] {
   
   const periods: CreditPaymentPeriod[] = [];
   
+  // Khởi tạo mảng để lưu trữ các kỳ thanh toán
+  let currentStartDate = startDate;
+
   for (let i = 0; i < totalPeriods; i++) {
-    // Xác định ngày bắt đầu của kỳ đóng lãi
-    // Kỳ đầu tiên bắt đầu từ ngày vay
-    // Các kỳ tiếp theo bắt đầu từ ngày kết thúc kỳ trước
-    const periodStartDate = i === 0 
-      ? startDate 
-      : addDays(startDate, i * interest_period);
+    // Mỗi kỳ bắt đầu ngay khi kỳ trước kết thúc 
+    // (hoặc từ startDate nếu là kỳ đầu tiên)
+    const periodStartDate = currentStartDate;
       
     // Ngày kết thúc kỳ = ngày bắt đầu + kỳ lãi phí
     const periodEndDate = addDays(periodStartDate, interest_period);
     
     // Đảm bảo kỳ cuối cùng không vượt quá ngày kết thúc hợp đồng
     const actualEndDate = isBefore(endDate, periodEndDate) ? endDate : periodEndDate;
+    
+    // Cập nhật ngày bắt đầu cho kỳ tiếp theo
+    // Kỳ tiếp theo sẽ bắt đầu từ ngày kết thúc của kỳ này (actualEndDate) + 1 ngày
+    // Sử dụng addDays(actualEndDate, 1) để tránh trùng lắp ngày giữa các kỳ
+    currentStartDate = addDays(actualEndDate, 1);
     
     periods.push({
       id: '', // ID sẽ được DB tạo khi insert
@@ -159,4 +164,53 @@ export function recalculatePeriodNumbers(periods: CreditPaymentPeriod[]): Credit
     ...period,
     period_number: index + 1
   }));
+}
+
+/**
+ * Tính toán số tiền dự kiến dựa trên khoảng thời gian
+ */
+export function calculateExpectedAmountForDateRange(
+  credit: Credit,
+  startDate: Date,
+  endDate: Date
+): number {
+  const { 
+    loan_amount, 
+    interest_type, 
+    interest_value,
+    interest_period
+  } = credit;
+  
+  // Normalize dates to calculate exact calendar days (not 24-hour periods)
+  const normalizedStartDate = new Date(
+    startDate.getFullYear(),
+    startDate.getMonth(),
+    startDate.getDate()
+  );
+  const normalizedEndDate = new Date(
+    endDate.getFullYear(),
+    endDate.getMonth(),
+    endDate.getDate()
+  );
+  
+  // Tính số ngày trong khoảng thời gian (bao gồm cả 2 ngày đầu và cuối)
+  const days = differenceInDays(normalizedEndDate, normalizedStartDate) + 1;
+  
+  // Tính số tiền lãi dựa trên số ngày
+  let amount = 0;
+  
+  if (interest_type === InterestType.PERCENTAGE) {
+    // Nếu là lãi suất phần trăm
+    // Số tiền lãi chuẩn cho 1 ngày
+    const dailyInterestRate = interest_value / 100 / 30; // Lãi suất hàng ngày
+    
+    // Công thức: Số tiền vay * lãi suất hàng ngày * số ngày * interest_period (30 ngày)
+    amount = loan_amount * dailyInterestRate * days * 30;
+  } else {
+    // Nếu là số tiền cố định, tính tỷ lệ theo ngày
+    const dailyAmount = interest_value / interest_period;
+    amount = dailyAmount * days * interest_period;
+  }
+  
+  return Math.round(amount);
 }

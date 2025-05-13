@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
+import { Sidebar } from '@/components/Sidebar';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
@@ -31,7 +32,8 @@ import { PaymentPeriodManager } from '@/components/Credit';
 
 export default function ViewCreditPage({ params }: { params: { id: string } }) {
   const router = useRouter();
-  const { id } = params;
+  const resolvedParams = use(params as unknown as Promise<{ id: string }>);
+  const { id } = resolvedParams;
   
   const [credit, setCredit] = useState<CreditWithCustomer | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -68,7 +70,7 @@ export default function ViewCreditPage({ params }: { params: { id: string } }) {
         
         // Tính toán thông tin lãi suất
         if (data) {
-          const interestCalc = calculateCreditInterest(data as Credit);
+          const interestCalc = calculateCreditInterest(data);
           
           // Chuyển đổi kết quả từ calculateCreditInterest để phù hợp với state
           const daysRemaining = Math.max(0, data.loan_period - interestCalc.daysElapsed);
@@ -196,10 +198,13 @@ export default function ViewCreditPage({ params }: { params: { id: string } }) {
 
   if (isLoading) {
     return (
-      <div className="container flex items-center justify-center py-20">
-        <div className="text-center">
-          <Loader2 className="h-10 w-10 animate-spin mx-auto text-primary" />
-          <p className="mt-4 text-lg text-gray-500">Đang tải thông tin hợp đồng...</p>
+      <div className="flex h-screen">
+        <Sidebar />
+        <div className="flex-1 ml-64 p-8">
+          <div className="flex items-center justify-center h-full flex-col">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            <p className="mt-4 text-lg text-gray-500">Đang tải thông tin hợp đồng...</p>
+          </div>
         </div>
       </div>
     );
@@ -207,14 +212,17 @@ export default function ViewCreditPage({ params }: { params: { id: string } }) {
 
   if (error) {
     return (
-      <div className="container py-10">
-        <div className="bg-red-50 border border-red-400 text-red-700 px-4 py-3 rounded" role="alert">
-          <p className="font-bold">Lỗi</p>
-          <p>{error}</p>
-          <div className="mt-4">
-            <Button onClick={() => router.push('/credits')} variant="outline">
-              Quay lại danh sách hợp đồng
-            </Button>
+      <div className="flex h-screen">
+        <Sidebar />
+        <div className="flex-1 ml-64 p-8">
+          <div className="bg-red-50 border border-red-400 text-red-700 px-4 py-3 rounded" role="alert">
+            <p className="font-bold">Lỗi</p>
+            <p>{error}</p>
+            <div className="mt-4">
+              <Button onClick={() => router.push('/credits')} variant="outline">
+                Quay lại danh sách hợp đồng
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -223,14 +231,17 @@ export default function ViewCreditPage({ params }: { params: { id: string } }) {
 
   if (!credit) {
     return (
-      <div className="container py-10">
-        <div className="bg-yellow-50 border border-yellow-400 text-yellow-700 px-4 py-3 rounded" role="alert">
-          <p className="font-bold">Không tìm thấy hợp đồng</p>
-          <p>Hợp đồng bạn đang tìm kiếm không tồn tại hoặc đã bị xóa.</p>
-          <div className="mt-4">
-            <Button onClick={() => router.push('/credits')} variant="outline">
-              Quay lại danh sách hợp đồng
-            </Button>
+      <div className="flex h-screen">
+        <Sidebar />
+        <div className="flex-1 ml-64 p-8">
+          <div className="bg-yellow-50 border border-yellow-400 text-yellow-700 px-4 py-3 rounded" role="alert">
+            <p className="font-bold">Không tìm thấy hợp đồng</p>
+            <p>Hợp đồng bạn đang tìm kiếm không tồn tại hoặc đã bị xóa.</p>
+            <div className="mt-4">
+              <Button onClick={() => router.push('/credits')} variant="outline">
+                Quay lại danh sách hợp đồng
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -238,58 +249,61 @@ export default function ViewCreditPage({ params }: { params: { id: string } }) {
   }
 
   return (
-    <div className="container py-6">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center">
-          <Button 
-            variant="ghost" 
-            onClick={() => router.push('/credits')}
-            className="mr-2"
-          >
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Quay lại
-          </Button>
-          <h1 className="text-2xl font-semibold">Chi tiết hợp đồng tín chấp</h1>
-        </div>
-        <div className="flex space-x-2">
-          <Button 
-            variant="outline"
-            onClick={() => router.push(`/credits/edit/${id}`)}
-          >
-            <EditIcon className="h-4 w-4 mr-2" />
-            Chỉnh sửa
-          </Button>
-          <Button 
-            variant="outline"
-            onClick={() => setIsStatusDialogOpen(true)}
-          >
-            <FilePenLine className="h-4 w-4 mr-2" />
-            Thay đổi trạng thái
-          </Button>
-          <Button 
-            variant="destructive"
-            onClick={() => setIsDeleteDialogOpen(true)}
-          >
-            <XCircle className="h-4 w-4 mr-2" />
-            Xóa hợp đồng
-          </Button>
-        </div>
+    <div className="flex h-screen">
+      <Sidebar />
+      <div className="flex-1 ml-64 p-8 overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center">
+            <Button 
+              variant="ghost" 
+              onClick={() => router.push('/credits')}
+              className="mr-2"
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Quay lại
+            </Button>
+            <h1 className="text-2xl font-semibold">Chi tiết hợp đồng tín chấp</h1>
+          </div>
+          <div className="flex space-x-2">
+            <Button 
+              variant="outline"
+              onClick={() => router.push(`/credits/edit/${id}`)}
+            >
+              <EditIcon className="h-4 w-4 mr-2" />
+              Chỉnh sửa
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={() => setIsStatusDialogOpen(true)}
+            >
+              <FilePenLine className="h-4 w-4 mr-2" />
+              Thay đổi trạng thái
+            </Button>
+            <Button 
+              variant="destructive"
+              onClick={() => setIsDeleteDialogOpen(true)}
+            >
+              <XCircle className="h-4 w-4 mr-2" />
+              Xóa hợp đồng
+            </Button>
+          </div>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        {/* Thông tin hợp đồng */}
-        <Card className="md:col-span-2">
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Thông tin hợp đồng */}
+          <Card className="md:col-span-2">
           <CardHeader>
-            <CardTitle>Thông tin hợp đồng #{credit.contract_code || credit.id.substring(0, 8)}</CardTitle>
+            <CardTitle>Thông tin hợp đồng #{credit?.contract_code || credit?.id?.substring(0, 8)}</CardTitle>
             <CardDescription>
-              Hợp đồng được tạo ngày {credit.created_at ? format(new Date(credit.created_at), 'dd/MM/yyyy', { locale: vi }) : '-'}
+              Hợp đồng được tạo ngày {credit?.created_at ? format(new Date(credit.created_at), 'dd/MM/yyyy', { locale: vi }) : '-'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Trạng thái hợp đồng */}
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium text-gray-500">Trạng thái hợp đồng:</span>
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(credit.status as CreditStatus)}`}>
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(credit?.status as CreditStatus)}`}>
                 {getStatusText(credit.status as CreditStatus)}
               </span>
             </div>
@@ -297,58 +311,58 @@ export default function ViewCreditPage({ params }: { params: { id: string } }) {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Số tiền vay</h3>
-                <p className="text-lg font-semibold">{formatCurrency(credit.loan_amount)}</p>
+                <p className="text-lg font-semibold">{formatCurrency(credit?.loan_amount || 0)}</p>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Thời gian vay</h3>
-                <p className="text-lg font-semibold">{credit.loan_period} ngày</p>
+                <p className="text-lg font-semibold">{credit?.loan_period || 0} ngày</p>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Hình thức lãi</h3>
                 <p className="text-lg font-semibold">
-                  {credit.interest_type === InterestType.PERCENTAGE ? 'Theo phần trăm (%)' : 'Số tiền cố định'}
+                  {credit?.interest_type === InterestType.PERCENTAGE ? 'Theo phần trăm (%)' : 'Số tiền cố định'}
                 </p>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Giá trị lãi</h3>
                 <p className="text-lg font-semibold">
-                  {credit.interest_type === InterestType.PERCENTAGE 
-                    ? `${credit.interest_value}%` 
-                    : formatCurrency(credit.interest_value)}
+                  {credit?.interest_type === InterestType.PERCENTAGE 
+                    ? `${credit?.interest_value}%` 
+                    : formatCurrency(credit?.interest_value || 0)}
                 </p>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Kỳ lãi phí</h3>
-                <p className="text-lg font-semibold">{credit.interest_period} ngày/kỳ</p>
+                <p className="text-lg font-semibold">{credit?.interest_period || 0} ngày/kỳ</p>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Ngày vay</h3>
                 <p className="text-lg font-semibold">
-                  {credit.loan_date ? format(new Date(credit.loan_date), 'dd/MM/yyyy', { locale: vi }) : '-'}
+                  {credit?.loan_date ? format(new Date(credit.loan_date), 'dd/MM/yyyy', { locale: vi }) : '-'}
                 </p>
               </div>
             </div>
             
             {/* Tài sản thế chấp */}
-            {credit.collateral && (
+            {credit?.collateral && (
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Tài sản thế chấp</h3>
-                <p className="text-base">{credit.collateral}</p>
+                <p className="text-base">{credit?.collateral}</p>
               </div>
             )}
             
             {/* Ghi chú */}
-            {credit.notes && (
+            {credit?.notes && (
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Ghi chú</h3>
-                <p className="text-base">{credit.notes}</p>
+                <p className="text-base">{credit?.notes}</p>
               </div>
             )}
           </CardContent>
-        </Card>
+          </Card>
         
-        {/* Thông tin lãi suất */}
-        <Card>
+          {/* Thông tin lãi suất */}
+          <Card>
           <CardHeader>
             <CardTitle>Thông tin tính toán</CardTitle>
             <CardDescription>
@@ -441,9 +455,10 @@ export default function ViewCreditPage({ params }: { params: { id: string } }) {
           </div>
         </CardContent>
       </Card>
-      
-      {/* Quản lý kỳ đóng lãi */}
-      {credit && (
+        </div>
+
+        {/* Quản lý kỳ đóng lãi */}
+        {credit && (
         <Card className="mt-6">
           <CardHeader>
             <CardTitle>Quản lý kỳ đóng lãi</CardTitle>
@@ -486,8 +501,8 @@ export default function ViewCreditPage({ params }: { params: { id: string } }) {
         </AlertDialogContent>
       </AlertDialog>
       
-      {/* Dialog thay đổi trạng thái */}
-      <AlertDialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
+        {/* Dialog thay đổi trạng thái */}
+        <AlertDialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Thay đổi trạng thái hợp đồng</AlertDialogTitle>
@@ -548,7 +563,8 @@ export default function ViewCreditPage({ params }: { params: { id: string } }) {
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
+        </AlertDialog>
+      </div>
     </div>
   );
 }

@@ -52,9 +52,12 @@ export function MarkAsPaidDialog({
   // Khởi tạo form khi mở dialog
   useEffect(() => {
     if (period) {
+      // Sử dụng ngày bắt đầu của kỳ làm ngày mặc định thay vì ngày hiện tại
+      const startDate = new Date(period.start_date);
+      
       setFormData({
         actual_amount: period.expected_amount,
-        payment_date: new Date(),
+        payment_date: startDate,
         notes: ''
       });
     }
@@ -180,7 +183,14 @@ export function MarkAsPaidDialog({
                 <Calendar
                   mode="single"
                   selected={formData.payment_date}
+                  month={formData.payment_date} // Hiển thị đúng tháng của ngày được chọn
                   onSelect={handleDateChange}
+                  disabled={{
+                    // Không cho phép chọn ngày trước ngày bắt đầu của kỳ
+                    before: new Date(period.start_date),
+                    // Không cho phép chọn ngày trong tương lai
+                    after: new Date(period.end_date)
+                  }}
                   initialFocus
                 />
               </PopoverContent>

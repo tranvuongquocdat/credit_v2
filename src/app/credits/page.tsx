@@ -345,9 +345,13 @@ export default function CreditsPage() {
                   {credits.map((credit) => (
                     <TableRow key={credit.id}>
                       <TableCell>
-                        <div className="font-medium">
+                        <Button
+                          variant="link"
+                          className="p-0 h-auto font-medium"
+                          onClick={() => router.push(`/credits/view/${credit.id}`)}
+                        >
                           {credit.contract_code || "-"}
-                        </div>
+                        </Button>
                       </TableCell>
                       <TableCell>
                         {credit.customer?.name || "Không có thông tin"}

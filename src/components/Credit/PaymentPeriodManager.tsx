@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { format, parseISO, isBefore, isAfter, addDays } from 'date-fns';
+import { format, parseISO, isBefore, isAfter, addDays, differenceInDays } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Credit } from '@/models/credit';
 import { CreditPaymentPeriod, PaymentPeriodStatus, CreditPaymentSummary } from '@/models/credit-payment';
-import { calculatePaymentPeriods, calculatePaymentSummary, recalculatePeriodNumbers } from '@/utils/payment-calculator';
+import { calculatePaymentPeriods, calculatePaymentSummary, recalculatePeriodNumbers, calculateExpectedAmountForDateRange } from '@/utils/payment-calculator';
 import { getCreditPaymentPeriods, createManyPaymentPeriods, deletePaymentPeriod, markPeriodAsPaid, updatePaymentPeriod, createPaymentPeriod } from '@/lib/credit-payment';
 import { PaymentPeriodList, PaymentSummary, PaymentPeriodDialog, MarkAsPaidDialog } from '@/components/Credit';
 import { Button } from '@/components/ui/button';
@@ -38,7 +38,7 @@ export function PaymentPeriodManager({ credit }: PaymentPeriodManagerProps) {
   const [isGenerateDialogOpen, setIsGenerateDialogOpen] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<CreditPaymentPeriod | null>(null);
   
-  // Tạo danh sách kỳ thanh toán ước tính từ thông tin hợp đồng
+  // Tạo danh sách kỳ thanh toán ước tính từ thông tin hợp đồng và đối chiếu với dữ liệu thực tế
   const generateEstimatedPeriods = (considerDbPeriods = true) => {
     try {
       // Tính toán các kỳ ước tính dựa trên thông tin hợp đồng
@@ -52,47 +52,77 @@ export function PaymentPeriodManager({ credit }: PaymentPeriodManagerProps) {
         return;
       }
       
-      // Lọc ra các kỳ ước tính không trùng với kỳ đã lưu trong DB
-      // Một kỳ được coi là trùng nếu thời gian bắt đầu và kết thúc gần tương tự
-      const filteredEstimatedPeriods = calculatedPeriods.filter(estPeriod => {
+      // Sắp xếp các kỳ từ DB theo thời gian
+      const sortedDbPeriods = [...dbPeriods].sort((a, b) => {
+        return new Date(a.start_date).getTime() - new Date(b.start_date).getTime();
+      });
+      
+      // Sắp xếp các kỳ ước tính theo thời gian
+      const sortedEstPeriods = [...calculatedPeriods].sort((a, b) => {
+        return new Date(a.start_date).getTime() - new Date(b.start_date).getTime();
+      });
+      
+      // Thờ iđiểm kết thúc của kỳ đã thanh toán cuối cùng trong DB
+      const paidPeriods = sortedDbPeriods.filter(p => p.status === PaymentPeriodStatus.PAID);
+      const lastPaidPeriod = paidPeriods.length > 0 ? paidPeriods[paidPeriods.length - 1] : null;
+      const lastPaidDate = lastPaidPeriod ? new Date(lastPaidPeriod.end_date).getTime() : 0;
+      
+      // Các kỳ đã có trong DB
+      let existingPeriods = [...sortedDbPeriods];
+      
+      // Xác định các kỳ cần thêm (các kỳ ước tính chưa có trong DB và sau kỳ đã thanh toán cuối cùng)
+      let futurePeriods = sortedEstPeriods.filter(estPeriod => {
         const estStart = parseISO(estPeriod.start_date);
-        const estEnd = parseISO(estPeriod.end_date);
+        
+        // Chỉ xem xét các kỳ trong tương lai
+        if (lastPaidDate > 0 && estStart.getTime() <= lastPaidDate) {
+          return false;
+        }
         
         // Kiểm tra xem kỳ này có tương tự với bất kỳ kỳ nào trong DB không
-        return !dbPeriods.some(dbPeriod => {
+        return !existingPeriods.some(dbPeriod => {
           const dbStart = parseISO(dbPeriod.start_date);
           const dbEnd = parseISO(dbPeriod.end_date);
+          const estEnd = parseISO(estPeriod.end_date);
           
-          // Nếu thời gian bắt đầu và kết thúc gần nhau (sai lệch tối đa 2 ngày),
+          // Nếu thời gian bắt đầu và kết thúc gần nhau (sai lệch tối đa 3 ngày),
           // coi chúng là cùng một kỳ
           const startDiff = Math.abs(dbStart.getTime() - estStart.getTime());
           const endDiff = Math.abs(dbEnd.getTime() - estEnd.getTime());
           
-          return startDiff <= 2 * 24 * 60 * 60 * 1000 && endDiff <= 2 * 24 * 60 * 60 * 1000;
+          return startDiff <= 3 * 24 * 60 * 60 * 1000 && endDiff <= 3 * 24 * 60 * 60 * 1000;
         });
       });
       
-      // Nếu có kỳ hiện tại đã được đánh dấu là đã thanh toán, chỉ hiển thị các kỳ tương lai
-      const paidPeriods = dbPeriods.filter(p => p.status === PaymentPeriodStatus.PAID);
-      const lastPaidDate = paidPeriods.length > 0
-        ? Math.max(...paidPeriods.map(p => new Date(p.end_date).getTime()))
-        : 0;
+      // Các bước phải thực hiện:
+      // 1. Tạo danh sách kết hợp gồm các kỳ DB và các kỳ ước tính trong tương lai
+      // 2. Các kỳ ước tính mới nếu cần sẽ được điều chỉnh từ dưới lên (kỳ cuối cùng trước)
       
-      // Lọc các kỳ ước tính trong tương lai (sau kỳ đã thanh toán cuối cùng)
-      const futurePeriods = filteredEstimatedPeriods.filter(p => {
-        return lastPaidDate === 0 || new Date(p.start_date).getTime() > lastPaidDate;
-      });
+      let combinedPeriods: CreditPaymentPeriod[];
       
-      // Kết hợp dữ liệu từ DB và dữ liệu ước tính
-      const combinedPeriods = [...dbPeriods, ...futurePeriods];
+      // Nếu có kỳ đã thanh toán và có các kỳ ước tính mới cần thêm vào
+      if (lastPaidPeriod && futurePeriods.length > 0) {
+        combinedPeriods = [...existingPeriods];
+        
+        // Thừ điều chỉnh từ dưới lên (kỳ cuối cùng trước)
+        // Đảo ngược các kỳ ước tính để xử lý từ cuối lên trên
+        const reversedFuturePeriods = [...futurePeriods].reverse();
+        
+        for (const estPeriod of reversedFuturePeriods) {
+          combinedPeriods.push(estPeriod);
+        }
+      } else {
+        // Nếu không có kỳ đã thanh toán, hoặc không có kỳ ước tính mới
+        combinedPeriods = [...existingPeriods, ...futurePeriods];
+      }
       
-      // Sắp xếp theo thời gian và đánh số thứ tự lại
-      const sortedPeriods = combinedPeriods.sort((a, b) => {
+      // Sắp xếp lại theo thời gian
+      const sortedCombinedPeriods = combinedPeriods.sort((a, b) => {
         return new Date(a.start_date).getTime() - new Date(b.start_date).getTime();
       });
       
       // Đánh số lại các kỳ
-      const renumberedPeriods = recalculatePeriodNumbers(sortedPeriods);
+      const renumberedPeriods = recalculatePeriodNumbers(sortedCombinedPeriods);
       
       setEstimatedPeriods(futurePeriods);
       setPeriods(renumberedPeriods);
@@ -143,24 +173,266 @@ export function PaymentPeriodManager({ credit }: PaymentPeriodManagerProps) {
     }
   };
   
+  // Process periods directly without relying on state updates
+  const processPeriodsWithData = (calculatedPeriods: CreditPaymentPeriod[], dbData: CreditPaymentPeriod[]) => {
+    try {
+      if (!dbData || dbData.length === 0) {
+        // Nếu không có dữ liệu từ DB, trả về các kỳ ước tính
+        return calculatedPeriods;
+      }
+      
+      // Sắp xếp các kỳ từ DB theo thời gian (start_date và end_date)
+      const sortedDbPeriods = [...dbData].sort((a, b) => {
+        const dateA = new Date(a.start_date).getTime();
+        const dateB = new Date(b.start_date).getTime();
+        
+        if (dateA !== dateB) {
+          return dateA - dateB;
+        }
+        
+        return new Date(a.end_date).getTime() - new Date(b.end_date).getTime();
+      });
+      
+      console.log('Sorted DB periods:', sortedDbPeriods.map(p => 
+        ({ number: p.period_number, start: p.start_date, end: p.end_date })));
+      
+      // Tìm kỳ DB cuối cùng theo thời gian (không phải theo period_number)
+      const lastDbPeriod = sortedDbPeriods.reduce((latest, current) => {
+        const latestEndDate = new Date(latest.end_date).getTime();
+        const currentEndDate = new Date(current.end_date).getTime();
+        return currentEndDate > latestEndDate ? current : latest;
+      }, sortedDbPeriods[0]);
+      
+      console.log('Latest period by end date:', { 
+        number: lastDbPeriod.period_number, 
+        end: lastDbPeriod.end_date 
+      });
+      
+      // Tạo danh sách kỳ mới kết hợp cả DB và ước tính
+      const combinedPeriods: CreditPaymentPeriod[] = [...sortedDbPeriods];
+      
+      // Nếu không có kỳ nào trong DB, chỉ sử dụng kỳ ước tính
+      if (sortedDbPeriods.length === 0) {
+        return calculatedPeriods;
+      }
+      
+      // Tính toán ngày kết thúc hợp đồng dựa trên thông tin credit
+      const loanEndDate = addDays(parseISO(credit.loan_date), credit.loan_period);
+      
+      // Kiểm tra xem kỳ cuối cùng có đã đến ngày kết thúc hợp đồng chưa
+      const lastPeriodEndDate = new Date(lastDbPeriod.end_date);
+      
+      // Nếu kỳ cuối cùng đã kéo dài đến hoặc vượt quá ngày kết thúc hợp đồng
+      if (lastPeriodEndDate >= loanEndDate) {
+        console.log('Last period already extends to or beyond loan end date - no additional periods needed');
+        return recalculatePeriodNumbers(combinedPeriods);
+      }
+      
+      // Còn ngày sau kỳ cuối cùng, cần tạo thêm các kỳ mới
+      // Ngày bắt đầu cho kỳ tiếp theo phải là ngày sau ngày kết thúc của kỳ cuối cùng
+      const nextStartDate = addDays(lastPeriodEndDate, 1);
+      
+      // Nếu còn ngày sau kỳ cuối cùng và trước ngày kết thúc hợp đồng
+      if (nextStartDate < loanEndDate) {
+        // Tính số kỳ còn lại
+        const daysRemaining = differenceInDays(loanEndDate, nextStartDate);
+        const periodsRemaining = Math.ceil(daysRemaining / credit.interest_period);
+        
+        console.log('Days remaining:', daysRemaining, 'Periods remaining:', periodsRemaining);
+        
+        // Tạo các kỳ còn lại
+        if (periodsRemaining > 0) {
+          let currentStartDate = nextStartDate;
+          
+          for (let i = 0; i < periodsRemaining; i++) {
+            // Ngày kết thúc của kỳ này (hoặc ngày kết thúc hợp đồng nếu là kỳ cuối)
+            let periodEndDate;
+            
+            // Nếu là kỳ cuối cùng và còn ngày thừa
+            if (i === periodsRemaining - 1) {
+              periodEndDate = loanEndDate;
+            } else {
+              // Ngày kết thúc kỳ thường là ngày bắt đầu + interest_period - 1
+              periodEndDate = addDays(currentStartDate, credit.interest_period - 1);
+            }
+            
+            // Xác định số ngày thực tế trong kỳ
+            const daysInPeriod = differenceInDays(periodEndDate, currentStartDate) + 1;
+            
+            // Tính số tiền dự kiến
+            const expectedAmount = calculateExpectedAmountForDateRange(
+              credit, 
+              currentStartDate, 
+              periodEndDate
+            );
+            
+            // Tạo kỳ mới
+            const newPeriod: CreditPaymentPeriod = {
+              id: '',
+              credit_id: credit.id,
+              period_number: sortedDbPeriods.length + i + 1,
+              start_date: format(currentStartDate, 'yyyy-MM-dd'),
+              end_date: format(periodEndDate, 'yyyy-MM-dd'),
+              expected_amount: expectedAmount,
+              actual_amount: 0,
+              payment_date: null,
+              status: PaymentPeriodStatus.PENDING,
+              notes: ''
+            };
+            
+            // Thêm kỳ mới vào danh sách
+            combinedPeriods.push(newPeriod);
+            
+            // Cập nhật ngày bắt đầu cho kỳ tiếp theo
+            currentStartDate = addDays(periodEndDate, 1);
+          }
+        }
+      }
+      
+      // Sắp xếp lại toàn bộ các kỳ theo thời gian
+      const sortedCombinedPeriods = combinedPeriods.sort((a, b) => {
+        const startA = new Date(a.start_date).getTime();
+        const startB = new Date(b.start_date).getTime();
+        
+        if (startA !== startB) {
+          return startA - startB;
+        }
+        
+        return new Date(a.end_date).getTime() - new Date(b.end_date).getTime();
+      });
+      
+      // Đánh số lại các kỳ để đảm bảo tuần tự
+      return recalculatePeriodNumbers(sortedCombinedPeriods);
+    } catch (error) {
+      console.error('Error processing periods:', error);
+      // Trường hợp lỗi, trả về kết quả từ các kỳ ước tính gốc
+      return calculatedPeriods;
+    }
+  };
+
   useEffect(() => {
-    // Tạo dữ liệu ước tính trước để hiển thị ngay lập tức
-    generateEstimatedPeriods(false);
-    // Sau đó mới gọi API để lấy dữ liệu thật từ DB (nếu có)
-    fetchPaymentPeriods();
+    // Đặt trạng thái loading khi component mount
+    setIsLoading(true);
+    
+    // Gọi hàm async để tải dữ liệu
+    const loadData = async () => {
+      try {
+        // Gọi API để lấy dữ liệu từ Supabase
+        const { data, error } = await getCreditPaymentPeriods(credit.id);
+        
+        if (error) {
+          throw new Error(error.message);
+        }
+        
+        // Tính toán các kỳ ước tính dựa trên thông tin hợp đồng
+        const calculatedPeriods = calculatePaymentPeriods(credit);
+        
+        if (data && data.length > 0) {
+          // Lưu dữ liệu từ DB
+          setDbPeriods(data as CreditPaymentPeriod[]);
+          setEstimatedPeriods(calculatedPeriods);
+          
+          // Xử lý dữ liệu trực tiếp thay vì dựa vào state updates
+          const processedPeriods = processPeriodsWithData(calculatedPeriods, data as CreditPaymentPeriod[]);
+          setPeriods(processedPeriods);
+          
+          // Tính toán tổng kết dựa trên dữ liệu đã xử lý
+          setSummary(calculatePaymentSummary(processedPeriods));
+        } else {
+          // Nếu không có dữ liệu từ DB, sử dụng hoàn toàn dữ liệu ước tính
+          setDbPeriods([]);
+          setEstimatedPeriods(calculatedPeriods);
+          setPeriods(calculatedPeriods);
+          setSummary(calculatePaymentSummary(calculatedPeriods));
+        }
+      } catch (error) {
+        console.error('Error fetching payment periods:', error);
+        toast({
+          title: "Lỗi",
+          description: "Không thể tải danh sách kỳ đóng lãi",
+          variant: "destructive"
+        });
+        
+        // Nếu có lỗi khi truy vấn DB, sử dụng dữ liệu ước tính thay thế
+        const calculatedPeriods = calculatePaymentPeriods(credit);
+        setDbPeriods([]);
+        setEstimatedPeriods(calculatedPeriods);
+        setPeriods(calculatedPeriods);
+        setSummary(calculatePaymentSummary(calculatedPeriods));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    // Gọi hàm async để tải dữ liệu
+    loadData();
+    
+    // Clean up function
+    return () => {
+      // Có thể thêm logic xử lý khi component unmount
+    };
   }, [credit.id]);
   
   // Xử lý thêm kỳ thanh toán (kỳ bất thường)
   const handleAddPeriod = async (data: any) => {
     try {
+      setIsLoading(true);
+      
+      // Đảm bảo ngày kết thúc >= ngày bắt đầu
+      const startDate = new Date(data.start_date);
+      let endDate = new Date(data.end_date);
+      
+      if (endDate < startDate) {
+        endDate = new Date(startDate);
+      }
+      
+      // Tính toán period_number dựa trên ngày bắt đầu của kỳ mới
+      // Sắp xếp tất cả các kỳ theo thời gian và đặt kỳ mới vào vị trí đúng
+      const allPeriodsWithNew = [...periods, {
+        credit_id: credit.id,
+        start_date: format(startDate, 'yyyy-MM-dd'),
+        end_date: format(endDate, 'yyyy-MM-dd'),
+        // Các trường khác không quan trọng cho việc sắp xếp
+      }];
+      
+      // Sắp xếp tất cả các kỳ theo thời gian (start_date trước rồi đến end_date)
+      const sortedPeriods = allPeriodsWithNew.sort((a, b) => {
+        const dateA = new Date(a.start_date).getTime();
+        const dateB = new Date(b.start_date).getTime();
+        const endDateA = new Date(a.end_date).getTime();
+        const endDateB = new Date(b.end_date).getTime();
+        
+        // Đầu tiên so sánh start_date
+        if (dateA !== dateB) {
+          return dateA - dateB;
+        }
+        
+        // Nếu start_date bằng nhau, so sánh end_date
+        return endDateA - endDateB;
+      });
+      
+      // Tìm vị trí của kỳ mới trong danh sách đã sắp xếp
+      const newPeriodIndex = sortedPeriods.findIndex(
+        p => p.start_date === format(startDate, 'yyyy-MM-dd') && 
+             p.end_date === format(endDate, 'yyyy-MM-dd')
+      );
+      console.log(newPeriodIndex)
+      // Tính period_number dựa trên vị trí trong danh sách đã sắp xếp
+      const periodNumber = newPeriodIndex + 1;
+      
       const newPeriod = {
         credit_id: credit.id,
-        period_number: periods.length + 1,
-        start_date: format(data.start_date, 'yyyy-MM-dd'),
-        end_date: format(data.end_date, 'yyyy-MM-dd'),
+        period_number: periodNumber,
+        start_date: format(startDate, 'yyyy-MM-dd'),
+        end_date: format(endDate, 'yyyy-MM-dd'),
         expected_amount: data.expected_amount,
-        notes: data.notes || 'Kỳ thanh toán bất thường'
+        notes: data.notes || 'Kỳ thanh toán bất thường',
+        payment_date: format(endDate, 'yyyy-MM-dd'),
+        actual_amount: data.expected_amount,
+        status: PaymentPeriodStatus.PAID,
       };
+      
+      console.log('Adding new custom period with number:', periodNumber);
       
       const { data: result, error } = await createPaymentPeriod(newPeriod);
       
@@ -170,8 +442,23 @@ export function PaymentPeriodManager({ credit }: PaymentPeriodManagerProps) {
       
       setIsAddDialogOpen(false);
       
-      // Tải lại dữ liệu từ DB và tính toán lại
-      fetchPaymentPeriods();
+      // Giai đoạn quan trọng: tạo lại tất cả các kỳ để đảm bảo tham chiếu chính xác
+      // và không có khoảng cách thời gian bất thường giữa các kỳ
+      const { data: dbPeriodsAfterAdd, error: fetchError } = await getCreditPaymentPeriods(credit.id);
+      
+      if (fetchError) {
+        throw new Error(fetchError.message);
+      }
+      
+      // Cập nhật trạng thái component với dữ liệu mới nhất
+      if (dbPeriodsAfterAdd && dbPeriodsAfterAdd.length > 0) {
+        setDbPeriods(dbPeriodsAfterAdd as CreditPaymentPeriod[]);
+        // Tính toán lại các kỳ ước tính dựa trên dữ liệu mới
+        const calculatedPeriods = calculatePaymentPeriods(credit);
+        const processedPeriods = processPeriodsWithData(calculatedPeriods, dbPeriodsAfterAdd as CreditPaymentPeriod[]);
+        setPeriods(processedPeriods);
+        setSummary(calculatePaymentSummary(processedPeriods));
+      }
       
       toast({
         title: "Thành công",
@@ -181,9 +468,11 @@ export function PaymentPeriodManager({ credit }: PaymentPeriodManagerProps) {
       console.error('Error adding payment period:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể thêm kỳ đóng lãi",
+        description: "Không thể thêm kỳ đóng lãi mới",
         variant: "destructive"
       });
+    } finally {
+      setIsLoading(false);
     }
   };
   
@@ -192,9 +481,17 @@ export function PaymentPeriodManager({ credit }: PaymentPeriodManagerProps) {
     if (!selectedPeriod) return;
     
     try {
+      // Đảm bảo ngày kết thúc >= ngày bắt đầu
+      const startDate = new Date(data.start_date);
+      let endDate = new Date(data.end_date);
+      
+      if (endDate < startDate) {
+        endDate = new Date(startDate);
+      }
+      
       const updateData = {
-        start_date: format(data.start_date, 'yyyy-MM-dd'),
-        end_date: format(data.end_date, 'yyyy-MM-dd'),
+        start_date: format(startDate, 'yyyy-MM-dd'),
+        end_date: format(endDate, 'yyyy-MM-dd'),
         expected_amount: data.expected_amount,
         actual_amount: data.actual_amount,
         payment_date: data.payment_date ? format(data.payment_date, 'yyyy-MM-dd') : null,
@@ -449,40 +746,57 @@ export function PaymentPeriodManager({ credit }: PaymentPeriodManagerProps) {
       
       <Separator />
       
-      {/* Danh sách kỳ thanh toán */}
-      <PaymentPeriodList 
-        periods={periods.map(period => ({
-          ...period,
-          // Thêm thông tin trạng thái cho UI
-          isFromDb: isPeriodFromDb(period),
-          status: getPeriodStatus(period)
-        }))}
-        onMarkAsPaid={(period) => {
-          setSelectedPeriod(period);
-          setIsPaidDialogOpen(true);
-        }}
-        onEdit={(period) => {
-          setSelectedPeriod(period);
-          setIsEditDialogOpen(true);
-        }}
-        onDelete={(period) => {
-          setSelectedPeriod(period);
-          setIsDeleteDialogOpen(true);
-        }}
-        onAddCustomPeriod={() => setIsAddDialogOpen(true)}
-      />
+      {/* Hiển thị trạng thái đang tải */}
+      {isLoading ? (
+        <div className="p-8 flex flex-col items-center justify-center space-y-4 border rounded-lg bg-muted/10">
+          <RefreshCw className="h-10 w-10 animate-spin text-primary" />
+          <p className="text-lg font-medium">Đang tải dữ liệu từ Supabase...</p>
+          <p className="text-sm text-muted-foreground">Vui lòng đợi trong giây lát</p>
+        </div>
+      ) : (
+        /* Danh sách kỳ thanh toán */
+        <PaymentPeriodList 
+          periods={periods.map(period => ({
+            ...period,
+            // Thêm thông tin trạng thái cho UI
+            isFromDb: isPeriodFromDb(period),
+            status: getPeriodStatus(period)
+          }))}
+          onMarkAsPaid={(period) => {
+            setSelectedPeriod(period);
+            setIsPaidDialogOpen(true);
+          }}
+          onEdit={(period) => {
+            setSelectedPeriod(period);
+            setIsEditDialogOpen(true);
+          }}
+          onDelete={(period) => {
+            setSelectedPeriod(period);
+            setIsDeleteDialogOpen(true);
+          }}
+          onAddCustomPeriod={() => setIsAddDialogOpen(true)}
+        />
+      )}
       
       {/* Dialog thêm kỳ thanh toán */}
       <PaymentPeriodDialog
         isOpen={isAddDialogOpen}
         onClose={() => setIsAddDialogOpen(false)}
-        onSubmit={handleAddPeriod}
+        onSave={handleAddPeriod}
+        mode="add"
         title="Thêm kỳ đóng lãi bất thường"
-        submitLabel="Thêm"
-        initialData={{
-          start_date: new Date(),
-          end_date: new Date(),
+        credit={credit}
+        allPeriods={periods}
+        period={{
+          id: '',
+          credit_id: credit.id,
+          period_number: 0,
+          start_date: format(new Date(), 'yyyy-MM-dd'),
+          end_date: format(new Date(), 'yyyy-MM-dd'),
           expected_amount: 0,
+          actual_amount: 0,
+          payment_date: null,
+          status: PaymentPeriodStatus.PENDING,
           notes: 'Kỳ thanh toán bất thường'
         }}
       />
@@ -494,20 +808,12 @@ export function PaymentPeriodManager({ credit }: PaymentPeriodManagerProps) {
           setIsEditDialogOpen(false);
           setSelectedPeriod(null);
         }}
-        onSubmit={handleEditPeriod}
+        onSave={handleEditPeriod}
+        mode={selectedPeriod?.id ? 'edit' : 'add'}
         title={selectedPeriod?.id ? "Chỉnh sửa kỳ đóng lãi" : "Lưu kỳ đóng lãi vào DB"}
-        submitLabel={selectedPeriod?.id ? "Cập nhật" : "Lưu vào DB"}
-        initialData={selectedPeriod ? {
-          period_number: selectedPeriod.period_number,
-          start_date: selectedPeriod.start_date ? new Date(selectedPeriod.start_date) : new Date(),
-          end_date: selectedPeriod.end_date ? new Date(selectedPeriod.end_date) : new Date(),
-          expected_amount: selectedPeriod.expected_amount,
-          actual_amount: selectedPeriod.actual_amount,
-          payment_date: selectedPeriod.payment_date ? new Date(selectedPeriod.payment_date) : null,
-          status: selectedPeriod.status,
-          notes: selectedPeriod.notes || (selectedPeriod.id ? '' : 'Kỳ thanh toán từ ước tính')
-        } : undefined}
-        isEdit={true}
+        credit={credit}
+        allPeriods={periods}
+        period={selectedPeriod || undefined}
       />
       
       {/* Dialog đánh dấu đã đóng */}

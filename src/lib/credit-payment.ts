@@ -3,16 +3,54 @@ import { CreditPaymentPeriod, CreatePaymentPeriodData, UpdatePaymentPeriodData, 
 
 /**
  * Lấy danh sách kỳ thanh toán của một hợp đồng
+ * Đã thêm logging và xử lý lỗi tốt hơn
  */
 export async function getCreditPaymentPeriods(creditId: string) {
-  console.log(creditId);
-  const { data, error } = await supabase
-    .from('credit_payment_periods')
-    .select('*')
-    .eq('credit_id', creditId)
-    .order('period_number', { ascending: true });
+  // Kiểm tra ID hợp lệ
+  if (!creditId) {
+    console.error('getCreditPaymentPeriods called with invalid creditId:', creditId);
+    return { data: null, error: new Error('Credit ID is required') };
+  }
   
-  return { data, error };
+  console.log('getCreditPaymentPeriods - Fetching periods for credit ID:', creditId);
+  
+  try {
+    // Mặc định thử 3 lần nếu có lỗi kết nối
+    let attempt = 0;
+    let data = null;
+    let error = null;
+    
+    while (attempt < 3 && !data && !error) {
+      if (attempt > 0) {
+        console.log(`Retry attempt ${attempt} for credit ID ${creditId}`);
+        // Chờ 500ms trước khi thử lại
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
+      const response = await supabase
+        .from('credit_payment_periods')
+        .select('*')
+        .eq('credit_id', creditId)
+        .order('period_number', { ascending: true });
+      
+      data = response.data;
+      error = response.error;
+      
+      console.log(`Attempt ${attempt + 1} result - data count:`, data?.length, 'error:', error);
+      attempt++;
+    }
+    
+    if (error) {
+      console.error('Error fetching payment periods after retries:', error);
+    } else if (data) {
+      console.log('Successfully fetched payment periods. Count:', data.length);
+    }
+    
+    return { data, error };
+  } catch (e) {
+    console.error('Unexpected error in getCreditPaymentPeriods:', e);
+    return { data: null, error: e as Error };
+  }
 }
 
 /**
@@ -124,10 +162,21 @@ export async function deleteAllPaymentPeriods(creditId: string) {
  */
 export async function recreatePaymentPeriods(creditId: string, periods: CreatePaymentPeriodData[]) {
   // Sử dụng transaction để đảm bảo tính nhất quán
+  // Convert CreatePaymentPeriodData[] to a record object to satisfy Json type requirement
+  const periodsAsJson = periods.map(period => {
+    return {
+      ...period,
+      // Ensure all dates are properly formatted as strings
+      start_date: period.start_date?.toString() || '',
+      end_date: period.end_date?.toString() || '',
+      expected_amount: Number(period.expected_amount || 0)
+    };
+  });
+  
   const { data, error } = await supabase
     .rpc('recreate_payment_periods', {
       credit_id_param: creditId,
-      periods_param: periods
+      periods_param: periodsAsJson as any // Type assertion to bypass TypeScript error
     });
   
   if (error) {
