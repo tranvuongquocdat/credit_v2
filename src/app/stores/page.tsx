@@ -2,10 +2,54 @@
 import { useEffect, useState } from 'react';
 import { Layout } from '@/components/Layout';
 import { StoreForm } from '@/components/Store';
-import { Modal } from '@/components/UI';
+import { Modal } from '@/components/ui';
 import { getStores, createStore, updateStore, deleteStore } from '@/lib/store';
 import { Store, StoreFormData, StoreStatus } from '@/models/store';
-import { FiPlus, FiEdit2, FiTrash2, FiEye } from 'react-icons/fi';
+import { Plus, Pencil, Trash2, Eye, Search, RefreshCw } from 'lucide-react';
+
+// Shadcn UI components
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+import { Badge } from "@/components/ui/badge";
 
 export default function StoresPage() {
   // Trạng thái
@@ -26,8 +70,28 @@ export default function StoresPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Format currency
-  const formatCurrency = (value: number) => {
+  const formatCurrency = (value: number | undefined | null) => {
+    if (value === undefined || value === null) return '0 ₫';
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
+  };
+  
+  // Status map for styling
+  const statusMap = {
+    [StoreStatus.ACTIVE]: {
+      label: 'Hoạt động',
+      color: 'bg-green-100 text-green-800',
+      variant: 'secondary' as const
+    },
+    [StoreStatus.SUSPENDED]: {
+      label: 'Tạm ngưng',
+      color: 'bg-orange-100 text-orange-800',
+      variant: 'outline' as const
+    },
+    [StoreStatus.INACTIVE]: {
+      label: 'Không hoạt động',
+      color: 'bg-red-100 text-red-800',
+      variant: 'destructive' as const
+    }
   };
 
   // Fetch danh sách cửa hàng
@@ -150,248 +214,207 @@ export default function StoresPage() {
     const pages = [];
     for (let i = 1; i <= totalPages; i++) {
       pages.push(
-        <button
+        <Button
           key={i}
           onClick={() => setCurrentPage(i)}
-          className={`px-3 py-1 rounded ${
-            currentPage === i
-              ? 'bg-blue-600 text-white'
-              : 'bg-white text-gray-700 hover:bg-gray-100'
-          }`}
+          variant={currentPage === i ? "default" : "outline"}
+          size="sm"
+          className="w-9 h-9 p-0"
         >
           {i}
-        </button>
+        </Button>
       );
     }
     
     return (
-      <div className="flex justify-center mt-6 space-x-2">
-        <button
+      <div className="flex justify-center mt-6 gap-2">
+        <Button
           onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
           disabled={currentPage === 1}
-          className="px-3 py-1 rounded bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+          variant="outline"
+          size="sm"
         >
           Trước
-        </button>
+        </Button>
         {pages}
-        <button
+        <Button
           onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
           disabled={currentPage === totalPages}
-          className="px-3 py-1 rounded bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+          variant="outline"
+          size="sm"
         >
           Sau
-        </button>
+        </Button>
       </div>
     );
   };
-
+  
   return (
     <Layout>
-      <div className="container mx-auto p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Quản lý cửa hàng</h1>
-          <button
-            onClick={() => {
-              setSelectedStore(null);
-              setIsFormModalOpen(true);
-            }}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            <FiPlus className="mr-2" /> Thêm cửa hàng
-          </button>
-        </div>
-
-        {/* Search và filter */}
-        <div className="bg-white p-4 rounded-lg shadow mb-6">
-          <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="container mx-auto py-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
-                Tìm kiếm theo tên
-              </label>
-              <input
-                type="text"
-                id="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Nhập tên cửa hàng..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-              />
+              <CardTitle className="text-2xl font-bold">Quản lý cửa hàng</CardTitle>
+              <CardDescription>Danh sách các cửa hàng trong hệ thống</CardDescription>
             </div>
-            
-            <div>
-              <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
-                Lọc theo trạng thái
-              </label>
-              <select
-                id="status"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-              >
-                <option value="">Tất cả trạng thái</option>
-                <option value={StoreStatus.ACTIVE}>Hoạt động</option>
-                <option value={StoreStatus.SUSPENDED}>Tạm ngưng</option>
-              </select>
-            </div>
-            
-            <div className="flex items-end">
-              <button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
-                Tìm kiếm
-              </button>
-            </div>
-          </form>
-        </div>
+            <Button
+              onClick={() => {
+                setSelectedStore(null);
+                setIsFormModalOpen(true);
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" /> Thêm cửa hàng
+            </Button>
+          </CardHeader>
 
-        {/* Hiển thị lỗi nếu có */}
-        {error && (
-          <div className="bg-red-100 text-red-700 p-4 rounded-lg mb-6">
-            {error}
-          </div>
-        )}
-
-        {/* Danh sách cửa hàng */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          {isLoading ? (
-            <div className="p-6 text-center">Đang tải...</div>
-          ) : stores.length === 0 ? (
-            <div className="p-6 text-center">
-              Không tìm thấy cửa hàng nào
+          <CardContent className="py-6">
+            <div className="flex flex-col sm:flex-row gap-4 mb-6">
+              <div className="flex-1">
+                <Input
+                  placeholder="Tìm kiếm theo tên cửa hàng..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <div className="flex flex-row gap-2">
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Trạng thái" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả</SelectItem>
+                    <SelectItem value={StoreStatus.ACTIVE}>Hoạt động</SelectItem>
+                    <SelectItem value={StoreStatus.SUSPENDED}>Tạm ngưng</SelectItem>
+                    <SelectItem value={StoreStatus.INACTIVE}>Không hoạt động</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" onClick={fetchStores}>
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Tên cửa hàng
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Địa chỉ
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Vốn đầu tư
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Quỹ tiền mặt
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Trạng thái
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Thao tác
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {stores.map((store) => (
-                    <tr key={store.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="font-medium text-gray-900 cursor-pointer hover:text-blue-600" 
-                          onClick={() => openEditModal(store)}>
-                          {store.name}
-                        </div>
-                        <div className="text-sm text-gray-500">{store.phone}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{store.address}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{formatCurrency(store.investment)}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{formatCurrency(store.cash_fund)}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          store.status === StoreStatus.ACTIVE
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {store.status === StoreStatus.ACTIVE ? 'Hoạt động' : 'Tạm ngưng'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex justify-end space-x-2">
-                          <button
+
+            {/* Hiển thị lỗi nếu có */}
+            {error && (
+              <div className="bg-red-100 text-red-700 p-4 rounded-lg mb-6">
+                {error}
+              </div>
+            )}
+
+            {/* Danh sách cửa hàng */}
+            {isLoading ? (
+              <div className="p-6 text-center flex justify-center items-center">
+                <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+                <span>Đang tải...</span>
+              </div>
+            ) : stores.length === 0 ? (
+              <div className="p-6 text-center text-muted-foreground">
+                Không tìm thấy cửa hàng nào
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Tên cửa hàng</TableHead>
+                      <TableHead>Địa chỉ</TableHead>
+                      <TableHead>Vốn đầu tư</TableHead>
+                      <TableHead>Quỹ tiền mặt</TableHead>
+                      <TableHead>Trạng thái</TableHead>
+                      <TableHead className="text-right">Thao tác</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {stores.map((store) => (
+                      <TableRow key={store.id} className="cursor-default">
+                        <TableCell>
+                          <div className="font-medium cursor-pointer hover:text-primary" 
+                            onClick={() => openEditModal(store)}>
+                            {store.name}
+                          </div>
+                          <div className="text-sm text-muted-foreground">{store.phone}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">{store.address}</div>
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {formatCurrency(store.investment)}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {formatCurrency(store.cash_fund)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={statusMap[store.status || StoreStatus.INACTIVE].variant}>
+                            {statusMap[store.status || StoreStatus.INACTIVE].label}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={() => openEditModal(store)}
-                            className="text-blue-600 hover:text-blue-900"
                           >
-                            <FiEdit2 size={18} />
-                          </button>
-                          <button
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={() => openDeleteModal(store)}
-                            className="text-red-600 hover:text-red-900"
+                            className="text-destructive hover:text-destructive"
                           >
-                            <FiTrash2 size={18} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          
-          {/* Phân trang */}
-          {!isLoading && stores.length > 0 && renderPagination()}
-        </div>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+          <CardFooter>
+            {/* Phân trang */}
+            {!isLoading && stores.length > 0 && renderPagination()}
+          </CardFooter>
+        </Card>
+        
+        {/* Modal Form */}
+        <Modal
+          isOpen={isFormModalOpen}
+          onClose={() => setIsFormModalOpen(false)}
+          title={selectedStore ? 'Chỉnh sửa cửa hàng' : 'Thêm cửa hàng mới'}
+        >
+          <StoreForm
+            initialData={selectedStore}
+            onSubmit={selectedStore ? handleUpdateStore : handleAddStore}
+            isSubmitting={isSubmitting}
+          />
+        </Modal>
+        
+        {/* Modal Xóa */}
+        <AlertDialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Xác nhận xóa</AlertDialogTitle>
+              <AlertDialogDescription>
+                Bạn có chắc chắn muốn xóa cửa hàng: <span className="font-semibold">{selectedStore?.name}</span>?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isSubmitting}>Hủy bỏ</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteStore} 
+                disabled={isSubmitting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isSubmitting ? 'Đang xử lý...' : 'Xác nhận xóa'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
-
-      {/* Modal thêm/sửa cửa hàng */}
-      <Modal
-        isOpen={isFormModalOpen}
-        onClose={() => {
-          setIsFormModalOpen(false);
-          setSelectedStore(null);
-        }}
-        title={selectedStore ? 'Chỉnh sửa cửa hàng' : 'Thêm cửa hàng mới'}
-        size="lg"
-      >
-        <StoreForm
-          store={selectedStore || undefined}
-          onSubmit={selectedStore ? handleUpdateStore : handleAddStore}
-          isSubmitting={isSubmitting}
-        />
-      </Modal>
-
-      {/* Modal xác nhận xóa */}
-      <Modal
-        isOpen={isDeleteModalOpen}
-        onClose={() => {
-          setIsDeleteModalOpen(false);
-          setSelectedStore(null);
-        }}
-        title="Xác nhận xóa"
-        size="sm"
-      >
-        <div className="py-4">
-          <p className="text-gray-700">
-            Bạn có chắc chắn muốn xóa cửa hàng "{selectedStore?.name}"?
-          </p>
-          <p className="text-gray-500 text-sm mt-2">
-            Hành động này không thể hoàn tác.
-          </p>
-          <div className="flex justify-end mt-6 space-x-3">
-            <button
-              onClick={() => setIsDeleteModalOpen(false)}
-              className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-            >
-              Hủy bỏ
-            </button>
-            <button
-              onClick={handleDeleteStore}
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Đang xử lý...' : 'Xóa'}
-            </button>
-          </div>
-        </div>
-      </Modal>
     </Layout>
   );
 }

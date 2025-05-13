@@ -13,7 +13,8 @@ export interface Store {
 
 export enum StoreStatus {
   ACTIVE = 'active',      // Hoạt động
-  SUSPENDED = 'suspended' // Tạm ngưng
+  SUSPENDED = 'suspended', // Tạm ngưng
+  INACTIVE = 'inactive'   // Không hoạt động
 }
 
 export type StoreFormData = Omit<Store, 'id' | 'created_at' | 'updated_at' | 'is_deleted'>;

@@ -45,7 +45,6 @@ export async function getCurrentUser() {
       .select('username, role')
       .eq('id', user.id)
       .single();
-      
     if (!error && profileData) {
       username = profileData.username;
       role = profileData.role || 'user';

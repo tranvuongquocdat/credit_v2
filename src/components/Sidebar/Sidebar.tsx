@@ -1,7 +1,8 @@
 "use client";
 import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { signOut } from '@/lib/auth';
 import { 
   FiHome, 
   FiCreditCard, 
@@ -12,7 +13,8 @@ import {
   FiActivity,
   FiHelpCircle,
   FiShoppingBag,
-  FiUsers
+  FiUsers,
+  FiLogOut
 } from 'react-icons/fi';
 
 interface SidebarItem {
@@ -24,8 +26,9 @@ interface SidebarItem {
 const sidebarItems: SidebarItem[] = [
   { title: 'Dashboard', path: '/dashboard', icon: <FiHome size={20} /> },
   { title: 'Cửa hàng', path: '/stores', icon: <FiShoppingBag size={20} /> },
+  { title: 'Khách hàng', path: '/customers', icon: <FiUsers size={20} /> },
   { title: 'Nhân viên', path: '/employees', icon: <FiUsers size={20} /> },
-  { title: 'Credit', path: '/credit', icon: <FiCreditCard size={20} /> },
+  { title: 'Tín chấp', path: '/credits', icon: <FiCreditCard size={20} /> },
   { title: 'Activities', path: '/activities', icon: <FiActivity size={20} /> },
   { title: 'Profile', path: '/profile', icon: <FiUser size={20} /> },
   { title: 'Settings', path: '/settings', icon: <FiSettings size={20} /> },
@@ -34,7 +37,9 @@ const sidebarItems: SidebarItem[] = [
 
 export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
 
   return (
     <div 
@@ -54,8 +59,8 @@ export default function Sidebar() {
         </button>
       </div>
 
-      <nav className="p-4">
-        <ul className="space-y-2">
+      <nav className="p-4 flex flex-col h-[calc(100vh-64px)]">
+        <ul className="space-y-2 flex-grow">
           {sidebarItems.map((item) => (
             <li key={item.path}>
               <Link
@@ -72,6 +77,33 @@ export default function Sidebar() {
             </li>
           ))}
         </ul>
+        
+        {/* Nút đăng xuất ở dưới cùng */}
+        <div className="mt-auto pt-4 border-t">
+          <button
+            onClick={async () => {
+              try {
+                setIsLoggingOut(true);
+                await signOut();
+                router.push('/login');
+                router.refresh();
+              } catch (error) {
+                console.error('Lỗi khi đăng xuất:', error);
+              } finally {
+                setIsLoggingOut(false);
+              }
+            }}
+            disabled={isLoggingOut}
+            className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-red-600 hover:bg-red-50 ${isCollapsed ? 'justify-center' : ''}`}
+          >
+            <span className="flex-shrink-0">
+              <FiLogOut size={20} />
+            </span>
+            {!isCollapsed && (
+              <span>{isLoggingOut ? 'Đang đăng xuất...' : 'Đăng xuất'}</span>
+            )}
+          </button>
+        </div>
       </nav>
     </div>
   );

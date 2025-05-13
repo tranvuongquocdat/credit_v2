@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect } from 'react';
-import { FiX } from 'react-icons/fi';
+import { X } from 'lucide-react'; // Thay FiX bằng X từ lucide-react
 
 interface ModalProps {
   isOpen: boolean;
@@ -49,21 +49,22 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' }:
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
       <div 
         className={`bg-white rounded-lg shadow-xl w-full ${getModalWidth()} max-h-[90vh] overflow-hidden flex flex-col`}
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b">
-          <h3 className="text-xl font-semibold text-gray-800">{title}</h3>
+        <div className="flex justify-between items-center p-4 border-b">
+          <h2 className="text-xl font-semibold">{title}</h2>
           <button 
             onClick={onClose}
             className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+            aria-label="Close"
           >
-            <FiX size={24} className="text-gray-500" />
+            <X className="h-5 w-5" />
           </button>
         </div>
         
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto p-6">
+        {/* Body with scrollable content */}
+        <div className="flex-1 overflow-y-auto p-4">
           {children}
         </div>
       </div>

@@ -108,8 +108,8 @@ export async function getEmployeeById(id: string) {
         store_id: data.store_id,
         phone: data.phone,
         status: data.status as EmployeeStatus,
-        created_at: data.created_at,
-        updated_at: data.updated_at,
+        created_at: data.created_at || '',
+        updated_at: data.updated_at || '',
         auth: {
           email: userData?.email || '',
           username: userData?.username || ''
@@ -131,7 +131,7 @@ export async function createEmployee(params: CreateEmployeeParams) {
   try {
     // 1. Tạo auth user với username và password
     const { data: authData, error: authError } = await supabase.functions.invoke(
-      'create-employee', 
+      'create-auth-user', 
       { 
         body: {
           username: params.username,
@@ -150,8 +150,10 @@ export async function createEmployee(params: CreateEmployeeParams) {
     const { data, error } = await supabase
       .from('employees')
       .insert({
-        id: authData.userId,
+        id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15), // Tạo ID duy nhất
+        user_id: authData.userId, // Liên kết với auth user ID
         full_name: params.full_name,
+        email: params.email, // Thêm email field mới
         store_id: params.store_id,
         phone: params.phone,
         status: params.status
