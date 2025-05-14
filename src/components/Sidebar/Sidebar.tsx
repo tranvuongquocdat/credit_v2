@@ -43,30 +43,30 @@ export default function Sidebar() {
 
   return (
     <div 
-      className={`fixed left-0 top-0 h-screen bg-white shadow-lg transition-all duration-300 ${
+      className={`fixed left-0 top-14 h-[calc(100vh-3.5rem)] bg-white shadow-lg transition-all duration-300 ${
         isCollapsed ? 'w-20' : 'w-64'
       }`}
     >
-      <div className="flex h-16 items-center justify-between px-4 border-b">
+      <div className="flex h-12 items-center justify-between px-4 border-b">
         {!isCollapsed && (
-          <h1 className="text-xl font-bold text-gray-800">Credit App</h1>
+          <h2 className="text-sm font-medium text-gray-600">Menu điều hướng</h2>
         )}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
         >
-          {isCollapsed ? <FiMenu size={24} /> : <FiChevronLeft size={24} />}
+          {isCollapsed ? <FiMenu size={20} /> : <FiChevronLeft size={20} />}
         </button>
       </div>
 
-      <nav className="p-4 flex flex-col h-[calc(100vh-64px)]">
+      <nav className="p-4 flex flex-col h-[calc(100vh-3.5rem-3rem)]">
         <ul className="space-y-2 flex-grow">
           {sidebarItems.map((item) => (
             <li key={item.path}>
               <Link
                 href={item.path}
-                className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
-                  pathname === item.path
+                className={`flex items-center space-x-3 p-2.5 rounded-lg transition-colors ${
+                  pathname.startsWith(item.path)
                     ? 'bg-blue-50 text-blue-600'
                     : 'text-gray-600 hover:bg-gray-50'
                 } ${isCollapsed ? 'justify-center' : ''}`}
