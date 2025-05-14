@@ -480,7 +480,7 @@ export function PaymentPeriodDialog({
                 <Calendar
                   mode="single"
                   selected={formData.start_date}
-                  month={formData.start_date}
+                  defaultMonth={formData.start_date}
                   onSelect={(date) => handleDateChange('start_date', date)}
                   disabled={{
                     before: earliestUnpaidDate,
@@ -517,7 +517,7 @@ export function PaymentPeriodDialog({
                 <Calendar
                   mode="single"
                   selected={formData.end_date}
-                  month={formData.end_date}
+                  defaultMonth={formData.end_date}
                   onSelect={(date) => handleDateChange('end_date', date)}
                   disabled={{
                     before: formData.start_date,

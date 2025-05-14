@@ -6,7 +6,7 @@ import { vi } from 'date-fns/locale';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Credit } from '@/models/credit';
 import { CreditPaymentPeriod, PaymentPeriodStatus, CreditPaymentSummary } from '@/models/credit-payment';
-import { calculatePaymentPeriods, calculatePaymentSummary, recalculatePeriodNumbers, calculateExpectedAmountForDateRange } from '@/utils/payment-calculator';
+import { calculatePaymentPeriods, calculatePaymentSummary, calculateExpectedAmountForDateRange, recalculatePeriodNumbers, calculateLastPeriodAmount, recalculateRemainingPeriodsAfterIrregular } from '@/utils/payment-calculator';
 import { getCreditPaymentPeriods, createManyPaymentPeriods, deletePaymentPeriod, markPeriodAsPaid, updatePaymentPeriod, createPaymentPeriod } from '@/lib/credit-payment';
 import { PaymentPeriodList, PaymentSummary, PaymentPeriodDialog, MarkAsPaidDialog } from '@/components/Credit';
 import { Button } from '@/components/ui/button';
@@ -139,6 +139,7 @@ export function PaymentPeriodManager({ credit }: PaymentPeriodManagerProps) {
   
   // Fetch danh sách kỳ thanh toán từ database
   const fetchPaymentPeriods = async () => {
+    console.log('Fetching payment periods for credit:', credit.id);
     setIsLoading(true);
     try {
       const { data, error } = await getCreditPaymentPeriods(credit.id);
@@ -149,14 +150,52 @@ export function PaymentPeriodManager({ credit }: PaymentPeriodManagerProps) {
       
       if (data && data.length > 0) {
         // Lưu dữ liệu từ DB
-        setDbPeriods(data as CreditPaymentPeriod[]);
+        const typedData = data as CreditPaymentPeriod[];
+        setDbPeriods(typedData);
         
-        // Tạo danh sách kỳ kết hợp (DB + ước tính)
-        generateEstimatedPeriods(true);
+        // Tính toán các kỳ ước tính chuẩn dựa trên thông tin hợp đồng
+        const calculatedPeriods = calculatePaymentPeriods(credit);
+        
+        // Log thông tin kỳ từ DB với số tiền thực tế và tỷ lệ bù trừ
+        console.log('Periods from DB:', typedData.map(p => ({
+          number: p.period_number,
+          start: p.start_date,
+          end: p.end_date,
+          expected: p.expected_amount,
+          actual: p.actual_amount,
+          // Tính toán phần trăm bù trừ (nếu có số tiền thêm)
+          compensation: p.actual_amount > p.expected_amount ? 
+            ((p.actual_amount - p.expected_amount) / p.expected_amount * 100).toFixed(2) + '%' : 
+            '0%'
+        })));
+        
+        // Sử dụng phương pháp xử lý các kỳ mới
+        const processedPeriods = processPeriodsWithData(calculatedPeriods, typedData);
+        
+        // Kiểm tra sự khác biệt giữa các kỳ đã xử lý và các kỳ tại DB
+        const hasIrregularPeriods = typedData.some(p => p.actual_amount > p.expected_amount);
+        
+        if (hasIrregularPeriods) {
+          console.log('Phát hiện các kỳ bất thường với số tiền thêm - Điều chỉnh kế hoạch thanh toán');
+        }
+        
+        // Cập nhật danh sách kỳ đã xử lý
+        setPeriods(processedPeriods);
+        setEstimatedPeriods(calculatedPeriods);
+        
+        // Tính toán thông tin tổng hợp về các kỳ
+        setSummary(calculatePaymentSummary(processedPeriods));
       } else {
         // Nếu không có dữ liệu từ DB, sử dụng hoàn toàn dữ liệu ước tính
         setDbPeriods([]);
-        generateEstimatedPeriods(false);
+        
+        // Tính toán các kỳ ước tính chuẩn
+        const calculatedPeriods = calculatePaymentPeriods(credit);
+        
+        // Cập nhật các state
+        setEstimatedPeriods(calculatedPeriods);
+        setPeriods(calculatedPeriods);
+        setSummary(calculatePaymentSummary(calculatedPeriods));
       }
     } catch (error) {
       console.error('Error fetching payment periods:', error);
@@ -165,9 +204,15 @@ export function PaymentPeriodManager({ credit }: PaymentPeriodManagerProps) {
         description: "Không thể tải danh sách kỳ đóng lãi",
         variant: "destructive"
       });
+      
       // Nếu có lỗi khi truy vấn DB, sử dụng dữ liệu ước tính thay thế
       setDbPeriods([]);
-      generateEstimatedPeriods(false);
+      
+      // Tính toán các kỳ ước tính chuẩn trong trường hợp lỗi
+      const calculatedPeriods = calculatePaymentPeriods(credit);
+      setEstimatedPeriods(calculatedPeriods);
+      setPeriods(calculatedPeriods);
+      setSummary(calculatePaymentSummary(calculatedPeriods));
     } finally {
       setIsLoading(false);
     }
@@ -234,59 +279,22 @@ export function PaymentPeriodManager({ credit }: PaymentPeriodManagerProps) {
       
       // Nếu còn ngày sau kỳ cuối cùng và trước ngày kết thúc hợp đồng
       if (nextStartDate < loanEndDate) {
-        // Tính số kỳ còn lại
-        const daysRemaining = differenceInDays(loanEndDate, nextStartDate);
-        const periodsRemaining = Math.ceil(daysRemaining / credit.interest_period);
+        console.log('Tính toán lại các kỳ còn lại sau kỳ bất thường hoặc có số tiền thêm');
         
-        console.log('Days remaining:', daysRemaining, 'Periods remaining:', periodsRemaining);
+        // Sử dụng phương pháp mới tính toán các kỳ còn lại
+        // Cách tính mới này xử lý việc phân bổ lại cả thời gian và số tiền
+        // dựa trên tổng số tiền lãi và số tiền đã tính cho các kỳ trước đó
+        const remainingPeriods = recalculateRemainingPeriodsAfterIrregular(
+          credit,
+          combinedPeriods, // Các kỳ đã tồn tại
+          nextStartDate,    // Ngày bắt đầu kỳ tiếp theo
+          loanEndDate       // Ngày kết thúc khoản vay
+        );
         
-        // Tạo các kỳ còn lại
-        if (periodsRemaining > 0) {
-          let currentStartDate = nextStartDate;
-          
-          for (let i = 0; i < periodsRemaining; i++) {
-            // Ngày kết thúc của kỳ này (hoặc ngày kết thúc hợp đồng nếu là kỳ cuối)
-            let periodEndDate;
-            
-            // Nếu là kỳ cuối cùng và còn ngày thừa
-            if (i === periodsRemaining - 1) {
-              periodEndDate = loanEndDate;
-            } else {
-              // Ngày kết thúc kỳ thường là ngày bắt đầu + interest_period - 1
-              periodEndDate = addDays(currentStartDate, credit.interest_period - 1);
-            }
-            
-            // Xác định số ngày thực tế trong kỳ
-            const daysInPeriod = differenceInDays(periodEndDate, currentStartDate) + 1;
-            
-            // Tính số tiền dự kiến
-            const expectedAmount = calculateExpectedAmountForDateRange(
-              credit, 
-              currentStartDate, 
-              periodEndDate
-            );
-            
-            // Tạo kỳ mới
-            const newPeriod: CreditPaymentPeriod = {
-              id: '',
-              credit_id: credit.id,
-              period_number: sortedDbPeriods.length + i + 1,
-              start_date: format(currentStartDate, 'yyyy-MM-dd'),
-              end_date: format(periodEndDate, 'yyyy-MM-dd'),
-              expected_amount: expectedAmount,
-              actual_amount: 0,
-              payment_date: null,
-              status: PaymentPeriodStatus.PENDING,
-              notes: ''
-            };
-            
-            // Thêm kỳ mới vào danh sách
-            combinedPeriods.push(newPeriod);
-            
-            // Cập nhật ngày bắt đầu cho kỳ tiếp theo
-            currentStartDate = addDays(periodEndDate, 1);
-          }
-        }
+        // Thêm các kỳ mới tính toán vào danh sách
+        combinedPeriods.push(...remainingPeriods);
+        
+        console.log(`Đã tính toán ${remainingPeriods.length} kỳ còn lại sau điều chỉnh`);
       }
       
       // Sắp xếp lại toàn bộ các kỳ theo thời gian
@@ -602,8 +610,12 @@ export function PaymentPeriodManager({ credit }: PaymentPeriodManagerProps) {
     if (!selectedPeriod) return;
     
     try {
+      console.log('Xử lý đánh dấu đã thanh toán cho kỳ:', selectedPeriod.period_number);
+      console.log('Dữ liệu submit:', data);
+      
       // Nếu là kỳ ước tính (chưa có trong DB), tạo mới và đánh dấu đã thanh toán
       if (!selectedPeriod.id) {
+        console.log('Kỳ này là ước tính, cần tạo mới trong DB');
         const newPeriod = {
           credit_id: credit.id,
           period_number: selectedPeriod.period_number,
@@ -616,13 +628,16 @@ export function PaymentPeriodManager({ credit }: PaymentPeriodManagerProps) {
           status: PaymentPeriodStatus.PAID
         };
         
+        console.log('Tạo kỳ mới:', newPeriod);
         const { data: result, error } = await createPaymentPeriod(newPeriod);
         
         if (error) {
           throw new Error(error.message);
         }
+        console.log('Kết quả:', result);
       } else {
         // Nếu đã có trong DB, cập nhật trạng thái
+        console.log(`Cập nhật kỳ ${selectedPeriod.id} đã có trong DB`);
         const { data: result, error } = await markPeriodAsPaid(
           selectedPeriod.id, 
           data.actual_amount, 
@@ -633,13 +648,21 @@ export function PaymentPeriodManager({ credit }: PaymentPeriodManagerProps) {
         if (error) {
           throw new Error(error.message);
         }
+        console.log('Kết quả cập nhật:', result);
       }
       
+      // Đóng dialog trước khi tải lại dữ liệu để tránh xung đột
       setIsPaidDialogOpen(false);
       setSelectedPeriod(null);
       
-      // Tải lại dữ liệu từ DB và tính toán lại các kỳ
-      fetchPaymentPeriods();
+      // Để chắc chắn UI đã cập nhật trước khi fetch dữ liệu mới
+      setTimeout(() => {
+        // Tải lại dữ liệu từ DB và tính toán lại các kỳ
+        console.log('Bắt đầu fetch lại dữ liệu...');
+        fetchPaymentPeriods().then(() => {
+          console.log('Fetch dữ liệu hoàn tất');
+        });
+      }, 300);
       
       toast({
         title: "Thành công",
@@ -750,7 +773,7 @@ export function PaymentPeriodManager({ credit }: PaymentPeriodManagerProps) {
       {isLoading ? (
         <div className="p-8 flex flex-col items-center justify-center space-y-4 border rounded-lg bg-muted/10">
           <RefreshCw className="h-10 w-10 animate-spin text-primary" />
-          <p className="text-lg font-medium">Đang tải dữ liệu từ Supabase...</p>
+          <p className="text-lg font-medium">Đang tải dữ liệu...</p>
           <p className="text-sm text-muted-foreground">Vui lòng đợi trong giây lát</p>
         </div>
       ) : (

@@ -144,18 +144,17 @@ export function MarkAsPaidDialog({
             </div>
           </div>
           
-          {/* Số tiền đã đóng */}
+          {/* Số tiền đã đóng - đã vô hiệu hóa */}
           <div className="space-y-2">
-            <Label htmlFor="actual_amount">Số tiền đã đóng <span className="text-destructive">*</span></Label>
-            <Input
-              id="actual_amount"
-              name="actual_amount"
-              type="number"
-              value={formData.actual_amount}
-              onChange={handleChange}
-              className={cn(errors.actual_amount && "border-destructive")}
+            <Label htmlFor="actual_amount">Số tiền đã đóng</Label>
+            <div className="p-2 border rounded bg-muted/20">
+              {formatCurrency(formData.actual_amount)}
+            </div>
+            <input 
+              type="hidden" 
+              name="actual_amount" 
+              value={formData.actual_amount} 
             />
-            {errors.actual_amount && <p className="text-sm text-destructive">{errors.actual_amount}</p>}
           </div>
           
           {/* Ngày đóng lãi */}
@@ -183,7 +182,7 @@ export function MarkAsPaidDialog({
                 <Calendar
                   mode="single"
                   selected={formData.payment_date}
-                  month={formData.payment_date} // Hiển thị đúng tháng của ngày được chọn
+                  defaultMonth={formData.payment_date} // Hiển thị đúng tháng của ngày được chọn
                   onSelect={handleDateChange}
                   disabled={{
                     // Không cho phép chọn ngày trước ngày bắt đầu của kỳ

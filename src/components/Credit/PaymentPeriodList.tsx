@@ -135,9 +135,9 @@ export function PaymentPeriodList({
                           Kỳ {period.period_number}
                         </CardTitle>
                         {period.isFromDb ? (
-                          <Database className="h-4 w-4 text-blue-500" title="Đã lưu trong DB" />
+                          <Database className="h-4 w-4 text-blue-500" />
                         ) : (
-                          <Calculator className="h-4 w-4 text-orange-500" title="Dữ liệu ước tính" />
+                          <Calculator className="h-4 w-4 text-orange-500" />
                         )}
                         <Badge 
                           variant={statusVariantMap[period.status]} 
