@@ -10,6 +10,9 @@ export interface Customer {
   phone?: string | null;
   address?: string | null;
   id_number?: string | null;
+  email?: string | null;
+  notes?: string | null;
+  status?: CustomerStatus;
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -20,6 +23,9 @@ export interface CreateCustomerParams {
   phone?: string | null;
   address?: string | null;
   id_number?: string | null;
+  email?: string | null;
+  notes?: string | null;
+  status?: CustomerStatus;
 }
 
 export interface UpdateCustomerParams {
@@ -28,4 +34,7 @@ export interface UpdateCustomerParams {
   phone?: string | null;
   address?: string | null;
   id_number?: string | null;
+  email?: string | null;
+  notes?: string | null;
+  status?: CustomerStatus;
 }

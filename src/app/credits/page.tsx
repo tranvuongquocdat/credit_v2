@@ -191,14 +191,6 @@ export default function CreditsPage() {
         {/* Title và nút trở về */}
         <div className="flex items-center justify-between border-b pb-2 mb-2">
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push('/')}
-              className="h-7 px-2"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
             <h1 className="text-lg font-bold">Quản lý hợp đồng tín chấp</h1>
           </div>
         </div>
