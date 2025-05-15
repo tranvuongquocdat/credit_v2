@@ -1,17 +1,8 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+// Không cần import font từ Google Fonts vì sẽ sử dụng Arial (system font)
 
 export const metadata: Metadata = {
   title: "Credit App",
@@ -26,8 +17,12 @@ export default function RootLayout({
   return (
     <html lang="vi">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-        style={{ backgroundColor: '#f5f5f5', color: '#333' }}
+        className="antialiased"
+        style={{ 
+          backgroundColor: '#f5f5f5', 
+          color: '#333',
+          fontFamily: 'Arial, sans-serif' 
+        }}
       >
         {children}
         <Toaster />

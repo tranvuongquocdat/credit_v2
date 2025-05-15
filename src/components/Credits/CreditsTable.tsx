@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { CreditWithCustomer, CreditStatus } from '@/models/credit';
-import { FileEditIcon, MoreVertical, Trash2Icon } from 'lucide-react';
+import { FileEditIcon, MoreVertical, Trash2Icon, CalendarIcon, ClockIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
@@ -34,6 +34,7 @@ interface CreditsTableProps {
   onEdit: (id: string) => void;
   onDelete: (credit: CreditWithCustomer) => void;
   onUpdateStatus: (credit: CreditWithCustomer) => void;
+  onShowPaymentHistory?: (credit: CreditWithCustomer) => void;
 }
 
 export function CreditsTable({ 
@@ -42,7 +43,8 @@ export function CreditsTable({
   onView, 
   onEdit, 
   onDelete, 
-  onUpdateStatus 
+  onUpdateStatus,
+  onShowPaymentHistory 
 }: CreditsTableProps) {
   // Format tiền tệ
   const formatCurrency = (amount: number): string => {
@@ -70,9 +72,9 @@ export function CreditsTable({
             <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Tên KH</TableHead>
             <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Tài sản</TableHead>
             <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Số tiền</TableHead>
-            <TableHead className="py-2 px-3 text-left font-medium w-28 border-b border-r border-gray-200">Từ ngày</TableHead>
+            <TableHead className="py-2 px-3 text-left font-medium w-28 border-b border-r border-gray-200">Ngày vay</TableHead>
             <TableHead className="py-2 px-3 text-left font-medium w-28 border-b border-r border-gray-200">Ngày trả</TableHead>
-            <TableHead className="py-2 px-3 text-right font-medium w-28 border-b border-r border-gray-200">Lãi phí</TableHead>
+            <TableHead className="py-2 px-3 text-right font-medium w-28 border-b border-r border-gray-200">Lãi phí đã đóng</TableHead>
             <TableHead className="py-2 px-3 text-right font-medium w-28 border-b border-r border-gray-200">Nợ cũ</TableHead>
             <TableHead className="py-2 px-3 text-right font-medium w-28 border-b border-r border-gray-200">Lãi phí đến hôm nay</TableHead>
             <TableHead className="py-2 px-3 text-center font-medium w-28 border-b border-r border-gray-200">Tình trạng</TableHead>
@@ -103,10 +105,22 @@ export function CreditsTable({
                   {credit.collateral || '-'}
                 </TableCell>
                 <TableCell className="py-3 px-3 border-b border-r border-gray-200">
-                  {formatCurrency(credit.loan_amount)}
+                  <div>
+                    {formatCurrency(credit.loan_amount)}
+                    <div className="text-xs text-red-800 mt-1">
+                      {credit.interest_type === 'percentage' 
+                        ? `${credit.interest_value}%` 
+                        : `${formatCurrency(credit.interest_value)}`}
+                    </div>
+                  </div>
                 </TableCell>
                 <TableCell className="py-3 px-3 text-gray-600 border-b border-r border-gray-200">
-                  {formatDate(credit.loan_date)}
+                  <div>
+                    {formatDate(credit.loan_date)}
+                    <div className="text-xs text-gray-400 mt-1">
+                      Kỳ lãi: {credit.interest_period} ngày
+                    </div>
+                  </div>
                 </TableCell>
                 <TableCell className="py-3 px-3 text-gray-600 border-b border-r border-gray-200">
                   {formatDate(new Date(new Date(credit.loan_date).getTime() + credit.loan_period * 24 * 60 * 60 * 1000).toISOString())}
@@ -147,6 +161,16 @@ export function CreditsTable({
                     >
                       <Trash2Icon className="h-4 w-4 text-gray-500" />
                     </Button>
+                    {onShowPaymentHistory && (
+                      <Button 
+                        variant="ghost" 
+                        className="h-8 w-8 p-0" 
+                        onClick={() => onShowPaymentHistory(credit)}
+                        title="Lịch sử thanh toán"
+                      >
+                        <CalendarIcon className="h-4 w-4 text-gray-500" />
+                      </Button>
+                    )}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" className="h-8 w-8 p-0">
@@ -158,6 +182,11 @@ export function CreditsTable({
                         <DropdownMenuItem onClick={() => onView(credit.id)}>
                           Xem chi tiết
                         </DropdownMenuItem>
+                        {onShowPaymentHistory && (
+                          <DropdownMenuItem onClick={() => onShowPaymentHistory(credit)}>
+                            Lịch sử thanh toán
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem onClick={() => onUpdateStatus(credit)}>
                           Cập nhật trạng thái
                         </DropdownMenuItem>

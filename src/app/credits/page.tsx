@@ -19,6 +19,7 @@ import { FinancialSummary } from '@/components/Credits/FinancialSummary';
 import { SearchFilters } from '@/components/Credits/SearchFilters';
 import { CreditsTable } from '@/components/Credits/CreditsTable';
 import { CreditsPagination } from '@/components/Credits/CreditsPagination';
+import { PaymentHistoryModal } from '@/components/Credits/PaymentHistoryModal';
 
 // Import custom hooks
 import { useCredits } from '@/hooks/useCredits';
@@ -69,6 +70,10 @@ export default function CreditsPage() {
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedCredit, setSelectedCredit] = useState<CreditWithCustomer | null>(null);
+  
+  // State cho modal lịch sử thanh toán
+  const [isPaymentHistoryModalOpen, setIsPaymentHistoryModalOpen] = useState(false);
+  const [paymentHistoryCredit, setPaymentHistoryCredit] = useState<CreditWithCustomer | null>(null);
   
   // Quỹ tiền mặt state
   const [fundStatus, setFundStatus] = useState<FundStatus>({
@@ -156,6 +161,18 @@ export default function CreditsPage() {
     handleCloseDeleteDialog();
   };
   
+  // Handle opening payment history modal
+  const handleOpenPaymentHistory = (credit: CreditWithCustomer) => {
+    setPaymentHistoryCredit(credit);
+    setIsPaymentHistoryModalOpen(true);
+  };
+  
+  // Handle closing payment history modal
+  const handleClosePaymentHistory = () => {
+    setIsPaymentHistoryModalOpen(false);
+    setPaymentHistoryCredit(null);
+  };
+  
   return (
     <Layout>
       <div className="max-w-full">
@@ -197,6 +214,7 @@ export default function CreditsPage() {
           onEdit={handleEditCredit}
           onDelete={handleOpenDeleteDialog}
           onUpdateStatus={handleOpenStatusDialog}
+          onShowPaymentHistory={handleOpenPaymentHistory}
         />
         
         {/* Phân trang */}
@@ -252,6 +270,15 @@ export default function CreditsPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+        
+        {/* Modal lịch sử thanh toán */}
+        {paymentHistoryCredit && (
+          <PaymentHistoryModal
+            isOpen={isPaymentHistoryModalOpen}
+            onClose={handleClosePaymentHistory}
+            credit={paymentHistoryCredit}
+          />
+        )}
       </div>
     </Layout>
   );
