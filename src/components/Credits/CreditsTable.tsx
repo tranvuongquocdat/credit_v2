@@ -94,7 +94,7 @@ export function CreditsTable({
                 <TableCell className="py-3 px-3 text-gray-500 border-b border-r border-gray-200">{index + 1}</TableCell>
                 <TableCell 
                   className="py-3 px-3 font-medium text-blue-600 cursor-pointer border-b border-r border-gray-200" 
-                  onClick={() => onView(credit.id)}
+                  onClick={() => onEdit(credit.id)}
                 >
                   {credit.contract_code || '-'}
                 </TableCell>

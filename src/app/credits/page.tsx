@@ -16,10 +16,12 @@ import { ChevronLeft } from 'lucide-react';
 
 // Import custom components
 import { FinancialSummary } from '@/components/Credits/FinancialSummary';
-import { SearchFilters } from '@/components/Credits/SearchFilters';
+import { SearchFilters } from '@/components/credits/SearchFilters';
 import { CreditsTable } from '@/components/Credits/CreditsTable';
 import { CreditsPagination } from '@/components/Credits/CreditsPagination';
 import { PaymentHistoryModal } from '@/components/Credits/PaymentHistoryModal';
+import { CreditCreateModal } from '@/components/Credits/CreditCreateModal';
+import { CreditEditModal } from '@/components/Credits/CreditEditModal';
 
 // Import custom hooks
 import { useCredits } from '@/hooks/useCredits';
@@ -75,6 +77,13 @@ export default function CreditsPage() {
   const [isPaymentHistoryModalOpen, setIsPaymentHistoryModalOpen] = useState(false);
   const [paymentHistoryCredit, setPaymentHistoryCredit] = useState<CreditWithCustomer | null>(null);
   
+  // State cho modal tạo hợp đồng mới
+  const [isCreditCreateModalOpen, setIsCreditCreateModalOpen] = useState(false);
+  
+  // State cho modal chỉnh sửa hợp đồng
+  const [isCreditEditModalOpen, setIsCreditEditModalOpen] = useState(false);
+  const [editCreditId, setEditCreditId] = useState<string>('');
+  
   // Quỹ tiền mặt state
   const [fundStatus, setFundStatus] = useState<FundStatus>({
     totalFund: 122350000,
@@ -104,7 +113,8 @@ export default function CreditsPage() {
   
   // Handle create new credit
   const handleCreateCredit = () => {
-    router.push('/credits/create');
+    // Mở modal tạo hợp đồng mới thay vì chuyển trang
+    setIsCreditCreateModalOpen(true);
   };
   
   // Handle export to Excel
@@ -115,7 +125,9 @@ export default function CreditsPage() {
   
   // Handle edit credit
   const handleEditCredit = (creditId: string) => {
-    router.push(`/credits/edit/${creditId}`);
+    // Mở modal chỉnh sửa thay vì chuyển trang
+    setEditCreditId(creditId);
+    setIsCreditEditModalOpen(true);
   };
   
   // Handle view credit details
@@ -277,6 +289,33 @@ export default function CreditsPage() {
             isOpen={isPaymentHistoryModalOpen}
             onClose={handleClosePaymentHistory}
             credit={paymentHistoryCredit}
+          />
+        )}
+
+        {/* Modal tạo hợp đồng mới */}
+        <CreditCreateModal
+          isOpen={isCreditCreateModalOpen}
+          onClose={() => setIsCreditCreateModalOpen(false)}
+          onSuccess={(creditId) => {
+            setIsCreditCreateModalOpen(false);
+            refetch(); // Refresh danh sách hợp đồng sau khi tạo mới
+          }}
+        />
+        
+        {/* Modal chỉnh sửa hợp đồng */}
+        {editCreditId && (
+          <CreditEditModal
+            isOpen={isCreditEditModalOpen}
+            onClose={() => {
+              setIsCreditEditModalOpen(false);
+              setEditCreditId('');
+            }}
+            creditId={editCreditId}
+            onSuccess={(creditId) => {
+              setIsCreditEditModalOpen(false);
+              setEditCreditId('');
+              refetch(); // Refresh danh sách hợp đồng sau khi cập nhật
+            }}
           />
         )}
       </div>
