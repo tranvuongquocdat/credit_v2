@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { AlertCircle } from 'lucide-react';
@@ -40,8 +41,10 @@ export function InstallmentCreateModal({
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [amountGiven, setAmountGiven] = useState<string>('0');
+  const [formattedAmountGiven, setFormattedAmountGiven] = useState<string>('0');
   const [interestRate, setInterestRate] = useState<string>('10');
-  const [duration, setDuration] = useState<string>('7');
+  const [interestRateType, setInterestRateType] = useState<string>('daily');
+  const [duration, setDuration] = useState<string>('50');
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [paymentDate, setPaymentDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -61,8 +64,34 @@ export function InstallmentCreateModal({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Quick buttons for amount adjustments
-  const amountPresets = [1, 2, 3, 5, 10, 15, 20];
+  // Quick buttons for loan amount
+  const amountPresets = [-5, 10, 15, 20, 25, 30, 40, 50];
+  
+  // For the second input field - tiền đưa khách
+  const [customerAmount, setCustomerAmount] = useState<string>('0');
+  const [formattedCustomerAmount, setFormattedCustomerAmount] = useState<string>('0');
+  
+  // Format number with thousand separators
+  const formatNumber = (value: string | number): string => {
+    // Convert to number and back to string to remove non-numeric characters
+    const numericValue = value.toString().replace(/[^0-9]/g, '');
+    // Format with thousand separators
+    return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+  
+  // Handle amount change for trả góp
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value.replace(/\./g, '');
+    setAmountGiven(rawValue);
+    setFormattedAmountGiven(formatNumber(rawValue));
+  };
+  
+  // Handle amount change for tiền đưa khách
+  const handleCustomerAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value.replace(/\./g, '');
+    setCustomerAmount(rawValue);
+    setFormattedCustomerAmount(formatNumber(rawValue));
+  };
 
   // Load customers and employees for dropdowns
   useEffect(() => {
@@ -108,7 +137,19 @@ export function InstallmentCreateModal({
   // Quick amount adjustment
   const adjustAmount = (amount: number) => {
     const newAmount = parseInt(amountGiven || '0') + amount;
-    setAmountGiven(newAmount > 0 ? newAmount.toString() : '0');
+    if (newAmount >= 0) {
+      setAmountGiven(newAmount.toString());
+      setFormattedAmountGiven(formatNumber(newAmount));
+    }
+  };
+  
+  // Quick amount adjustment for tiền đưa khách
+  const adjustCustomerAmount = (amount: number) => {
+    const newAmount = parseInt(customerAmount || '0') + amount;
+    if (newAmount >= 0) {
+      setCustomerAmount(newAmount.toString());
+      setFormattedCustomerAmount(formatNumber(newAmount));
+    }
   };
   
   // Form submission handler
@@ -129,7 +170,7 @@ export function InstallmentCreateModal({
         amount_given: parseInt(amountGiven || '0'),
         interest_rate: parseFloat(interestRate || '0'),
         duration: parseInt(duration || '7'),
-        start_date: new Date(startDate),
+        start_date: startDate,
         notes,
         status: InstallmentStatus.ON_TIME,
         amount_paid: 0,
@@ -263,28 +304,17 @@ export function InstallmentCreateModal({
             <Label htmlFor="amountGiven" className="text-right">
               Trả góp <span className="text-red-500">*</span>
             </Label>
-            <div>
+            <div className="flex items-center gap-3">
               <Input 
                 id="amountGiven"
-                type="number"
-                value={amountGiven}
-                onChange={(e) => setAmountGiven(e.target.value)}
+                type="text"
+                value={formattedAmountGiven}
+                onChange={handleAmountChange}
                 required
+                inputMode="numeric"
+                className="w-48"
               />
-              <div className="flex flex-wrap gap-2 mt-2">
-                {amountPresets.map(amount => (
-                  <Button 
-                    key={amount}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => adjustAmount(amount * 1000000)}
-                    className="px-2 py-1 h-auto"
-                  >
-                    {amount}tr
-                  </Button>
-                ))}
-              </div>
+              <span className="text-sm text-gray-500">(Tổng tiền vay khách phải thanh toán)</span>
             </div>
           </div>
           
@@ -292,29 +322,39 @@ export function InstallmentCreateModal({
             <Label htmlFor="tiendua" className="text-right">
               Tiền đưa khách <span className="text-red-500">*</span>
             </Label>
-            <Input 
-              id="tiendua"
-              type="number"
-              value={amountGiven}
-              onChange={(e) => setAmountGiven(e.target.value)}
-              required
-            />
+            <div className="flex items-center gap-3">
+              <Input 
+                id="tiendua"
+                type="text"
+                value={formattedCustomerAmount}
+                onChange={handleCustomerAmountChange}
+                required
+                inputMode="numeric"
+                className="w-48"
+              />
+              <span className="text-sm text-gray-500">(Tổng tiền khách nhận được)</span>
+            </div>
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
             <Label htmlFor="duration" className="text-right">
               Thời gian vay <span className="text-red-500">*</span>
             </Label>
-            <div className="flex items-center gap-2">
-              <Input 
-                id="duration"
-                type="number"
-                value={duration}
-                onChange={(e) => setDuration(e.target.value)}
-                required
-                className="w-24"
-              />
-              <span>ngày</span>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Input 
+                  id="duration"
+                  type="number"
+                  value={duration}
+                  onChange={(e) => setDuration(e.target.value)}
+                  required
+                  className="w-24"
+                />
+                <span>ngày</span>
+              </div>
+              <span className="text-sm text-gray-500">
+                {`(Thanh toán ${formatNumber(Math.round(parseInt(amountGiven || '0') / (parseInt(duration || '50') || 1)))} / 1 ngày)`}
+              </span>
             </div>
           </div>
           
@@ -322,26 +362,28 @@ export function InstallmentCreateModal({
             <Label htmlFor="interestRate" className="text-right">
               Số ngày đóng tiền <span className="text-red-500">*</span>
             </Label>
-            <div className="flex items-center gap-2">
-              <Input 
-                id="interestRate"
-                type="number"
-                value={interestRate}
-                onChange={(e) => setInterestRate(e.target.value)}
-                required
-                className="w-24"
-              />
-              <span>ngày</span>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Input 
+                  id="interestRate"
+                  type="number"
+                  value={interestRate}
+                  onChange={(e) => setInterestRate(e.target.value)}
+                  required
+                  className="w-24"
+                />
+                <span>ngày</span>
+              </div>
+              <span className="text-sm text-gray-500">(VD: 3 ngày đóng 1 lần thì điền số 3)</span>
             </div>
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
             <Label htmlFor="startDate" className="text-right">Ngày vay</Label>
-            <Input 
+            <DatePicker 
               id="startDate"
-              type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={setStartDate}
               required
             />
           </div>

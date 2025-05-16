@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 
 interface AdditionalLoanFormProps {
   onSubmit: (data: {
@@ -39,12 +40,11 @@ export function AdditionalLoanForm({ onSubmit }: AdditionalLoanFormProps) {
         {/* Ngày vay thêm gốc */}
         <div className="flex items-center">
           <label htmlFor="loanDate" className="w-48 text-right mr-4">Ngày vay thêm gốc</label>
-          <input
+          <DatePicker
             id="loanDate"
-            type="date"
-            className="border rounded px-2 py-1 w-64"
             value={loanDate}
-            onChange={(e) => setLoanDate(e.target.value)}
+            onChange={setLoanDate}
+            className="w-64"
           />
         </div>
         

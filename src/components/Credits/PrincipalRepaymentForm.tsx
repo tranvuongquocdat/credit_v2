@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 
 interface PrincipalRepaymentFormProps {
   onSubmit: (data: {
@@ -39,12 +40,11 @@ export function PrincipalRepaymentForm({ onSubmit }: PrincipalRepaymentFormProps
         {/* Ngày trả trước gốc */}
         <div className="flex items-center">
           <label htmlFor="repaymentDate" className="w-48 text-right mr-4">Ngày trả trước gốc</label>
-          <input
+          <DatePicker
             id="repaymentDate"
-            type="date"
-            className="border rounded px-2 py-1 w-64"
             value={repaymentDate}
-            onChange={(e) => setRepaymentDate(e.target.value)}
+            onChange={setRepaymentDate}
+            className="w-64"
           />
         </div>
         

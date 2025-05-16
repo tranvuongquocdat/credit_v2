@@ -13,6 +13,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { DatePicker } from '@/components/ui/date-picker';
+// Không cần import CustomDateInput
 // Using regular input radio buttons instead of RadioGroup component
 import { createCredit } from '@/lib/credit';
 import { getCustomers } from '@/lib/customer';
@@ -39,7 +41,9 @@ export function CreditCreateModal({
   const [address, setAddress] = useState('');
   const [collateral, setCollateral] = useState('');
   const [loanAmount, setLoanAmount] = useState<string>('0');
-  const [interestType, setInterestType] = useState<'percentage' | 'fixed'>('percentage');
+  const [formattedLoanAmount, setFormattedLoanAmount] = useState<string>('0');
+  const [interestType, setInterestType] = useState<string>('daily');
+  const [interestNotation, setInterestNotation] = useState<string>('k_per_million');  // For tracking the selected radio button option
   const [interestValue, setInterestValue] = useState<string>('0');
   const [loanPeriod, setLoanPeriod] = useState<string>('30');
   const [interestPeriod, setInterestPeriod] = useState<string>('10');
@@ -57,7 +61,22 @@ export function CreditCreateModal({
   const [error, setError] = useState<string | null>(null);
   
   // Quick buttons for loan amount
-  const loanAmountPresets = [-5, +5, 10, 20, 50, 40, 50];
+  const loanAmountPresets = [-5, +5, 10, 20, 30, 40, 50];
+  
+  // Format number with thousand separators
+  const formatNumber = (value: string | number): string => {
+    // Convert to number and back to string to remove non-numeric characters
+    const numericValue = value.toString().replace(/[^0-9]/g, '');
+    // Format with thousand separators
+    return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+  
+  // Handle loan amount change
+  const handleLoanAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value.replace(/\./g, '');
+    setLoanAmount(rawValue);
+    setFormattedLoanAmount(formatNumber(rawValue));
+  };
   
   // Load customers for dropdown
   useEffect(() => {
@@ -91,10 +110,36 @@ export function CreditCreateModal({
     }
   };
   
+  // Handle interest type change
+  const handleInterestTypeChange = (value: string) => {
+    setInterestType(value);
+    
+    // Set default notation based on interest type
+    switch(value) {
+      case 'daily':
+        setInterestNotation('k_per_million');
+        break;
+      case 'monthly_30':
+      case 'monthly_custom':
+        setInterestNotation('percent_per_month');
+        break;
+      case 'weekly_percent':
+        setInterestNotation('percent_per_week');
+        break;
+      case 'weekly_k':
+        setInterestNotation('k_per_week');
+        break;
+      default:
+        setInterestNotation('k_per_million');
+    }
+  };
+  
   // Quick loan amount adjustment
   const adjustLoanAmount = (amount: number) => {
     const newAmount = parseInt(loanAmount || '0') + amount;
-    setLoanAmount(newAmount > 0 ? newAmount.toString() : '0');
+    const newAmountStr = newAmount > 0 ? newAmount.toString() : '0';
+    setLoanAmount(newAmountStr);
+    setFormattedLoanAmount(formatNumber(newAmountStr));
   };
   
   // Form submission handler
@@ -107,21 +152,33 @@ export function CreditCreateModal({
       // Prepare credit data
       // For new customers, we need to create a customer record first (handled by backend)
       // For existing customers, we use the selected customer_id
+      // Map the UI interest type to the backend interest type
+      let backendInterestType = InterestType.PERCENTAGE;
+      if (interestType === 'daily') {
+        backendInterestType = InterestType.PERCENTAGE;
+      } else if (interestType === 'monthly_30' || interestType === 'monthly_custom' || 
+                 interestType === 'weekly_percent') {
+        backendInterestType = InterestType.PERCENTAGE;
+      } else if (interestType === 'weekly_k') {
+        backendInterestType = InterestType.FIXED_AMOUNT;
+      }
+      
+      // Prepare credit data
       const creditData: CreateCreditParams = {
-        customer_id: customerType === 'existing' ? selectedCustomerId : '', // For new customers, backend will create a customer with the details below
+        customer_id: customerType === 'existing' ? selectedCustomerId : '',
         contract_code: contractCode,
         id_number: idNumber,
         phone,
         address,
         collateral,
         loan_amount: parseInt(loanAmount || '0'),
-        interest_type: interestType === 'percentage' ? InterestType.PERCENTAGE : InterestType.FIXED_AMOUNT,
+        interest_type: backendInterestType,
         interest_value: parseFloat(interestValue || '0'),
         loan_period: parseInt(loanPeriod || '30'),
         interest_period: parseInt(interestPeriod || '10'),
         loan_date: new Date(loanDate),
-        notes,
         status: CreditStatus.ON_TIME,
+        notes: notes + (interestType !== 'daily' ? ` [${interestType}]` : ''),
         store_id: '1', // Default store ID - this could be fetched from context in a real implementation
       };
       
@@ -265,10 +322,11 @@ export function CreditCreateModal({
             <div>
               <Input 
                 id="loanAmount"
-                type="number"
-                value={loanAmount}
-                onChange={(e) => setLoanAmount(e.target.value)}
+                type="text"
+                value={formattedLoanAmount}
+                onChange={handleLoanAmountChange}
                 required
+                inputMode="numeric"
               />
               <div className="flex flex-wrap gap-2 mt-2">
                 {loanAmountPresets.map(amount => (
@@ -292,10 +350,13 @@ export function CreditCreateModal({
             <select 
               className="border rounded-md p-2 w-full"
               value={interestType}
-              onChange={(e) => setInterestType(e.target.value as 'percentage' | 'fixed')}
+              onChange={(e) => handleInterestTypeChange(e.target.value)}
             >
-              <option value="percentage">Lãi phí ngày</option>
-              <option value="fixed">Lãi phí cố định</option>
+              <option value="daily">Lãi phí ngày</option>
+              <option value="monthly_30">Lãi phí tháng (%) (30 ngày)</option>
+              <option value="monthly_custom">Lãi phí tháng (%) (Định kỳ)</option>
+              <option value="weekly_percent">Lãi phí tuần (%)</option>
+              <option value="weekly_k">Lãi phí tuần (k)</option>
             </select>
           </div>
           
@@ -312,28 +373,80 @@ export function CreditCreateModal({
                 required
                 className="w-32"
               />
-              <div className="flex items-center space-x-4">
-                <div className="flex items-center">
-                  <input 
-                    type="radio" 
-                    id="interestOption1" 
-                    name="interestOption" 
-                    checked={true}
-                    className="mr-2"
-                  />
-                  <label htmlFor="interestOption1">k/1 triệu</label>
-                </div>
+              <div className="flex flex-wrap gap-4 items-center">
+                {interestType === 'daily' && (
+                  <>
+                    <div className="flex items-center">
+                      <input 
+                        type="radio" 
+                        id="interestDaily1" 
+                        name="interestDaily" 
+                        checked={interestNotation === 'k_per_million'}
+                        onChange={() => setInterestNotation('k_per_million')}
+                        className="mr-2"
+                      />
+                      <label htmlFor="interestDaily1" className="text-sm">k/1 triệu</label>
+                    </div>
+                    <div className="flex items-center">
+                      <input 
+                        type="radio" 
+                        id="interestDaily2" 
+                        name="interestDaily" 
+                        checked={interestNotation === 'k_per_day'}
+                        onChange={() => setInterestNotation('k_per_day')}
+                        className="mr-2"
+                      />
+                      <label htmlFor="interestDaily2" className="text-sm">k/1 ngày</label>
+                    </div>
+                  </>
+                )}
                 
-                <div className="flex items-center">
-                  <input 
-                    type="radio" 
-                    id="interestOption2" 
-                    name="interestOption"
-                    checked={false}
-                    className="mr-2"
-                  />
-                  <label htmlFor="interestOption2">k/1 ngày</label>
-                </div>
+                {(interestType === 'monthly_30' || interestType === 'monthly_custom') && (
+                  <>
+                    <div className="flex items-center">
+                      <input 
+                        type="radio" 
+                        id="interestMonthly1" 
+                        name="interestMonthly" 
+                        checked={interestNotation === 'percent_per_month'}
+                        onChange={() => setInterestNotation('percent_per_month')}
+                        className="mr-2"
+                      />
+                      <label htmlFor="interestMonthly1" className="text-sm">%/1 tháng</label>
+                    </div>
+                  </>
+                )}
+                
+                {interestType === 'weekly_percent' && (
+                  <>
+                    <div className="flex items-center">
+                      <input 
+                        type="radio" 
+                        id="interestWeeklyPercent1" 
+                        name="interestWeeklyPercent" 
+                        checked={interestNotation === 'percent_per_week'}
+                        onChange={() => setInterestNotation('percent_per_week')}
+                        className="mr-2"
+                      />
+                      <label htmlFor="interestWeeklyPercent1" className="text-sm">% /1 tuần (VD : 2% / 1 tuần)</label>
+                    </div>
+                  </>
+                )}
+                
+                {interestType === 'weekly_k' && (
+                  <>
+                    <div className="flex items-center">
+                      <input 
+                        type="radio" 
+                        id="interestWeeklyK1" 
+                        name="interestWeeklyK" 
+                        checked={true}
+                        className="mr-2"
+                      />
+                      <label htmlFor="interestWeeklyK1" className="text-sm">k/1 tuần (VD: 100k/1 tuần)</label>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -365,7 +478,12 @@ export function CreditCreateModal({
                 className="w-32"
               />
               <div className="text-sm text-gray-600">
-                (VD : 10 ngày đóng lãi phí 1 lần thì điền số 10 )
+                {(interestType === 'daily') && 
+                  '(VD: 10 ngày đóng lãi phí 1 lần thì điền số 10)'}
+                {(interestType === 'monthly_30' || interestType === 'monthly_custom') && 
+                  '(VD: 1 tháng đóng lãi phí 1 lần thì điền số 1)'}
+                {(interestType === 'weekly_percent' || interestType === 'weekly_k') && 
+                  '(VD: 1 tuần đóng lãi phí 1 lần thì điền số 1)'}
               </div>
             </div>
           </div>
@@ -374,11 +492,10 @@ export function CreditCreateModal({
             <Label htmlFor="loanDate" className="text-right">
               Ngày vay <span className="text-red-500">*</span>
             </Label>
-            <Input 
+            <DatePicker
               id="loanDate"
-              type="date"
               value={loanDate}
-              onChange={(e) => setLoanDate(e.target.value)}
+              onChange={setLoanDate}
               required
             />
           </div>

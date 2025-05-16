@@ -81,7 +81,7 @@ export function CreditsTable({
             <TableHead className="py-2 px-3 text-center font-medium w-24 border-b border-gray-200">Thao tác</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody>
+        <TableBody className="bg-white divide-y divide-gray-200">
           {credits.length === 0 ? (
             <TableRow>
               <TableCell colSpan={12} className="py-8 text-center text-gray-500 border-b border-gray-200">

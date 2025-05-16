@@ -1,5 +1,11 @@
-import { Button } from "@/components/ui/button";
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious
+} from '@/components/ui/pagination';
 
 interface InstallmentsPaginationProps {
   currentPage: number;
@@ -53,63 +59,76 @@ export function InstallmentsPagination({
   const startItem = (currentPage - 1) * itemsPerPage + 1;
   const endItem = Math.min(startItem + itemsPerPage - 1, totalItems);
 
+  const handlePrevious = () => {
+    if (currentPage > 1) {
+      onPageChange(currentPage - 1);
+    }
+  };
+  
+  const handleNext = () => {
+    if (currentPage < totalPages) {
+      onPageChange(currentPage + 1);
+    }
+  };
+
   return (
-    <div className="flex flex-col sm:flex-row justify-between items-center">
-      {/* Info about shown items */}
-      <div className="text-sm text-gray-500 mb-2 sm:mb-0">
+    <div className="flex justify-between items-center mb-4">
+      <div className="text-sm text-gray-500">
         Hiển thị {totalItems > 0 ? startItem : 0} đến {endItem} trong tổng số {totalItems} hợp đồng
       </div>
-
-      {/* Pagination controls */}
-      <div className="flex items-center gap-1">
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => onPageChange(currentPage - 1)}
-          disabled={currentPage === 1}
-        >
-          <ChevronLeftIcon className="h-4 w-4" />
-        </Button>
-
-        {pagination.map((page, index) => {
-          if (page === "ellipsis") {
+      
+      <Pagination>
+        <PaginationContent>
+          <PaginationItem>
+            <PaginationPrevious 
+              href="#" 
+              onClick={(e) => {
+                e.preventDefault();
+                handlePrevious();
+              }}
+              className={currentPage === 1 ? 'pointer-events-none opacity-50' : ''}
+            />
+          </PaginationItem>
+          
+          {pagination.map((page, index) => {
+            if (page === "ellipsis") {
+              return (
+                <PaginationItem key={`ellipsis-${index}`}>
+                  <PaginationLink href="#" onClick={(e) => e.preventDefault()} className="pointer-events-none">
+                    ...
+                  </PaginationLink>
+                </PaginationItem>
+              );
+            }
+            
             return (
-              <Button
-                key={`ellipsis-${index}`}
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 text-sm"
-                disabled
-              >
-                ...
-              </Button>
+              <PaginationItem key={page}>
+                <PaginationLink 
+                  href="#" 
+                  isActive={page === currentPage}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onPageChange(page as number);
+                  }}
+                >
+                  {page}
+                </PaginationLink>
+              </PaginationItem>
             );
-          }
-
-          return (
-            <Button
-              key={page}
-              variant={currentPage === page ? "default" : "outline"}
-              size="sm"
-              className="h-8 w-8 text-sm"
-              onClick={() => onPageChange(page as number)}
-            >
-              {page}
-            </Button>
-          );
-        })}
-
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => onPageChange(currentPage + 1)}
-          disabled={currentPage >= totalPages}
-        >
-          <ChevronRightIcon className="h-4 w-4" />
-        </Button>
-      </div>
+          })}
+          
+          <PaginationItem>
+            <PaginationNext 
+              href="#" 
+              onClick={(e) => {
+                e.preventDefault();
+                handleNext();
+              }}
+              className={currentPage === totalPages ? 'pointer-events-none opacity-50' : ''}
+            />
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
     </div>
   );
 }

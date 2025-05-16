@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { AlertCircle } from 'lucide-react';
@@ -42,8 +43,12 @@ export function InstallmentEditModal({
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [amountGiven, setAmountGiven] = useState<string>('0');
+  const [formattedAmountGiven, setFormattedAmountGiven] = useState<string>('0');
+  const [customerAmount, setCustomerAmount] = useState<string>('0');
+  const [formattedCustomerAmount, setFormattedCustomerAmount] = useState<string>('0');
   const [interestRate, setInterestRate] = useState<string>('10');
-  const [duration, setDuration] = useState<string>('7');
+  const [interestRateType, setInterestRateType] = useState<string>('daily');
+  const [duration, setDuration] = useState<string>('50');
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [paymentDate, setPaymentDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -67,6 +72,26 @@ export function InstallmentEditModal({
   
   // Quick buttons for amount adjustments
   const amountPresets = [1, 2, 3, 5, 10, 15, 20];
+  
+  // Format number with thousand separators
+  const formatNumber = (value: string | number): string => {
+    const numericValue = value.toString().replace(/[^0-9]/g, '');
+    return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+  
+  // Handle amount change for trả góp
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value.replace(/\./g, '');
+    setAmountGiven(rawValue);
+    setFormattedAmountGiven(formatNumber(rawValue));
+  };
+
+  // Handle amount change for tiền đưa khách
+  const handleCustomerAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value.replace(/\./g, '');
+    setCustomerAmount(rawValue);
+    setFormattedCustomerAmount(formatNumber(rawValue));
+  };
 
   // Load installment data and customers
   useEffect(() => {
@@ -85,20 +110,28 @@ export function InstallmentEditModal({
         setInstallment(installmentData);
         
         // Set form values from installment data
-        setCustomerName(installmentData.customer_name || '');
+        setCustomerName(installmentData.customer?.name || '');
         setContractCode(installmentData.contract_code || '');
-        setIdNumber(installmentData.id_number || '');
-        setPhone(installmentData.phone || '');
-        setAddress(installmentData.address || '');
-        setAmountGiven(installmentData.amount_given?.toString() || '0');
-        setInterestRate(installmentData.interest_rate?.toString() || '10');
-        setDuration(installmentData.duration?.toString() || '7');
-        setStartDate(format(new Date(installmentData.start_date || new Date()), 'yyyy-MM-dd'));
-        setNotes(installmentData.notes || '');
-        setStatus(installmentData.status || InstallmentStatus.ON_TIME);
-        setAmountPaid(installmentData.amount_paid?.toString() || '0');
-        setAdvancePayment(installmentData.advance_payment || false);
-        setEmployeeId(installmentData.employee_id || '');
+        setIdNumber(installmentData.customer?.id_number || '');
+        setPhone(installmentData.customer?.phone || '');
+        setAddress(installmentData.customer?.address || '');
+        if (installmentData) {
+          setContractCode(installmentData.contract_code || '');
+          setAmountGiven(installmentData.amount_given?.toString() || '0');
+          setFormattedAmountGiven(formatNumber(installmentData.amount_given?.toString() || '0'));
+          // Set customer amount to same as amountGiven initially, can be changed by user
+          setCustomerAmount(installmentData.amount_given?.toString() || '0');
+          setFormattedCustomerAmount(formatNumber(installmentData.amount_given?.toString() || '0'));
+          setInterestRate(installmentData.interest_rate?.toString() || '10');
+          setDuration(installmentData.duration?.toString() || '7');
+          setStartDate(installmentData.start_date ? format(new Date(installmentData.start_date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
+          setStatus(installmentData.status || InstallmentStatus.ON_TIME);
+          setAmountPaid(installmentData.amount_paid?.toString() || '0');
+          setSelectedCustomerId(installmentData.customer_id || '');
+        }
+        // Note: employee_id might be coming from a different relationship or field
+        // For now, we'll initialize it as empty if not found
+        setEmployeeId('');
         
         if (installmentData.customer_id) {
           setSelectedCustomerId(installmentData.customer_id);
@@ -136,10 +169,22 @@ export function InstallmentEditModal({
     }
   };
   
-  // Quick amount adjustment
+  // Quick amount adjustment for trả góp
   const adjustAmount = (amount: number) => {
     const newAmount = parseInt(amountGiven || '0') + amount;
-    setAmountGiven(newAmount > 0 ? newAmount.toString() : '0');
+    if (newAmount >= 0) {
+      setAmountGiven(newAmount.toString());
+      setFormattedAmountGiven(formatNumber(newAmount));
+    }
+  };
+  
+  // Quick amount adjustment for tiền đưa khách
+  const adjustCustomerAmount = (amount: number) => {
+    const newAmount = parseInt(customerAmount || '0') + amount;
+    if (newAmount >= 0) {
+      setCustomerAmount(newAmount.toString());
+      setFormattedCustomerAmount(formatNumber(newAmount));
+    }
   };
 
   // Form submission handler
@@ -162,7 +207,7 @@ export function InstallmentEditModal({
         amount_given: parseInt(amountGiven || '0'),
         interest_rate: parseFloat(interestRate || '0'),
         duration: parseInt(duration || '7'),
-        start_date: new Date(startDate),
+        start_date: startDate,
         notes,
         status: status,
         amount_paid: parseInt(amountPaid || '0'),
@@ -191,6 +236,9 @@ export function InstallmentEditModal({
     return (
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
         <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="text-center">Cập nhật hợp đồng trả góp</DialogTitle>
+          </DialogHeader>
           <div className="flex justify-center p-8">
             <Spinner className="h-8 w-8" />
           </div>
@@ -269,28 +317,17 @@ export function InstallmentEditModal({
             <Label htmlFor="amountGiven" className="text-right">
               Trả góp <span className="text-red-500">*</span>
             </Label>
-            <div>
+            <div className="flex items-center gap-3">
               <Input 
                 id="amountGiven"
-                type="number"
-                value={amountGiven}
-                onChange={(e) => setAmountGiven(e.target.value)}
+                type="text"
+                value={formattedAmountGiven}
+                onChange={handleAmountChange}
                 required
+                inputMode="numeric"
+                className="w-48"
               />
-              <div className="flex flex-wrap gap-2 mt-2">
-                {amountPresets.map(amount => (
-                  <Button 
-                    key={amount}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => adjustAmount(amount * 1000000)}
-                    className="px-2 py-1 h-auto"
-                  >
-                    {amount}tr
-                  </Button>
-                ))}
-              </div>
+              <span className="text-sm text-gray-500">(Tổng tiền vay khách phải thanh toán)</span>
             </div>
           </div>
           
@@ -298,29 +335,39 @@ export function InstallmentEditModal({
             <Label htmlFor="tiendua" className="text-right">
               Tiền đưa khách <span className="text-red-500">*</span>
             </Label>
-            <Input 
-              id="tiendua"
-              type="number"
-              value={amountGiven}
-              onChange={(e) => setAmountGiven(e.target.value)}
-              required
-            />
+            <div className="flex items-center gap-3">
+              <Input 
+                id="tiendua"
+                type="text"
+                value={formattedCustomerAmount}
+                onChange={handleCustomerAmountChange}
+                required
+                inputMode="numeric"
+                className="w-48"
+              />
+              <span className="text-sm text-gray-500">(Tổng tiền khách nhận được)</span>
+            </div>
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
             <Label htmlFor="duration" className="text-right">
               Thời gian vay <span className="text-red-500">*</span>
             </Label>
-            <div className="flex items-center gap-2">
-              <Input 
-                id="duration"
-                type="number"
-                value={duration}
-                onChange={(e) => setDuration(e.target.value)}
-                required
-                className="w-24"
-              />
-              <span>ngày</span>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Input 
+                  id="duration"
+                  type="number"
+                  value={duration}
+                  onChange={(e) => setDuration(e.target.value)}
+                  required
+                  className="w-24"
+                />
+                <span>ngày</span>
+              </div>
+              <span className="text-sm text-gray-500">
+                {`Thanh toán ${formatNumber(Math.round(parseInt(amountGiven || '0') / (parseInt(duration || '50') || 1)))} / 1 ngày`}
+              </span>
             </div>
           </div>
           
@@ -328,26 +375,28 @@ export function InstallmentEditModal({
             <Label htmlFor="interestRate" className="text-right">
               Số ngày đóng tiền <span className="text-red-500">*</span>
             </Label>
-            <div className="flex items-center gap-2">
-              <Input 
-                id="interestRate"
-                type="number"
-                value={interestRate}
-                onChange={(e) => setInterestRate(e.target.value)}
-                required
-                className="w-24"
-              />
-              <span>ngày</span>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Input 
+                  id="interestRate"
+                  type="number"
+                  value={interestRate}
+                  onChange={(e) => setInterestRate(e.target.value)}
+                  required
+                  className="w-24"
+                />
+                <span>ngày</span>
+              </div>
+              <span className="text-sm text-gray-500">(VD: 3 ngày đóng 1 lần thì điền số 3)</span>
             </div>
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
             <Label htmlFor="startDate" className="text-right">Ngày vay</Label>
-            <Input 
+            <DatePicker 
               id="startDate"
-              type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={setStartDate}
               required
             />
           </div>

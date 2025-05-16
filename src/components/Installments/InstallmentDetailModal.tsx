@@ -14,7 +14,7 @@ import { getInstallmentById } from '@/lib/installment';
 import { InstallmentStatus, InstallmentWithCustomer } from '@/models/installment';
 
 // Import component từ Credits để đảm bảo nhất quán UI
-import { CreditActionTabs, TabId } from '@/components/Credits/CreditActionTabs';
+import { CreditActionTabs, TabId, CreditTab } from '@/components/Credits/CreditActionTabs';
 
 // Import các tab components
 import { CustomerInfoTab } from './tabs/CustomerInfoTab';
@@ -30,12 +30,12 @@ interface InstallmentDetailModalProps {
 }
 
 // Các tab cho hợp đồng trả góp, dùng cấu trúc giống Credits
-const INSTALLMENT_TABS = [
-  { id: 'info', label: 'Thông tin khách hàng' },
-  { id: 'schedule', label: 'Lịch trả góp' },
-  { id: 'payments', label: 'Lịch sử thanh toán' },
-  { id: 'payment_due', label: 'Lịch đóng tiền' },
-  { id: 'documents', label: 'Chứng từ' },
+const INSTALLMENT_TABS: CreditTab[] = [
+  { id: 'info' as TabId, label: 'Thông tin khách hàng' },
+  { id: 'schedule' as TabId, label: 'Lịch trả góp' },
+  { id: 'payments' as TabId, label: 'Lịch sử thanh toán' },
+  { id: 'payment_due' as TabId, label: 'Lịch đóng tiền' },
+  { id: 'documents' as TabId, label: 'Chứng từ' },
 ];
 
 export function InstallmentDetailModal({
@@ -46,7 +46,34 @@ export function InstallmentDetailModal({
   const [installment, setInstallment] = useState<InstallmentWithCustomer | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabId>('info');
+  const [activeTab, setActiveTab] = useState<TabId>('info' as TabId);
+  
+  // Format currency helper
+  const formatCurrency = (amount: number): string => {
+    return new Intl.NumberFormat('vi-VN', { 
+      style: 'currency', 
+      currency: 'VND',
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
+  
+  // Format installment status helper
+  const formatInstallmentStatus = (status?: InstallmentStatus): string => {
+    if (!status) return 'Không xác định';
+    
+    switch (status) {
+      case InstallmentStatus.ON_TIME:
+        return 'Đúng hẹn';
+      case InstallmentStatus.OVERDUE:
+        return 'Quá hạn';
+      case InstallmentStatus.LATE_INTEREST:
+        return 'Chậm lãi';
+      case InstallmentStatus.CLOSED:
+        return 'Đã đóng';
+      default:
+        return 'Không xác định';
+    }
+  };
 
   // Fetch installment data
   useEffect(() => {
@@ -119,6 +146,55 @@ export function InstallmentDetailModal({
           <div className="py-8 text-center text-red-500">{error}</div>
         ) : installment ? (
           <div className="space-y-4 py-4">
+            {/* Thông tin chung về hợp đồng trả góp */}
+            <div className="mt-2">
+              {/* Thông tin khách hàng */}
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-medium">{installment?.customer?.name || 'Khách hàng'}</h3>
+                <h3 className="font-medium text-red-600">Số tiền hàng ngày: {formatCurrency(installment?.daily_amount || 0)}</h3>
+              </div>
+              
+              {/* Tổng hợp chi tiết */}
+              <div className="grid grid-cols-2 gap-8 my-4">
+                <div>
+                  <table className="w-full border-collapse">
+                    <tbody>
+                      <tr>
+                        <td className="py-1 px-2 border font-bold">Tiền vay ban đầu</td>
+                        <td className="py-1 px-2 text-right border">{formatCurrency(installment?.amount_given || 0)}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-1 px-2 border font-bold">Lãi suất</td>
+                        <td className="py-1 px-2 text-right border">{installment?.interest_rate || 0}%</td>
+                      </tr>
+                      <tr>
+                        <td className="py-1 px-2 border font-bold">Thời gian vay</td>
+                        <td className="py-1 px-2 text-right border">{installment?.duration || 0} ngày</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div>
+                  <table className="w-full border-collapse">
+                    <tbody>
+                      <tr>
+                        <td className="py-1 px-2 border font-bold">Đã thanh toán</td>
+                        <td className="py-1 px-2 text-right border">{formatCurrency(installment?.amount_paid || 0)}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-1 px-2 border font-bold">Nợ cũ</td>
+                        <td className="py-1 px-2 text-right text-red-600 border">{formatCurrency(installment?.old_debt || 0)}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-1 px-2 border font-bold">Trạng thái</td>
+                        <td className="py-1 px-2 text-right border">{formatInstallmentStatus(installment?.status)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            
             {/* Sử dụng CreditActionTabs thay vì tự tạo custom tabs */}
             <CreditActionTabs
               tabs={INSTALLMENT_TABS}
@@ -128,23 +204,23 @@ export function InstallmentDetailModal({
 
             {/* Nội dung tab */}
             <div className="mt-4">
-              {activeTab === 'info' && (
+              {activeTab === ('info' as TabId) && (
                 <CustomerInfoTab installment={installment} />
               )}
               
-              {activeTab === 'schedule' && (
+              {activeTab === ('schedule' as TabId) && (
                 <PaymentScheduleTab installmentId={installmentId} />
               )}
               
-              {activeTab === 'payments' && (
+              {activeTab === ('payments' as TabId) && (
                 <PaymentHistoryTab installmentId={installmentId} />
               )}
               
-              {activeTab === 'payment_due' && (
+              {activeTab === ('payment_due' as TabId) && (
                 <PaymentDueTab installmentId={installmentId} />
               )}
               
-              {activeTab === 'documents' && (
+              {activeTab === ('documents' as TabId) && (
                 <DocumentsTab installmentId={installmentId} />
               )}
             </div>

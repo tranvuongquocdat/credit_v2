@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { Icon } from '@/components/ui/Icon';
@@ -87,10 +88,10 @@ export function ScheduleTab({ creditId }: ScheduleTabProps) {
         <div className="grid grid-cols-[120px_1fr] gap-4 items-center mb-4">
           <div className="text-right font-medium">Ngày hẹn</div>
           <div>
-            <input
-              type="date"
-              className="border rounded px-2 py-1 w-full max-w-[300px]"
-              defaultValue={format(new Date(), 'yyyy-MM-dd')}
+            <DatePicker
+              value={format(new Date(), 'yyyy-MM-dd')}
+              onChange={() => {}}
+              className="max-w-[300px]"
             />
           </div>
         </div>

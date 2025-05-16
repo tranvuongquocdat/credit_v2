@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { format, addDays } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
@@ -28,11 +29,36 @@ export function PaymentForm({
   defaultAmount = 128000,
   onSubmit
 }: PaymentFormProps) {
-  const [startDate, setStartDate] = useState(format(defaultStartDate, 'dd-MM-yyyy'));
-  const [endDate, setEndDate] = useState(format(defaultEndDate, 'dd-MM-yyyy'));
+  // Format number with thousand separators
+  const formatNumber = (value: string | number): string => {
+    const numericValue = value.toString().replace(/[^0-9]/g, '');
+    return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+
+  const [startDate, setStartDate] = useState(format(defaultStartDate, 'yyyy-MM-dd'));
+  const [endDate, setEndDate] = useState(format(defaultEndDate, 'yyyy-MM-dd'));
   const [days, setDays] = useState('8');
+  
+  // State for monetary amounts with formatting
   const [interestAmount, setInterestAmount] = useState(defaultAmount.toString());
+  const [formattedInterestAmount, setFormattedInterestAmount] = useState(formatNumber(defaultAmount.toString()));
+  
   const [otherAmount, setOtherAmount] = useState('0');
+  const [formattedOtherAmount, setFormattedOtherAmount] = useState('0');
+  
+  // Handle interest amount change
+  const handleInterestAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value.replace(/\./g, '');
+    setInterestAmount(rawValue);
+    setFormattedInterestAmount(formatNumber(rawValue));
+  };
+  
+  // Handle other amount change
+  const handleOtherAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value.replace(/\./g, '');
+    setOtherAmount(rawValue);
+    setFormattedOtherAmount(formatNumber(rawValue));
+  };
   
   // Tính tổng tiền
   const totalAmount = Number(interestAmount) + Number(otherAmount);
@@ -63,18 +89,18 @@ export function PaymentForm({
         <div className="grid grid-cols-[150px_1fr] gap-y-4 items-center">
           <div className="text-right pr-2">Từ ngày :</div>
           <div>
-            <Input 
+            <DatePicker 
               value={startDate} 
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={setStartDate}
               className="w-64"
             />
           </div>
           
           <div className="text-right pr-2">Đến ngày :</div>
           <div className="flex items-center gap-3">
-            <Input 
+            <DatePicker 
               value={endDate} 
-              onChange={(e) => setEndDate(e.target.value)}
+              onChange={setEndDate}
               className="w-64"
             />
             <span>( Ngày đóng lãi phí tiếp : <span className="text-blue-600">{nextPaymentDate}</span> )</span>
@@ -92,25 +118,27 @@ export function PaymentForm({
           </div>
           
           <div className="text-right pr-2">Tiền lãi phí :</div>
-          <div>
+          <div className="flex items-center gap-3">
             <Input 
-              value={interestAmount} 
-              onChange={(e) => setInterestAmount(e.target.value)}
-              className="w-64"
-              type="number"
+              value={formattedInterestAmount} 
+              onChange={handleInterestAmountChange}
+              className="w-48"
+              inputMode="numeric"
+              type="text"
             />
-            <span className="text-gray-500 text-sm ml-2">VNĐ</span>
+            <span className="text-gray-500 text-sm">VNĐ (Tiền lãi suất phải trả)</span>
           </div>
           
           <div className="text-right pr-2">Tiền khác :</div>
-          <div>
+          <div className="flex items-center gap-3">
             <Input 
-              value={otherAmount} 
-              onChange={(e) => setOtherAmount(e.target.value)}
-              className="w-64"
-              type="number"
+              value={formattedOtherAmount} 
+              onChange={handleOtherAmountChange}
+              className="w-48"
+              inputMode="numeric"
+              type="text"
             />
-            <span className="text-gray-500 text-sm ml-2">VNĐ</span>
+            <span className="text-gray-500 text-sm">VNĐ (Chi phí khác nếu có)</span>
           </div>
           
           <div className="text-right pr-2">Tổng tiền lãi phí :</div>

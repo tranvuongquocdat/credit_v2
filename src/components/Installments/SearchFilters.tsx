@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { 
   Select, 
   SelectContent, 
@@ -136,12 +137,13 @@ export function SearchFilters({
           <label htmlFor="start_date" className="block text-sm font-medium text-gray-700 mb-1">
             Từ ngày
           </label>
-          <Input
+          <DatePicker
             id="start_date"
-            type="date"
-            className="w-full"
             value={filters.start_date}
-            onChange={handleInputChange}
+            onChange={(value) => handleInputChange({
+              target: { id: 'start_date', value }
+            } as React.ChangeEvent<HTMLInputElement>)}
+            className="w-full"
           />
         </div>
         
@@ -149,12 +151,13 @@ export function SearchFilters({
           <label htmlFor="end_date" className="block text-sm font-medium text-gray-700 mb-1">
             Đến ngày
           </label>
-          <Input
+          <DatePicker
             id="end_date"
-            type="date"
-            className="w-full"
             value={filters.end_date}
-            onChange={handleInputChange}
+            onChange={(value) => handleInputChange({
+              target: { id: 'end_date', value }
+            } as React.ChangeEvent<HTMLInputElement>)}
+            className="w-full"
           />
         </div>
         

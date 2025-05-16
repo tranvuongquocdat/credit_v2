@@ -1,16 +1,18 @@
 "use client";
 import { useEffect, useState } from 'react';
 import { Layout } from '@/components/Layout';
-import { EmployeeForm } from '@/components/Employee';
-import { Modal } from '@/components/ui';
+import { EmployeesPagination } from '@/components/Employees/EmployeesPagination';
+import { SearchFilters, EmployeeSearchFilters } from '@/components/Employees/SearchFilters';
+import { EmployeeCreateModal } from '@/components/Employees/EmployeeCreateModal';
+import { EmployeeEditModal } from '@/components/Employees/EmployeeEditModal';
+import { EmployeeStatusDialog } from '@/components/Employees/EmployeeStatusDialog';
 import { getEmployees, createEmployee, updateEmployee, deactivateEmployee, activateEmployee } from '@/lib/employee';
 import { getStores } from '@/lib/store';
 import { Employee, EmployeeFormData, EmployeeStatus, EmployeeWithAuth } from '@/models/employee';
 import { Store } from '@/models/store';
-import { Plus, Edit, UserX, UserCheck, Search } from 'lucide-react';
+import { Plus, Edit, UserX, UserCheck, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -90,11 +92,7 @@ export default function EmployeesPage() {
     fetchStores();
   }, []);
   
-  // Xử lý tìm kiếm
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setCurrentPage(1); // Reset về trang 1 khi tìm kiếm
-  };
+  // Nội dung các hàm xử lý tìm kiếm đã được di chuyển vào SearchFilters component
 
   // Xử lý thêm nhân viên mới
   const handleAddEmployee = async (data: EmployeeFormData) => {
@@ -145,6 +143,8 @@ export default function EmployeesPage() {
     }
   };
 
+  // Các hàm xử lý form đã được di chuyển vào các modal component
+
   // Xử lý thay đổi trạng thái nhân viên
   const handleChangeEmployeeStatus = async () => {
     if (!selectedEmployee) return;
@@ -186,274 +186,218 @@ export default function EmployeesPage() {
     setIsStatusModalOpen(true);
   };
 
-  // Render phân trang
-  const renderPagination = () => {
-    const pages = [];
-    for (let i = 1; i <= totalPages; i++) {
-      pages.push(
-        <Button
-          key={i}
-          onClick={() => setCurrentPage(i)}
-          variant={currentPage === i ? "default" : "outline"}
-          size="sm"
-          className="w-10"
-        >
-          {i}
-        </Button>
-      );
-    }
-    
-    return (
-      <div className="flex justify-center mt-6 space-x-2">
-        <Button
-          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-          disabled={currentPage === 1}
-          variant="outline"
-          size="sm"
-        >
-          Trước
-        </Button>
-        {pages}
-        <Button
-          onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-          disabled={currentPage === totalPages}
-          variant="outline"
-          size="sm"
-        >
-          Sau
-        </Button>
-      </div>
-    );
+  // Xử lý thay đổi trang
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
   };
 
   return (
     <Layout>
-      <div className="container mx-auto p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Quản lý nhân viên</h1>
-          <Button
-            onClick={() => {
-              setSelectedEmployee(null);
-              setIsFormModalOpen(true);
-            }}
-          >
-            <Plus className="mr-2 h-4 w-4" /> Thêm nhân viên
-          </Button>
+      <div className="max-w-full">
+        {/* Title và nút trở về */}
+        <div className="flex items-center justify-between border-b pb-2 mb-2">
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-bold">Quản lý nhân viên</h1>
+          </div>
         </div>
 
         {/* Search và filter */}
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="space-y-2">
-                <label htmlFor="search" className="text-sm font-medium">
-                  Tìm kiếm theo tên
-                </label>
-                <Input
-                  type="text"
-                  id="search"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Nhập tên nhân viên..."
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <label htmlFor="store" className="text-sm font-medium">
-                  Lọc theo cửa hàng
-                </label>
-                <Select value={storeFilter} onValueChange={setStoreFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Tất cả cửa hàng" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tất cả cửa hàng</SelectItem>
-                    {stores.map(store => (
-                      <SelectItem key={store.id} value={store.id}>
-                        {store.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <label htmlFor="status" className="text-sm font-medium">
-                  Lọc theo trạng thái
-                </label>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Tất cả trạng thái" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                    <SelectItem value={EmployeeStatus.WORKING}>Đang làm việc</SelectItem>
-                    <SelectItem value={EmployeeStatus.INACTIVE}>Đã nghỉ việc</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="flex items-end">
-                <Button type="submit">
-                  <Search className="mr-2 h-4 w-4" /> Tìm kiếm
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+        <SearchFilters 
+          stores={stores}
+          onSearch={(filters: EmployeeSearchFilters) => {
+            setSearchQuery(filters.query);
+            setStoreFilter(filters.store);
+            setStatusFilter(filters.status);
+            setCurrentPage(1);
+          }}
+          onReset={() => {
+            setSearchQuery('');
+            setStoreFilter('all');
+            setStatusFilter('all');
+            setCurrentPage(1);
+          }}
+          onCreateNew={() => {
+            setSelectedEmployee(null);
+            setIsFormModalOpen(true);
+          }}
+        />
 
         {/* Hiển thị lỗi nếu có */}
         {error && (
-          <Card className="mb-6 border-red-200 bg-red-50">
-            <CardContent className="pt-6 text-red-700">
-              {error}
-            </CardContent>
-          </Card>
+          <div className="text-red-700 py-2" role="alert">
+            <p>{error}</p>
+          </div>
         )}
 
         {/* Danh sách nhân viên */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Danh sách nhân viên</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="p-6 text-center">Đang tải...</div>
-            ) : employees.length === 0 ? (
-              <div className="p-6 text-center">
-                Không tìm thấy nhân viên nào
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Họ tên</TableHead>
-                      <TableHead>Tên đăng nhập</TableHead>
-                      <TableHead>Cửa hàng</TableHead>
-                      <TableHead>Liên hệ</TableHead>
-                      <TableHead>Trạng thái</TableHead>
-                      <TableHead className="text-right">Thao tác</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {employees.map((employee) => (
-                      <TableRow key={employee.uid}>
-                        <TableCell>
-                          <div 
-                            className="font-medium cursor-pointer hover:text-primary" 
-                            onClick={() => openEditModal(employee)}
-                          >
-                            {employee.full_name}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div>{employee.auth.username}</div>
-                          <div className="text-sm text-muted-foreground">{employee.auth.email}</div>
-                        </TableCell>
-                        <TableCell>
-                          {employee.store?.name || '-'}
-                        </TableCell>
-                        <TableCell>
-                          {employee.phone || '-'}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={employee.status === EmployeeStatus.WORKING ? "success" : "destructive"}>
+        <div className="rounded-md border mt-4 mb-1">
+          {isLoading ? (
+            <div className="overflow-hidden">
+              <Table className="border-collapse">
+                <TableHeader className="bg-gray-50">
+                  <TableRow>
+                    <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Họ tên</TableHead>
+                    <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Tên đăng nhập</TableHead>
+                    <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Cửa hàng</TableHead>
+                    <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Liên hệ</TableHead>
+                    <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Trạng thái</TableHead>
+                    <TableHead className="py-2 px-3 text-center font-medium border-b border-gray-200">Thao tác</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-8 text-center text-gray-500 border-b border-gray-200">
+                      <div className="flex justify-center items-center py-12">
+                        <RefreshCw className="animate-spin h-6 w-6 text-gray-400" />
+                        <span className="ml-2">Đang tải dữ liệu...</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+          ) : employees.length === 0 ? (
+            <div className="overflow-hidden">
+              <Table className="border-collapse">
+                <TableHeader className="bg-gray-50">
+                  <TableRow>
+                    <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Họ tên</TableHead>
+                    <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Tên đăng nhập</TableHead>
+                    <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Cửa hàng</TableHead>
+                    <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Liên hệ</TableHead>
+                    <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Trạng thái</TableHead>
+                    <TableHead className="py-2 px-3 text-center font-medium border-b border-gray-200">Thao tác</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-8 text-center text-gray-500 border-b border-gray-200">
+                      <div className="py-8">
+                        <h3 className="text-lg font-medium">Không tìm thấy nhân viên nào</h3>
+                        <p className="text-sm text-muted-foreground mt-1">Thử thay đổi điều kiện tìm kiếm hoặc thêm nhân viên mới</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="overflow-hidden">
+              <Table className="border-collapse">
+                <TableHeader className="bg-gray-50">
+                  <TableRow>
+                    <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Họ tên</TableHead>
+                    <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Tên đăng nhập</TableHead>
+                    <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Cửa hàng</TableHead>
+                    <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Liên hệ</TableHead>
+                    <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Trạng thái</TableHead>
+                    <TableHead className="py-2 px-3 text-center font-medium border-b border-gray-200">Thao tác</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {employees.map((employee) => (
+                    <TableRow key={employee.uid} className="hover:bg-gray-50 transition-colors">
+                      <TableCell className="py-3 px-3 border-b border-r border-gray-200">
+                        <div 
+                          className="font-medium cursor-pointer text-blue-600" 
+                          onClick={() => openEditModal(employee)}
+                        >
+                          {employee.full_name}
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-3 px-3 border-b border-r border-gray-200">
+                        <div>{employee.auth.username}</div>
+                        <div className="text-sm text-muted-foreground">{employee.auth.email}</div>
+                      </TableCell>
+                      <TableCell className="py-3 px-3 border-b border-r border-gray-200">
+                        {employee.store?.name || '-'}
+                      </TableCell>
+                      <TableCell className="py-3 px-3 border-b border-r border-gray-200">
+                        {employee.phone || '-'}
+                      </TableCell>
+                      <TableCell className="py-3 px-3 border-b border-r border-gray-200">
+                        <div className="flex justify-center">
+                          <span className={`px-2 py-1 rounded-full text-xs ${employee.status === EmployeeStatus.WORKING ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                             {employee.status === EmployeeStatus.WORKING ? 'Đang làm việc' : 'Đã nghỉ việc'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end space-x-2">
-                            <Button
-                              onClick={() => openEditModal(employee)}
-                              variant="ghost"
-                              size="sm"
-                              title="Chỉnh sửa"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              onClick={() => openStatusModal(employee)}
-                              variant="ghost"
-                              size="sm"
-                              className={employee.status === EmployeeStatus.WORKING ? 'text-destructive hover:text-destructive' : 'text-success hover:text-success'}
-                              title={employee.status === EmployeeStatus.WORKING ? 'Vô hiệu hóa' : 'Kích hoạt'}
-                            >
-                              {employee.status === EmployeeStatus.WORKING ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                
-                {/* Phân trang */}
-                {totalPages > 1 && renderPagination()}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-3 px-3 border-b border-gray-200">
+                        <div className="flex justify-center space-x-1">
+                          <Button
+                            onClick={() => openEditModal(employee)}
+                            variant="ghost"
+                            size="sm"
+                            title="Chỉnh sửa"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            onClick={() => openStatusModal(employee)}
+                            variant="ghost"
+                            size="sm"
+                            className={employee.status === EmployeeStatus.WORKING ? 'text-destructive hover:text-destructive' : 'text-success hover:text-success'}
+                            title={employee.status === EmployeeStatus.WORKING ? 'Vô hiệu hóa' : 'Kích hoạt'}
+                          >
+                            {employee.status === EmployeeStatus.WORKING ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+        
+        {/* Phân trang */}
+        <EmployeesPagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalPages * 10} // Assuming 10 items per page, adjust if needed
+          itemsPerPage={10}
+          onPageChange={handlePageChange}
+        />
       </div>
 
-      {/* Modal thêm/sửa nhân viên */}
-      <Modal
-        isOpen={isFormModalOpen}
+
+      {/* Modal thêm nhân viên mới */}
+      <EmployeeCreateModal
+        isOpen={isFormModalOpen && !selectedEmployee}
+        onClose={() => setIsFormModalOpen(false)}
+        onSuccess={() => {
+          fetchEmployees();
+        }}
+        stores={stores}
+      />
+
+      {/* Modal sửa thông tin nhân viên */}
+      <EmployeeEditModal
+        isOpen={isFormModalOpen && !!selectedEmployee}
         onClose={() => {
           setIsFormModalOpen(false);
           setSelectedEmployee(null);
         }}
-        title={selectedEmployee ? 'Chỉnh sửa nhân viên' : 'Thêm nhân viên mới'}
-        size="lg"
-      >
-        <EmployeeForm
-          employee={selectedEmployee || undefined}
-          onSubmit={selectedEmployee ? handleUpdateEmployee : handleAddEmployee}
-          isSubmitting={isSubmitting}
-          isEditing={!!selectedEmployee}
-        />
-      </Modal>
+        onSuccess={() => {
+          fetchEmployees();
+        }}
+        employee={selectedEmployee}
+        stores={stores}
+      />
 
-      {/* Modal xác nhận thay đổi trạng thái */}
-      <Modal
+      {/* Dialog thay đổi trạng thái nhân viên */}
+      <EmployeeStatusDialog
         isOpen={isStatusModalOpen}
         onClose={() => {
           setIsStatusModalOpen(false);
           setSelectedEmployee(null);
         }}
-        title={selectedEmployee?.status === EmployeeStatus.WORKING ? 'Vô hiệu hóa nhân viên' : 'Kích hoạt nhân viên'}
-        size="sm"
-      >
-        <div className="py-4">
-          <p>
-            {selectedEmployee?.status === EmployeeStatus.WORKING 
-              ? `Bạn có chắc chắn muốn vô hiệu hóa tài khoản của nhân viên "${selectedEmployee?.full_name}"?`
-              : `Bạn có chắc chắn muốn kích hoạt lại tài khoản của nhân viên "${selectedEmployee?.full_name}"?`
-            }
-          </p>
-          <p className="text-muted-foreground text-sm mt-2">
-            {selectedEmployee?.status === EmployeeStatus.WORKING 
-              ? 'Nhân viên sẽ không thể đăng nhập vào hệ thống sau khi bị vô hiệu hóa.'
-              : 'Nhân viên sẽ có thể đăng nhập lại vào hệ thống sau khi được kích hoạt.'
-            }
-          </p>
-          <div className="flex justify-end mt-6 space-x-3">
-            <Button
-              onClick={() => setIsStatusModalOpen(false)}
-              variant="outline"
-            >
-              Hủy bỏ
-            </Button>
-            <Button
-              onClick={handleChangeEmployeeStatus}
-              variant={selectedEmployee?.status === EmployeeStatus.WORKING ? "destructive" : "default"}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Đang xử lý...' : selectedEmployee?.status === EmployeeStatus.WORKING ? 'Vô hiệu hóa' : 'Kích hoạt'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        onSuccess={() => {
+          fetchEmployees();
+        }}
+        employee={selectedEmployee}
+      />
     </Layout>
   );
 }
