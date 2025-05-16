@@ -136,12 +136,6 @@ export function PaymentDueTab({ installmentId }: PaymentDueTabProps) {
                   Chưa có lịch hẹn nào
                 </td>
               </tr>
-            ) : paymentPeriods.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="py-4 text-center text-gray-500">
-                  Chưa có lịch hẹn nào
-                </td>
-              </tr>
             ) : (
               // Hiển thị dữ liệu lịch hẹn
               paymentPeriods.map((period, index) => (
