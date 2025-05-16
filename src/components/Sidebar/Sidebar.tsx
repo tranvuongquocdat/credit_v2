@@ -29,6 +29,7 @@ const sidebarItems: SidebarItem[] = [
   { title: 'Khách hàng', path: '/customers', icon: <FiUsers size={20} /> },
   { title: 'Nhân viên', path: '/employees', icon: <FiUsers size={20} /> },
   { title: 'Tín chấp', path: '/credits', icon: <FiCreditCard size={20} /> },
+  { title: 'Trả góp', path: '/installments', icon: <FiCreditCard size={20} /> },
   { title: 'Activities', path: '/activities', icon: <FiActivity size={20} /> },
   { title: 'Profile', path: '/profile', icon: <FiUser size={20} /> },
   { title: 'Settings', path: '/settings', icon: <FiSettings size={20} /> },

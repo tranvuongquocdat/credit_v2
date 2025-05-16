@@ -21,3 +21,9 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the application.
 
 The page auto-updates as you edit files.
+
+### Update types
+
+```bash
+npm run update-types
+```

@@ -15,8 +15,8 @@ import { cn } from '@/lib/utils';
 import { ChevronLeft } from 'lucide-react';
 
 // Import custom components
-import { FinancialSummary } from '@/components/Credits/FinancialSummary';
-import { SearchFilters } from '@/components/credits/SearchFilters';
+import { FinancialSummary } from '@/components/common/FinancialSummary';
+import { SearchFilters } from '@/components/Credits/SearchFilters';
 import { CreditsTable } from '@/components/Credits/CreditsTable';
 import { CreditsPagination } from '@/components/Credits/CreditsPagination';
 import { PaymentHistoryModal } from '@/components/Credits/PaymentHistoryModal';
@@ -84,27 +84,8 @@ export default function CreditsPage() {
   const [isCreditEditModalOpen, setIsCreditEditModalOpen] = useState(false);
   const [editCreditId, setEditCreditId] = useState<string>('');
   
-  // Quỹ tiền mặt state
-  const [fundStatus, setFundStatus] = useState<FundStatus>({
-    totalFund: 122350000,
-    totalLoan: 100000000,
-    profit: 22350000,
-    availableFund: 22350000,
-    oldDebt: 0,
-    collectedInterest: 8940000
-  });
-  
   // Calculate total pages
   const totalPages = Math.ceil(totalItems / itemsPerPage);
-  
-  // Handle fund refresh
-  const handleRefreshFund = () => {
-    // In a real app, this would fetch the latest fund data
-    setFundStatus({
-      ...fundStatus,
-      totalFund: 122350000
-    });
-  };
   
   // Handle search filters
   const handleSearchFilters = (filters: any) => {
@@ -197,8 +178,8 @@ export default function CreditsPage() {
         
         {/* Thông tin tài chính */}
         <FinancialSummary 
-          fundStatus={fundStatus} 
-          onRefresh={handleRefreshFund} 
+          storeId="1" 
+          autoFetch={true} 
         />
         
         {/* Bộ lọc và tìm kiếm */}

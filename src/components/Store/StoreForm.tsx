@@ -33,6 +33,7 @@ interface StoreFormProps {
   initialData?: Store | null;
   onSubmit: (data: StoreFormData) => Promise<void>;
   isSubmitting: boolean;
+  hideButtons?: boolean;
 }
 
 // Schema validation cho form
@@ -49,7 +50,7 @@ const formSchema = z.object({
   })
 });
 
-export default function StoreForm({ initialData, onSubmit, isSubmitting }: StoreFormProps) {
+export default function StoreForm({ initialData, onSubmit, isSubmitting, hideButtons = false }: StoreFormProps) {
   // Format number to currency
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
@@ -224,16 +225,18 @@ export default function StoreForm({ initialData, onSubmit, isSubmitting }: Store
           />
         </div>
 
-        <div className="flex justify-end mt-6 space-x-3">
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Đang xử lý...
-              </>
-            ) : initialData ? 'Cập nhật' : 'Tạo cửa hàng'}
-          </Button>
-        </div>
+        {!hideButtons && (
+          <div className="flex justify-end mt-6 space-x-3">
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Đang xử lý...
+                </>
+              ) : initialData ? 'Cập nhật' : 'Tạo cửa hàng'}
+            </Button>
+          </div>
+        )}
       </form>
     </Form>
   );
