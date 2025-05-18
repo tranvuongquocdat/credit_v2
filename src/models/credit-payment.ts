@@ -2,7 +2,7 @@ export enum PaymentPeriodStatus {
   PENDING = 'pending', // Chưa đóng
   PAID = 'paid', // Đã đóng
   OVERDUE = 'overdue', // Quá hạn
-  PARTIALLY_PAID = 'partially_paid' // Đóng một phần
+  PARTIALLY_PAID = 'partially_paid', // Đóng một phần
 }
 
 export interface CreditPaymentPeriod {
@@ -16,6 +16,7 @@ export interface CreditPaymentPeriod {
   payment_date: string | null; // Ngày đóng lãi
   status: PaymentPeriodStatus; // Trạng thái đóng lãi
   notes: string | null; // Ghi chú
+  other_amount?: number | null; // Tiền khác
   created_at?: string | null;
   updated_at?: string | null;
 }

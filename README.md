@@ -27,3 +27,9 @@ The page auto-updates as you edit files.
 ```bash
 npm run update-types
 ```
+
+### Update types from supabase
+
+```bash
+npx supabase gen types typescript --project-id "abcd1234" --schema public > src/types/database.types.ts
+```

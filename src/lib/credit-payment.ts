@@ -210,3 +210,89 @@ export async function getTotalPaidAmount(creditId: string) {
   const total = data.reduce((sum, period) => sum + (period.actual_amount || 0), 0);
   return { total, error: null };
 }
+
+/**
+ * Lưu hoặc cập nhật thanh toán của một kỳ: xử lý cả khi kỳ chưa có trong DB và cả khi đã có
+ * @param creditId - ID của hợp đồng
+ * @param periodData - Dữ liệu kỳ thanh toán (nếu đã tồn tại trong DB)
+ * @param actualAmount - Số tiền lãi thực tế
+ * @param otherAmount - Số tiền khác
+ * @param isCalculatedPeriod - Có phải là kỳ chưa có trong DB không
+ */
+export async function savePaymentWithOtherAmount(
+  creditId: string,
+  periodData: Partial<CreditPaymentPeriod>,
+  actualAmount: number,
+  otherAmount: number,
+  isCalculatedPeriod: boolean = false
+) {
+  if (!creditId) return { data: null, error: new Error('Credit ID is required') };
+  
+  try {
+    const now = new Date().toISOString();
+    
+    // Dữ liệu cập nhật cho DB (sử dụng chuỗi thay vì enum)
+    const paymentDate = now;
+    const confirmedStatus = PaymentPeriodStatus.PAID;
+    
+    let response;
+    
+    // Nếu là kỳ tính toán (chưa lưu trong DB), tạo mới
+    if (isCalculatedPeriod) {
+      // Đảm bảo có đủ các trường cần thiết
+      if (!periodData.period_number || !periodData.start_date || !periodData.end_date || !periodData.expected_amount) {
+        return { data: null, error: new Error('Missing required period data') };
+      }
+      
+      // Tạo mới kỳ trong DB
+      response = await supabase
+        .from('credit_payment_periods')
+        .insert({
+          credit_id: creditId,
+          period_number: periodData.period_number,
+          start_date: periodData.start_date,
+          end_date: periodData.end_date,
+          expected_amount: periodData.expected_amount,
+          notes: periodData.notes || null,
+          actual_amount: actualAmount,
+          other_amount: otherAmount,
+          payment_date: now,
+          status: PaymentPeriodStatus.PAID
+        })
+        .select()
+        .single();
+    } else {
+      // Nếu là kỳ đã có trong DB, cập nhật
+      if (!periodData.id) {
+        return { data: null, error: new Error('Period ID is required for update') };
+      }
+      
+      response = await supabase
+        .from('credit_payment_periods')
+        .update({
+          actual_amount: actualAmount,
+          other_amount: otherAmount,
+          payment_date: paymentDate,
+          status: confirmedStatus as any
+        })
+        .eq('id', periodData.id)
+        .select()
+        .single();
+    }
+    
+    // Chuyển đổi dữ liệu trả về để sử dụng trong code
+    if (response?.data) {
+      // Sử dụng as để ép kiểu dữ liệu
+      const statusStr = response.data.status as string;
+      const period = {...response.data};
+      period.status = statusStr as unknown as PaymentPeriodStatus;
+      
+      return { data: period, error: null };
+    }
+    
+    return response;
+  } catch (e) {
+    console.error('Error saving payment with other amount:', e);
+    return { data: null, error: e };
+  }
+}

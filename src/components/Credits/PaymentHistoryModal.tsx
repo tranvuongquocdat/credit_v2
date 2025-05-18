@@ -12,35 +12,16 @@ import {
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { X, ChevronDown } from 'lucide-react';
-import { CreditWithCustomer, InterestType } from '@/models/credit';
+import { CreditWithCustomer, InterestType, Credit } from '@/models/credit';
 import { CreditPaymentPeriod, PaymentPeriodStatus } from '@/models/credit-payment';
-import { getCreditPaymentPeriods } from '@/lib/credit-payment';
+import { getCreditPaymentPeriods, savePaymentWithOtherAmount } from '@/lib/credit-payment';
+import { getInterestDisplayString, calculateInterestAmount as calculateInterestForPeriod } from '@/lib/interest-calculator';
 import { addPrincipalRepayment, updateCreditPrincipal } from '@/lib/principal-repayment';
 import { addAdditionalLoan, updateCreditWithAdditionalLoan } from '@/lib/additional-loan';
 import { addExtension, updateCreditEndDate } from '@/lib/extension';
 import { CreditActionTabs, DEFAULT_CREDIT_TABS, TabId } from './CreditActionTabs';
-import { PaymentForm } from './PaymentForm';
-import { PrincipalRepaymentForm } from './PrincipalRepaymentForm';
-import { PrincipalRepaymentList } from './PrincipalRepaymentList';
-import { AdditionalLoanForm } from './AdditionalLoanForm';
-import { AdditionalLoanList } from './AdditionalLoanList';
-import { ExtensionForm } from './ExtensionForm';
-import { ExtensionList } from './ExtensionList';
+import { AdditionalLoanTab, BadCreditTab, CloseTab, DebtTab, DocumentsTab, ExtensionTab, LatePaymentHistoryTab, PaymentTab, PrincipalRepaymentTab, ScheduleTab } from './tabs';
 
-// Import our new UI components
-import { SectionHeader } from '@/components/ui/SectionHeader';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { DataTable } from '@/components/ui/DataTable';
-import { Icon } from '@/components/ui/Icon';
-import { FormRow } from '@/components/ui/FormRow';
-
-// Import tab components
-import { 
-  DocumentsTab,
-  ScheduleTab,
-  BadCreditTab,
-  LatePaymentHistoryTab
-} from './tabs';
 
 interface PaymentHistoryModalProps {
   isOpen: boolean;
@@ -53,6 +34,8 @@ export function PaymentHistoryModal({
   onClose,
   credit
 }: PaymentHistoryModalProps) {
+  // Properly declare the variables to fix TypeScript errors
+  const creditId = credit?.id || '';
   const [paymentPeriods, setPaymentPeriods] = useState<CreditPaymentPeriod[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +43,12 @@ export function PaymentHistoryModal({
   const [showPaymentForm, setShowPaymentForm] = useState(false); // Hiển thị form đóng lãi phí
   const [refreshRepayments, setRefreshRepayments] = useState(0); // Counter để refresh danh sách trả bớt gốc
   
+  // State cho modal nhập tiền khách trả
+  const [showPaymentInput, setShowPaymentInput] = useState(false);
+  const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [otherAmount, setOtherAmount] = useState<number>(0);
+
   // Helper function to calculate interest amount based on credit details
   const calculateInterestAmount = (credit: CreditWithCustomer | null) => {
     if (!credit) return 0;
@@ -124,16 +113,266 @@ export function PaymentHistoryModal({
     }
   };
   
+  // Hàm tính chính xác số ngày giữa hai ngày (inclusive)
+  const calculateDaysBetween = (startDate: Date, endDate: Date): number => {
+    // Chuẩn hóa về đầu ngày để tránh sai lệch do giờ/phút/giây
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(0, 0, 0, 0);
+    
+    // Tính ngày (bao gồm cả ngày đầu và cuối)
+    return Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  };
+  
+  // Hàm tạo các kỳ thanh toán dựa trên thông tin hợp đồng
+  const generatePaymentPeriods = (credit: CreditWithCustomer | null): CreditPaymentPeriod[] => {
+    if (!credit) return [];
+    
+    const result: CreditPaymentPeriod[] = [];
+    const loanDate = new Date(credit.loan_date);
+    const interestPeriod = credit.interest_period; // Số ngày của một kỳ lãi
+    const loanPeriod = credit.loan_period; // Tổng số ngày vay
+    
+    // Tính toán tổng số kỳ
+    const totalPeriods = Math.ceil(loanPeriod / interestPeriod);
+    
+    // Tạo từng kỳ thanh toán
+    for (let i = 0; i < totalPeriods; i++) {
+      // Tính ngày bắt đầu và kết thúc của kỳ
+      let startDate;
+      
+      // Nếu là kỳ đầu tiên, ngày bắt đầu là loan_date
+      // Nếu không phải kỳ đầu tiên, ngày bắt đầu là ngày tiếp theo sau ngày kết thúc của kỳ trước
+      if (i > 0) {
+        // Tính ngày kết thúc của kỳ trước
+        const prevEndDate = new Date(loanDate.getTime());
+        prevEndDate.setDate(loanDate.getDate() + (i * interestPeriod - 1));
+        
+        // Ngày bắt đầu kỳ này = ngày sau ngày kết thúc kỳ trước
+        startDate = new Date(prevEndDate.getTime());
+        startDate.setDate(prevEndDate.getDate() + 1);
+      } else {
+        // Kỳ đầu tiên, giữ nguyên startDate = loanDate
+        startDate = new Date(loanDate.getTime());
+      }
+      
+      const endDate = new Date(startDate);
+      // Nếu là kỳ cuối cùng và không chia đều, chỉ cộng số ngày còn lại
+      if (i === totalPeriods - 1 && loanPeriod % interestPeriod !== 0) {
+        // Đảm bảo kỳ cuối không vượt quá tổng số ngày vay
+        const loanEndDate = new Date(loanDate);
+        loanEndDate.setDate(loanDate.getDate() + loanPeriod - 1); // Trừ 1 vì tính cả ngày đầu và cuối
+        endDate.setTime(loanEndDate.getTime()); // Gán trực tiếp thởi gian
+      } else {
+        endDate.setDate(startDate.getDate() + interestPeriod - 1); // Trừ 1 vì tính cả ngày đầu và cuối
+      }
+      
+      // Tính số ngày trong kỳ sử dụng hàm tính ngày chuẩn hóa
+      const dayCount = calculateDaysBetween(startDate, endDate);
+      
+      // Tính số tiền dự kiến của kỳ - đảm bảo luôn trả về giá trị > 0
+      // Sử dụng cùng công thức với mergePaymentPeriods để đảm bảo tính nhất quán
+      let expectedAmount = 0;
+      if (credit.interest_type === InterestType.PERCENTAGE) {
+        // Lãi suất phần trăm
+        expectedAmount = Math.round(credit.loan_amount * (credit.interest_value / 100 / 30) * dayCount * 30);
+      } else {
+        // Lãi suất cố định
+        // Tính theo công thức: lãi suất * số tiền vay (tính theo đơn vị triệu) * số ngày
+        const loanAmountInMillions = credit.loan_amount / 1000;
+        expectedAmount = Math.round(credit.interest_value * loanAmountInMillions * dayCount);
+      }
+      
+      result.push({
+        id: `calculated-${i}`, // ID tạm thởi
+        credit_id: credit.id,
+        period_number: i + 1,
+        start_date: startDate.toISOString(),
+        end_date: endDate.toISOString(),
+        expected_amount: expectedAmount,
+        actual_amount: 0,
+        payment_date: null,
+        status: PaymentPeriodStatus.PENDING,
+        notes: null,
+        other_amount: 0 // Thêm trường other_amount với giá trị mặc định là 0
+      });
+    }
+    
+    return result;
+  };
+  
+  // Kết hợp kỳ thanh toán tính toán với dữ liệu thực từ database
+  const mergePaymentPeriods = (calculated: CreditPaymentPeriod[], actual: CreditPaymentPeriod[]): CreditPaymentPeriod[] => {
+    if (!credit) return actual;
+    if (actual.length === 0) return calculated;
+    if (calculated.length === 0) return actual;
+    
+    // Sắp xếp các kỳ thực tế theo số thứ tự
+    const sortedActual = [...actual].sort((a, b) => a.period_number - b.period_number);
+    
+    // Tìm kỳ đã xác nhận sau cùng
+    const lastConfirmedPeriod = sortedActual[sortedActual.length - 1];
+    
+    // Kết quả sẽ chứa tất cả các kỳ đã xác nhận trước
+    const result: CreditPaymentPeriod[] = [...sortedActual];
+    
+    // Nếu có kỳ đã xác nhận, tính toán các kỳ tiếp theo dựa trên kỳ sau cùng
+    if (lastConfirmedPeriod) {
+      const loanEndDate = new Date(credit.loan_date);
+      loanEndDate.setDate(loanEndDate.getDate() + credit.loan_period - 1); // Tính cả ngày đầu và cuối
+      
+      // Lấy ngày cuối kỳ của kỳ đã đóng gần nhất
+      const lastEndDate = new Date(lastConfirmedPeriod.end_date);
+      
+      // Ngày bắt đầu kỳ tiếp theo là ngày sau của ngày kết thúc kỳ trước
+      let nextStartDate = new Date(lastEndDate);
+      nextStartDate.setDate(nextStartDate.getDate() + 1);
+      
+      // Nếu ngày bắt đầu kỳ tiếp theo đã vượt quá ngày kết thúc khoản vay, không cần tạo thêm kỳ
+      if (nextStartDate.getTime() > loanEndDate.getTime()) {
+        return result;
+      }
+      
+      // Tính số kỳ còn lại
+      const periodLength = credit.interest_period; // Số ngày của một kỳ
+      let nextPeriodNumber = lastConfirmedPeriod.period_number + 1;
+      
+      // Tạo các kỳ tiếp theo
+      while (nextStartDate.getTime() <= loanEndDate.getTime()) {
+        let nextEndDate = new Date(nextStartDate);
+        nextEndDate.setDate(nextStartDate.getDate() + periodLength - 1); // Trừ 1 vì tính cả ngày đầu và cuối
+        
+        // Nếu kỳ này vượt quá ngày kết thúc khoản vay, rút ngắn xuống ngày kết thúc
+        if (nextEndDate.getTime() > loanEndDate.getTime()) {
+          nextEndDate = new Date(loanEndDate);
+        }
+        
+        // Tính số ngày trong kỳ sử dụng hàm tính ngày chuẩn hóa
+        const daysCount = calculateDaysBetween(nextStartDate, nextEndDate);
+        
+        // Tính số tiền dự kiến của kỳ
+        // Đảm bảo calculateInterestForPeriod luôn trả về giá trị > 0 cho các kỳ trong tương lai
+        const expectedAmount = credit.interest_type === InterestType.PERCENTAGE
+          ? Math.round(credit.loan_amount * (credit.interest_value / 100) * daysCount)
+          : Math.round((credit.interest_value / credit.interest_period) * daysCount * credit.interest_period);
+        
+        // Tạo kỳ mới
+        const newPeriod: CreditPaymentPeriod = {
+          id: `calculated-${nextPeriodNumber}`,
+          credit_id: credit.id,
+          period_number: nextPeriodNumber,
+          start_date: nextStartDate.toISOString(),
+          end_date: nextEndDate.toISOString(),
+          expected_amount: expectedAmount,
+          actual_amount: 0,
+          payment_date: null,
+          status: PaymentPeriodStatus.PENDING,
+          notes: null,
+          other_amount: 0
+        };
+        
+        // Thêm kỳ mới vào kết quả
+        result.push(newPeriod);
+        
+        // Chuẩn bị cho kỳ tiếp theo
+        nextStartDate = new Date(nextEndDate);
+        nextStartDate.setDate(nextEndDate.getDate() + 1);
+        nextPeriodNumber++;
+        
+        // Nếu ngày bắt đầu kỳ tiếp đã vượt quá ngày kết thúc khoản vay, dừng
+        if (nextStartDate.getTime() > loanEndDate.getTime()) {
+          break;
+        }
+      }
+    } else {
+      // Nếu chưa có kỳ nào được xác nhận, sử dụng các kỳ tính toán
+      return calculated;
+    }
+    
+    // Sắp xếp lại theo số thứ tự kỳ
+    return result.sort((a, b) => a.period_number - b.period_number);
+  };
+
+  // Generate calculated payment periods
+  const calculatedPeriods = generatePaymentPeriods(credit);
+  
+  // Merge with actual data from database
+  const combinedPaymentPeriods = mergePaymentPeriods(calculatedPeriods, paymentPeriods);
+  
   // Calculate total amounts
   const totalAmount = credit?.loan_amount || 0;
-  const totalPaid = 0; // This should come from the API or be calculated
-  const remainingAmount = totalAmount - totalPaid;
+  
+  // Calculate total expected, paid, and remaining amounts from payment periods
+  const totalExpected = combinedPaymentPeriods.reduce((sum, period) => sum + (period.expected_amount || 0), 0);
+  const totalPaid = combinedPaymentPeriods.reduce((sum, period) => sum + (period.actual_amount || 0), 0);
+  const remainingAmount = totalExpected - totalPaid;
   
   // Generate date range for display
   const loanDateFormatted = formatDate(credit?.loan_date);
   const endDateFormatted = credit?.loan_date 
-    ? formatDate(new Date(new Date(credit.loan_date).getTime() + credit.loan_period * 24 * 60 * 60 * 1000).toISOString())
+    ? formatDate(new Date(new Date(credit.loan_date).getTime() + (credit.loan_period - 1) * 24 * 60 * 60 * 1000).toISOString())
     : '-';
+  
+  // Giải thích: Chúng ta trừ 1 vì khi tính số ngày, ngày đầu và ngày cuối đều được tính vào (inclusive)
+  // Ví dụ: từ 18/5 đến 17/6 là 31 ngày, nhưng khi tính số ngày cần nhảy là 30 ngày
+  
+  // Hàm xử lý việc lưu thanh toán khi người dùng nhập xong
+  const handleSavePayment = async () => {
+    if (!selectedPeriodId || !credit) return;
+    
+    try {
+      // Tìm kỳ được chọn
+      const periodToUpdate = paymentPeriods.find(p => p.id === selectedPeriodId);
+      if (!periodToUpdate) return;
+      
+      // Kiểm tra xem đây có phải kỳ tính toán chưa lưu trong DB không
+      const isCalculatedPeriod = selectedPeriodId.startsWith('calculated-');
+      
+      // Sử dụng hàm savePaymentWithOtherAmount để lưu hoặc cập nhật
+      const { data, error } = await savePaymentWithOtherAmount(
+        credit.id,
+        periodToUpdate,
+        paymentAmount,
+        otherAmount,
+        isCalculatedPeriod
+      );
+      
+      if (error) {
+        console.error('Lỗi khi lưu thanh toán:', error);
+        return;
+      }
+      
+      // Cập nhật lại danh sách kỳ thanh toán
+      if (data) {
+        // Tạo bản sao của danh sách hiện tại
+        const updatedPeriods = [...paymentPeriods];
+        
+        // Tìm và thay thế kỳ được cập nhật
+        const periodIndex = updatedPeriods.findIndex(p => p.id === selectedPeriodId);
+        if (periodIndex >= 0) {
+          // Nếu đây là kỳ tính toán, thay thế ID tạm bởi ID thật
+          updatedPeriods[periodIndex] = {
+            ...periodToUpdate,
+            id: isCalculatedPeriod ? data.id : periodToUpdate.id,
+            actual_amount: paymentAmount,
+            other_amount: otherAmount,
+            payment_date: new Date().toISOString(),
+            status: PaymentPeriodStatus.PENDING
+          };
+        }
+        
+        // Cập nhật state
+        setPaymentPeriods(updatedPeriods);
+      }
+      
+      // Đóng dialog
+      setShowPaymentInput(false);
+      setSelectedPeriodId(null);
+    } catch (error) {
+      console.error('Lỗi khi xử lý thanh toán:', error);
+    }
+  }
   
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -148,7 +387,7 @@ export function PaymentHistoryModal({
           {/* Thông tin khách hàng */}
           <div className="flex justify-between items-center mb-2">
             <h3 className="font-medium">{credit?.customer?.name || 'Khách hàng'}</h3>
-            <h3 className="font-medium text-red-600">Tổng lãi phí: {formatCurrency(250000)}</h3>
+            <h3 className="font-medium text-red-600">Tổng lãi phí: {formatCurrency(totalExpected)}</h3>
           </div>
           
           {/* Tổng hợp chi tiết */}
@@ -163,10 +402,7 @@ export function PaymentHistoryModal({
                   <tr>
                     <td className="py-1 px-2 border font-bold">Lãi phí</td>
                     <td className="py-1 px-2 text-right border">
-                      {credit?.interest_type === 'percentage' 
-                        ? `${credit.interest_value}%` 
-                        : formatCurrency(credit?.interest_value || 0)}
-                      {credit?.interest_period ? ` /${credit.interest_period} ngày` : ''}
+                      {credit ? getInterestDisplayString(credit) : '-'}
                     </td>
                   </tr>
                   <tr>
@@ -181,11 +417,11 @@ export function PaymentHistoryModal({
                 <tbody>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Đã thanh toán</td>
-                    <td className="py-1 px-2 text-right border">{formatCurrency(0)}</td>
+                    <td className="py-1 px-2 text-right border">{formatCurrency(totalPaid)}</td>
                   </tr>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Nợ cũ</td>
-                    <td className="py-1 px-2 text-right text-red-600 border">{formatCurrency(0)}</td>
+                    <td className="py-1 px-2 text-right text-red-600 border">{formatCurrency(remainingAmount)}</td>
                   </tr>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Trạng thái</td>
@@ -207,356 +443,68 @@ export function PaymentHistoryModal({
           
           {/* Nội dung theo tab */}
           {activeTab === 'payment' && (
-            <div>
-              {/* Link mở form đóng lãi phí */}
-              <div className="flex items-center mb-2 ml-1">
-                <ChevronDown className="h-4 w-4 text-blue-600" />
-                <a 
-                  href="#" 
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setShowPaymentForm(!showPaymentForm);
-                  }}
-                  className="text-blue-600 hover:underline ml-1"
-                >
-                  Đóng lãi phí tùy biến theo ngày
-                </a>
-              </div>
-              
-              {/* Form đóng lãi phí tùy biến */}
-              {showPaymentForm && (
-                <PaymentForm 
-                  onClose={() => setShowPaymentForm(false)}
-                  onSubmit={(data) => {
-                    console.log('Submitted payment data:', data);
-                    // Xử lý dữ liệu đóng lãi phí tại đây
-                    setShowPaymentForm(false);
-                  }}
-                />
-              )}
-              
-              <div className="overflow-auto mt-2" style={{ maxHeight: '400px' }}>
-                <table className="w-full border-collapse">
-                <thead className="bg-gray-50 sticky top-0">
-                  <tr>
-                    <th className="px-2 py-2 text-left text-sm font-medium text-gray-500 border">STT</th>
-                    <th className="px-2 py-2 text-left text-sm font-medium text-gray-500 border">Ngày</th>
-                    <th className="px-2 py-2 text-center text-sm font-medium text-gray-500 border">Số ngày</th>
-                    <th className="px-2 py-2 text-right text-sm font-medium text-gray-500 border">Tiền lãi phí</th>
-                    <th className="px-2 py-2 text-right text-sm font-medium text-gray-500 border">Tiền khác</th>
-                    <th className="px-2 py-2 text-right text-sm font-medium text-gray-500 border">Tổng lãi phí</th>
-                    <th className="px-2 py-2 text-right text-sm font-medium text-gray-500 border">Tiền khách trả</th>
-                    <th className="px-2 py-2 text-center text-sm font-medium text-gray-500 border w-10"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <tr>
-                      <td colSpan={8} className="py-4 text-center text-gray-500">
-                        Đang tải dữ liệu...
-                      </td>
-                    </tr>
-                  ) : error ? (
-                    <tr>
-                      <td colSpan={8} className="py-4 text-center text-red-500">
-                        {error}
-                      </td>
-                    </tr>
-                  ) : paymentPeriods.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="py-4 text-center text-gray-500">
-                        Chưa có dữ liệu thanh toán
-                      </td>
-                    </tr>
-                  ) : (
-                    // Dữ liệu mẫu như trong hình
-                    Array.from({ length: 5 }).map((_, index) => (
-                      <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-2 py-2 text-center border">{index + 1}</td>
-                        <td className="px-2 py-2 text-center border">
-                          {formatDate(new Date(2025, 4, 15 + index).toISOString())} 
-                          {' →'} 
-                          {formatDate(new Date(2025, 4, 15 + index).toISOString())}
-                        </td>
-                        <td className="px-2 py-2 text-center border">1</td>
-                        <td className="px-2 py-2 text-right border">{formatCurrency(50000)}</td>
-                        <td className="px-2 py-2 text-right border">{formatCurrency(0)}</td>
-                        <td className="px-2 py-2 text-right border">{formatCurrency(50000)}</td>
-                        <td className="px-2 py-2 text-right border">
-                          <span className="text-blue-500 cursor-pointer">
-                            {formatCurrency(50000).replace('₫', '')}
-                          </span>
-                        </td>
-                        <td className="px-2 py-2 text-center border">
-                          <Checkbox />
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-                </table>
-              </div>
-            </div>
+            <PaymentTab
+              credit={credit}
+              paymentPeriods={paymentPeriods}
+              combinedPaymentPeriods={combinedPaymentPeriods}
+              loading={loading}
+              error={error}
+              showPaymentForm={showPaymentForm}
+              setShowPaymentForm={setShowPaymentForm}
+              formatCurrency={formatCurrency}
+              formatDate={formatDate}
+              calculateDaysBetween={calculateDaysBetween}
+              onDataChange={() => {
+                // Reload payment periods data
+                if (credit?.id) {
+                  setLoading(true);
+                  getCreditPaymentPeriods(credit.id).then(({ data, error }) => {
+                    setLoading(false);
+                    if (error) {
+                      setError('Không thể tải lại dữ liệu thanh toán');
+                      return;
+                    }
+                    
+                    setPaymentPeriods(data ? data.map(period => ({
+                      ...period,
+                      status: period.status as PaymentPeriodStatus
+                    })) : []);
+                  });
+                }
+              }}
+            />
           )}
           
           {activeTab === 'principal-repayment' && (
-            <div>
-              <PrincipalRepaymentForm 
-                onSubmit={async (data) => {
-                  try {
-                    if (!credit?.id) return;
-                    
-                    // Thêm khoản trả bớt gốc
-                    await addPrincipalRepayment({
-                      credit_id: credit.id,
-                      amount: data.amount,
-                      repayment_date: data.repaymentDate,
-                      notes: data.notes
-                    });
-                    
-                    // Cập nhật số tiền gốc còn lại của hợp đồng
-                    await updateCreditPrincipal(credit.id, data.amount);
-                    
-                    // Refresh danh sách
-                    setRefreshRepayments(prev => prev + 1);
-                    
-                    // Hiển thị thông báo thành công (có thể thêm toast notification ở đây)
-                    alert('Đã cập nhật khoản trả bớt gốc thành công');
-                  } catch (err) {
-                    console.error('Error adding principal repayment:', err);
-                    alert('Không thể thêm khoản trả bớt gốc. Vui lòng thử lại sau.');
-                  }
-                }}  
-              />
-              
-              {/* Danh sách tiền gốc */}
-              {credit?.id && (
-                <PrincipalRepaymentList 
-                  creditId={credit.id} 
-                  key={refreshRepayments}
-                  onDeleted={() => {
-                    // Reload credit data when a repayment is deleted
-                    // TODO: Add function to reload credit data after deletion
-                  }}
-                />
-              )}
-            </div>
+            <PrincipalRepaymentTab
+              credit={credit}
+              refreshRepayments={refreshRepayments}
+              setRefreshRepayments={setRefreshRepayments}
+            />
           )}
           
           {activeTab === 'additional-loan' && (
-            <div>
-              <AdditionalLoanForm 
-                onSubmit={async (data) => {
-                  try {
-                    if (!credit?.id) return;
-                    
-                    // Thêm khoản vay thêm
-                    await addAdditionalLoan({
-                      credit_id: credit.id,
-                      amount: data.amount,
-                      loan_date: data.loanDate,
-                      notes: data.notes
-                    });
-                    
-                    // Cập nhật số tiền gốc của hợp đồng
-                    await updateCreditWithAdditionalLoan(credit.id, data.amount);
-                    
-                    // Hiển thị thông báo thành công
-                    alert('Đã cập nhật khoản vay thêm thành công');
-                  } catch (err) {
-                    console.error('Error adding additional loan:', err);
-                    alert('Không thể thêm khoản vay thêm. Vui lòng thử lại sau.');
-                  }
-                }}
-              />
-              
-              {/* Danh sách vay thêm */}
-              {credit?.id && (
-                <AdditionalLoanList
-                  creditId={credit.id}
-                  onDeleted={() => {
-                    // TODO: Reload credit data after deletion
-                  }}
-                />
-              )}
-            </div>
+            <AdditionalLoanTab credit={credit} />
           )}
           
           {activeTab === 'extension' && (
-            <div>
-              <ExtensionForm
-                customerName={credit?.customer?.name}
-                onSubmit={async (data) => {
-                  try {
-                    if (!credit?.id) return;
-                    
-                    // Thêm khoản gia hạn
-                    const today = new Date();
-                    await addExtension({
-                      credit_id: credit.id,
-                      days: data.days,
-                      extension_date: format(today, 'yyyy-MM-dd'),
-                      notes: data.notes
-                    });
-                    
-                    // Cập nhật ngày đáo hạn của hợp đồng
-                    await updateCreditEndDate(credit.id, data.days);
-                    
-                    // Hiển thị thông báo thành công
-                    alert('Đã gia hạn hợp đồng thành công');
-                  } catch (err) {
-                    console.error('Error adding extension:', err);
-                    alert('Không thể gia hạn hợp đồng. Vui lòng thử lại sau.');
-                  }
-                }}
-              />
-              
-              {/* Danh sách gia hạn */}
-              {credit?.id && (
-                <ExtensionList
-                  creditId={credit.id}
-                  onDeleted={() => {
-                    // TODO: Reload credit data after deletion
-                  }}
-                />
-              )}
-            </div>
+            <ExtensionTab credit={credit} />
           )}
           
           {activeTab === 'close' && (
-            <div className="p-4">
-              <div className="grid grid-cols-[200px_1fr] gap-y-4 items-center">
-                <div className="text-right pr-4 font-medium">Ngày đóng HĐ :</div>
-                <div>
-                  <input
-                    type="text"
-                    className="border rounded px-2 py-1 w-full max-w-[300px]"
-                    defaultValue={format(new Date(), 'dd-MM-yyyy')}
-                  />
-                </div>
-                
-                <div className="text-right pr-4 font-medium">Tiền cầm :</div>
-                <div className="text-blue-600 font-medium">
-                  {credit?.loan_amount?.toLocaleString('vi-VN')} vnd
-                </div>
-                
-                <div className="text-right pr-4 font-medium">Nợ cũ :</div>
-                <div className="text-blue-600 font-medium">
-                  0 vnd
-                </div>
-                
-                <div className="text-right pr-4 font-medium">Tiền lãi phí :</div>
-                <div className="text-blue-600 font-medium">
-                  {/* Calculate interest based on loan_amount and interest_value */}
-                  {(calculateInterestAmount(credit) || 0).toLocaleString('vi-VN')} vnd ({credit?.interest_period || 0} ngày)
-                </div>
-                
-                <div className="text-right pr-4 font-medium">Tiền khác :</div>
-                <div>
-                  <input
-                    type="text"
-                    className="border rounded px-2 py-1 w-full max-w-[300px]"
-                    defaultValue="0"
-                  />
-                </div>
-                
-                <div className="text-right pr-4 font-medium">Tổng tiền chuộc :</div>
-                <div className="text-red-600 font-medium">
-                  {((credit?.loan_amount || 0) + (calculateInterestAmount(credit) || 0)).toLocaleString('vi-VN')} vnd
-                </div>
-              </div>
-              
-              <div className="mt-6 flex justify-center">
-                <Button className="bg-blue-600 hover:bg-blue-700 text-white px-8">
-                  Đóng HĐ
-                </Button>
-              </div>
-            </div>
+            <CloseTab credit={credit} />
           )}
           
           {activeTab === 'debt' && (
-            <div className="p-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Khách hàng nợ lãi phí */}
-                <div className="border rounded-md">
-                  <div className="bg-gray-100 p-3 border-b flex items-center">
-                    <span className="text-amber-600 mr-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="7 10 12 15 17 10"></polyline>
-                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                      </svg>
-                    </span>
-                    <span className="font-medium">Khách hàng nợ lãi phí</span>
-                  </div>
-                  <div className="p-4">
-                    <div className="grid grid-cols-[150px_1fr] gap-4 items-center mb-4">
-                      <div className="text-right">
-                        <label htmlFor="debt-amount" className="font-medium">
-                          Số tiền nợ lại lần này <span className="text-red-500">*</span>
-                        </label>
-                      </div>
-                      <div>
-                        <input
-                          id="debt-amount"
-                          type="text"
-                          className="border rounded px-2 py-1 w-full"
-                          defaultValue="0"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex justify-end">
-                      <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-                        Ghi nợ
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Khách hàng trả nợ */}
-                <div className="border rounded-md">
-                  <div className="bg-gray-100 p-3 border-b flex items-center">
-                    <span className="text-green-600 mr-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 9v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9"></path>
-                        <polyline points="7 14 12 9 17 14"></polyline>
-                        <line x1="12" y1="9" x2="12" y2="21"></line>
-                      </svg>
-                    </span>
-                    <span className="font-medium">Khách hàng trả nợ</span>
-                  </div>
-                  <div className="p-4">
-                    <div className="grid grid-cols-[150px_1fr] gap-4 items-center mb-4">
-                      <div className="text-right">
-                        <label htmlFor="pay-debt-amount" className="font-medium">
-                          Số tiền trả nợ <span className="text-red-500">*</span>
-                        </label>
-                      </div>
-                      <div>
-                        <input
-                          id="pay-debt-amount"
-                          type="text"
-                          className="border rounded px-2 py-1 w-full"
-                          defaultValue="0"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex justify-end">
-                      <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-                        Thanh toán
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <DebtTab credit={credit} />
           )}
+
           
           {activeTab === 'documents' && (
-            <DocumentsTab creditId={credit?.id || ''} />
+            <DocumentsTab creditId={creditId} />
           )}
           
-          {activeTab === 'history' && (
+          {activeTab === 'history' && credit && (
             <div className="p-4">
               {/* Ghi chú */}
               <div className="mb-6">

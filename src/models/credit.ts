@@ -24,6 +24,8 @@ export interface Credit {
   loan_amount: number;
   interest_type: InterestType;
   interest_value: number;
+  interest_ui_type?: string;  // UI interest type: 'daily', 'monthly_30', 'weekly_percent', etc.
+  interest_notation?: string; // Notation: 'k_per_million', 'percent_per_month', etc.
   loan_period: number;       // Số ngày vay
   interest_period: number;   // Kỳ lãi phí (VD: 10 ngày đóng lãi 1 lần)
   loan_date: string;         // Ngày vay
@@ -44,6 +46,8 @@ export interface CreateCreditParams {
   loan_amount: number;
   interest_type: InterestType;
   interest_value: number;
+  interest_ui_type?: string;  // UI interest type: 'daily', 'monthly_30', etc.
+  interest_notation?: string; // Notation format: 'k_per_million', etc.
   loan_period: number;
   interest_period: number;
   loan_date: string | Date;
@@ -62,6 +66,8 @@ export interface UpdateCreditParams {
   loan_amount?: number;
   interest_type?: InterestType;
   interest_value?: number;
+  interest_ui_type?: string;  // UI interest type: 'daily', 'monthly_30', etc.
+  interest_notation?: string; // Notation format: 'k_per_million', etc.
   loan_period?: number;
   interest_period?: number;
   loan_date?: string | Date;

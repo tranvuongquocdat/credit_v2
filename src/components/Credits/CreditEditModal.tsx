@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useStore } from '@/contexts/StoreContext';
 import { format } from 'date-fns';
 import { 
   Dialog, 
@@ -82,20 +83,31 @@ export function CreditEditModal({
   const handleInterestTypeChange = (value: string) => {
     setInterestType(value);
     
-    // Set default notation based on interest type
+    // Set default notation and update interest period based on interest type
     switch(value) {
       case 'daily':
         setInterestNotation('k_per_million');
+        // Để nguyên interest period vì đã đúng đơn vị ngày
         break;
       case 'monthly_30':
+        setInterestNotation('percent_per_month');
+        // Cập nhật thành 30 ngày (1 tháng 30 ngày)
+        setInterestPeriod('30');
+        break;
       case 'monthly_custom':
         setInterestNotation('percent_per_month');
+        // Cập nhật thành 30 ngày (1 tháng mặc định)
+        setInterestPeriod('30');
         break;
       case 'weekly_percent':
         setInterestNotation('percent_per_week');
+        // Cập nhật thành 7 ngày (1 tuần)
+        setInterestPeriod('7');
         break;
       case 'weekly_k':
         setInterestNotation('k_per_week');
+        // Cập nhật thành 7 ngày (1 tuần)
+        setInterestPeriod('7');
         break;
       default:
         setInterestNotation('k_per_million');
@@ -131,11 +143,15 @@ export function CreditEditModal({
         const loanAmountStr = creditData.loan_amount?.toString() || '0';
         setLoanAmount(loanAmountStr);
         setFormattedLoanAmount(formatNumber(loanAmountStr));
-        // Extract interest type from notes if available
-        let detectedInterestType = 'daily';
-        let detectedNotation = 'k_per_million';
-        if (creditData.notes) {
-          // Check for saved interest mode pattern
+        // Get interest UI type and notation from the credit data
+        // If they're available in the dedicated fields, use those
+        // Otherwise, fall back to extracting from notes (for backward compatibility)
+        let detectedInterestType = creditData.interest_ui_type || 'daily';
+        let detectedNotation = creditData.interest_notation || 'k_per_million';
+        
+        // For backward compatibility with older records
+        if (!creditData.interest_ui_type && creditData.notes) {
+          // Check for saved interest mode pattern in notes
           const interestModeMatch = creditData.notes.match(/\[(\w+_\w+)\]/);
           if (interestModeMatch && interestModeMatch[1]) {
             detectedInterestType = interestModeMatch[1];
@@ -214,6 +230,14 @@ export function CreditEditModal({
         backendInterestType = InterestType.FIXED_AMOUNT;
       }
       
+      // Get current store from context
+      const { currentStore } = useStore();
+
+      // Ensure we have a store selected
+      if (!currentStore?.id) {
+        throw new Error('Vui lòng chọn chi nhánh trước khi cập nhật hợp đồng');
+      }
+      
       // Prepare update data
       const updateData: UpdateCreditParams = {
         customer_id: selectedCustomerId,
@@ -225,11 +249,14 @@ export function CreditEditModal({
         loan_amount: parseInt(loanAmount || '0'),
         interest_type: backendInterestType,
         interest_value: parseFloat(interestValue || '0'),
+        interest_ui_type: interestType, // Save the UI interest type
+        interest_notation: interestNotation, // Save the notation format
         loan_period: parseInt(loanPeriod || '30'),
         interest_period: parseInt(interestPeriod || '10'),
         loan_date: new Date(loanDate),
-        notes: notes + (interestType !== 'daily' ? ` [${interestType}]` : ''),
+        notes: notes, // Keep notes clean, don't append the interest type information
         status,
+        store_id: currentStore.id, // Use store ID from context
       };
       
       // Call API to update credit
