@@ -4,7 +4,15 @@ import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
 // Định nghĩa các loại tab có thể có
-export type TabId = 'payment' | 'principal-repayment' | 'additional-loan' | 'extension' | 'close' | 'debt' | 'documents' | 'history' | 'late-payment-history' | 'schedule' | 'bad-credit';
+export type TabId = 
+  | 'payment' 
+  | 'principal-repayment' 
+  | 'additional-loan' 
+  | 'extension' 
+  | 'close'
+  | 'documents'
+  | 'history'
+  | 'bad-credit';
 
 export interface CreditTab {
   id: TabId;
@@ -69,10 +77,7 @@ export const DEFAULT_CREDIT_TABS: CreditTab[] = [
   { id: 'additional-loan', label: 'Vay thêm' },
   { id: 'extension', label: 'Gia hạn' },
   { id: 'close', label: 'Đóng HĐ' },
-  { id: 'debt', label: 'Nợ' },
   { id: 'documents', label: 'Chứng từ' },
   { id: 'history', label: 'Lịch sử' },
-  { id: 'late-payment-history', label: 'Lịch sử trả chậm' },
-  { id: 'schedule', label: 'Hẹn giờ' },
-  { id: 'bad-credit', label: 'Báo xấu khách hàng' }
+  { id: 'bad-credit', label: 'Báo xấu khách hàng' },
 ] as CreditTab[];

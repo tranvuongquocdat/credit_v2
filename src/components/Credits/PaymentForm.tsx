@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
-import { format, addDays } from 'date-fns';
+import { format, addDays, differenceInDays } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
 interface PaymentFormProps {
@@ -12,6 +12,8 @@ interface PaymentFormProps {
   defaultStartDate?: Date;
   defaultEndDate?: Date;
   defaultAmount?: number;
+  creditId?: string;
+  interestCalculator?: (startDate: string, endDate: string) => number;
   onSubmit: (data: {
     startDate: string;
     endDate: string;
@@ -27,6 +29,8 @@ export function PaymentForm({
   defaultStartDate = new Date(),
   defaultEndDate = addDays(new Date(), 8),
   defaultAmount = 128000,
+  creditId,
+  interestCalculator,
   onSubmit
 }: PaymentFormProps) {
   // Format number with thousand separators
@@ -37,7 +41,7 @@ export function PaymentForm({
 
   const [startDate, setStartDate] = useState(format(defaultStartDate, 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(defaultEndDate, 'yyyy-MM-dd'));
-  const [days, setDays] = useState('8');
+  const [days, setDays] = useState(differenceInDays(defaultEndDate, defaultStartDate).toString());
   
   // State for monetary amounts with formatting
   const [interestAmount, setInterestAmount] = useState(defaultAmount.toString());
@@ -45,6 +49,42 @@ export function PaymentForm({
   
   const [otherAmount, setOtherAmount] = useState('0');
   const [formattedOtherAmount, setFormattedOtherAmount] = useState('0');
+
+  // Recalculate interest when dates change
+  useEffect(() => {
+    try {
+      if (interestCalculator && startDate && endDate) {
+        // Calculate days between dates
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const daysDiff = differenceInDays(end, start) + 1;
+        setDays(daysDiff.toString());
+        
+        // Calculate interest using the provided calculator
+        const calculatedInterest = interestCalculator(startDate, endDate);
+        setInterestAmount(calculatedInterest.toString());
+        setFormattedInterestAmount(formatNumber(calculatedInterest));
+      } else {
+        // Calculate days between dates
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const daysDiff = differenceInDays(end, start) + 1;
+        setDays(daysDiff.toString());
+      }
+    } catch (err) {
+      console.error('Error calculating interest:', err);
+    }
+  }, [startDate, endDate, interestCalculator]);
+  
+  // Handle start date change
+  const handleStartDateChange = (value: string) => {
+    setStartDate(value);
+  };
+  
+  // Handle end date change
+  const handleEndDateChange = (value: string) => {
+    setEndDate(value);
+  };
   
   // Handle interest amount change
   const handleInterestAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -65,7 +105,7 @@ export function PaymentForm({
   
   // Tính ngày đóng tiếp theo
   const nextPaymentDate = format(
-    addDays(defaultEndDate, 8),
+    addDays(new Date(endDate), Number(days)),
     'dd-MM-yyyy'
   );
   
@@ -91,7 +131,7 @@ export function PaymentForm({
           <div>
             <DatePicker 
               value={startDate} 
-              onChange={setStartDate}
+              onChange={handleStartDateChange}
               className="w-64"
             />
           </div>
@@ -100,7 +140,7 @@ export function PaymentForm({
           <div className="flex items-center gap-3">
             <DatePicker 
               value={endDate} 
-              onChange={setEndDate}
+              onChange={handleEndDateChange}
               className="w-64"
             />
             <span>( Ngày đóng lãi phí tiếp : <span className="text-blue-600">{nextPaymentDate}</span> )</span>
@@ -113,6 +153,7 @@ export function PaymentForm({
               onChange={(e) => setDays(e.target.value)}
               className="w-64"
               type="number"
+              readOnly={!!interestCalculator}
             />
             <span className="text-blue-600">Ngày</span>
           </div>
@@ -125,6 +166,7 @@ export function PaymentForm({
               className="w-48"
               inputMode="numeric"
               type="text"
+              readOnly={!!interestCalculator}
             />
             <span className="text-gray-500 text-sm">VNĐ (Tiền lãi suất phải trả)</span>
           </div>

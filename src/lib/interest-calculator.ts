@@ -168,3 +168,143 @@ export function convertFromStandardRate(
   
   return 0;
 }
+
+/**
+ * Calculate interest with consideration for principal changes within the period
+ * Used when there are principal repayments or additional loans during a payment period
+ * 
+ * @param credit - The credit object containing basic loan information
+ * @param startDate - Start date of the payment period
+ * @param endDate - End date of the payment period
+ * @param principalChanges - Array of principal changes with dates and amounts
+ * @returns The calculated interest amount for the specified period
+ */
+export interface PrincipalChange {
+  date: string; // ISO string date of the change
+  previousAmount: number; // Loan amount before the change
+  newAmount: number; // Loan amount after the change
+  changeType: 'additional_loan' | 'principal_repayment';
+}
+
+export function calculateInterestWithPrincipalChanges(
+  credit: Credit,
+  startDate: Date,
+  endDate: Date,
+  principalChanges: PrincipalChange[]
+): number {
+  // If no principal changes, use the standard calculation
+  if (!principalChanges || principalChanges.length === 0) {
+    return calculateInterestForDateRange(credit, startDate, endDate);
+  }
+
+  // Sort all changes by date (including those outside our period)
+  const sortedChanges = [...principalChanges].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+
+  // Filter changes that fall within the payment period
+  const relevantChanges = sortedChanges.filter(change => {
+    const changeDate = new Date(change.date);
+    return (
+      changeDate >= startDate && 
+      changeDate <= endDate
+    );
+  });
+
+  // Find the original loan amount by working backwards through changes
+  // First, assume it's the current loan amount in the credit object
+  let originalLoanAmount = credit.loan_amount;
+  
+  // Find the very first change in the full history to determine the original amount
+  if (sortedChanges.length > 0) {
+    const firstEverChange = sortedChanges[0];
+    originalLoanAmount = firstEverChange.previousAmount;
+  }
+  
+  console.log(`[Interest Calc] Original loan amount from history: ${originalLoanAmount}`);
+  
+  // Now determine the correct starting amount for this specific period
+  let initialLoanAmount = originalLoanAmount;
+  
+  // If there are changes before the start date, use the latest previous change
+  const previousChanges = sortedChanges.filter(change => 
+    new Date(change.date) < startDate
+  );
+  
+  if (previousChanges.length > 0) {
+    // Use the loan amount after the latest previous change
+    const latestPreviousChange = previousChanges[previousChanges.length - 1];
+    initialLoanAmount = latestPreviousChange.newAmount;
+    console.log(`[Interest Calc] Using loan amount after previous change: ${initialLoanAmount}`);
+  }
+
+  // If no relevant changes in this period, just use the starting amount for the entire period
+  if (relevantChanges.length === 0) {
+    console.log(`[Interest Calc] No changes in this period, using initial amount: ${initialLoanAmount}`);
+    // Create a credit object with the initial loan amount for this period
+    const periodCredit = { ...credit, loan_amount: initialLoanAmount };
+    return calculateInterestForDateRange(periodCredit, startDate, endDate);
+  }
+
+  // Calculate interest in segments
+  let totalInterest = 0;
+  let currentDate = new Date(startDate);
+  let currentPrincipal = initialLoanAmount; // Start with the correct initial loan amount
+
+  // For logging and debugging
+  console.log(`[Interest Calc] Period: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+  console.log(`[Interest Calc] Initial loan amount for this period: ${initialLoanAmount}`);
+  console.log(`[Interest Calc] Credit object loan amount: ${credit.loan_amount}`);
+  console.log(`[Interest Calc] Relevant changes in period: ${relevantChanges.length}`);
+
+  // Process each change chronologically
+  for (const change of relevantChanges) {
+    const changeDate = new Date(change.date);
+    
+    // Calculate interest for the segment before this change
+    if (changeDate > currentDate) {
+      // Calculate number of days in this segment (end date not inclusive)
+      const segmentDays = Math.floor((changeDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (segmentDays > 0) {
+        // Create a credit object with the current principal
+        const segmentCredit = { ...credit, loan_amount: currentPrincipal };
+        
+        // Calculate interest for this segment
+        const segmentInterest = calculateInterestAmount(segmentCredit, segmentDays);
+        
+        // Log for debugging
+        console.log(`[Interest Calc] Segment: ${currentDate.toISOString()} to ${new Date(changeDate.getTime() - 86400000).toISOString()}`);
+        console.log(`[Interest Calc] Days: ${segmentDays}, Principal: ${currentPrincipal}, Interest: ${segmentInterest}`);
+        
+        totalInterest += segmentInterest;
+      }
+    }
+    
+    // Update current values for next segment
+    currentDate = changeDate;
+    currentPrincipal = change.newAmount; // Use the new amount from this change
+    console.log(`[Interest Calc] Principal changed to: ${currentPrincipal} on ${changeDate.toISOString()}`);
+  }
+  
+  // Calculate interest for the final segment (after the last change to the end date)
+  // Adding 1 to include the end date in the calculation
+  const finalDays = Math.floor((endDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  
+  if (finalDays > 0) {
+    // Create a credit object with the final principal
+    const finalCredit = { ...credit, loan_amount: currentPrincipal };
+    
+    // Calculate interest for the final segment
+    const finalInterest = calculateInterestAmount(finalCredit, finalDays);
+    
+    // Log for debugging
+    console.log(`[Interest Calc] Final segment: ${currentDate.toISOString()} to ${endDate.toISOString()}`);
+    console.log(`[Interest Calc] Days: ${finalDays}, Principal: ${currentPrincipal}, Interest: ${finalInterest}`);
+    
+    totalInterest += finalInterest;
+  }
+  
+  console.log(`[Interest Calc] Total interest: ${totalInterest}`);
+  return Math.round(totalInterest);
+}

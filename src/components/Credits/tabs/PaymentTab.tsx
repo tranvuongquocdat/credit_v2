@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PaymentForm } from '../PaymentForm';
 import { CreditWithCustomer } from '@/models/credit';
 import { CreditPaymentPeriod, PaymentPeriodStatus } from '@/models/credit-payment';
-import { savePaymentWithOtherAmount, markPeriodAsPaid, deletePaymentPeriod } from '@/lib/credit-payment';
+import { toast } from '@/components/ui/use-toast';
+import { PrincipalChange, calculateInterestWithPrincipalChanges } from '@/lib/interest-calculator';
+import { getPrincipalChangesForCredit } from '@/lib/credit-principal-changes';
 
 type PaymentTabProps = {
   credit: CreditWithCustomer | null;
@@ -20,6 +22,7 @@ type PaymentTabProps = {
   formatDate: (date: string) => string;
   calculateDaysBetween: (start: Date, end: Date) => number;
   onDataChange?: () => void;
+  principalChanges?: PrincipalChange[];
 };
 
 // Helper function to format number with thousand separators for input
@@ -43,12 +46,61 @@ export function PaymentTab({
   formatCurrency,
   formatDate,
   calculateDaysBetween,
-  onDataChange
+  onDataChange,
+  principalChanges = [] // Default to empty array
 }: PaymentTabProps) {
   // State for inline payment editing
   const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [localPrincipalChanges, setLocalPrincipalChanges] = useState<PrincipalChange[]>(principalChanges);
   
+  // Load principal changes if not provided
+  useEffect(() => {
+    if (principalChanges && principalChanges.length > 0) {
+      setLocalPrincipalChanges(principalChanges);
+      return;
+    }
+
+    async function loadPrincipalChanges() {
+      if (!credit?.id) return;
+
+      try {
+        const { data, error } = await getPrincipalChangesForCredit(credit.id);
+        
+        if (error) {
+          console.error('Error loading principal changes:', error);
+          return;
+        }
+        
+        setLocalPrincipalChanges(data || []);
+      } catch (err) {
+        console.error('Error fetching principal changes:', err);
+      }
+    }
+
+    loadPrincipalChanges();
+  }, [credit?.id, principalChanges]);
+
+  // Calculate interest with principal changes
+  const calculateInterestForPeriod = (startDate: string, endDate: string): number => {
+    if (!credit) return 0;
+    
+    try {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      return calculateInterestWithPrincipalChanges(
+        credit,
+        start,
+        end,
+        localPrincipalChanges
+      );
+    } catch (err) {
+      console.error('Error calculating interest with principal changes:', err);
+      return 0;
+    }
+  };
+
   // Start editing a payment
   const startEditing = (period: CreditPaymentPeriod) => {
     if (period.status === PaymentPeriodStatus.PAID) return; // Don't edit paid periods
@@ -72,6 +124,10 @@ export function PaymentTab({
       console.log(today)
       const isCalculatedPeriod = !period.id || period.id.startsWith('calculated-');
       console.log(paymentAmount)
+      
+      // Import dynamically to prevent import cycle
+      const { savePaymentWithOtherAmount } = await import('@/lib/credit-payment');
+      
       await savePaymentWithOtherAmount(
         credit.id,
         period,
@@ -89,7 +145,11 @@ export function PaymentTab({
       }
     } catch (error) {
       console.error('Error saving payment:', error);
-      alert('Có lỗi xảy ra khi lưu thanh toán. Vui lòng thử lại.');
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: "Có lỗi xảy ra khi lưu thanh toán. Vui lòng thử lại."
+      });
     }
   };
   
@@ -98,6 +158,9 @@ export function PaymentTab({
     if (!credit?.id) return;
     
     try {
+      // Import necessary functions
+      const { savePaymentWithOtherAmount, markPeriodAsPaid, deletePaymentPeriod } = await import('@/lib/credit-payment');
+      
       if (checked) {
         // Find all unchecked periods from the oldest up to this one
         const periodsToCheck = [];
@@ -150,7 +213,11 @@ export function PaymentTab({
         );
         
         if (anyLaterPeriodPaid) {
-          alert('Không thể bỏ chọn kỳ thanh toán này vì đã có kỳ thanh toán sau đã được thanh toán.');
+          toast({
+            variant: "destructive",
+            title: "Lỗi",
+            description: "Không thể bỏ chọn kỳ thanh toán này vì đã có kỳ thanh toán sau đã được thanh toán."
+          });
           return;
         }
         
@@ -166,7 +233,11 @@ export function PaymentTab({
       }
     } catch (error) {
       console.error('Error updating payment status:', error);
-      alert('Có lỗi xảy ra khi cập nhật trạng thái thanh toán. Vui lòng thử lại.');
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: "Có lỗi xảy ra khi cập nhật trạng thái thanh toán. Vui lòng thử lại."
+      });
     }
   };
 
@@ -192,11 +263,57 @@ export function PaymentTab({
         <div className="border p-4 rounded mb-4">
           <PaymentForm 
             onClose={() => setShowPaymentForm(false)}
-            onSubmit={(data) => {
-              console.log('Payment data submitted:', data);
-              setShowPaymentForm(false);
-              if (onDataChange) onDataChange();
-            }} 
+            onSubmit={async (data) => {
+              try {
+                console.log('Payment data submitted:', data);
+                
+                // Calculate interest considering principal changes
+                const interestAmount = calculateInterestForPeriod(
+                  data.startDate,
+                  data.endDate
+                );
+                
+                // Import the function dynamically to prevent import cycle
+                const { savePaymentWithOtherAmount } = await import('@/lib/credit-payment');
+                
+                await savePaymentWithOtherAmount(
+                  credit.id,
+                  {
+                    period_number: 0, // Custom payment
+                    start_date: data.startDate,
+                    end_date: data.endDate,
+                    expected_amount: interestAmount,
+                    other_amount: data.otherAmount,
+                    actual_amount: data.totalAmount
+                  },
+                  interestAmount,
+                  data.otherAmount,
+                  true // isCalculatedPeriod
+                );
+                
+                toast({
+                  title: "Thành công",
+                  description: "Đã cập nhật khoản thanh toán thành công",
+                });
+                
+                setShowPaymentForm(false);
+                if (onDataChange) onDataChange();
+              } catch (err) {
+                console.error('Error submitting payment:', err);
+                toast({
+                  variant: "destructive",
+                  title: "Lỗi",
+                  description: "Có lỗi xảy ra khi lưu thanh toán. Vui lòng thử lại sau."
+                });
+              }
+            }}
+            interestCalculator={(startDate, endDate) => {
+              // Function to calculate interest based on dates
+              const start = new Date(startDate);
+              const end = new Date(endDate);
+              return calculateInterestForPeriod(startDate, endDate);
+            }}
+            creditId={credit.id}
           />
         </div>
       )}

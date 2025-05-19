@@ -8,9 +8,18 @@ import { addDays, format } from 'date-fns';
  */
 export async function getExtensions(creditId: string): Promise<Extension[]> {
   try {
-    // Trong phiên bản demo, trả về mảng rỗng vì bảng có thể chưa được tạo
-    console.log('Fetching extensions for credit ID:', creditId);
-    return [];
+    const { data, error } = await supabase
+      .from('extensions')
+      .select('*')
+      .eq('credit_id', creditId)
+      .order('extension_date', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching extensions:', error);
+      throw new Error(`Error fetching extensions: ${error.message}`);
+    }
+
+    return data || [];
   } catch (error) {
     console.error('Failed to fetch extensions:', error);
     throw error;
@@ -23,12 +32,44 @@ export async function getExtensions(creditId: string): Promise<Extension[]> {
  */
 export async function addExtension(extension: Extension): Promise<Extension> {
   try {
-    // Trong phiên bản demo, chỉ log thông tin và trả về đối tượng giả
-    console.log('Adding extension:', extension);
-    return {
-      ...extension,
-      id: 'temp-' + Date.now()
-    };
+    // Lấy thông tin hợp đồng để tính toán ngày kết thúc cũ
+    const { data: creditData, error: creditError } = await supabase
+      .from('credits')
+      .select('loan_date, loan_period')
+      .eq('id', extension.credit_id)
+      .single();
+
+    if (creditError) {
+      console.error('Error fetching credit:', creditError);
+      throw new Error(`Error fetching credit: ${creditError.message}`);
+    }
+
+    if (!creditData) {
+      throw new Error('Credit not found');
+    }
+
+    // Thêm vào bảng extensions
+    // Lưu ý: from_date và to_date sẽ được tự động điền bởi trigger
+    const { data, error } = await supabase
+      .from('extensions')
+      .insert({
+        credit_id: extension.credit_id,
+        days: extension.days,
+        extension_date: extension.extension_date,
+        notes: extension.notes || null,
+        // Add temporary values that will be overwritten by the database trigger
+        from_date: new Date().toISOString(),
+        to_date: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error adding extension:', error);
+      throw new Error(`Error adding extension: ${error.message}`);
+    }
+
+    return data;
   } catch (error) {
     console.error('Failed to add extension:', error);
     throw error;
@@ -41,8 +82,16 @@ export async function addExtension(extension: Extension): Promise<Extension> {
  */
 export async function deleteExtension(id: string): Promise<void> {
   try {
-    // Trong phiên bản demo, chỉ log thông tin
-    console.log('Deleting extension with ID:', id);
+    // Trigger trước khi xóa sẽ tự động điều chỉnh loan_period của credit
+    const { error } = await supabase
+      .from('extensions')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting extension:', error);
+      throw new Error(`Error deleting extension: ${error.message}`);
+    }
   } catch (error) {
     console.error('Failed to delete extension:', error);
     throw error;
@@ -56,14 +105,10 @@ export async function deleteExtension(id: string): Promise<void> {
  */
 export async function updateCreditEndDate(creditId: string, days: number): Promise<void> {
   try {
-    // Trong phiên bản demo, chúng ta sử dụng ngày hiện tại + 30 ngày làm ngày đáo hạn giả định
-    // vì có thể bảng credits không có trường end_date
-    
-    /*
     // Lấy thông tin hiện tại của hợp đồng
     const { data: credit, error: fetchError } = await supabase
       .from('credits')
-      .select('end_date')
+      .select('loan_date, loan_period')
       .eq('id', creditId)
       .single();
       
@@ -71,32 +116,26 @@ export async function updateCreditEndDate(creditId: string, days: number): Promi
       throw new Error(`Error fetching credit: ${fetchError.message}`);
     }
     
-    if (!credit?.end_date) {
-      throw new Error('Credit end date not found');
+    if (!credit) {
+      throw new Error('Credit not found');
     }
     
-    // Tính toán ngày đáo hạn mới
-    const currentEndDate = new Date(credit.end_date);
-    */
+    // Tính toán loan_period mới
+    const newLoanPeriod = credit.loan_period + days;
     
-    // Sử dụng ngày hiện tại + 30 ngày làm ngày đáo hạn giả định
-    const currentEndDate = addDays(new Date(), 30);
-    const newEndDate = addDays(currentEndDate, days);
-    
-    // Giả lập cập nhật hợp đồng
-    console.log(`Updating credit ${creditId} end date: ${format(currentEndDate, 'yyyy-MM-dd')} → ${format(newEndDate, 'yyyy-MM-dd')} (+ ${days} days)`);
-    
-    // Uncomment khi cần thực hiện thật
-    /*
+    // Cập nhật loan_period trong credits
+    // Lưu ý: Đây là logic dự phòng, thường thì việc cập nhật này đã được xử lý bởi trigger trong database
     const { error: updateError } = await supabase
       .from('credits')
-      .update({ end_date: format(newEndDate, 'yyyy-MM-dd') })
+      .update({ 
+        loan_period: newLoanPeriod,
+        updated_at: new Date().toISOString()
+      })
       .eq('id', creditId);
       
     if (updateError) {
       throw new Error(`Error updating credit: ${updateError.message}`);
     }
-    */
   } catch (error) {
     console.error('Failed to update credit end date:', error);
     throw error;

@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { AdditionalLoan } from '@/models/additional-loan';
+import { CreditTransactionType } from './credit-amount-history';
 
 /**
  * Lấy danh sách các khoản vay thêm theo credit_id
@@ -7,9 +8,29 @@ import { AdditionalLoan } from '@/models/additional-loan';
  */
 export async function getAdditionalLoans(creditId: string): Promise<AdditionalLoan[]> {
   try {
-    // Trong phiên bản demo, trả về mảng rỗng vì bảng có thể chưa được tạo
-    console.log('Fetching additional loans for credit ID:', creditId);
-    return [];
+    const { data, error } = await supabase
+      .from('credit_amount_history')
+      .select('*')
+      .eq('credit_id', creditId)
+      .eq('transaction_type', CreditTransactionType.ADDITIONAL_LOAN)
+      .order('transaction_date', { ascending: false });
+      
+    if (error) {
+      console.error('Error fetching additional loans:', error);
+      throw new Error(`Error fetching additional loans: ${error.message}`);
+    }
+    
+    // Transform to AdditionalLoan format
+    const additionalLoans: AdditionalLoan[] = (data || []).map(record => ({
+      id: record.id,
+      credit_id: record.credit_id,
+      amount: record.amount, // Already positive
+      loan_date: record.transaction_date,
+      notes: record.notes || undefined,
+      created_at: record.created_at
+    }));
+    
+    return additionalLoans;
   } catch (error) {
     console.error('Failed to fetch additional loans:', error);
     throw error;
@@ -22,11 +43,53 @@ export async function getAdditionalLoans(creditId: string): Promise<AdditionalLo
  */
 export async function addAdditionalLoan(loan: AdditionalLoan): Promise<AdditionalLoan> {
   try {
-    // Trong phiên bản demo, chỉ log thông tin và trả về đối tượng giả
-    console.log('Adding additional loan:', loan);
+    // Get current loan amount
+    const { data: creditData, error: fetchError } = await supabase
+      .from('credits')
+      .select('loan_amount')
+      .eq('id', loan.credit_id)
+      .single();
+      
+    if (fetchError) {
+      console.error('Error fetching credit:', fetchError);
+      throw new Error(`Error fetching credit: ${fetchError.message}`);
+    }
+    
+    if (!creditData) {
+      throw new Error('Credit not found');
+    }
+    
+    const previousLoanAmount = creditData.loan_amount;
+    const newLoanAmount = previousLoanAmount + loan.amount;
+    
+    // Insert into credit_amount_history
+    const { data, error } = await supabase
+      .from('credit_amount_history')
+      .insert({
+        credit_id: loan.credit_id,
+        transaction_type: CreditTransactionType.ADDITIONAL_LOAN,
+        amount: loan.amount, // Positive for additional loan
+        previous_loan_amount: previousLoanAmount,
+        new_loan_amount: newLoanAmount,
+        transaction_date: loan.loan_date,
+        notes: loan.notes || null
+      })
+      .select()
+      .single();
+      
+    if (error) {
+      console.error('Error adding additional loan:', error);
+      throw new Error(`Error adding additional loan: ${error.message}`);
+    }
+    
+    // Return in AdditionalLoan format
     return {
-      ...loan,
-      id: 'temp-' + Date.now()
+      id: data.id,
+      credit_id: data.credit_id,
+      amount: data.amount,
+      loan_date: data.transaction_date,
+      notes: data.notes || undefined,
+      created_at: data.created_at
     };
   } catch (error) {
     console.error('Failed to add additional loan:', error);
@@ -40,8 +103,43 @@ export async function addAdditionalLoan(loan: AdditionalLoan): Promise<Additiona
  */
 export async function deleteAdditionalLoan(id: string): Promise<void> {
   try {
-    // Trong phiên bản demo, chỉ log thông tin
-    console.log('Deleting additional loan with ID:', id);
+    // Get the record details first to restore the loan amount later
+    const { data: record, error: fetchError } = await supabase
+      .from('credit_amount_history')
+      .select('*')
+      .eq('id', id)
+      .single();
+      
+    if (fetchError) {
+      console.error('Error fetching loan record:', fetchError);
+      throw new Error(`Error fetching loan record: ${fetchError.message}`);
+    }
+    
+    if (!record || record.transaction_type !== CreditTransactionType.ADDITIONAL_LOAN) {
+      throw new Error('Additional loan record not found');
+    }
+    
+    // Restore the previous loan amount
+    const { error: updateError } = await supabase
+      .from('credits')
+      .update({ loan_amount: record.previous_loan_amount })
+      .eq('id', record.credit_id);
+      
+    if (updateError) {
+      console.error('Error restoring loan amount:', updateError);
+      throw new Error(`Error restoring loan amount: ${updateError.message}`);
+    }
+    
+    // Delete the history record
+    const { error: deleteError } = await supabase
+      .from('credit_amount_history')
+      .delete()
+      .eq('id', id);
+      
+    if (deleteError) {
+      console.error('Error deleting additional loan:', deleteError);
+      throw new Error(`Error deleting additional loan: ${deleteError.message}`);
+    }
   } catch (error) {
     console.error('Failed to delete additional loan:', error);
     throw error;
@@ -52,9 +150,12 @@ export async function deleteAdditionalLoan(id: string): Promise<void> {
  * Cập nhật số tiền gốc của hợp đồng sau khi vay thêm
  * @param creditId - ID của hợp đồng
  * @param amount - Số tiền vay thêm
+ * @deprecated Use recordAdditionalLoan from credit-amount-history.ts instead
  */
 export async function updateCreditWithAdditionalLoan(creditId: string, amount: number): Promise<void> {
   try {
+    console.warn('updateCreditWithAdditionalLoan is deprecated. Use recordAdditionalLoan instead.');
+    
     // Lấy thông tin hiện tại của hợp đồng
     const { data: credit, error: fetchError } = await supabase
       .from('credits')
@@ -63,26 +164,27 @@ export async function updateCreditWithAdditionalLoan(creditId: string, amount: n
       .single();
       
     if (fetchError) {
+      console.error('Error fetching credit:', fetchError);
       throw new Error(`Error fetching credit: ${fetchError.message}`);
     }
     
+    if (!credit) {
+      throw new Error('Credit not found');
+    }
+    
     // Tính toán số tiền gốc mới (cộng thêm số vay thêm)
-    const newLoanAmount = (credit?.loan_amount || 0) + amount;
+    const newLoanAmount = (credit.loan_amount || 0) + amount;
     
-    // Giả lập cập nhật hợp đồng
-    console.log(`Updating credit ${creditId} loan amount: ${credit?.loan_amount} + ${amount} = ${newLoanAmount}`);
-    
-    // Uncomment khi cần thực hiện thật
-    /*
+    // Cập nhật hợp đồng
     const { error: updateError } = await supabase
       .from('credits')
       .update({ loan_amount: newLoanAmount })
       .eq('id', creditId);
       
     if (updateError) {
+      console.error('Error updating credit:', updateError);
       throw new Error(`Error updating credit: ${updateError.message}`);
     }
-    */
   } catch (error) {
     console.error('Failed to update credit with additional loan:', error);
     throw error;

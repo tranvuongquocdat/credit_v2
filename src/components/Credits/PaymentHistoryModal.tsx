@@ -15,12 +15,14 @@ import { X, ChevronDown } from 'lucide-react';
 import { CreditWithCustomer, InterestType, Credit } from '@/models/credit';
 import { CreditPaymentPeriod, PaymentPeriodStatus } from '@/models/credit-payment';
 import { getCreditPaymentPeriods, savePaymentWithOtherAmount } from '@/lib/credit-payment';
-import { getInterestDisplayString, calculateInterestAmount as calculateInterestForPeriod } from '@/lib/interest-calculator';
+import { getInterestDisplayString, calculateInterestAmount as calculateInterestForPeriod, calculateInterestWithPrincipalChanges, PrincipalChange } from '@/lib/interest-calculator';
 import { addPrincipalRepayment, updateCreditPrincipal } from '@/lib/principal-repayment';
 import { addAdditionalLoan, updateCreditWithAdditionalLoan } from '@/lib/additional-loan';
 import { addExtension, updateCreditEndDate } from '@/lib/extension';
 import { CreditActionTabs, DEFAULT_CREDIT_TABS, TabId } from './CreditActionTabs';
-import { AdditionalLoanTab, BadCreditTab, CloseTab, DebtTab, DocumentsTab, ExtensionTab, LatePaymentHistoryTab, PaymentTab, PrincipalRepaymentTab, ScheduleTab } from './tabs';
+import { AdditionalLoanTab, BadCreditTab, CloseTab, DocumentsTab, ExtensionTab, PaymentTab, PrincipalRepaymentTab } from './tabs';
+import { getCreditById } from '@/lib/credit';
+import { getPrincipalChangesForCredit } from '@/lib/credit-principal-changes';
 
 
 interface PaymentHistoryModalProps {
@@ -32,9 +34,10 @@ interface PaymentHistoryModalProps {
 export function PaymentHistoryModal({
   isOpen,
   onClose,
-  credit
+  credit: initialCredit
 }: PaymentHistoryModalProps) {
   // Properly declare the variables to fix TypeScript errors
+  const [credit, setCredit] = useState<CreditWithCustomer>(initialCredit);
   const creditId = credit?.id || '';
   const [paymentPeriods, setPaymentPeriods] = useState<CreditPaymentPeriod[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,12 +45,38 @@ export function PaymentHistoryModal({
   const [activeTab, setActiveTab] = useState<TabId>('payment'); // Tab mặc định là "Đóng lãi phí"
   const [showPaymentForm, setShowPaymentForm] = useState(false); // Hiển thị form đóng lãi phí
   const [refreshRepayments, setRefreshRepayments] = useState(0); // Counter để refresh danh sách trả bớt gốc
+  const [refreshAdditionalLoans, setRefreshAdditionalLoans] = useState(0); // Counter để refresh danh sách vay thêm
+  const [principalChanges, setPrincipalChanges] = useState<PrincipalChange[]>([]);
   
   // State cho modal nhập tiền khách trả
   const [showPaymentInput, setShowPaymentInput] = useState(false);
   const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [otherAmount, setOtherAmount] = useState<number>(0);
+  
+  // Cập nhật state credit khi initialCredit thay đổi
+  useEffect(() => {
+    setCredit(initialCredit);
+  }, [initialCredit]);
+
+  // Hàm reload thông tin hợp đồng
+  const reloadCreditInfo = async () => {
+    if (!credit?.id) return;
+    
+    try {
+      const { data, error } = await getCreditById(credit.id);
+      
+      if (error) {
+        throw error;
+      }
+      
+      if (data) {
+        setCredit(data);
+      }
+    } catch (err) {
+      console.error('Error reloading credit info:', err);
+    }
+  };
 
   // Helper function to calculate interest amount based on credit details
   const calculateInterestAmount = (credit: CreditWithCustomer | null) => {
@@ -125,6 +154,28 @@ export function PaymentHistoryModal({
     return Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
   };
   
+  // Fetch principal changes when credit changes
+  useEffect(() => {
+    async function fetchPrincipalChanges() {
+      if (!credit?.id) return;
+      
+      try {
+        const { data, error } = await getPrincipalChangesForCredit(credit.id);
+        
+        if (error) {
+          console.error('Error fetching principal changes:', error);
+          return;
+        }
+        
+        setPrincipalChanges(data || []);
+      } catch (err) {
+        console.error('Error in fetchPrincipalChanges:', err);
+      }
+    }
+    
+    fetchPrincipalChanges();
+  }, [credit?.id, refreshRepayments, refreshAdditionalLoans]);
+
   // Hàm tạo các kỳ thanh toán dựa trên thông tin hợp đồng
   const generatePaymentPeriods = (credit: CreditWithCustomer | null): CreditPaymentPeriod[] => {
     if (!credit) return [];
@@ -171,21 +222,30 @@ export function PaymentHistoryModal({
       // Tính số ngày trong kỳ sử dụng hàm tính ngày chuẩn hóa
       const dayCount = calculateDaysBetween(startDate, endDate);
       
-      // Tính số tiền dự kiến của kỳ - đảm bảo luôn trả về giá trị > 0
-      // Sử dụng cùng công thức với mergePaymentPeriods để đảm bảo tính nhất quán
+      // Tính số tiền lãi dự kiến của kỳ, xem xét đến thay đổi gốc
       let expectedAmount = 0;
-      if (credit.interest_type === InterestType.PERCENTAGE) {
-        // Lãi suất phần trăm
-        expectedAmount = Math.round(credit.loan_amount * (credit.interest_value / 100 / 30) * dayCount * 30);
+      if (principalChanges && principalChanges.length > 0) {
+        // Sử dụng hàm tính lãi nâng cao có xét đến thay đổi gốc
+        expectedAmount = calculateInterestWithPrincipalChanges(
+          credit,
+          startDate,
+          endDate,
+          principalChanges
+        );
       } else {
-        // Lãi suất cố định
-        // Tính theo công thức: lãi suất * số tiền vay (tính theo đơn vị triệu) * số ngày
-        const loanAmountInMillions = credit.loan_amount / 1000;
-        expectedAmount = Math.round(credit.interest_value * loanAmountInMillions * dayCount);
+        // Sử dụng tính toán cũ nếu không có thay đổi gốc
+        if (credit.interest_type === InterestType.PERCENTAGE) {
+          // Lãi suất phần trăm
+          expectedAmount = Math.round(credit.loan_amount * (credit.interest_value / 100 / 30) * dayCount * 30);
+        } else {
+          // Lãi suất cố định
+          const loanAmountInMillions = credit.loan_amount / 1000;
+          expectedAmount = Math.round(credit.interest_value * loanAmountInMillions * dayCount);
+        }
       }
       
       result.push({
-        id: `calculated-${i}`, // ID tạm thởi
+        id: `calculated-${i}`, // ID tạm thời
         credit_id: credit.id,
         period_number: i + 1,
         start_date: startDate.toISOString(),
@@ -195,7 +255,7 @@ export function PaymentHistoryModal({
         payment_date: null,
         status: PaymentPeriodStatus.PENDING,
         notes: null,
-        other_amount: 0 // Thêm trường other_amount với giá trị mặc định là 0
+        other_amount: 0
       });
     }
     
@@ -251,11 +311,27 @@ export function PaymentHistoryModal({
         // Tính số ngày trong kỳ sử dụng hàm tính ngày chuẩn hóa
         const daysCount = calculateDaysBetween(nextStartDate, nextEndDate);
         
-        // Tính số tiền dự kiến của kỳ
-        // Đảm bảo calculateInterestForPeriod luôn trả về giá trị > 0 cho các kỳ trong tương lai
-        const expectedAmount = credit.interest_type === InterestType.PERCENTAGE
-          ? Math.round(credit.loan_amount * (credit.interest_value / 100) * daysCount)
-          : Math.round((credit.interest_value / credit.interest_period) * daysCount * credit.interest_period);
+        // Tính số tiền lãi dự kiến của kỳ, xem xét đến thay đổi gốc
+        let expectedAmount = 0;
+        if (principalChanges && principalChanges.length > 0) {
+          // Sử dụng hàm tính lãi nâng cao có xét đến thay đổi gốc
+          expectedAmount = calculateInterestWithPrincipalChanges(
+            credit,
+            nextStartDate,
+            nextEndDate,
+            principalChanges
+          );
+        } else {
+          // Sử dụng tính toán cũ nếu không có thay đổi gốc
+          if (credit.interest_type === InterestType.PERCENTAGE) {
+            // Lãi suất phần trăm - sử dụng cùng công thức với generatePaymentPeriods
+            expectedAmount = Math.round(credit.loan_amount * (credit.interest_value / 100 / 30) * daysCount * 30);
+          } else {
+            // Lãi suất cố định - sử dụng cùng công thức với generatePaymentPeriods
+            const loanAmountInMillions = credit.loan_amount / 1000;
+            expectedAmount = Math.round(credit.interest_value * loanAmountInMillions * daysCount);
+          }
+        }
         
         // Tạo kỳ mới
         const newPeriod: CreditPaymentPeriod = {
@@ -306,7 +382,15 @@ export function PaymentHistoryModal({
   // Calculate total expected, paid, and remaining amounts from payment periods
   const totalExpected = combinedPaymentPeriods.reduce((sum, period) => sum + (period.expected_amount || 0), 0);
   const totalPaid = combinedPaymentPeriods.reduce((sum, period) => sum + (period.actual_amount || 0), 0);
-  const remainingAmount = totalExpected - totalPaid;
+  
+  // Calculate old debt as the difference between customer payments and (interest fees + other fees) in database
+  // Only consider periods that exist in database (not calculated ones)
+  const databasePeriods = paymentPeriods.filter(p => p.id && !p.id.startsWith('calculated-'));
+  const totalInterestAndOtherFees = databasePeriods.reduce((sum, period) => 
+    sum + (period.expected_amount || 0) + (period.other_amount || 0), 0);
+  const totalCustomerPayments = databasePeriods.reduce((sum, period) => 
+    sum + (period.actual_amount || 0), 0);
+  const remainingAmount = totalCustomerPayments - totalInterestAndOtherFees;
   
   // Generate date range for display
   const loanDateFormatted = formatDate(credit?.loan_date);
@@ -420,8 +504,10 @@ export function PaymentHistoryModal({
                     <td className="py-1 px-2 text-right border">{formatCurrency(totalPaid)}</td>
                   </tr>
                   <tr>
-                    <td className="py-1 px-2 border font-bold">Nợ cũ</td>
-                    <td className="py-1 px-2 text-right text-red-600 border">{formatCurrency(remainingAmount)}</td>
+                    <td className="py-1 px-2 border font-bold">{remainingAmount > 0 ? 'Tiền thừa' : 'Nợ cũ'}</td>
+                    <td className={`py-1 px-2 text-right border ${remainingAmount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(Math.abs(remainingAmount))}
+                    </td>
                   </tr>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Trạng thái</td>
@@ -454,6 +540,7 @@ export function PaymentHistoryModal({
               formatCurrency={formatCurrency}
               formatDate={formatDate}
               calculateDaysBetween={calculateDaysBetween}
+              principalChanges={principalChanges}
               onDataChange={() => {
                 // Reload payment periods data
                 if (credit?.id) {
@@ -480,25 +567,31 @@ export function PaymentHistoryModal({
               credit={credit}
               refreshRepayments={refreshRepayments}
               setRefreshRepayments={setRefreshRepayments}
+              onDataChange={reloadCreditInfo}
             />
           )}
           
           {activeTab === 'additional-loan' && (
-            <AdditionalLoanTab credit={credit} />
+            <AdditionalLoanTab 
+              credit={credit}
+              key={refreshAdditionalLoans}
+              onDataChange={() => {
+                setRefreshAdditionalLoans(prev => prev + 1);
+                reloadCreditInfo();
+              }}
+            />
           )}
           
           {activeTab === 'extension' && (
-            <ExtensionTab credit={credit} />
+            <ExtensionTab 
+              credit={credit} 
+              onDataChange={reloadCreditInfo}
+            />
           )}
           
           {activeTab === 'close' && (
             <CloseTab credit={credit} />
           )}
-          
-          {activeTab === 'debt' && (
-            <DebtTab credit={credit} />
-          )}
-
           
           {activeTab === 'documents' && (
             <DocumentsTab creditId={creditId} />
@@ -615,14 +708,6 @@ export function PaymentHistoryModal({
                 </div>
               </div>
             </div>
-          )}
-          
-          {activeTab === 'late-payment-history' && (
-            <LatePaymentHistoryTab credit={credit} />
-          )}
-          
-          {activeTab === 'schedule' && (
-            <ScheduleTab creditId={credit?.id || ''} />
           )}
           
           {activeTab === 'bad-credit' && (

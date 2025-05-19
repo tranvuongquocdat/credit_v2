@@ -203,7 +203,7 @@ export function CreditCreateModal({
       // Map the UI interest type to the backend interest type
       let backendInterestType = InterestType.PERCENTAGE;
       if (interestType === 'daily') {
-        backendInterestType = InterestType.PERCENTAGE;
+        backendInterestType = InterestType.FIXED_AMOUNT;
       } else if (interestType === 'monthly_30' || interestType === 'monthly_custom' || 
                  interestType === 'weekly_percent') {
         backendInterestType = InterestType.PERCENTAGE;

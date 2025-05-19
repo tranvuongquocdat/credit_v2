@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/use-toast';
+import { DatePicker } from '@/components/ui/date-picker';
 
 interface ExtensionFormProps {
   customerName?: string; // Tên khách hàng để hiển thị
@@ -13,13 +15,23 @@ interface ExtensionFormProps {
 export function ExtensionForm({ customerName, onSubmit }: ExtensionFormProps) {
   const [days, setDays] = useState<number>(10); // Mặc định gia hạn 10 ngày
   const [notes, setNotes] = useState<string>('');
+  const [extensionDate, setExtensionDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+
+  // Format số với dấu phẩy ngăn cách hàng nghìn
+  const formatNumber = (num: number): string => {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validate form
     if (days <= 0) {
-      alert('Vui lòng nhập số ngày gia hạn');
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: "Vui lòng nhập số ngày gia hạn"
+      });
       return;
     }
 
@@ -37,14 +49,25 @@ export function ExtensionForm({ customerName, onSubmit }: ExtensionFormProps) {
         {/* Thông tin khách hàng */}
         {customerName && (
           <div className="flex items-center">
-            <label className="w-36 text-right mr-4">Khách hàng</label>
+            <label className="w-48 text-right mr-4">Khách hàng</label>
             <span className="font-medium">{customerName}</span>
           </div>
         )}
         
+        {/* Ngày gia hạn */}
+        <div className="flex items-center">
+          <label htmlFor="extensionDate" className="w-48 text-right mr-4">Ngày gia hạn</label>
+          <DatePicker
+            id="extensionDate"
+            value={extensionDate}
+            onChange={setExtensionDate}
+            className="w-64"
+          />
+        </div>
+        
         {/* Số ngày gia hạn */}
         <div className="flex items-center">
-          <label htmlFor="days" className="w-36 text-right mr-4">
+          <label htmlFor="days" className="w-48 text-right mr-4">
             Gia hạn thêm
             <span className="text-red-500 ml-1">*</span>
           </label>
@@ -60,7 +83,7 @@ export function ExtensionForm({ customerName, onSubmit }: ExtensionFormProps) {
         
         {/* Ghi chú */}
         <div className="flex items-start">
-          <label htmlFor="notes" className="w-36 text-right mr-4 pt-1">Ghi chú</label>
+          <label htmlFor="notes" className="w-48 text-right mr-4 pt-1">Ghi chú</label>
           <textarea
             id="notes"
             className="border rounded px-2 py-1 w-64 h-20"
