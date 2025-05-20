@@ -295,7 +295,36 @@ export function InstallmentsTable({
                     }
                   })()}
                 </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">{installment.duration} ngày</td>
+                <td className="py-3 px-3 border-r border-gray-200 text-center">
+                  {(() => {
+                    // Calculate end date based on start date and duration
+                    try {
+                      const startDate = new Date(installment.start_date);
+                      const endDate = new Date(startDate);
+                      endDate.setDate(startDate.getDate() + installment.duration);
+                      
+                      // Format dates in Vietnamese format
+                      const formatDate = (date: Date) => {
+                        // Format as DD/MM (Day/Month) without year
+                        return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+                      };
+                      
+                      return (
+                        <div className="flex flex-col items-center">
+                          <span className="text-xs text-gray-500">
+                            {formatDate(startDate)} → {formatDate(endDate)}
+                          </span>
+                          <span className="font-medium mt-1">
+                            ({installment.duration} ngày)
+                          </span>
+                        </div>
+                      );
+                    } catch (error) {
+                      // Fallback if date calculation fails
+                      return `${installment.duration} ngày`;
+                    }
+                  })()}
+                </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
                   {formatCurrency(installment.totalPaid || 0)}
                 </td>
