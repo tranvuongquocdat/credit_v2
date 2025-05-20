@@ -3,8 +3,13 @@
 import { Settings, Lock, User, Clock, Bike, DollarSign, Salad, Folder, ChevronDown, LogOut } from "lucide-react";
 import Link from "next/link";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo, useCallback } from "react";
 import { useStore } from "@/contexts/StoreContext";
+
+// Debug helper
+const debugLog = (message: string, data?: any) => {
+  console.log(`[TopNavbar] ${message}`, data ? data : '');
+};
 
 // This interface will represent the notification data structure
 interface NotificationCounts {
@@ -14,6 +19,62 @@ interface NotificationCounts {
   loanInvoices: number;
   installmentInvoices: number;
 }
+
+// Memomized Store Dropdown Button để tránh re-render không cần thiết
+const StoreDropdown = memo(({ 
+  currentStore, 
+  stores, 
+  loading, 
+  onSelectStore 
+}: { 
+  currentStore: any, 
+  stores: any[], 
+  loading: boolean, 
+  onSelectStore: (store: any) => void 
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  
+  const toggleDropdown = useCallback(() => {
+    setIsOpen(prev => !prev);
+  }, []);
+  
+  const selectStore = useCallback((store: any) => {
+    onSelectStore(store);
+    setIsOpen(false);
+  }, [onSelectStore]);
+  
+  return (
+    <div className="relative">
+      <button 
+        className="flex items-center px-2 hover:bg-[#3a5a75] transition-colors border-l border-r border-[rgba(0,0,0,0.2)]" 
+        onClick={toggleDropdown}
+      >
+        <Folder className="h-6 w-6 mr-1" />
+        <span className="text-white whitespace-nowrap mr-1">
+          {loading ? 'Đang tải...' : (currentStore ? currentStore.name : 'Chọn cửa hàng')}
+        </span>
+        <ChevronDown className="h-4 w-4" />
+      </button>
+      
+      {/* Store dropdown menu */}
+      {isOpen && (
+        <div className="absolute left-0 top-full mt-1 w-64 bg-white rounded-md shadow-lg py-1 text-gray-700 z-50">
+          {stores.map(store => (
+            <button
+              key={store.id}
+              className={`block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${currentStore?.id === store.id ? 'bg-gray-100 font-medium' : ''}`}
+              onClick={() => selectStore(store)}
+            >
+              <div className="font-medium">{store.name}</div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
+StoreDropdown.displayName = 'StoreDropdown';
 
 export function TopNavbar() {
   // This state will be replaced with data from your backend API
@@ -27,42 +88,21 @@ export function TopNavbar() {
   
   // Use the store context instead of local state
   const { currentStore, stores, setCurrentStore, loading } = useStore();
-  const [isStoreDropdownOpen, setIsStoreDropdownOpen] = useState(false);
   
-  // This useEffect will be where you fetch the notification data from your backend
-  useEffect(() => {
-    // Mock API call - replace this with your actual API call in the future
-    const fetchNotifications = () => {
-      // Simulating API response
-      const mockData = {
-        storeInvoices: 2,
-        appointments: 3,
-        pawnInvoices: 4,
-        loanInvoices: 6,
-        installmentInvoices: 9
-      };
-      
-      setNotificationCounts(mockData);
-    };
-    
-    fetchNotifications();
-    
-    // You could add a polling mechanism here if needed
-    // const interval = setInterval(fetchNotifications, 60000); // every minute
-    // return () => clearInterval(interval);
-  }, []);
+  // Handler for store selection - memoized to prevent recreating on every render
+  const handleStoreChange = useCallback((store: any) => {
+    debugLog(`Changing store in TopNavbar to: ${store.name} (${store.id}), type: ${typeof store.id}`);
+    setCurrentStore(store);
+  }, [setCurrentStore]);
   
-  // Load notifications when store changes
+  // Log when component mounts and when current store changes
   useEffect(() => {
     if (currentStore) {
+      debugLog(`Current store updated: ${currentStore.name} (${currentStore.id})`);
+      
       // Replace with your actual API call to get notifications for the selected store
       const fetchNotificationsForStore = async () => {
         try {
-          // Simulating API response with different values based on store ID
-          // In a real implementation, you would fetch this data from your backend
-          // const response = await fetch(`/api/notifications?storeId=${currentStore.id}`);
-          // const data = await response.json();
-          
           // Simulate different notification counts based on store ID to demonstrate it works
           const storeIdNum = parseInt(currentStore.id) || 0;
           const mockData = {
@@ -74,8 +114,9 @@ export function TopNavbar() {
           };
           
           setNotificationCounts(mockData);
+          debugLog('Updated notifications for store', mockData);
         } catch (error) {
-          console.error('Error fetching notifications:', error);
+          debugLog('Error fetching notifications', error);
         }
       };
       
@@ -94,6 +135,7 @@ export function TopNavbar() {
     }
     return null;
   };
+  
   return (
     <div className="fixed top-0 left-0 right-0 h-14 bg-[#4d7496] text-white z-50 flex items-center justify-between px-4 shadow-md">
       {/* Left section with logo and settings icons */}
@@ -153,36 +195,14 @@ export function TopNavbar() {
           <Salad className="h-6 w-6" />
           {renderNotificationBadge(notificationCounts.installmentInvoices)}
         </button>
-        <div className="relative">
-          <button 
-            className="flex items-center px-2 hover:bg-[#3a5a75] transition-colors border-l border-r border-[rgba(0,0,0,0.2)]" 
-            onClick={() => setIsStoreDropdownOpen(!isStoreDropdownOpen)}
-          >
-            <Folder className="h-6 w-6 mr-1" />
-            <span className="text-white whitespace-nowrap mr-1">
-              {loading ? 'Đang tải...' : (currentStore ? currentStore.name : 'Chọn cửa hàng')}
-            </span>
-            <ChevronDown className="h-4 w-4" />
-          </button>
-          
-          {/* Store dropdown menu */}
-          {isStoreDropdownOpen && (
-            <div className="absolute left-0 top-full mt-1 w-64 bg-white rounded-md shadow-lg py-1 text-gray-700 z-50">
-              {stores.map(store => (
-                <button
-                  key={store.id}
-                  className={`block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${currentStore?.id === store.id ? 'bg-gray-100 font-medium' : ''}`}
-                  onClick={() => {
-                    setCurrentStore(store);
-                    setIsStoreDropdownOpen(false);
-                  }}
-                >
-                  <div className="font-medium">{store.name}</div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        
+        {/* Memomized Store Dropdown Component */}
+        <StoreDropdown
+          currentStore={currentStore}
+          stores={stores}
+          loading={loading}
+          onSelectStore={handleStoreChange}
+        />
         
         {/* User profile with dropdown */}
         <div className="relative group ml-2">

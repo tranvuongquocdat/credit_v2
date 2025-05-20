@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft } from 'lucide-react';
+import { useStore } from '@/contexts/StoreContext';
 
 // Import custom components
 import {
@@ -17,22 +18,31 @@ import {
 } from '@/components/Customers';
 
 // Import functions and types
-import { getCustomers } from '@/lib/customer';
+import { getCustomers, getCustomersByStore } from '@/lib/customer';
 import { getAllActiveStores } from '@/lib/store';
-import { Customer } from '@/models/customer';
+import { Customer, CustomerStatus } from '@/models/customer';
 import { Store } from '@/models/store';
 
 // Define customer status badges
 const customerStatusMap: Record<string, { label: string, color: string }> = {
-  active: { label: 'Hoạt động', color: 'bg-green-100 text-green-800 border-green-200' },
-  inactive: { label: 'Không hoạt động', color: 'bg-gray-100 text-gray-800 border-gray-200' },
+  [CustomerStatus.ACTIVE]: { label: 'Hoạt động', color: 'bg-green-100 text-green-800 border-green-200' },
+  [CustomerStatus.INACTIVE]: { label: 'Không hoạt động', color: 'bg-gray-100 text-gray-800 border-gray-200' },
   blacklisted: { label: 'Đen', color: 'bg-red-50 text-red-700 border-red-200' }
+};
+
+// Debug helper
+const debugLog = (message: string, data?: any) => {
+  console.log(`[CustomersPage] ${message}`, data ? data : '');
 };
 
 export default function CustomersPage() {
   const router = useRouter();
+  const { currentStore, loading: storeLoading } = useStore();
   
-  // State cho phân trang và tìm kiếm
+  debugLog('Rendering with currentStore:', currentStore?.name);
+  debugLog('Store loading state:', storeLoading);
+  
+  // Basic state
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [totalCustomers, setTotalCustomers] = useState(0);
@@ -42,128 +52,201 @@ export default function CustomersPage() {
     status: 'all'
   });
   
-  // State cho dữ liệu và loading
+  // Data state
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // State cho dialog
+  // Dialog state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   
-  // State cho danh sách cửa hàng
+  // Store list
   const [stores, setStores] = useState<Store[]>([]);
   
-  // Tính toán tổng số trang
+  // Pagination
   const totalPages = Math.ceil(totalCustomers / pageSize);
   
-  // Load customers data
-  const loadCustomers = async () => {
+  // Effect to update filters when store changes
+  useEffect(() => {
+    if (currentStore) {
+      debugLog(`Store changed: ${currentStore.name} (${currentStore.id})`);
+      
+      // Update filters with current store
+      setSearchFilters(prev => {
+        const newFilters = {
+          ...prev,
+          store: currentStore.id
+        };
+        debugLog('Updated filters with new store:', newFilters);
+        return newFilters;
+      });
+      
+      // Test direct store filtering
+      const testDirectStoreFilter = async () => {
+        debugLog(`Testing direct store filter for ${currentStore.name} (${currentStore.id})`);
+        const result = await getCustomersByStore(currentStore.id);
+        debugLog(`Direct filter test results: ${result.count} customers found`);
+      };
+      
+      testDirectStoreFilter();
+    } else {
+      debugLog('No current store available');
+    }
+  }, [currentStore]);
+  
+  // Memoized loadCustomers function to prevent recreating on every render
+  const loadCustomers = useCallback(async () => {
+    // Không tải dữ liệu nếu store context đang tải
+    if (storeLoading) {
+      debugLog('Skipping customer loading because store context is still initializing');
+      return;
+    }
+    
+    debugLog('Loading customers with filters:', searchFilters);
+    debugLog('Current store when loading:', currentStore?.name);
+    
     setIsLoading(true);
     setError(null);
+    
     try {
+      // Always use current store if available
+      const storeId = currentStore ? currentStore.id : 
+                     (searchFilters.store !== 'all' ? searchFilters.store : undefined);
+      
+      debugLog(`Using store ID for filtering: ${storeId}`);
+      
+      const status = searchFilters.status !== 'all' ? searchFilters.status : undefined;
+      
+      // Call API
       const { data, total, error } = await getCustomers(
         currentPage,
         pageSize,
         searchFilters.query,
-        searchFilters.store !== 'all' ? searchFilters.store : undefined
+        storeId,
+        status
       );
       
       if (error) throw error;
       
+      debugLog(`Loaded ${data.length} customers out of ${total}`);
+      if (data.length > 0) {
+        debugLog('First customer sample:', {
+          id: data[0].id,
+          name: data[0].name,
+          store_id: data[0].store_id
+        });
+      }
+      
       setCustomers(data);
       setTotalCustomers(total);
     } catch (err: any) {
-      console.error('Error loading customers:', err);
-      setError(err.message || 'Có lỗi xảy ra khi tải dữ liệu. Vui lòng thử lại sau.');
+      const errorMsg = err.message || 'Có lỗi xảy ra khi tải dữ liệu. Vui lòng thử lại sau.';
+      debugLog(`Error loading customers: ${errorMsg}`);
+      setError(errorMsg);
     } finally {
       setIsLoading(false);
     }
-  }
-
-  // Effect to load customers on mount and when filters change
+  }, [currentPage, pageSize, searchFilters, currentStore, storeLoading]);
+  
+  // Effect to load customers when filters change
   useEffect(() => {
+    debugLog('Load customers effect triggered');
     loadCustomers();
-  }, [currentPage, pageSize, searchFilters]);
-
+  }, [loadCustomers]);
+  
   // Load store data
   useEffect(() => {
     async function fetchStores() {
       try {
         const { data, error } = await getAllActiveStores();
         if (error) throw error;
+        debugLog(`Fetched ${data.length} stores`);
         setStores(data || []);
       } catch (err) {
-        console.error('Error fetching stores:', err);
+        debugLog('Error fetching stores:', err);
       }
     }
     
     fetchStores();
   }, []);
-
-  // Handle search filters
+  
+  // Event handlers for search and filtering
   const handleSearchFilters = (filters: any) => {
+    debugLog('Search filters changed:', filters);
     setSearchFilters(filters);
     setCurrentPage(1);
   };
-
-  // Handle reset filters
+  
   const handleResetFilters = () => {
-    setSearchFilters({
+    const newFilters = {
       query: '',
-      store: 'all',
+      store: currentStore ? currentStore.id : 'all',
       status: 'all'
-    });
+    };
+    debugLog('Resetting filters to:', newFilters);
+    setSearchFilters(newFilters);
     setCurrentPage(1);
   };
-
-  // Handle page change
+  
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
-
-  // Handle create new customer
+  
+  // CRUD operations
   const handleCreateCustomer = () => {
     setIsCreateModalOpen(true);
   };
-
-  // Handle create success
+  
   const handleCreateSuccess = () => {
     setIsCreateModalOpen(false);
     loadCustomers();
   };
-
-  // Handle edit customer
+  
   const handleEditCustomer = (customer: Customer) => {
     setSelectedCustomer(customer);
     setIsEditModalOpen(true);
   };
-
-  // Handle edit success
+  
   const handleEditSuccess = () => {
     setIsEditModalOpen(false);
     loadCustomers();
   };
-
-  // Handle delete customer
+  
   const handleDeleteCustomer = (customer: Customer) => {
     setSelectedCustomer(customer);
     setIsDeleteDialogOpen(true);
   };
-
-  // Handle delete success
+  
   const handleDeleteSuccess = () => {
     setIsDeleteDialogOpen(false);
     loadCustomers();
   };
-
-  // View customer credits
+  
   const handleViewCredits = (customerId: string) => {
     router.push(`/credits?customer_id=${customerId}`);
   };
-
+  
+  // Hiển thị trạng thái loading khi store chưa khởi tạo xong
+  if (storeLoading) {
+    return (
+      <Layout>
+        <div className="max-w-full">
+          <div className="flex items-center justify-between border-b pb-2 mb-2">
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold">Quản lý khách hàng</h1>
+            </div>
+          </div>
+          <div className="flex items-center justify-center h-64">
+            <div className="text-gray-500">Đang tải dữ liệu cửa hàng...</div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+  
   return (
     <Layout>
       <div className="max-w-full">
@@ -171,6 +254,11 @@ export default function CustomersPage() {
         <div className="flex items-center justify-between border-b pb-2 mb-2">
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-bold">Quản lý khách hàng</h1>
+            {currentStore && (
+              <div className="text-sm text-gray-500">
+                Cửa hàng: {currentStore.name}
+              </div>
+            )}
           </div>
         </div>
         
@@ -178,6 +266,7 @@ export default function CustomersPage() {
         <SearchFilters
           statusMap={customerStatusMap}
           stores={stores}
+          initialFilters={searchFilters}
           onSearch={handleSearchFilters}
           onReset={handleResetFilters}
           onCreateNew={handleCreateCustomer}
@@ -223,21 +312,25 @@ export default function CustomersPage() {
         />
         
         {/* Edit Customer Modal */}
-        <CustomerEditModal
-          isOpen={isEditModalOpen}
-          onClose={() => setIsEditModalOpen(false)}
-          onSuccess={handleEditSuccess}
-          customer={selectedCustomer}
-          stores={stores}
-        />
+        {selectedCustomer && (
+          <CustomerEditModal
+            isOpen={isEditModalOpen}
+            customer={selectedCustomer}
+            onClose={() => setIsEditModalOpen(false)}
+            onSuccess={handleEditSuccess}
+            stores={stores}
+          />
+        )}
         
-        {/* Delete Confirmation Dialog */}
-        <CustomerDeleteDialog
-          isOpen={isDeleteDialogOpen}
-          onClose={() => setIsDeleteDialogOpen(false)}
-          onSuccess={handleDeleteSuccess}
-          customer={selectedCustomer}
-        />
+        {/* Delete Customer Dialog */}
+        {selectedCustomer && (
+          <CustomerDeleteDialog
+            isOpen={isDeleteDialogOpen}
+            customer={selectedCustomer}
+            onClose={() => setIsDeleteDialogOpen(false)}
+            onSuccess={handleDeleteSuccess}
+          />
+        )}
       </div>
     </Layout>
   );

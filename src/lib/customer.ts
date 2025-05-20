@@ -1,6 +1,11 @@
 import { supabase } from './supabase';
 import { Customer, CreateCustomerParams, UpdateCustomerParams } from '@/models/customer';
 
+// Debug helper
+const debugLog = (message: string, data?: any) => {
+  console.log(`[Customer API] ${message}`, data ? data : '');
+};
+
 /**
  * Lấy danh sách khách hàng có phân trang và tìm kiếm
  */
@@ -8,32 +13,51 @@ export async function getCustomers(
   page = 1,
   limit = 10,
   searchQuery = '',
-  storeId = ''
+  storeId = '',
+  status = ''
 ) {
+  debugLog('Getting customers with params:', { page, limit, searchQuery, storeId, status });
+  
   try {
     // Bắt đầu từ record thứ mấy
     const from = (page - 1) * limit;
     
-    // Tạo query cơ bản
+    // Build query
     let query = supabase
       .from('customers')
       .select('*', { count: 'exact' });
     
-    // Áp dụng filter nếu có
+    // Apply filters
     if (searchQuery) {
+      debugLog(`Applying search query: ${searchQuery}`);
       query = query.or(`name.ilike.%${searchQuery}%,phone.ilike.%${searchQuery}%,id_number.ilike.%${searchQuery}%`);
     }
     
     if (storeId) {
+      // Basic store filter
+      debugLog(`Filtering by store_id: ${storeId} (${typeof storeId})`);
       query = query.eq('store_id', storeId);
+    } else {
+      debugLog('No store filter applied');
+    }
+
+    if (status) {
+      debugLog(`Filtering by status: ${status}`);
+      query = query.eq('status', status);
     }
     
-    // Thực hiện query với phân trang
+    // Execute with pagination
+    debugLog(`Executing query with pagination: ${from} to ${from + limit - 1}`);
     const { data, error, count } = await query
       .order('created_at', { ascending: false })
       .range(from, from + limit - 1);
     
-    if (error) throw error;
+    if (error) {
+      debugLog('Error from database:', error);
+      throw error;
+    }
+    
+    debugLog(`Query returned ${data?.length || 0} results of ${count} total`);
     
     return {
       data: data as Customer[],
@@ -43,7 +67,7 @@ export async function getCustomers(
       error: null
     };
   } catch (error) {
-    console.error('Error fetching customers:', error);
+    debugLog('Error fetching customers:', error);
     return {
       data: [],
       total: 0,
@@ -173,5 +197,41 @@ export async function deleteCustomer(id: string) {
   } catch (error) {
     console.error('Error deleting customer:', error);
     return { success: false, error };
+  }
+}
+
+/**
+ * Function to directly test the store filter
+ * This is a special debug function to isolate the issue
+ */
+export async function getCustomersByStore(storeId: string) {
+  try {
+    console.log('Testing direct store filter with ID:', storeId);
+    
+    // Create a simple query that only filters by store
+    const { data, error, count } = await supabase
+      .from('customers')
+      .select('*', { count: 'exact' })
+      .eq('store_id', String(storeId));
+    
+    if (error) {
+      console.error('Store filter test failed:', error);
+      return { success: false, error, data: null, count: 0 };
+    }
+    
+    console.log(`Direct store filter found ${count} customers`);
+    if (data && data.length > 0) {
+      console.log('Sample customer:', {
+        id: data[0].id,
+        name: data[0].name,
+        store_id: data[0].store_id,
+        store_id_type: typeof data[0].store_id
+      });
+    }
+    
+    return { success: true, data, count, error: null };
+  } catch (err) {
+    console.error('Error in direct store test:', err);
+    return { success: false, error: err, data: null, count: 0 };
   }
 }

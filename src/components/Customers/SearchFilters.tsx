@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { 
@@ -23,6 +23,7 @@ interface StatusMapType {
 interface SearchFiltersProps {
   statusMap: StatusMapType;
   stores: Store[];
+  initialFilters?: CustomerSearchFilters;
   onSearch: (filters: CustomerSearchFilters) => void;
   onReset: () => void;
   onCreateNew: () => void;
@@ -37,15 +38,24 @@ export interface CustomerSearchFilters {
 export function SearchFilters({ 
   statusMap, 
   stores,
+  initialFilters,
   onSearch, 
   onReset, 
   onCreateNew
 }: SearchFiltersProps) {
-  const [filters, setFilters] = useState<CustomerSearchFilters>({
+  const [filters, setFilters] = useState<CustomerSearchFilters>(initialFilters || {
     query: '',
     store: 'all',
     status: 'all'
   });
+
+  // Update filters when initialFilters change
+  useEffect(() => {
+    if (initialFilters) {
+      console.log('SearchFilters received initialFilters:', initialFilters);
+      setFilters(initialFilters);
+    }
+  }, [initialFilters]);
 
   const handleFilterChange = (key: keyof CustomerSearchFilters, value: string) => {
     setFilters(prev => ({
@@ -60,11 +70,12 @@ export function SearchFilters({
   };
 
   const handleReset = () => {
-    setFilters({
+    const resetFilters = {
       query: '',
-      store: 'all',
+      store: initialFilters?.store || 'all',
       status: 'all'
-    });
+    };
+    setFilters(resetFilters);
     onReset();
   };
 
@@ -95,7 +106,10 @@ export function SearchFilters({
           </label>
           <Select
             value={filters.store}
-            onValueChange={value => handleFilterChange('store', value)}
+            onValueChange={value => {
+              console.log('Store select changed to:', value);
+              handleFilterChange('store', value);
+            }}
           >
             <SelectTrigger id="store" className="w-full">
               <SelectValue placeholder="Cửa hàng" />
