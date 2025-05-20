@@ -20,7 +20,6 @@ import { InstallmentsTable } from '@/components/Installments/InstallmentsTable';
 import { InstallmentsPagination } from '@/components/Installments/InstallmentsPagination'; 
 import { InstallmentCreateModal } from '@/components/Installments/InstallmentCreateModal';
 import { InstallmentEditModal } from '@/components/Installments/InstallmentEditModal';
-import { InstallmentDetailModal } from '@/components/Installments/InstallmentDetailModal';
 import { InstallmentPaymentHistoryModal } from '@/components/Installments/InstallmentPaymentHistoryModal';
 
 // Import custom hooks
@@ -71,9 +70,7 @@ export default function InstallmentsPage() {
   const [isInstallmentEditModalOpen, setIsInstallmentEditModalOpen] = useState(false);
   const [editInstallmentId, setEditInstallmentId] = useState<string>('');
   
-  // State cho modal chi tiết hợp đồng (dạng tabs)
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [detailInstallmentId, setDetailInstallmentId] = useState<string>('');
+  // State cho modal thanh toán (đã bỏ modal chi tiết)
   
   // State cho modal thanh toán (InstallmentPaymentHistoryModal)
   const [isPaymentActionsModalOpen, setIsPaymentActionsModalOpen] = useState(false);
@@ -104,12 +101,6 @@ export default function InstallmentsPage() {
     // Mở modal chỉnh sửa thay vì chuyển trang
     setEditInstallmentId(installmentId);
     setIsInstallmentEditModalOpen(true);
-  };
-  
-  // Handle view installment details
-  const handleViewInstallmentDetail = (installmentId: string) => {
-    setDetailInstallmentId(installmentId);
-    setIsDetailModalOpen(true);
   };
   
   // Handle opening status dialog
@@ -218,7 +209,6 @@ export default function InstallmentsPage() {
             installments={installments}
             statusMap={statusMap}
             isLoading={loading}
-            onView={handleViewInstallmentDetail}
             onEdit={handleEditInstallment}
             onUpdateStatus={handleOpenStatusDialog}
             onDelete={handleOpenDeleteDialog}
@@ -249,14 +239,7 @@ export default function InstallmentsPage() {
           />
         )}
         
-        {/* Modal chi tiết hợp đồng dạng tabs */}
-        {detailInstallmentId && (
-          <InstallmentDetailModal 
-            isOpen={isDetailModalOpen}
-            onClose={() => setIsDetailModalOpen(false)}
-            installmentId={detailInstallmentId}
-          />
-        )}
+        {/* Modal chi tiết hợp đồng đã bị loại bỏ */}
         
         {/* Modal thao tác thanh toán */}
         {selectedInstallmentForPayment && (
