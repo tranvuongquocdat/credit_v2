@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { CreateInstallmentParams, Installment, InstallmentFilters, InstallmentStatus, InstallmentWithCustomer } from '@/models/installment';
+import { Customer } from '@/models/customer';
 
 // Get all installments with pagination and filters
 export async function getInstallments(
@@ -8,12 +9,13 @@ export async function getInstallments(
   filters?: InstallmentFilters
 ) {
   try {
+    // Use the installments_by_store view to include store_id
     let query = supabase
-      .from('installments')
+      .from('installments_by_store')
       .select(`
         *,
         customer:customers(
-          id, name, phone, address, email
+          id, name, phone, address
         )
       `, { count: 'exact' });
     
@@ -27,19 +29,20 @@ export async function getInstallments(
     }
     
     if (filters?.start_date) {
-      query = query.gte('start_date', filters.start_date);
+      query = query.gte('loan_date', filters.start_date);
     }
     
     if (filters?.end_date) {
-      query = query.lte('start_date', filters.end_date);
+      query = query.lte('loan_date', filters.end_date);
     }
     
     if (filters?.duration) {
-      query = query.eq('duration', filters.duration);
+      query = query.eq('loan_period', filters.duration);
     }
     
-    if (filters?.status) {
-      query = query.eq('status', filters.status);
+    if (filters?.status && filters.status !== 'all') {
+      // Convert enum value to string for the database query
+      query = query.eq('status', filters.status as "on_time" | "overdue" | "late_interest" | "bad_debt" | "closed" | "deleted");
     }
     
     if (filters?.store_id) {
@@ -59,8 +62,46 @@ export async function getInstallments(
       throw error;
     }
     
-    // Convert to typed result
-    const installments = data as InstallmentWithCustomer[];
+    // Transform data to match UI requirements
+    const installments = (data || []).map(item => {
+      // Ensure values are not null
+      const downPayment = item.down_payment || 0;
+      const installmentAmount = item.installment_amount || 0;
+      const loanPeriod = item.loan_period || 0;
+      const paymentPeriod = item.payment_period || 30;
+      const loanDate = item.loan_date || new Date().toISOString();
+      
+      // Convert customer data to Customer type or undefined
+      const customerData = item.customer ? {
+        id: item.customer.id || '',
+        name: item.customer.name || '',
+        phone: item.customer.phone || undefined,
+        address: item.customer.address || undefined,
+      } as Customer : undefined;
+      
+      return {
+        id: item.id || '',
+        contract_code: item.contract_code || '',
+        customer_id: item.customer_id || '',
+        employee_id: item.employee_id || '',
+        amount_given: downPayment,
+        interest_rate: calculateInterestRate(downPayment, installmentAmount, loanPeriod),
+        duration: loanPeriod,
+        payment_period: paymentPeriod,
+        amount_paid: 0, // This will need to be calculated from payment records
+        old_debt: 0, // This will need to be calculated or tracked separately
+        daily_amount: installmentAmount / paymentPeriod,
+        remaining_amount: downPayment,
+        status: item.status as InstallmentStatus,
+        due_date: calculateDueDate(loanDate, loanPeriod),
+        start_date: new Date(loanDate).toISOString().split('T')[0],
+        store_id: item.store_id || '',
+        created_at: item.created_at || undefined,
+        updated_at: item.updated_at || undefined,
+        notes: item.notes || '',
+        customer: customerData
+      };
+    }) as InstallmentWithCustomer[];
     
     // Calculate total pages
     const totalPages = Math.ceil((count || 0) / pageSize);
@@ -82,15 +123,36 @@ export async function getInstallments(
   }
 }
 
+// Helper function to calculate interest rate from down_payment and installment_amount
+function calculateInterestRate(downPayment: number, installmentAmount: number, loanPeriod: number): number {
+  // Công thức: (installmentAmount - downPayment) / downPayment * 100%
+  // Ví dụ: khách đưa 10,000,000 VND, phải trả lại 12,000,000 VND
+  // Lãi suất = ((12,000,000 - 10,000,000) / 10,000,000) * 100% = 20%
+  const rate = Math.round(((installmentAmount - downPayment) / downPayment) * 100 * 100) / 100;
+  return isNaN(rate) || !isFinite(rate) ? 0 : rate;
+}
+
+// Helper function to calculate due date
+function calculateDueDate(loanDate: string, loanPeriod: number): string {
+  try {
+    const date = new Date(loanDate);
+    date.setDate(date.getDate() + loanPeriod);
+    return date.toISOString().split('T')[0];
+  } catch (error) {
+    console.error('Error calculating due date:', error);
+    return new Date().toISOString().split('T')[0];
+  }
+}
+
 // Get a single installment by ID
 export async function getInstallmentById(id: string) {
   try {
     const { data, error } = await supabase
-      .from('installments')
+      .from('installments_by_store')
       .select(`
         *,
         customer:customers(
-          id, name, phone, address, email
+          id, name, phone, address
         )
       `)
       .eq('id', id)
@@ -100,8 +162,58 @@ export async function getInstallmentById(id: string) {
       throw error;
     }
     
+    if (!data) {
+      throw new Error('Installment not found');
+    }
+    
+    // Ensure values are not null
+    const downPayment = data.down_payment || 0;
+    const installmentAmount = data.installment_amount || 0;
+    const loanPeriod = data.loan_period || 0;
+    const paymentPeriod = data.payment_period || 30;
+    const loanDate = data.loan_date || new Date().toISOString();
+    
+    // Convert customer data to Customer type or undefined
+    const customerData = data.customer ? {
+      id: data.customer.id || '',
+      name: data.customer.name || '',
+      phone: data.customer.phone || undefined,
+      address: data.customer.address || undefined,
+    } as Customer : undefined;
+    
+    // Transform data to match UI requirements
+    const installment: InstallmentWithCustomer = {
+      id: data.id || '',
+      contract_code: data.contract_code || '',
+      customer_id: data.customer_id || '',
+      employee_id: data.employee_id || '',
+      amount_given: downPayment,
+      interest_rate: calculateInterestRate(downPayment, installmentAmount, loanPeriod),
+      duration: loanPeriod,
+      payment_period: paymentPeriod,
+      amount_paid: 0, // This will need to be calculated from payment records
+      old_debt: 0, // This will need to be calculated or tracked separately
+      daily_amount: installmentAmount / paymentPeriod,
+      remaining_amount: downPayment,
+      status: data.status as InstallmentStatus,
+      due_date: calculateDueDate(loanDate, loanPeriod),
+      start_date: new Date(loanDate).toISOString().split('T')[0],
+      
+      // Direct DB field references
+      down_payment: downPayment,
+      installment_amount: installmentAmount,
+      loan_period: loanPeriod,
+      loan_date: loanDate,
+      
+      store_id: data.store_id || '',
+      created_at: data.created_at || undefined,
+      updated_at: data.updated_at || undefined,
+      notes: data.notes || '',
+      customer: customerData
+    };
+    
     return { 
-      data: data as InstallmentWithCustomer, 
+      data: installment, 
       error: null 
     };
   } catch (error: any) {
@@ -116,27 +228,18 @@ export async function getInstallmentById(id: string) {
 // Create a new installment
 export async function createInstallment(installment: CreateInstallmentParams) {
   try {
-    // Calculate derived values
-    const dailyAmount = installment.amount_given * (installment.interest_rate / 100) / installment.duration;
-    const remainingAmount = installment.amount_given - (installment.amount_paid || 0);
-    
-    // Default status is ON_TIME if not provided
-    const status = installment.status || InstallmentStatus.ON_TIME;
-    
-    // Generate due date by adding duration to start date
-    const startDate = new Date(installment.start_date);
-    const dueDate = new Date(startDate);
-    dueDate.setDate(dueDate.getDate() + installment.duration);
-    
-    // Prepare data
+    // Convert UI model to database model
     const newInstallment = {
-      ...installment,
-      amount_paid: installment.amount_paid || 0,
-      old_debt: installment.old_debt || 0,
-      daily_amount: dailyAmount,
-      remaining_amount: remainingAmount,
-      status: status,
-      due_date: dueDate.toISOString().split('T')[0]
+      customer_id: installment.customer_id,
+      employee_id: installment.employee_id,
+      contract_code: installment.contract_code,
+      down_payment: installment.down_payment,
+      installment_amount: installment.installment_amount,
+      loan_period: installment.loan_period,
+      payment_period: installment.payment_period,
+      loan_date: installment.loan_date,
+      notes: installment.notes || '',
+      status: (installment.status || InstallmentStatus.ON_TIME).toString() as any
     };
     
     // Insert into database
@@ -150,8 +253,50 @@ export async function createInstallment(installment: CreateInstallmentParams) {
       throw error;
     }
     
+    if (!data) {
+      throw new Error('Failed to create installment');
+    }
+    
+    // Ensure values are not null
+    const downPayment = data.down_payment || 0;
+    const installmentAmount = data.installment_amount || 0;
+    const loanPeriod = data.loan_period || 0;
+    const paymentPeriod = data.payment_period || 30;
+    const loanDate = data.loan_date || new Date().toISOString();
+    
+    // Transform result to match UI requirements
+    const result: Installment = {
+      id: data.id || '',
+      contract_code: data.contract_code || '',
+      customer_id: data.customer_id || '',
+      employee_id: data.employee_id || '',
+      
+      // UI-specific mappings
+      amount_given: downPayment,
+      interest_rate: calculateInterestRate(downPayment, installmentAmount, loanPeriod),
+      duration: loanPeriod,
+      payment_period: paymentPeriod,
+      amount_paid: 0,
+      old_debt: 0,
+      daily_amount: installmentAmount / paymentPeriod,
+      remaining_amount: downPayment,
+      status: data.status as InstallmentStatus,
+      due_date: calculateDueDate(loanDate, loanPeriod),
+      start_date: new Date(loanDate).toISOString().split('T')[0],
+      
+      // Direct DB field references
+      down_payment: downPayment,
+      installment_amount: installmentAmount,
+      loan_period: loanPeriod,
+      loan_date: loanDate,
+      
+      notes: data.notes || '',
+      created_at: data.created_at || undefined,
+      updated_at: data.updated_at || undefined
+    };
+    
     return { 
-      data: data as Installment, 
+      data: result, 
       error: null 
     };
   } catch (error: any) {
@@ -163,26 +308,84 @@ export async function createInstallment(installment: CreateInstallmentParams) {
   }
 }
 
+// Helper function to calculate installment amount from amount_given and interest_rate
+function calculateInstallmentAmount(amountGiven: number, interestRate: number, duration: number): number {
+  // Công thức: amountGiven * (1 + interestRate / 100)
+  // Ví dụ: khách đưa 10,000,000 VND với lãi suất 20%
+  // Tiền trả góp = 10,000,000 * (1 + 20/100) = 12,000,000 VND
+  return amountGiven * (1 + interestRate / 100);
+}
+
 // Update an installment
 export async function updateInstallment(id: string, installment: Partial<Installment>) {
   try {
-    // If amount_paid is updated, recalculate remaining_amount
-    if (installment.amount_paid !== undefined) {
-      // Fetch current installment to get original amount
-      const { data: currentInstallment } = await supabase
-        .from('installments')
-        .select('amount_given')
-        .eq('id', id)
-        .single();
-        
-      if (currentInstallment) {
-        installment.remaining_amount = currentInstallment.amount_given - installment.amount_paid;
+    // First get the current installment to have reference data
+    const { data: currentData, error: fetchError } = await supabase
+      .from('installments')
+      .select('*')
+      .eq('id', id)
+      .single();
+      
+    if (fetchError) {
+      throw fetchError;
+    }
+    
+    if (!currentData) {
+      throw new Error('Installment not found');
+    }
+    
+    // Convert UI model to database model
+    const dbInstallment: any = {};
+    
+    if (installment.contract_code !== undefined) {
+      dbInstallment.contract_code = installment.contract_code;
+    }
+    
+    if (installment.customer_id !== undefined) {
+      dbInstallment.customer_id = installment.customer_id;
+    }
+    
+    if (installment.employee_id !== undefined) {
+      dbInstallment.employee_id = installment.employee_id;
+    }
+    
+    if (installment.amount_given !== undefined) {
+      dbInstallment.down_payment = installment.amount_given;
+      
+      // Recalculate installment_amount if interest_rate is also provided
+      if (installment.interest_rate !== undefined) {
+        dbInstallment.installment_amount = calculateInstallmentAmount(
+          installment.amount_given,
+          installment.interest_rate,
+          installment.duration || currentData.loan_period
+        );
       }
     }
     
+    if (installment.duration !== undefined) {
+      dbInstallment.loan_period = installment.duration;
+    }
+    
+    if (installment.payment_period !== undefined) {
+      dbInstallment.payment_period = installment.payment_period;
+    }
+    
+    if (installment.start_date !== undefined) {
+      dbInstallment.loan_date = installment.start_date;
+    }
+    
+    if (installment.notes !== undefined) {
+      dbInstallment.notes = installment.notes;
+    }
+    
+    if (installment.status !== undefined) {
+      dbInstallment.status = installment.status.toString() as any;
+    }
+    
+    // Update the database record
     const { data, error } = await supabase
       .from('installments')
-      .update(installment)
+      .update(dbInstallment)
       .eq('id', id)
       .select()
       .single();
@@ -191,8 +394,44 @@ export async function updateInstallment(id: string, installment: Partial<Install
       throw error;
     }
     
+    if (!data) {
+      throw new Error('Failed to update installment');
+    }
+    
+    // Ensure values are not null
+    const downPayment = data.down_payment || 0;
+    const installmentAmount = data.installment_amount || 0;
+    const loanPeriod = data.loan_period || 0;
+    const paymentPeriod = data.payment_period || 30;
+    const loanDate = data.loan_date || new Date().toISOString();
+    
+    // Transform result back to UI model
+    const result: Installment = {
+      id: data.id || '',
+      contract_code: data.contract_code || '',
+      customer_id: data.customer_id || '',
+      employee_id: data.employee_id || '',
+      amount_given: downPayment,
+      interest_rate: installment.interest_rate !== undefined ? 
+        installment.interest_rate : 
+        calculateInterestRate(downPayment, installmentAmount, loanPeriod),
+      duration: loanPeriod,
+      payment_period: paymentPeriod,
+      amount_paid: installment.amount_paid || 0,
+      old_debt: installment.old_debt || 0,
+      daily_amount: installmentAmount / paymentPeriod,
+      remaining_amount: downPayment - (installment.amount_paid || 0),
+      status: data.status as InstallmentStatus,
+      due_date: calculateDueDate(loanDate, loanPeriod),
+      start_date: new Date(loanDate).toISOString().split('T')[0],
+      notes: data.notes || '',
+      store_id: installment.store_id,
+      created_at: data.created_at || undefined,
+      updated_at: data.updated_at || undefined
+    };
+    
     return { 
-      data: data as Installment, 
+      data: result, 
       error: null 
     };
   } catch (error: any) {
@@ -209,7 +448,7 @@ export async function updateInstallmentStatus(id: string, status: InstallmentSta
   try {
     const { data, error } = await supabase
       .from('installments')
-      .update({ status })
+      .update({ status: status.toString() as any })
       .eq('id', id)
       .select()
       .single();
@@ -218,8 +457,41 @@ export async function updateInstallmentStatus(id: string, status: InstallmentSta
       throw error;
     }
     
+    if (!data) {
+      throw new Error('Failed to update installment status');
+    }
+    
+    // Ensure values are not null
+    const downPayment = data.down_payment || 0;
+    const installmentAmount = data.installment_amount || 0;
+    const loanPeriod = data.loan_period || 0;
+    const paymentPeriod = data.payment_period || 30;
+    const loanDate = data.loan_date || new Date().toISOString();
+    
+    // Transform result back to UI model
+    const result: Installment = {
+      id: data.id || '',
+      contract_code: data.contract_code || '',
+      customer_id: data.customer_id || '',
+      employee_id: data.employee_id || '',
+      amount_given: downPayment,
+      interest_rate: calculateInterestRate(downPayment, installmentAmount, loanPeriod),
+      duration: loanPeriod,
+      payment_period: paymentPeriod,
+      amount_paid: 0, // This should be calculated from payment records
+      old_debt: 0, // This should be calculated or tracked separately
+      daily_amount: installmentAmount / paymentPeriod,
+      remaining_amount: downPayment,
+      status: data.status as InstallmentStatus,
+      due_date: calculateDueDate(loanDate, loanPeriod),
+      start_date: new Date(loanDate).toISOString().split('T')[0],
+      notes: data.notes || '',
+      created_at: data.created_at || undefined,
+      updated_at: data.updated_at || undefined
+    };
+    
     return { 
-      data: data as Installment, 
+      data: result, 
       error: null 
     };
   } catch (error: any) {
@@ -234,25 +506,23 @@ export async function updateInstallmentStatus(id: string, status: InstallmentSta
 // Delete an installment (soft delete by changing status)
 export async function deleteInstallment(id: string) {
   try {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('installments')
-      .update({ status: InstallmentStatus.DELETED })
-      .eq('id', id)
-      .select()
-      .single();
+      .update({ status: InstallmentStatus.DELETED.toString() as any })
+      .eq('id', id);
       
     if (error) {
       throw error;
     }
     
     return { 
-      data: data as Installment, 
+      success: true, 
       error: null 
     };
   } catch (error: any) {
     console.error('Error deleting installment:', error);
     return { 
-      data: null, 
+      success: false, 
       error 
     };
   }
@@ -261,7 +531,7 @@ export async function deleteInstallment(id: string) {
 // Hard delete an installment (only for admin purposes)
 export async function hardDeleteInstallment(id: string) {
   try {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('installments')
       .delete()
       .eq('id', id);

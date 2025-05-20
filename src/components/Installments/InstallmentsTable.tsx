@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { Edit2Icon, EyeIcon, MoreVerticalIcon, TrashIcon, AlertTriangleIcon, CalendarIcon, ClockIcon, FileTextIcon } from "lucide-react";
+import { Edit2Icon, EyeIcon, MoreVerticalIcon, TrashIcon, AlertTriangleIcon, CalendarIcon, ClockIcon, FileTextIcon, DollarSignIcon } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import Spinner from "@/components/ui/spinner";
 
@@ -20,6 +20,8 @@ interface InstallmentsTableProps {
   onEdit: (id: string) => void;
   onUpdateStatus: (installment: InstallmentWithCustomer) => void;
   onDelete: (installment: InstallmentWithCustomer) => void;
+  onShowPaymentHistory?: (installment: InstallmentWithCustomer) => void;
+  onShowPaymentActions?: (installment: InstallmentWithCustomer) => void;
 }
 
 export function InstallmentsTable({
@@ -30,6 +32,8 @@ export function InstallmentsTable({
   onEdit,
   onUpdateStatus,
   onDelete,
+  onShowPaymentHistory,
+  onShowPaymentActions,
 }: InstallmentsTableProps) {
   if (isLoading) {
     return (
@@ -87,7 +91,36 @@ export function InstallmentsTable({
                 <td className="py-3 px-3 border-r border-gray-200 text-right">
                   {formatCurrency(installment.amount_given)}
                 </td>
-                <td className="py-3 px-3 border-r border-gray-200">{installment.interest_rate}%</td>
+                <td className="py-3 px-3 border-r border-gray-200">
+                  {(() => {
+                    try {
+                      // Get the values
+                      const installmentAmount = 
+                        installment.installment_amount ? 
+                        installment.installment_amount : 
+                        (installment.daily_amount * installment.payment_period);
+                      
+                      const downAmount = installment.amount_given;
+                      
+                      // Handle edge cases
+                      if (!installmentAmount || installmentAmount <= 0) {
+                        return `${installment.interest_rate}%`;
+                      }
+                      
+                      // Calculate ratio: if installment is 10, what is the down payment value
+                      const ratio = 10 / installmentAmount * downAmount;
+                      
+                      // Format to remove decimal if it's a whole number
+                      const formatValue = (value: number) => 
+                        Math.abs(value % 1) < 0.05 ? Math.round(value).toString() : value.toFixed(1);
+                      
+                      return `10 ăn ${formatValue(ratio)}`;
+                    } catch (error) {
+                      // Fallback to showing percentage
+                      return `${installment.interest_rate}%`;
+                    }
+                  })()}
+                </td>
                 <td className="py-3 px-3 border-r border-gray-200">{installment.duration} ngày</td>
                 <td className="py-3 px-3 border-r border-gray-200 text-right">
                   {formatCurrency(installment.amount_paid || 0)}
@@ -96,7 +129,19 @@ export function InstallmentsTable({
                   {formatCurrency(installment.old_debt || 0)}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-right">
-                  {formatCurrency(installment.daily_amount)}
+                  {formatCurrency(
+                    // Calculate daily amount as installment_amount / duration
+                    (() => {
+                      // Get installment_amount, either directly or calculate it
+                      const installmentAmount = installment.installment_amount || 
+                        (installment.daily_amount * installment.payment_period);
+                      
+                      // Calculate daily amount based on duration (loan_period)
+                      return installment.duration > 0 ? 
+                        installmentAmount / installment.duration : 
+                        installment.daily_amount;
+                    })()
+                  )}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-right">
                   {formatCurrency(installment.remaining_amount)}
@@ -130,6 +175,26 @@ export function InstallmentsTable({
                     >
                       <EyeIcon className="h-4 w-4 text-gray-500" />
                     </Button>
+                    {onShowPaymentHistory && (
+                      <Button 
+                        variant="ghost" 
+                        className="h-8 w-8 p-0" 
+                        onClick={() => onShowPaymentHistory(installment)}
+                        title="Lịch sử thanh toán"
+                      >
+                        <CalendarIcon className="h-4 w-4 text-gray-500" />
+                      </Button>
+                    )}
+                    {onShowPaymentActions && (
+                      <Button 
+                        variant="ghost" 
+                        className="h-8 w-8 p-0" 
+                        onClick={() => onShowPaymentActions(installment)}
+                        title="Thao tác thanh toán"
+                      >
+                        <DollarSignIcon className="h-4 w-4 text-gray-500" />
+                      </Button>
+                    )}
                     <Button 
                       variant="ghost" 
                       className="h-8 w-8 p-0" 
@@ -152,6 +217,16 @@ export function InstallmentsTable({
                         <DropdownMenuItem onClick={() => onUpdateStatus(installment)}>
                           Cập nhật trạng thái
                         </DropdownMenuItem>
+                        {onShowPaymentHistory && (
+                          <DropdownMenuItem onClick={() => onShowPaymentHistory(installment)}>
+                            Lịch sử thanh toán
+                          </DropdownMenuItem>
+                        )}
+                        {onShowPaymentActions && (
+                          <DropdownMenuItem onClick={() => onShowPaymentActions(installment)}>
+                            Thao tác thanh toán
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => onDelete(installment)} className="text-red-600">
                           Xóa hợp đồng

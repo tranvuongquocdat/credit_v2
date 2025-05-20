@@ -15,12 +15,14 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { AlertCircle } from 'lucide-react';
 import { createInstallment } from '@/lib/installment';
-import { getCustomers } from '@/lib/customer';
+import { getCustomers, createCustomer } from '@/lib/customer';
 import { getEmployees } from '@/lib/employee';
 import { Customer } from '@/models/customer';
 import { Employee } from '@/models/employee';
 import { InstallmentStatus } from '@/models/installment';
 import Spinner from '@/components/ui/spinner';
+import { useToast } from '@/components/ui/use-toast';
+import { useStore } from '@/contexts/StoreContext';
 
 interface InstallmentCreateModalProps {
   isOpen: boolean;
@@ -33,6 +35,12 @@ export function InstallmentCreateModal({
   onClose, 
   onSuccess 
 }: InstallmentCreateModalProps) {
+  // Toast notifications
+  const { toast } = useToast();
+  
+  // Get current store from context
+  const { currentStore } = useStore();
+  
   // State for form values
   const [customerType, setCustomerType] = useState<'new' | 'existing'>('new');
   const [customerName, setCustomerName] = useState('');
@@ -42,13 +50,10 @@ export function InstallmentCreateModal({
   const [address, setAddress] = useState('');
   const [amountGiven, setAmountGiven] = useState<string>('0');
   const [formattedAmountGiven, setFormattedAmountGiven] = useState<string>('0');
-  const [interestRate, setInterestRate] = useState<string>('10');
-  const [interestRateType, setInterestRateType] = useState<string>('daily');
   const [duration, setDuration] = useState<string>('50');
+  const [paymentPeriod, setPaymentPeriod] = useState<string>('10');
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [paymentDate, setPaymentDate] = useState('');
   const [notes, setNotes] = useState('');
-  const [advancePayment, setAdvancePayment] = useState(false);
   const [employeeId, setEmployeeId] = useState<string>('');
   
   // State for customers dropdown
@@ -70,6 +75,27 @@ export function InstallmentCreateModal({
   // For the second input field - tiền đưa khách
   const [customerAmount, setCustomerAmount] = useState<string>('0');
   const [formattedCustomerAmount, setFormattedCustomerAmount] = useState<string>('0');
+  
+  // Function to reset form fields
+  const resetForm = () => {
+    setCustomerType('new');
+    setCustomerName('');
+    setContractCode('');
+    setIdNumber('');
+    setPhone('');
+    setAddress('');
+    setAmountGiven('0');
+    setFormattedAmountGiven('0');
+    setDuration('50');
+    setPaymentPeriod('10');
+    setStartDate(format(new Date(), 'yyyy-MM-dd'));
+    setNotes('');
+    setEmployeeId('');
+    setSelectedCustomerId('');
+    setCustomerAmount('0');
+    setFormattedCustomerAmount('0');
+    setError(null);
+  };
   
   // Format number with thousand separators
   const formatNumber = (value: string | number): string => {
@@ -107,8 +133,14 @@ export function InstallmentCreateModal({
         if (customersError) throw customersError;
         setCustomers(customersData || []);
         
-        // Load employees
-        const { data: employeesData, error: employeesError } = await getEmployees(1, 1000);
+        // Load employees filtered by current store if available
+        const { data: employeesData, error: employeesError } = await getEmployees(
+          1, 
+          1000, 
+          '', // search query
+          currentStore?.id || '' // filter by store_id from context
+        );
+        
         if (employeesError) throw employeesError;
         setEmployees(employeesData || []);
       } catch (err) {
@@ -120,7 +152,7 @@ export function InstallmentCreateModal({
     }
     
     loadData();
-  }, [isOpen]);
+  }, [isOpen, currentStore]);
   
   // Handle customer selection change
   const handleCustomerChange = (customerId: string) => {
@@ -159,24 +191,95 @@ export function InstallmentCreateModal({
     setError(null);
     
     try {
+      // Validate required fields
+      if (customerType === 'existing' && !selectedCustomerId) {
+        throw new Error('Vui lòng chọn khách hàng');
+      }
+      
+      if (customerType === 'new' && !customerName.trim()) {
+        throw new Error('Vui lòng nhập tên khách hàng');
+      }
+      
+      if (!employeeId) {
+        throw new Error('Vui lòng chọn nhân viên');
+      }
+      
+      // Find selected employee to get their store
+      const selectedEmployee = employees.find(e => e.uid === employeeId);
+      if (!selectedEmployee) {
+        throw new Error('Không tìm thấy thông tin nhân viên');
+      }
+      
+      if (!selectedEmployee.store_id) {
+        throw new Error('Nhân viên chưa được gán cho cửa hàng');
+      }
+      
+      const downPayment = parseInt(customerAmount || '0');
+      const installmentAmount = parseInt(amountGiven || '0');
+      
+      if (downPayment <= 0) {
+        throw new Error('Tiền đưa khách phải lớn hơn 0');
+      }
+      
+      if (installmentAmount <= 0) {
+        throw new Error('Tiền trả góp phải lớn hơn 0');
+      }
+      
+      const loanPeriod = parseInt(duration || '50');
+      const paymentPrd = parseInt(paymentPeriod || '10');
+      
+      if (loanPeriod <= 0) {
+        throw new Error('Thời gian vay phải lớn hơn 0');
+      }
+      
+      if (paymentPrd <= 0) {
+        throw new Error('Kỳ hạn trả nợ phải lớn hơn 0');
+      }
+      
+      // Get or create customer
+      let finalCustomerId = selectedCustomerId;
+      
+      // For new customers, create in database first
+      if (customerType === 'new') {
+        // Create new customer with the employee's store_id
+        const newCustomer = {
+          name: customerName,
+          store_id: selectedEmployee.store_id,
+          phone: phone || undefined,
+          address: address || undefined,
+          id_number: idNumber || undefined
+        };
+        
+        const { data: createdCustomer, error: customerError } = await createCustomer(newCustomer);
+        
+        if (customerError) {
+          throw new Error(`Lỗi tạo khách hàng: ${String(customerError)}`);
+        }
+        
+        if (!createdCustomer || !createdCustomer.id) {
+          throw new Error('Không thể tạo khách hàng mới');
+        }
+        
+        finalCustomerId = createdCustomer.id;
+      }
+      
+      // Calculate interest rate based on the difference between amountGiven and customerAmount
+      const interestRate = downPayment > 0 
+        ? Math.round(((installmentAmount - downPayment) / downPayment) * 100 * 100) / 100
+        : 0;
+      
       // Prepare installment data
       const installmentData = {
-        customer_id: customerType === 'existing' ? selectedCustomerId : '',
-        customer_name: customerType === 'new' ? customerName : '',
-        contract_code: contractCode,
-        id_number: idNumber,
-        phone,
-        address,
-        amount_given: parseInt(amountGiven || '0'),
-        interest_rate: parseFloat(interestRate || '0'),
-        duration: parseInt(duration || '7'),
-        start_date: startDate,
-        notes,
-        status: InstallmentStatus.ON_TIME,
-        amount_paid: 0,
-        store_id: '1', // Default store ID
+        customer_id: finalCustomerId,
         employee_id: employeeId,
-        advance_payment: advancePayment
+        contract_code: contractCode,
+        down_payment: downPayment,
+        installment_amount: installmentAmount,
+        loan_period: loanPeriod,
+        payment_period: paymentPrd,
+        loan_date: startDate,
+        notes: notes || '',
+        status: InstallmentStatus.ON_TIME
       };
       
       // Call API to create installment
@@ -185,18 +288,37 @@ export function InstallmentCreateModal({
       if (error) throw error;
       
       // Success - close modal and notify parent
+      const successMessage = customerType === 'new' 
+        ? "Đã tạo khách hàng mới và hợp đồng trả góp" 
+        : "Đã tạo hợp đồng trả góp mới";
+        
+      toast({
+        title: "Thành công",
+        description: successMessage,
+      });
+      resetForm();
       onSuccess();
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error creating installment:', err);
-      setError('Có lỗi xảy ra khi tạo hợp đồng. Vui lòng thử lại.');
+      setError(err.message || 'Có lỗi xảy ra khi tạo hợp đồng. Vui lòng thử lại.');
+      toast({
+        title: "Lỗi",
+        description: err.message || "Không thể tạo hợp đồng trả góp",
+        variant: "destructive"
+      });
     } finally {
       setIsLoading(false);
     }
   };
   
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      if (!open) {
+        resetForm();
+        onClose();
+      }
+    }}>
       <DialogContent className="sm:max-w-[800px] md:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-center">Hợp đồng trả góp</DialogTitle>
@@ -302,7 +424,7 @@ export function InstallmentCreateModal({
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
             <Label htmlFor="amountGiven" className="text-right">
-              Trả góp <span className="text-red-500">*</span>
+              Tiền trả góp <span className="text-red-500">*</span>
             </Label>
             <div className="flex items-center gap-3">
               <Input 
@@ -314,7 +436,7 @@ export function InstallmentCreateModal({
                 inputMode="numeric"
                 className="w-48"
               />
-              <span className="text-sm text-gray-500">(Tổng tiền vay khách phải thanh toán)</span>
+              <span className="text-sm text-gray-500">(Tổng tiền vay khách phải thanh toán - installment_amount)</span>
             </div>
           </div>
           
@@ -332,7 +454,7 @@ export function InstallmentCreateModal({
                 inputMode="numeric"
                 className="w-48"
               />
-              <span className="text-sm text-gray-500">(Tổng tiền khách nhận được)</span>
+              <span className="text-sm text-gray-500">(Tiền khách nhận được - down_payment)</span>
             </div>
           </div>
           
@@ -353,33 +475,13 @@ export function InstallmentCreateModal({
                 <span>ngày</span>
               </div>
               <span className="text-sm text-gray-500">
-                {`(Thanh toán ${formatNumber(Math.round(parseInt(amountGiven || '0') / (parseInt(duration || '50') || 1)))} / 1 ngày)`}
+                {`(loan_period: Thanh toán ${formatNumber(Math.round(parseInt(amountGiven || '0') / (parseInt(duration || '50') || 1)))} / 1 ngày)`}
               </span>
             </div>
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="interestRate" className="text-right">
-              Số ngày đóng tiền <span className="text-red-500">*</span>
-            </Label>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Input 
-                  id="interestRate"
-                  type="number"
-                  value={interestRate}
-                  onChange={(e) => setInterestRate(e.target.value)}
-                  required
-                  className="w-24"
-                />
-                <span>ngày</span>
-              </div>
-              <span className="text-sm text-gray-500">(VD: 3 ngày đóng 1 lần thì điền số 3)</span>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="startDate" className="text-right">Ngày vay</Label>
+            <Label htmlFor="startDate" className="text-right">Ngày vay (loan_date)</Label>
             <DatePicker 
               id="startDate"
               value={startDate}
@@ -409,18 +511,22 @@ export function InstallmentCreateModal({
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="advancePayment" className="text-right">Thu tiền trước</Label>
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="advancePayment"
-                checked={advancePayment}
-                onChange={(e) => setAdvancePayment(e.target.checked)}
-                className="mr-2 h-4 w-4"
-              />
-              <Label htmlFor="advancePayment" className="text-sm font-normal">
-                Đánh dấu nếu thu tiền trước
-              </Label>
+            <Label htmlFor="paymentPeriod" className="text-right">
+              Kỳ hạn trả nợ <span className="text-red-500">*</span>
+            </Label>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Input 
+                  id="paymentPeriod"
+                  type="number"
+                  value={paymentPeriod}
+                  onChange={(e) => setPaymentPeriod(e.target.value)}
+                  required
+                  className="w-24"
+                />
+                <span>ngày</span>
+              </div>
+              <span className="text-sm text-gray-500">(Kỳ hạn payment_period: 10 ngày đóng 1 lần thì điền số 10)</span>
             </div>
           </div>
           

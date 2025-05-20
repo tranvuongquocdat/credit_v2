@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Layout from '@/components/Layout/Layout';
+import { Layout } from '@/components/Layout/Layout';
 import { Button } from '@/components/ui/button';
 import { 
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter
@@ -21,6 +21,7 @@ import { InstallmentsPagination } from '@/components/Installments/InstallmentsPa
 import { InstallmentCreateModal } from '@/components/Installments/InstallmentCreateModal';
 import { InstallmentEditModal } from '@/components/Installments/InstallmentEditModal';
 import { InstallmentDetailModal } from '@/components/Installments/InstallmentDetailModal';
+import { InstallmentPaymentHistoryModal } from '@/components/Installments/InstallmentPaymentHistoryModal';
 
 // Import custom hooks
 import { useInstallments } from '@/hooks/useInstallments';
@@ -73,6 +74,10 @@ export default function InstallmentsPage() {
   // State cho modal chi tiết hợp đồng (dạng tabs)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [detailInstallmentId, setDetailInstallmentId] = useState<string>('');
+  
+  // State cho modal thanh toán (InstallmentPaymentHistoryModal)
+  const [isPaymentActionsModalOpen, setIsPaymentActionsModalOpen] = useState(false);
+  const [selectedInstallmentForPayment, setSelectedInstallmentForPayment] = useState<InstallmentWithCustomer | null>(null);
   
   // Calculate total pages
   const totalPages = Math.ceil(totalItems / itemsPerPage);
@@ -168,6 +173,12 @@ export default function InstallmentsPage() {
     setIsInstallmentEditModalOpen(false);
     refetch();
   };
+  
+  // Handle showing payment actions modal
+  const handleShowPaymentActions = (installment: InstallmentWithCustomer) => {
+    setSelectedInstallmentForPayment(installment);
+    setIsPaymentActionsModalOpen(true);
+  };
 
   return (
     <Layout>
@@ -211,6 +222,7 @@ export default function InstallmentsPage() {
             onEdit={handleEditInstallment}
             onUpdateStatus={handleOpenStatusDialog}
             onDelete={handleOpenDeleteDialog}
+            onShowPaymentActions={handleShowPaymentActions}
           />
         </div>
         
@@ -243,6 +255,15 @@ export default function InstallmentsPage() {
             isOpen={isDetailModalOpen}
             onClose={() => setIsDetailModalOpen(false)}
             installmentId={detailInstallmentId}
+          />
+        )}
+        
+        {/* Modal thao tác thanh toán */}
+        {selectedInstallmentForPayment && (
+          <InstallmentPaymentHistoryModal
+            isOpen={isPaymentActionsModalOpen}
+            onClose={() => setIsPaymentActionsModalOpen(false)}
+            installment={selectedInstallmentForPayment}
           />
         )}
         

@@ -76,10 +76,10 @@ export function PrincipalRepaymentTab({
           } finally {
             setIsSubmitting(false);
           }
-        }}
+        }}  
       />
       <PrincipalRepaymentList 
-        creditId={credit.id}
+        creditId={credit.id} 
         key={localRefreshTrigger} // Force re-render when refreshTrigger changes
         onDeleted={refreshData}
       />

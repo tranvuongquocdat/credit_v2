@@ -100,7 +100,7 @@ export function PaymentTab({
       return 0;
     }
   };
-
+  
   // Start editing a payment
   const startEditing = (period: CreditPaymentPeriod) => {
     if (period.status === PaymentPeriodStatus.PAID) return; // Don't edit paid periods
@@ -265,7 +265,7 @@ export function PaymentTab({
             onClose={() => setShowPaymentForm(false)}
             onSubmit={async (data) => {
               try {
-                console.log('Payment data submitted:', data);
+              console.log('Payment data submitted:', data);
                 
                 // Calculate interest considering principal changes
                 const interestAmount = calculateInterestForPeriod(
@@ -296,8 +296,8 @@ export function PaymentTab({
                   description: "Đã cập nhật khoản thanh toán thành công",
                 });
                 
-                setShowPaymentForm(false);
-                if (onDataChange) onDataChange();
+              setShowPaymentForm(false);
+              if (onDataChange) onDataChange();
               } catch (err) {
                 console.error('Error submitting payment:', err);
                 toast({

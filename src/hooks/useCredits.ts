@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { CreditWithCustomer, CreditStatus } from '@/models/credit';
 import { getCredits, deleteCredit, updateCredit } from '@/lib/credit';
-import { SearchFilters } from '@/components/credits/SearchFilters';
+import { SearchFilters } from '@/components/Credits/SearchFilters';
 
 export function useCredits() {
   const [credits, setCredits] = useState<CreditWithCustomer[]>([]);

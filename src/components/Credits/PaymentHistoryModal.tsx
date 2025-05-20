@@ -175,7 +175,7 @@ export function PaymentHistoryModal({
     
     fetchPrincipalChanges();
   }, [credit?.id, refreshRepayments, refreshAdditionalLoans]);
-
+  
   // Hàm tạo các kỳ thanh toán dựa trên thông tin hợp đồng
   const generatePaymentPeriods = (credit: CreditWithCustomer | null): CreditPaymentPeriod[] => {
     if (!credit) return [];
@@ -234,13 +234,13 @@ export function PaymentHistoryModal({
         );
       } else {
         // Sử dụng tính toán cũ nếu không có thay đổi gốc
-        if (credit.interest_type === InterestType.PERCENTAGE) {
-          // Lãi suất phần trăm
-          expectedAmount = Math.round(credit.loan_amount * (credit.interest_value / 100 / 30) * dayCount * 30);
-        } else {
-          // Lãi suất cố định
-          const loanAmountInMillions = credit.loan_amount / 1000;
-          expectedAmount = Math.round(credit.interest_value * loanAmountInMillions * dayCount);
+      if (credit.interest_type === InterestType.PERCENTAGE) {
+        // Lãi suất phần trăm
+        expectedAmount = Math.round(credit.loan_amount * (credit.interest_value / 100 / 30) * dayCount * 30);
+      } else {
+        // Lãi suất cố định
+        const loanAmountInMillions = credit.loan_amount / 1000;
+        expectedAmount = Math.round(credit.interest_value * loanAmountInMillions * dayCount);
         }
       }
       
