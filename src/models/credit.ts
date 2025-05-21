@@ -4,7 +4,7 @@ export enum InterestType {
 }
 
 export enum CreditStatus {
-  ON_TIME = 'on_time',          // Đúng hẹn
+  ON_TIME = 'on_time',          // Đang vay
   OVERDUE = 'overdue',          // Quá hạn
   LATE_INTEREST = 'late_interest', // Chậm lãi
   BAD_DEBT = 'bad_debt',        // Nợ xấu

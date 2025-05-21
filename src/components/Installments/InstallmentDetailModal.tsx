@@ -63,7 +63,7 @@ export function InstallmentDetailModal({
     
     switch (status) {
       case InstallmentStatus.ON_TIME:
-        return 'Đúng hẹn';
+        return 'Đang vay';
       case InstallmentStatus.OVERDUE:
         return 'Quá hạn';
       case InstallmentStatus.LATE_INTEREST:

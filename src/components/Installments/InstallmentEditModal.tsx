@@ -419,7 +419,7 @@ export function InstallmentEditModal({
               value={status}
               onChange={(e) => setStatus(e.target.value as InstallmentStatus)}
             >
-              <option value={InstallmentStatus.ON_TIME}>Đúng hẹn</option>
+              <option value={InstallmentStatus.ON_TIME}>Đang vay</option>
               <option value={InstallmentStatus.OVERDUE}>Trễ hẹn</option>
               <option value={InstallmentStatus.LATE_INTEREST}>Chậm lãi</option>
               <option value={InstallmentStatus.BAD_DEBT}>Nợ xấu</option>

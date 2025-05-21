@@ -78,7 +78,7 @@ export function FinancialSummary({
           />
         </div>
         <div className="text-base font-semibold text-gray-800">
-          {Math.floor(fundStatus.totalFund / 1000).toLocaleString()}
+          {Math.floor(fundStatus.totalFund).toLocaleString()}
         </div>
       </div>
       
@@ -89,7 +89,7 @@ export function FinancialSummary({
           <span>Tiền cho vay</span>
         </div>
         <div className="text-base font-semibold text-gray-800">
-          {Math.floor(fundStatus.totalLoan / 1000).toLocaleString()}
+          {Math.floor(fundStatus.totalLoan).toLocaleString()}
         </div>
       </div>
       
@@ -100,7 +100,7 @@ export function FinancialSummary({
           <span>Tiền nợ</span>
         </div>
         <div className="text-base font-semibold text-gray-800">
-          {Math.floor(fundStatus.oldDebt / 1000).toLocaleString()}
+          {Math.floor(fundStatus.oldDebt).toLocaleString()}
         </div>
       </div>
       
@@ -111,7 +111,7 @@ export function FinancialSummary({
           <span>Lãi phí dự kiến</span>
         </div>
         <div className="text-base font-semibold text-gray-800">
-          {Math.floor(fundStatus.profit / 1000).toLocaleString()}
+          {Math.floor(fundStatus.profit).toLocaleString()}
         </div>
       </div>
       
@@ -122,7 +122,7 @@ export function FinancialSummary({
           <span>Lãi phí đã thu</span>
         </div>
         <div className="text-base font-semibold text-gray-800">
-          {Math.floor((fundStatus.collectedInterest || fundStatus.profit * 0.4) / 1000).toLocaleString()}
+          {Math.floor((fundStatus.collectedInterest || fundStatus.profit * 0.4)).toLocaleString()}
         </div>
       </div>
     </div>

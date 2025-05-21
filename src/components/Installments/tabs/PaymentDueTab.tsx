@@ -66,7 +66,7 @@ export function PaymentDueTab({ installmentId }: PaymentDueTabProps) {
     {
       key: 'scheduleDate',
       label: 'Hẹn đến ngày',
-      render: (value) => (value ? format(new Date(value), 'dd-MM-yyyy') : '')
+      render: (value) => (value ? format(new Date(value), 'dd/MM/yyyy') : '')
     },
     {
       key: 'content',
@@ -75,7 +75,7 @@ export function PaymentDueTab({ installmentId }: PaymentDueTabProps) {
     {
       key: 'createdAt',
       label: 'Ngày tạo',
-      render: (value) => (value ? format(new Date(value), 'dd-MM-yyyy') : '')
+      render: (value) => (value ? format(new Date(value), 'dd/MM/yyyy') : '')
     }
   ];
 
@@ -83,7 +83,7 @@ export function PaymentDueTab({ installmentId }: PaymentDueTabProps) {
   const formatDate = (dateString: string | null | undefined): string => {
     if (!dateString) return '-';
     try {
-      return format(new Date(dateString), 'dd-MM-yyyy', { locale: vi });
+      return format(new Date(dateString), 'dd/MM/yyyy', { locale: vi });
     } catch (error) {
       return '-';
     }

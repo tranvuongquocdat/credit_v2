@@ -300,14 +300,18 @@ export function InstallmentsTable({
               >
                 <td className="py-3 px-3 border-r border-gray-200 text-center">{index + 1}</td>
                 <td className="py-3 px-3 border-r border-gray-200 font-medium text-center">
+                  <span>
+                    {installment.contract_code}
+                  </span>
+                </td>
+                <td className="py-3 px-3 border-r border-gray-200 text-center">
                   <span 
                     className="text-blue-600 cursor-pointer hover:underline" 
                     onClick={() => onEdit(installment.id)}
                   >
-                    {installment.contract_code}
+                    {installment.customer?.name || "N/A"}
                   </span>
                 </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">{installment.customer?.name || "N/A"}</td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
                   {formatCurrency(installment.amount_given)}
                 </td>

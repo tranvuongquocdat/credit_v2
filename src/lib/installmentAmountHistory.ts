@@ -13,13 +13,13 @@ export enum TransactionType {
 
 // DB model - map trực tiếp với database
 export interface InstallmentAmountHistoryDB {
-  id: string;
+  id: number;
   installment_id: string;
-  created_at?: string;
-  employee_id: string;
-  debit_amount: number;
-  credit_amount: number;
-  description: string;
+  created_at?: string | null;
+  employee_id: string | null;
+  debit_amount: number | null;
+  credit_amount: number | null;
+  description: string | null;
   transaction_type: string;
 }
 
@@ -197,10 +197,48 @@ export async function recordContractRotation(
   return createInstallmentAmountHistory({
     installmentId: newInstallmentId,
     employeeId,
-    debitAmount: remainingDebt,
-    description: `Đảo từ hợp đồng cũ (ID: ${oldInstallmentId})`,
+    description: `Đảo từ hợp đồng cũ`,
     transactionType: TransactionType.ROTATE_CONTRACT
   });
+}
+
+/**
+ * Record a bulk payment transaction (for multiple periods at once)
+ */
+export async function recordBulkPayment(
+  installmentId: string,
+  employeeId: string,
+  amount: number,
+  periodCount: number
+) {
+  try {
+    const payload = {
+      installment_id: installmentId,
+      employee_id: employeeId,
+      credit_amount: amount,
+      debit_amount: 0,
+      description: `Đóng lãi ${periodCount} kỳ`,
+      transaction_type: TransactionType.PAYMENT
+    };
+    
+    const { data, error } = await supabase
+      .from('installment_amount_history')
+      .insert(payload)
+      .select();
+      
+    if (error) throw error;
+    
+    return {
+      data: data ? data[0] : null,
+      error: null
+    };
+  } catch (error) {
+    console.error('Error recording bulk payment history:', error);
+    return {
+      data: null,
+      error
+    };
+  }
 }
 
 /**
@@ -208,13 +246,13 @@ export async function recordContractRotation(
  */
 function transformHistory(item: InstallmentAmountHistoryDB): InstallmentAmountHistory {
   return {
-    id: item.id,
+    id: String(item.id),
     installmentId: item.installment_id,
     createdAt: item.created_at || new Date().toISOString(),
-    employeeId: item.employee_id,
-    debitAmount: item.debit_amount,
-    creditAmount: item.credit_amount,
-    description: item.description,
+    employeeId: item.employee_id || '',
+    debitAmount: item.debit_amount || 0,
+    creditAmount: item.credit_amount || 0,
+    description: item.description || '',
     transactionType: item.transaction_type as TransactionType
   };
 } 

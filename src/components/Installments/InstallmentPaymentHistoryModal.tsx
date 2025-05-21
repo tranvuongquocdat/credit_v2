@@ -80,13 +80,15 @@ interface InstallmentPaymentHistoryModalProps {
   onClose: () => void;
   installment: InstallmentWithCustomer;
   onContractStatusChange?: () => void;
+  onPaymentUpdate?: () => void;
 }
 
 export function InstallmentPaymentHistoryModal({
   isOpen,
   onClose,
   installment: initialInstallment,
-  onContractStatusChange
+  onContractStatusChange,
+  onPaymentUpdate
 }: InstallmentPaymentHistoryModalProps) {
   // State variables
   const [installment, setInstallment] = useState<InstallmentWithCustomer>(initialInstallment);
@@ -115,6 +117,13 @@ export function InstallmentPaymentHistoryModal({
   // State cho lịch sử giao dịch
   const [amountHistory, setAmountHistory] = useState<InstallmentAmountHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  
+  // State for checkbox processing
+  const [processingCheckbox, setProcessingCheckbox] = useState<boolean>(false);
+  const [processingPeriodId, setProcessingPeriodId] = useState<string | null>(null);
+  
+  // State for rotation processing
+  const [isRotating, setIsRotating] = useState<boolean>(false);
   
   // Cập nhật state installment khi initialInstallment thay đổi
   useEffect(() => {
@@ -202,7 +211,7 @@ export function InstallmentPaymentHistoryModal({
   const formatDate = (dateString: string | null | undefined): string => {
     if (!dateString) return '-';
     try {
-      return format(new Date(dateString), 'dd-MM-yyyy', { locale: vi });
+      return format(new Date(dateString), 'dd/MM/yyyy', { locale: vi });
     } catch (error) {
       return '-';
     }
@@ -326,6 +335,11 @@ export function InstallmentPaymentHistoryModal({
         }
       }
       
+      // Gọi callback để cập nhật summary
+      if (onPaymentUpdate) {
+        onPaymentUpdate();
+      }
+      
     } catch (error) {
       console.error('Error saving payment:', error);
       toast({
@@ -401,6 +415,11 @@ export function InstallmentPaymentHistoryModal({
         if (!error && data) {
           setPaymentPeriods(data);
         }
+      }
+      
+      // Gọi callback để cập nhật summary
+      if (onPaymentUpdate) {
+        onPaymentUpdate();
       }
     } catch (error) {
       console.error('Error saving payment date:', error);
@@ -545,11 +564,17 @@ export function InstallmentPaymentHistoryModal({
       return;
     }
     
+    // Set processing state
+    setProcessingCheckbox(true);
+    setProcessingPeriodId(period.id);
+    
     try {
       // Import necessary functions
       const { 
         saveInstallmentPayment,
-        deleteInstallmentPaymentPeriod
+        deleteInstallmentPaymentPeriod,
+        bulkSaveInstallmentPayments,
+        updateInstallmentStatus
       } = await import('@/lib/installmentPayment');
 
       if (checked) {
@@ -568,30 +593,96 @@ export function InstallmentPaymentHistoryModal({
         
         // Nếu không có kỳ nào cần cập nhật, thoát sớm
         if (periodsToUpdate.length === 0) {
+          setProcessingCheckbox(false);
+          setProcessingPeriodId(null);
           return;
         }
         
         console.log("Các kỳ sẽ được cập nhật:", periodsToUpdate);
         
-        // Xử lý từng kỳ cần đánh dấu là đã thanh toán
-        for (const periodToUpdate of periodsToUpdate) {
-          const isCalculatedPeriod = periodToUpdate.id.startsWith('calculated-');
-          
-          // Lưu kỳ vào DB với số tiền dự kiến
-          await saveInstallmentPayment(
-            installment.id,
-            periodToUpdate,
-            periodToUpdate.expectedAmount,
-            isCalculatedPeriod
-          );
+        // Show toast thông báo đang xử lý
+        if (periodsToUpdate.length > 1) {
+          toast({
+            title: "Đang xử lý",
+            description: `Đang cập nhật ${periodsToUpdate.length} kỳ thanh toán...`,
+          });
+        }
+        
+        // Optimistic UI update - cập nhật UI trước khi lưu vào DB để trải nghiệm mượt hơn
+        const optimisticPaymentPeriods = [...paymentPeriods];
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Tạo map của các kỳ hiện có để cập nhật
+        const updatedPeriodsMap = new Map<string, boolean>();
+        
+        for (const p of periodsToUpdate) {
+          updatedPeriodsMap.set(p.id, true);
+        }
+        
+        // Cập nhật UI trước cho người dùng thấy ngay
+        if (periodsToUpdate.length > 0) {
+          setPaymentPeriods(prev => {
+            const updatedPeriods = prev.map(p => {
+              if (updatedPeriodsMap.has(p.id)) {
+                return {
+                  ...p,
+                  actualAmount: p.expectedAmount,
+                  paymentDate: format(new Date(), 'dd/MM/yyyy')
+                };
+              }
+              return p;
+            });
+            return updatedPeriods;
+          });
         }
 
-        // Refresh dữ liệu từ API để cập nhật UI
+        // Phương pháp mới: Lưu tất cả các kỳ trong một giao dịch duy nhất
+        if (typeof bulkSaveInstallmentPayments === 'function') {
+          // Sử dụng phương pháp mới hiệu quả hơn
+          await bulkSaveInstallmentPayments(
+            installment.id,
+            periodsToUpdate,
+            installment.employee_id
+          );
+        } else {
+          // Fallback to previous batched method
+          // Cải thiện hiệu suất: Tách thành batch xử lý
+          const processInBatches = async (items: InstallmentPaymentPeriod[], batchSize: number = 5) => {
+            // Tạo mảng chứa các batch
+            const batches = [];
+            for (let i = 0; i < items.length; i += batchSize) {
+              batches.push(items.slice(i, i + batchSize));
+            }
+            
+            // Xử lý từng batch
+            for (let i = 0; i < batches.length; i++) {
+              const batch = batches[i];
+              const payments = batch.map(p => ({
+                installmentId: installment.id,
+                periodData: p,
+                actualAmount: p.expectedAmount,
+                isCalculatedPeriod: p.id.startsWith('calculated-')
+              }));
+              
+              // Process in parallel for better performance
+              await Promise.all(batch.map(p => saveInstallmentPayment(
+                installment.id,
+                p,
+                p.expectedAmount,
+                p.id.startsWith('calculated-')
+              )));
+            }
+          };
+          
+          // Xử lý các kỳ theo batch để cải thiện hiệu suất
+          await processInBatches(periodsToUpdate);
+        }
+
+        // Refresh dữ liệu từ API để cập nhật UI với data chính xác
         const { data, error } = await getInstallmentPaymentPeriods(installment.id);
         if (!error && data) {
           setPaymentPeriods(data);
         }
-        
       } else {
         // Lấy tất cả các kỳ từ calculateCombinedPaymentPeriods
         const allPeriods = calculateCombinedPaymentPeriods();
@@ -606,12 +697,51 @@ export function InstallmentPaymentHistoryModal({
             title: "Lỗi",
             description: "Không thể bỏ đánh dấu kỳ này vì có kỳ sau đã được thanh toán."
           });
+          setProcessingCheckbox(false);
+          setProcessingPeriodId(null);
           return;
         }
+        
+        // Optimistic UI update
+        setPaymentPeriods(prev => {
+          return prev.map(p => {
+            if (p.id === period.id) {
+              return {
+                ...p,
+                actualAmount: 0,
+                paymentDate: undefined
+              };
+            }
+            return p;
+          });
+        });
         
         // Chỉ xóa kỳ trong DB nếu đã tồn tại (không phải kỳ tính toán)
         if (!period.id.startsWith('calculated-')) {
           await deleteInstallmentPaymentPeriod(period.id);
+          
+          // Kiểm tra nếu hợp đồng đang ở trạng thái FINISHED
+          // và nếu vừa bỏ đánh dấu một kỳ, thì cần cập nhật lại trạng thái
+          if (installment.status === InstallmentStatus.FINISHED) {
+            // Kiểm tra xem tất cả các kỳ khác đã được thanh toán chưa
+            const { data: updatedPeriods } = await getInstallmentPaymentPeriods(installment.id);
+            const allPeriodsCompleted = updatedPeriods?.every(p => p.actualAmount && p.actualAmount >= p.expectedAmount);
+            
+            // Nếu không phải tất cả các kỳ đều hoàn thành, cập nhật trạng thái thành ON_TIME
+            if (!allPeriodsCompleted) {
+              await updateInstallmentStatus(installment.id, InstallmentStatus.ON_TIME);
+              // Cập nhật state installment
+              setInstallment({
+                ...installment,
+                status: InstallmentStatus.ON_TIME
+              });
+              
+              toast({
+                title: "Trạng thái hợp đồng đã thay đổi",
+                description: "Hợp đồng đã chuyển từ 'Hoàn thành' sang 'Đang vay' do có kỳ chưa thanh toán.",
+              });
+            }
+          }
           
           // Refresh dữ liệu từ API để cập nhật UI
           const { data, error } = await getInstallmentPaymentPeriods(installment.id);
@@ -629,6 +759,16 @@ export function InstallmentPaymentHistoryModal({
           : "Đã bỏ đánh dấu thanh toán cho kỳ này",
       });
       
+      // Gọi callback để cập nhật summary
+      if (onPaymentUpdate) {
+        onPaymentUpdate();
+      }
+      
+      // Gọi callback để cập nhật bảng hợp đồng nếu trạng thái hợp đồng thay đổi
+      if (!checked && installment.status === InstallmentStatus.FINISHED && onContractStatusChange) {
+        onContractStatusChange();
+      }
+      
     } catch (error) {
       console.error('Error updating payment status:', error);
       toast({
@@ -636,6 +776,19 @@ export function InstallmentPaymentHistoryModal({
         title: "Lỗi",
         description: "Có lỗi xảy ra khi cập nhật trạng thái thanh toán. Vui lòng thử lại."
       });
+      
+      // Refresh dữ liệu từ API để khôi phục UI
+      try {
+        const { data } = await getInstallmentPaymentPeriods(installment.id);
+        if (data) {
+          setPaymentPeriods(data);
+        }
+      } catch (refreshError) {
+        console.error('Error refreshing payment periods after failure:', refreshError);
+      }
+    } finally {
+      setProcessingCheckbox(false);
+      setProcessingPeriodId(null);
     }
   };
 
@@ -690,6 +843,11 @@ export function InstallmentPaymentHistoryModal({
       // Trigger page table reload if callback provided
       if (onContractStatusChange) {
         onContractStatusChange();
+      }
+      
+      // Gọi callback để cập nhật summary
+      if (onPaymentUpdate) {
+        onPaymentUpdate();
       }
       
       toast({
@@ -754,6 +912,8 @@ export function InstallmentPaymentHistoryModal({
   const handleRotateContract = async () => {
     if (!installment?.id || !installment?.customer_id) return;
     
+    setIsRotating(true); // Set loading state
+    
     try {
       // First close the current contract by marking all periods as paid and updating status
       const { saveInstallmentPayment, updateInstallmentStatus } = await import('@/lib/installmentPayment');
@@ -797,17 +957,6 @@ export function InstallmentPaymentHistoryModal({
         throw error;
       }
       
-      // Show success message
-      toast({
-        title: "Thành công",
-        description: "Đã đảo hợp đồng thành công!",
-      });
-      
-      // Trigger reload if callback provided
-      if (onContractStatusChange) {
-        onContractStatusChange();
-      }
-      
       // Record in transaction history
       if (data) {
         const { recordContractRotation } = await import('@/lib/installmentAmountHistory');
@@ -819,6 +968,22 @@ export function InstallmentPaymentHistoryModal({
         );
       }
       
+      // Show success message
+      toast({
+        title: "Thành công",
+        description: "Đã đảo hợp đồng thành công!",
+      });
+      
+      // Trigger reload if callback provided
+      if (onContractStatusChange) {
+        onContractStatusChange();
+      }
+      
+      // Trigger update of financial summary
+      if (onPaymentUpdate) {
+        onPaymentUpdate();
+      }
+      
     } catch (error) {
       console.error('Error rotating contract:', error);
       toast({
@@ -826,6 +991,8 @@ export function InstallmentPaymentHistoryModal({
         title: "Lỗi",
         description: "Có lỗi xảy ra khi đảo hợp đồng. Vui lòng thử lại."
       });
+    } finally {
+      setIsRotating(false); // Reset loading state
     }
   };
 
@@ -852,7 +1019,6 @@ export function InstallmentPaymentHistoryModal({
           {/* Thông tin khách hàng */}
           <div className="flex justify-between items-center mb-2">
             <h3 className="font-medium">{installment?.customer?.name || 'Khách hàng'}</h3>
-            <h3 className="font-medium text-red-600">Tổng lãi phí: {formatCurrency(totalExpected)}</h3>
           </div>
           
           {/* Tổng hợp chi tiết */}
@@ -865,16 +1031,28 @@ export function InstallmentPaymentHistoryModal({
                     <td className="py-1 px-2 text-right border">{formatCurrency(installment?.amount_given || 0)}</td>
                   </tr>
                   <tr>
-                    <td className="py-1 px-2 border font-bold">Tiền trả góp</td>
+                    <td className="py-1 px-2 border font-bold">Trả góp</td>
+                    <td className="py-1 px-2 text-right border">{formatCurrency(installmentAmount)}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1 px-2 border font-bold">Tỷ lệ</td>
                     <td className="py-1 px-2 text-right border">
-                      {formatCurrency(installmentAmount)}
+                      {installment?.amount_given && installmentAmount 
+                        ? `${(installmentAmount / 100000).toFixed(0)} ăn ${(installment.amount_given / 100000).toFixed(0)}`
+                        : '-'}
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-1 px-2 border font-bold">Vay từ ngày</td>
+                    <td className="py-1 px-2 border font-bold">Thời gian vay</td>
                     <td className="py-1 px-2 text-right border">{formatDate(installment?.start_date)} → {installment?.start_date && installment?.duration
                          ? formatDate(new Date(new Date(installment.start_date).getTime() + (installment.duration - 1) * 24 * 60 * 60 * 1000).toISOString())
                          : '-'}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1 px-2 border font-bold">Nợ cũ</td>
+                    <td className="py-1 px-2 text-right border text-red-600">
+                      {formatCurrency(Math.abs(remainingAmount < 0 ? remainingAmount : 0))}
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -883,18 +1061,26 @@ export function InstallmentPaymentHistoryModal({
               <table className="w-full border-collapse">
                 <tbody>
                   <tr>
-                    <td className="py-1 px-2 border font-bold">Đã thanh toán</td>
+                    <td className="py-1 px-2 border font-bold">Số tiền giao khách</td>
+                    <td className="py-1 px-2 text-right border">{formatCurrency(installment?.amount_given || 0)}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1 px-2 border font-bold">Tổng tiền phải đóng</td>
+                    <td className="py-1 px-2 text-right border text-red-600">{formatCurrency(installmentAmount)}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1 px-2 border font-bold">Đã đóng được</td>
                     <td className="py-1 px-2 text-right border">{formatCurrency(totalPaid)}</td>
                   </tr>
                   <tr>
-                    <td className="py-1 px-2 border font-bold">{remainingAmount > 0 ? 'Tiền thừa' : 'Nợ cũ'}</td>
-                    <td className={`py-1 px-2 text-right border ${remainingAmount > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatCurrency(Math.abs(remainingAmount))}
+                    <td className="py-1 px-2 border font-bold">Còn lại phải đóng</td>
+                    <td className="py-1 px-2 text-right border text-red-600">
+                      {formatCurrency(Math.max(0, installmentAmount - totalPaid))}
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-1 px-2 border font-bold">Trạng thái</td>
-                    <td className="py-1 px-2 text-right border">{installment?.status || 'Đang trả góp'}</td>
+                    <td className="py-1 px-2 border font-bold">Tổng lãi phí</td>
+                    <td className="py-1 px-2 text-right border">{formatCurrency(installmentAmount - (installment?.amount_given || 0))}</td>
                   </tr>
                 </tbody>
               </table>
@@ -946,7 +1132,7 @@ export function InstallmentPaymentHistoryModal({
                           periodDays = Math.max(1, totalDays - previousDays);
                         }
                         
-                        const actualAmount = period.expectedAmount || 0;
+                        const actualAmount = period.actualAmount || period.expectedAmount;
                         const isPaid = isPeriodInDatabase(period);
                         const isEditing = selectedPeriodId === period.id;
                         const isDateEditing = selectedDatePeriodId === period.id;
@@ -1018,13 +1204,17 @@ export function InstallmentPaymentHistoryModal({
                             </td>
                             <td className="px-2 py-2 text-center border">
                               <Checkbox 
-                                checked={isPaid} 
+                                checked={isPaid}
+                                disabled={processingCheckbox}
                                 onCheckedChange={(checked) => {
                                   if (period && period.id) {
                                     handleCheckboxChange(period, !!checked, index);
                                   }
                                 }}
                               />
+                              {processingCheckbox && processingPeriodId === period.id && (
+                                <div className="inline-block ml-2 animate-spin rounded-full h-3 w-3 border-b-2 border-blue-700"></div>
+                              )}
                             </td>
                           </tr>
                         );
@@ -1039,11 +1229,39 @@ export function InstallmentPaymentHistoryModal({
           {activeTab === 'close' && (
             <div className="p-4 border rounded-md">
               <h3 className="text-lg font-medium mb-4">Đóng hợp đồng</h3>
-              <div className="bg-red-50 border border-red-200 rounded-md p-4 text-center">
-                <div className="text-lg mb-2">Tổng số tiền phải thanh toán để đóng hợp đồng:</div>
-                <div className="text-red-600 font-medium">
-                  {formatCurrency(Math.max(0, installmentAmount - totalPaid))}
-                </div>
+              
+              <div className="mb-4 border rounded-md overflow-hidden">
+                <table className="w-full border-collapse">
+                  <tbody>
+                    <tr className="bg-gray-50">
+                      <td className="px-4 py-2 font-medium border">Tổng tiền trả góp</td>
+                      <td className="px-4 py-2 text-right font-medium border">{formatCurrency(installmentAmount)}</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border">Tiền đưa khách</td>
+                      <td className="px-4 py-2 text-right border">{formatCurrency(installment?.amount_given || 0)}</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border">Đã đóng được</td>
+                      <td className="px-4 py-2 text-right border text-green-600">{formatCurrency(totalPaid)}</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border">Còn phải đóng</td>
+                      <td className="px-4 py-2 text-right border text-red-600">{formatCurrency(Math.max(0, installmentAmount - totalPaid))}</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 border font-bold">Nợ cũ</td>
+                      <td className="px-4 py-2 text-right border text-red-600">{formatCurrency(Math.abs(remainingAmount < 0 ? remainingAmount : 0))}</td>
+                    </tr>
+                    
+                    <tr className="bg-red-50">
+                      <td className="px-4 py-3 font-medium border text-red-700">Còn lại phải đóng để đóng hợp đồng</td>
+                      <td className="px-4 py-3 text-right border font-bold text-red-700 text-lg">
+                        {formatCurrency(Math.max(0, installmentAmount - totalPaid + (remainingAmount < 0 ? Math.abs(remainingAmount) : 0)))}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
               
               <div className="mt-6 flex justify-center">
@@ -1300,8 +1518,19 @@ export function InstallmentPaymentHistoryModal({
                 </div>
                 
                 <div className="mt-6 flex justify-center">
-                  <Button className="bg-blue-600 hover:bg-blue-700 text-white px-8" onClick={handleRotateContract}>
-                    Đảo Hợp Đồng
+                  <Button 
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-8" 
+                    onClick={handleRotateContract}
+                    disabled={isRotating}
+                  >
+                    {isRotating ? (
+                      <>
+                        <span className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full inline-block"></span>
+                        Đang xử lý...
+                      </>
+                    ) : (
+                      "Đảo Hợp Đồng"
+                    )}
                   </Button>
                 </div>
               </div>

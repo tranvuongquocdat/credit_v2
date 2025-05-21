@@ -24,13 +24,14 @@ import { InstallmentPaymentHistoryModal } from '@/components/Installments/Instal
 
 // Import custom hooks
 import { useInstallments } from '@/hooks/useInstallments';
+import { useInstallmentsSummary } from '@/hooks/useInstallmentsSummary';
 
 // Import types and API functions
 import { InstallmentStatus, InstallmentWithCustomer } from '@/models/installment';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
-  [InstallmentStatus.ON_TIME]: { label: 'Đúng hẹn', color: 'bg-green-100 text-green-800 border-green-200' },
+  [InstallmentStatus.ON_TIME]: { label: 'Đang vay', color: 'bg-green-100 text-green-800 border-green-200' },
   [InstallmentStatus.OVERDUE]: { label: 'Quá hạn', color: 'bg-red-100 text-red-800 border-red-200' },
   [InstallmentStatus.LATE_INTEREST]: { label: 'Chậm lãi', color: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
   [InstallmentStatus.BAD_DEBT]: { label: 'Nợ xấu', color: 'bg-purple-100 text-purple-800 border-purple-200' },
@@ -58,6 +59,9 @@ export default function InstallmentsPage() {
     handleUpdateStatus,
     refetch
   } = useInstallments();
+  
+  // Sử dụng custom hook để lấy dữ liệu tài chính
+  const { data: financialSummary, refresh: refreshFinancial } = useInstallmentsSummary();
   
   // State for dialogs
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
@@ -158,6 +162,7 @@ export default function InstallmentsPage() {
   const handleCreateSuccess = () => {
     setIsInstallmentCreateModalOpen(false);
     refetch();
+    refreshFinancial();
   };
   
   // Handle installment edit success
@@ -184,8 +189,9 @@ export default function InstallmentsPage() {
         
         {/* Financial Summary */}
         <FinancialSummary
-          storeId="1"
-          autoFetch={true}
+          fundStatus={financialSummary || undefined}
+          onRefresh={refreshFinancial}
+          autoFetch={false}
         />
         
         {/* Search and filters */}
@@ -224,6 +230,7 @@ export default function InstallmentsPage() {
           onSuccess={() => {
             setIsInstallmentCreateModalOpen(false);
             refetch();
+            refreshFinancial();
           }}
         />
 
@@ -252,6 +259,7 @@ export default function InstallmentsPage() {
               refetch();
               setIsPaymentActionsModalOpen(false);
             }}
+            onPaymentUpdate={refreshFinancial}
           />
         )}
         

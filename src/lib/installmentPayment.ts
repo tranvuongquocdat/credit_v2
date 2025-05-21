@@ -460,4 +460,153 @@ export async function updateInstallmentStatus(installmentId: string, status: Ins
       error
     };
   }
+}
+
+// Interface for batch payment processing
+interface BatchPaymentItem {
+  installmentId: string;
+  periodData: Partial<InstallmentPaymentPeriod>;
+  actualAmount: number;
+  isCalculatedPeriod: boolean;
+}
+
+/**
+ * Process multiple payment periods in a batch for better performance
+ */
+export async function batchSaveInstallmentPayments(payments: BatchPaymentItem[]) {
+  if (!payments || payments.length === 0) {
+    return { data: [], error: null };
+  }
+  
+  try {
+    const results = [];
+    
+    // Process in parallel with Promise.all for better performance
+    const promises = payments.map(async item => {
+      const result = await saveInstallmentPayment(
+        item.installmentId,
+        item.periodData,
+        item.actualAmount,
+        item.isCalculatedPeriod
+      );
+      return result.data;
+    });
+    
+    const data = await Promise.all(promises);
+    
+    return {
+      data,
+      error: null
+    };
+  } catch (error) {
+    logError('Error batch processing payments', error);
+    return {
+      data: [],
+      error
+    };
+  }
+}
+
+/**
+ * Save multiple payment periods in a single database operation
+ * This is much more efficient than individual calls
+ */
+export async function bulkSaveInstallmentPayments(
+  installmentId: string,
+  periods: InstallmentPaymentPeriod[],
+  employeeId?: string
+) {
+  if (!installmentId || !periods || periods.length === 0) {
+    return { data: [], error: null };
+  }
+  
+  try {
+    const now = new Date().toISOString();
+    const paymentDate = now.split('T')[0];
+    const results = [];
+    
+    // Separate new periods vs existing periods
+    const newPeriods = periods.filter(p => p.id.startsWith('calculated-'));
+    const existingPeriods = periods.filter(p => !p.id.startsWith('calculated-'));
+    
+    // 1. Insert new periods in bulk if any
+    if (newPeriods.length > 0) {
+      // Prepare data for bulk insert
+      const periodsToCreate = newPeriods.map(period => ({
+        installment_id: installmentId,
+        period_number: period.periodNumber,
+        date: period.dueDate.split('/').reverse().join('-'),
+        expected_amount: period.expectedAmount,
+        actual_amount: period.expectedAmount, // Pay full amount
+        payment_date: paymentDate,
+        notes: period.notes
+      }));
+      
+      // Bulk insert in a single operation
+      const { data, error } = await supabase
+        .from('installment_payment_period')
+        .insert(periodsToCreate)
+        .select();
+        
+      if (error) throw error;
+      if (data) results.push(...data);
+    }
+    
+    // 2. Update existing periods
+    if (existingPeriods.length > 0) {
+      // Unfortunately we have to do these one by one because Supabase doesn't support
+      // bulk updates with different values for each row
+      for (const period of existingPeriods) {
+        const { data, error } = await supabase
+          .from('installment_payment_period')
+          .update({
+            actual_amount: period.expectedAmount,
+            payment_date: paymentDate
+          })
+          .eq('id', period.id)
+          .select();
+          
+        if (error) throw error;
+        if (data && data[0]) results.push(data[0]);
+      }
+    }
+    
+    // 3. Record a single payment history for all periods
+    if (periods.length > 0) {
+      try {
+        const { recordBulkPayment } = await import('./installmentAmountHistory');
+        const totalAmount = periods.reduce((sum, p) => sum + p.expectedAmount, 0);
+        
+        // Get employee ID if not provided
+        let empId = employeeId;
+        if (!empId) {
+          const { getInstallmentById } = await import('./installment');
+          const { data: installmentData } = await getInstallmentById(installmentId);
+          empId = installmentData?.employee_id;
+        }
+        
+        if (empId && totalAmount > 0) {
+          await recordBulkPayment(installmentId, empId, totalAmount, periods.length);
+        }
+      } catch (historyError) {
+        console.error('Error recording bulk payment history:', historyError);
+        // Continue anyway
+      }
+    }
+    
+    // Transform results for UI
+    const today = new Date();
+    const paymentPeriods = results.map(item => transformPaymentPeriod(item, today));
+    
+    return {
+      data: paymentPeriods,
+      error: null
+    };
+  } catch (error) {
+    logError('Error in bulk save payments', error);
+    return {
+      data: [],
+      error
+    };
+  }
 } 
