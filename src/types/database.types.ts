@@ -339,6 +339,61 @@ export type Database = {
           },
         ]
       }
+      installment_amount_history: {
+        Row: {
+          created_at: string | null
+          credit_amount: number | null
+          debit_amount: number | null
+          description: string | null
+          employee_id: string | null
+          id: number
+          installment_id: string
+          transaction_type: string
+        }
+        Insert: {
+          created_at?: string | null
+          credit_amount?: number | null
+          debit_amount?: number | null
+          description?: string | null
+          employee_id?: string | null
+          id?: number
+          installment_id: string
+          transaction_type: string
+        }
+        Update: {
+          created_at?: string | null
+          credit_amount?: number | null
+          debit_amount?: number | null
+          description?: string | null
+          employee_id?: string | null
+          id?: number
+          installment_id?: string
+          transaction_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "installment_amount_history_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installment_amount_history_installment_id_fkey"
+            columns: ["installment_id"]
+            isOneToOne: false
+            referencedRelation: "installments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installment_amount_history_installment_id_fkey"
+            columns: ["installment_id"]
+            isOneToOne: false
+            referencedRelation: "installments_by_store"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       installment_payment_period: {
         Row: {
           actual_amount: number | null

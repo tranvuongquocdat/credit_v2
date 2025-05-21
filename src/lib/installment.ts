@@ -1,6 +1,8 @@
 import { supabase } from './supabase';
 import { CreateInstallmentParams, Installment, InstallmentFilters, InstallmentStatus, InstallmentWithCustomer } from '@/models/installment';
 import { Customer } from '@/models/customer';
+import { format, addDays } from 'date-fns';
+import { formatCurrency } from '@/lib/utils';
 
 // Get all installments with pagination and filters
 export async function getInstallments(
@@ -228,6 +230,9 @@ export async function getInstallmentById(id: string) {
 // Create a new installment
 export async function createInstallment(installment: CreateInstallmentParams) {
   try {
+    // Import recordContractCreation
+    const { recordContractCreation } = await import('./installmentAmountHistory');
+
     // Convert UI model to database model
     const newInstallment = {
       customer_id: installment.customer_id,
@@ -295,6 +300,14 @@ export async function createInstallment(installment: CreateInstallmentParams) {
       updated_at: data.updated_at || undefined
     };
     
+    // Record history
+    try {
+      await recordContractCreation(data.id, data.employee_id, downPayment);
+    } catch (historyError) {
+      console.error('Error recording contract creation history:', historyError);
+      // Continue anyway
+    }
+    
     return { 
       data: result, 
       error: null 
@@ -319,6 +332,9 @@ function calculateInstallmentAmount(amountGiven: number, interestRate: number, d
 // Update an installment
 export async function updateInstallment(id: string, installment: Partial<Installment>) {
   try {
+    // Import recordContractUpdate
+    const { recordContractUpdate } = await import('./installmentAmountHistory');
+    
     // First get the current installment to have reference data
     const { data: currentData, error: fetchError } = await supabase
       .from('installments')
@@ -430,6 +446,24 @@ export async function updateInstallment(id: string, installment: Partial<Install
       updated_at: data.updated_at || undefined
     };
     
+    // Record history
+    try {
+      // Generate description based on what changed
+      let description = 'Cập nhật hợp đồng';
+      if (installment.amount_given !== undefined) {
+        description = `Cập nhật tiền đưa khách: ${formatCurrency(installment.amount_given)}`;
+      } else if (installment.interest_rate !== undefined) {
+        description = `Cập nhật lãi suất: ${installment.interest_rate}%`;
+      } else if (installment.duration !== undefined) {
+        description = `Cập nhật thời hạn: ${installment.duration} ngày`;
+      }
+      
+      await recordContractUpdate(data.id, data.employee_id, description);
+    } catch (historyError) {
+      console.error('Error recording contract update history:', historyError);
+      // Continue anyway
+    }
+    
     return { 
       data: result, 
       error: null 
@@ -446,6 +480,12 @@ export async function updateInstallment(id: string, installment: Partial<Install
 // Update installment status
 export async function updateInstallmentStatus(id: string, status: InstallmentStatus) {
   try {
+    // Import record functions
+    const { 
+      recordContractClosure, 
+      recordContractReopening 
+    } = await import('./installmentAmountHistory');
+
     const { data, error } = await supabase
       .from('installments')
       .update({ status: status.toString() as any })
@@ -489,6 +529,18 @@ export async function updateInstallmentStatus(id: string, status: InstallmentSta
       created_at: data.created_at || undefined,
       updated_at: data.updated_at || undefined
     };
+    
+    // Record history based on status change
+    try {
+      if (status === InstallmentStatus.CLOSED) {
+        await recordContractClosure(data.id, data.employee_id);
+      } else if (status === InstallmentStatus.FINISHED) {
+        await recordContractReopening(data.id, data.employee_id);
+      }
+    } catch (historyError) {
+      console.error('Error recording status update history:', historyError);
+      // Continue anyway
+    }
     
     return { 
       data: result, 

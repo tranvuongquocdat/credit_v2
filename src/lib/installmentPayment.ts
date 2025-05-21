@@ -171,12 +171,44 @@ export async function updateInstallmentPaymentPeriod(
  */
 export async function deleteInstallmentPaymentPeriod(id: string) {
   try {
+    // Get the payment period data before deleting
+    const { data: periodData, error: getPeriodError } = await supabase
+      .from('installment_payment_period')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (getPeriodError) throw getPeriodError;
+    
+    // Delete the payment period
     const { error } = await supabase
       .from('installment_payment_period')
       .delete()
       .eq('id', id);
     
     if (error) throw error;
+    
+    // Record payment cancellation history
+    if (periodData && periodData.actual_amount && periodData.actual_amount > 0) {
+      try {
+        const { recordCancelPayment } = await import('./installmentAmountHistory');
+        const { getInstallmentById } = await import('./installment');
+        
+        // Get employee_id from installment
+        const { data: installmentData } = await getInstallmentById(periodData.installment_id);
+        
+        if (installmentData) {
+          await recordCancelPayment(
+            periodData.installment_id,
+            installmentData.employee_id,
+            periodData.actual_amount
+          );
+        }
+      } catch (historyError) {
+        console.error('Error recording payment cancellation history:', historyError);
+        // Continue anyway
+      }
+    }
     
     return {
       success: true,
@@ -271,6 +303,22 @@ export async function saveInstallmentPayment(
       };
       
       response = await updateInstallmentPaymentPeriod(periodData.id, updateParams);
+    }
+    
+    // Ghi lịch sử giao dịch
+    try {
+      const { recordPayment } = await import('./installmentAmountHistory');
+      const { getInstallmentById } = await import('./installment');
+      
+      // Lấy thông tin của hợp đồng để lấy employee_id
+      const { data: installmentData } = await getInstallmentById(installmentId);
+      
+      if (installmentData && actualAmount > 0) {
+        await recordPayment(installmentId, installmentData.employee_id, actualAmount);
+      }
+    } catch (historyError) {
+      console.error('Error recording payment history:', historyError);
+      // Không throw error ở đây, tiếp tục trả về kết quả của việc lưu thanh toán
     }
     
     return response;

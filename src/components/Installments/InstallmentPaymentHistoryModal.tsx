@@ -22,6 +22,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { toast } from '@/components/ui/use-toast';
 import { DatePicker } from '@/components/ui/date-picker';
+import { InstallmentAmountHistory, getInstallmentAmountHistory } from '@/lib/installmentAmountHistory';
 
 // Define the tabs for this modal
 export type TabId = 'payment' | 'principal-repayment' | 'close' | 'documents' | 'history' | 'bad-debt' | 'rotate';
@@ -111,6 +112,10 @@ export function InstallmentPaymentHistoryModal({
   const [rotationDuration, setRotationDuration] = useState<string>("10");
   const [rotationPaymentPeriod, setRotationPaymentPeriod] = useState<string>("6");
   
+  // State cho lịch sử giao dịch
+  const [amountHistory, setAmountHistory] = useState<InstallmentAmountHistory[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  
   // Cập nhật state installment khi initialInstallment thay đổi
   useEffect(() => {
     setInstallment(initialInstallment);
@@ -165,6 +170,33 @@ export function InstallmentPaymentHistoryModal({
       loadPaymentPeriods();
     }
   }, [isOpen, installment?.id]);
+  
+  // Load transaction history when the modal opens
+  useEffect(() => {
+    async function loadTransactionHistory() {
+      if (!installment?.id) return;
+      
+      setLoadingHistory(true);
+      
+      try {
+        const { data, error } = await getInstallmentAmountHistory(installment.id);
+        
+        if (error) {
+          throw error;
+        }
+        
+        setAmountHistory(data || []);
+      } catch (err) {
+        console.error('Error loading transaction history:', err);
+      } finally {
+        setLoadingHistory(false);
+      }
+    }
+    
+    if (isOpen && activeTab === 'history') {
+      loadTransactionHistory();
+    }
+  }, [isOpen, installment?.id, activeTab]);
   
   // Format date helper
   const formatDate = (dateString: string | null | undefined): string => {
@@ -618,6 +650,8 @@ export function InstallmentPaymentHistoryModal({
         updateInstallmentStatus
       } = await import('@/lib/installmentPayment');
       
+      const { recordContractClosure } = await import('@/lib/installmentAmountHistory');
+      
       // Get all periods including calculated ones
       const allPeriods = calculateCombinedPaymentPeriods();
       
@@ -640,6 +674,9 @@ export function InstallmentPaymentHistoryModal({
       
       // Update installment status to closed
       await updateInstallmentStatus(installment.id, InstallmentStatus.CLOSED);
+      
+      // Record in transaction history
+      await recordContractClosure(installment.id, installment.employee_id);
       
       // Refresh data
       const { data, error } = await getInstallmentPaymentPeriods(installment.id);
@@ -683,11 +720,10 @@ export function InstallmentPaymentHistoryModal({
   // Calculate customer receive amount
   const calculateCustomerReceiveAmount = (): number => {
     const downPayment = parseFormattedNumber(rotationDownPayment);
-    const loanAmount = parseFormattedNumber(rotationLoanAmount);
-    const remainingToPay = Math.max(0, installmentAmount - totalPaid);
+    const remainingDebt = Math.max(0, installmentAmount - totalPaid);
     
-    // Customer receives: downPayment - loanAmount - remainingToPay
-    return downPayment - loanAmount - remainingToPay;
+    // Customer receives: downPayment - remainingDebt
+    return downPayment - remainingDebt;
   };
   
   // Handle rotation loan amount change
@@ -772,6 +808,17 @@ export function InstallmentPaymentHistoryModal({
         onContractStatusChange();
       }
       
+      // Record in transaction history
+      if (data) {
+        const { recordContractRotation } = await import('@/lib/installmentAmountHistory');
+        await recordContractRotation(
+          installment.id, 
+          data.id, 
+          installment.employee_id, 
+          Math.max(0, installmentAmount - totalPaid)
+        );
+      }
+      
     } catch (error) {
       console.error('Error rotating contract:', error);
       toast({
@@ -779,6 +826,16 @@ export function InstallmentPaymentHistoryModal({
         title: "Lỗi",
         description: "Có lỗi xảy ra khi đảo hợp đồng. Vui lòng thử lại."
       });
+    }
+  };
+
+  // Format date helper for transaction history
+  const formatHistoryDate = (dateString: string): string => {
+    if (!dateString) return '-';
+    try {
+      return format(new Date(dateString), 'dd-MM-yyyy HH:mm:ss', { locale: vi });
+    } catch (error) {
+      return '-';
     }
   };
 
@@ -1051,28 +1108,7 @@ export function InstallmentPaymentHistoryModal({
           )}
           
           {activeTab === 'history' && (
-            <div className="p-4 border rounded-md">
-              <h3 className="text-lg font-medium mb-4">Lịch sử giao dịch</h3>
-              
-              {/* Ghi chú */}
-              <div className="mb-6">
-                <div className="flex items-center mb-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                  </svg>
-                  <h3 className="text-lg font-medium">Ghi Chú</h3>
-                </div>
-                <div>
-                  <textarea 
-                    className="w-full border rounded-md p-3 min-h-[100px] text-sm"
-                    placeholder="Nhập ghi chú..."
-                    value={installment?.notes || ''}
-                    readOnly
-                  ></textarea>
-                </div>
-              </div>
-              
+            <div>
               {/* Lịch sử thao tác */}
               <div>
                 <div className="flex items-center mb-2">
@@ -1082,62 +1118,67 @@ export function InstallmentPaymentHistoryModal({
                   </svg>
                   <h3 className="text-lg font-medium">Lịch sử thao tác</h3>
                 </div>
+                <div className="text-sm text-amber-600 italic mb-2">
+                  *Lưu ý : Tiền khác đã được cộng vào tiền ghi có / ghi nợ
+                </div>
                 <div className="border rounded-md overflow-hidden">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-100">
-                      <tr>
-                        <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700 w-16 text-center">STT</th>
-                        <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Ngày</th>
-                        <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Giao dịch viên</th>
-                        <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700 text-right">Số tiền ghi nợ</th>
-                        <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700 text-right">Số tiền ghi có</th>
-                        <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Nội dung</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      <tr>
-                        <td className="px-4 py-3 text-sm text-gray-700 text-center">1</td>
-                        <td className="px-4 py-3 text-sm text-gray-700">{format(new Date(), 'dd-MM-yyyy HH:mm:ss')}</td>
-                        <td className="px-4 py-3 text-sm text-gray-700">Admin</td>
-                        <td className="px-4 py-3 text-sm text-gray-700 text-right text-red-600">
-                          {formatCurrency(installment?.amount_given || 0)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-700 text-right">0</td>
-                        <td className="px-4 py-3 text-sm text-gray-700">Cho vay trả góp</td>
-                      </tr>
-                      {paymentPeriods
-                        .filter(p => isPeriodInDatabase(p))
-                        .map((period, index) => (
-                          <tr key={period.id}>
-                            <td className="px-4 py-3 text-sm text-gray-700 text-center">{index + 2}</td>
-                            <td className="px-4 py-3 text-sm text-gray-700">{period.paymentDate || '-'}</td>
+                  {loadingHistory ? (
+                    <div className="flex justify-center items-center py-10">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700"></div>
+                    </div>
+                  ) : amountHistory.length === 0 ? (
+                    <div className="flex justify-center items-center py-10">
+                      <p className="text-gray-500">Chưa có lịch sử giao dịch</p>
+                    </div>
+                  ) : (
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-100">
+                        <tr>
+                          <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700 w-16 text-center">STT</th>
+                          <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Ngày</th>
+                          <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Giao dịch viên</th>
+                          <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700 text-right">Số tiền ghi nợ</th>
+                          <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700 text-right">Số tiền ghi có</th>
+                          <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Nội dung</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {amountHistory.map((history, index) => (
+                          <tr key={history.id}>
+                            <td className="px-4 py-3 text-sm text-gray-700 text-center">{index + 1}</td>
+                            <td className="px-4 py-3 text-sm text-gray-700">{formatHistoryDate(history.createdAt)}</td>
                             <td className="px-4 py-3 text-sm text-gray-700">Admin</td>
-                            <td className="px-4 py-3 text-sm text-gray-700 text-right">0</td>
-                            <td className="px-4 py-3 text-sm text-gray-700 text-right text-green-600">
-                              {formatCurrency(period.actualAmount || 0)}
+                            <td className="px-4 py-3 text-sm text-gray-700 text-right text-red-600">
+                              {history.debitAmount > 0 ? formatCurrency(history.debitAmount) : ''}
                             </td>
-                            <td className="px-4 py-3 text-sm text-gray-700">Thanh toán kỳ {period.periodNumber}</td>
+                            <td className="px-4 py-3 text-sm text-gray-700 text-right text-blue-600">
+                              {history.creditAmount > 0 ? formatCurrency(history.creditAmount) : ''}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-700">{history.description}</td>
                           </tr>
                         ))}
-                      <tr className="bg-amber-50">
-                        <td colSpan={3} className="px-4 py-2 text-sm font-medium text-right">Tổng Tiền</td>
-                        <td className="px-4 py-2 text-sm font-medium text-right text-red-600">
-                          {formatCurrency(installment?.amount_given || 0)}
-                        </td>
-                        <td className="px-4 py-2 text-sm font-medium text-right text-blue-600">
-                          {formatCurrency(totalPaid)}
-                        </td>
-                        <td></td>
-                      </tr>
-                      <tr className="bg-amber-100">
-                        <td colSpan={3} className="px-4 py-2 text-sm font-medium text-right">Chênh lệch</td>
-                        <td colSpan={2} className="px-4 py-2 text-sm font-medium text-right text-red-600">
-                          {formatCurrency(installment?.amount_given || 0 - totalPaid)}
-                        </td>
-                        <td></td>
-                      </tr>
-                    </tbody>
-                  </table>
+                        <tr className="bg-amber-50">
+                          <td colSpan={3} className="px-4 py-2 text-sm font-medium text-right">Tổng Tiền</td>
+                          <td className="px-4 py-2 text-sm font-medium text-right text-red-600">
+                            {formatCurrency(amountHistory.reduce((sum, h) => sum + h.debitAmount, 0))}
+                          </td>
+                          <td className="px-4 py-2 text-sm font-medium text-right text-blue-600">
+                            {formatCurrency(amountHistory.reduce((sum, h) => sum + h.creditAmount, 0))}
+                          </td>
+                          <td></td>
+                        </tr>
+                        <tr className="bg-amber-100">
+                          <td colSpan={3} className="px-4 py-2 text-sm font-medium text-right">Chênh lệch</td>
+                          <td colSpan={2} className="px-4 py-2 text-sm font-medium text-right">
+                            <span className={amountHistory.reduce((sum, h) => sum + h.creditAmount - h.debitAmount, 0) >= 0 ? 'text-blue-600' : 'text-red-600'}>
+                              {formatCurrency(amountHistory.reduce((sum, h) => sum + h.creditAmount - h.debitAmount, 0))}
+                            </span>
+                          </td>
+                          <td></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               </div>
             </div>
@@ -1200,8 +1241,17 @@ export function InstallmentPaymentHistoryModal({
                       />
                     </div>
                     <div className="ml-3 text-sm text-gray-500">
-                      - Tổng tiền đưa khách trên hợp đồng mới<br />
-                      - Không trừ tiền còn phải trả của HĐ hiện tại vào đây. Hệ thống tự trừ bên dưới
+                      - Tiền đưa khách cho hợp đồng mới<br />
+                      - Tiền này sẽ trừ đi số nợ còn lại của hợp đồng hiện tại
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center bg-gray-50 p-2 rounded border">
+                    <div className="w-36 text-right mr-3 font-medium">
+                      Số nợ còn lại:
+                    </div>
+                    <div className="text-red-600 font-medium">
+                      {formatCurrency(Math.max(0, installmentAmount - totalPaid))}
                     </div>
                   </div>
                   
@@ -1244,7 +1294,7 @@ export function InstallmentPaymentHistoryModal({
                       Tiền khách thực nhận
                     </div>
                     <div className="flex-1 max-w-xs">
-                      {formatCurrency(parseFormattedNumber(rotationDownPayment))} - {formatCurrency(parseFormattedNumber(rotationLoanAmount))} = {formatCurrency(calculateCustomerReceiveAmount())}
+                      {formatCurrency(parseFormattedNumber(rotationDownPayment))} - {formatCurrency(Math.max(0, installmentAmount - totalPaid))} = {formatCurrency(calculateCustomerReceiveAmount())}
                     </div>
                   </div>
                 </div>
