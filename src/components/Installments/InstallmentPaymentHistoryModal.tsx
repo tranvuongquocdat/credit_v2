@@ -24,11 +24,12 @@ import { toast } from '@/components/ui/use-toast';
 import { DatePicker } from '@/components/ui/date-picker';
 
 // Define the tabs for this modal
-export type TabId = 'payment' | 'principal-repayment' | 'close' | 'documents' | 'history' | 'bad-debt';
+export type TabId = 'payment' | 'principal-repayment' | 'close' | 'documents' | 'history' | 'bad-debt' | 'rotate';
 
 export const DEFAULT_INSTALLMENT_TABS = [
   { id: 'payment' as TabId, label: 'Đóng lãi phí' },
   { id: 'close' as TabId, label: 'Đóng HĐ' },
+  { id: 'rotate' as TabId, label: 'Đảo HĐ' },
   { id: 'documents' as TabId, label: 'Chứng từ' },
   { id: 'history' as TabId, label: 'Lịch sử' },
   { id: 'bad-debt' as TabId, label: 'Báo xấu khách hàng' }
@@ -102,6 +103,13 @@ export function InstallmentPaymentHistoryModal({
   const [isEditingDate, setIsEditingDate] = useState(false);
   const [selectedDatePeriodId, setSelectedDatePeriodId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>('');
+  
+  // State for contract rotation
+  const [rotationLoanDate, setRotationLoanDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [rotationLoanAmount, setRotationLoanAmount] = useState<string>("1,000,000");
+  const [rotationDownPayment, setRotationDownPayment] = useState<string>("800,000");
+  const [rotationDuration, setRotationDuration] = useState<string>("10");
+  const [rotationPaymentPeriod, setRotationPaymentPeriod] = useState<string>("6");
   
   // Cập nhật state installment khi initialInstallment thay đổi
   useEffect(() => {
@@ -662,6 +670,118 @@ export function InstallmentPaymentHistoryModal({
     }
   };
 
+  // Helper to parse formatted number input
+  const parseFormattedNumber = (formattedValue: string): number => {
+    return parseInt(formattedValue.replace(/,/g, ''), 10) || 0;
+  };
+  
+  // Helper to format number with commas
+  const formatNumberWithCommas = (value: number): string => {
+    return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  };
+  
+  // Calculate customer receive amount
+  const calculateCustomerReceiveAmount = (): number => {
+    const downPayment = parseFormattedNumber(rotationDownPayment);
+    const loanAmount = parseFormattedNumber(rotationLoanAmount);
+    const remainingToPay = Math.max(0, installmentAmount - totalPaid);
+    
+    // Customer receives: downPayment - loanAmount - remainingToPay
+    return downPayment - loanAmount - remainingToPay;
+  };
+  
+  // Handle rotation loan amount change
+  const handleRotationLoanAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/,/g, '');
+    const numberValue = parseInt(value, 10);
+    
+    if (!isNaN(numberValue)) {
+      setRotationLoanAmount(formatNumberWithCommas(numberValue));
+    } else if (value === "") {
+      setRotationLoanAmount("");
+    }
+  };
+  
+  // Handle rotation down payment change
+  const handleRotationDownPaymentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/,/g, '');
+    const numberValue = parseInt(value, 10);
+    
+    if (!isNaN(numberValue)) {
+      setRotationDownPayment(formatNumberWithCommas(numberValue));
+    } else if (value === "") {
+      setRotationDownPayment("");
+    }
+  };
+  
+  // Handler for rotating the contract (creating a new one and closing the current)
+  const handleRotateContract = async () => {
+    if (!installment?.id || !installment?.customer_id) return;
+    
+    try {
+      // First close the current contract by marking all periods as paid and updating status
+      const { saveInstallmentPayment, updateInstallmentStatus } = await import('@/lib/installmentPayment');
+      const { createInstallment } = await import('@/lib/installment');
+      
+      // Mark all remaining periods as paid
+      const allPeriods = calculateCombinedPaymentPeriods();
+      const periodsToUpdate = allPeriods.filter(p => !isPeriodInDatabase(p));
+      
+      for (const periodToUpdate of periodsToUpdate) {
+        const isCalculatedPeriod = periodToUpdate.id.startsWith('calculated-');
+        
+        await saveInstallmentPayment(
+          installment.id,
+          periodToUpdate,
+          periodToUpdate.expectedAmount,
+          isCalculatedPeriod
+        );
+      }
+      
+      // Close the current contract
+      await updateInstallmentStatus(installment.id, InstallmentStatus.CLOSED);
+      
+      // Create a new contract
+      const newContract = {
+        customer_id: installment.customer_id,
+        employee_id: installment.employee_id,
+        contract_code: `${installment.contract_code}-R`, // Add "R" suffix for rotated
+        down_payment: parseFormattedNumber(rotationDownPayment),
+        installment_amount: parseFormattedNumber(rotationLoanAmount),
+        loan_period: parseInt(rotationDuration, 10),
+        payment_period: parseInt(rotationPaymentPeriod, 10),
+        loan_date: rotationLoanDate,
+        notes: `Đảo từ hợp đồng ${installment.contract_code}. Khách thực nhận: ${formatCurrency(calculateCustomerReceiveAmount())}`,
+        status: InstallmentStatus.ON_TIME
+      };
+      
+      const { data, error } = await createInstallment(newContract);
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Show success message
+      toast({
+        title: "Thành công",
+        description: "Đã đảo hợp đồng thành công!",
+      });
+      
+      // Trigger reload if callback provided
+      if (onContractStatusChange) {
+        onContractStatusChange();
+      }
+      
+    } catch (error) {
+      console.error('Error rotating contract:', error);
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: "Có lỗi xảy ra khi đảo hợp đồng. Vui lòng thử lại."
+      });
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent 
@@ -1018,6 +1138,121 @@ export function InstallmentPaymentHistoryModal({
                       </tr>
                     </tbody>
                   </table>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {activeTab === 'rotate' && (
+            <div className="p-4 border rounded-md">
+              <div>
+                <p className="mb-4">
+                  - Đảo Hợp Đồng là chức năng cho phép bạn đóng HĐ hiện tại và tạo nhanh 1 hợp đồng mới<br />
+                  - Hệ thống sẽ tự tính số tiền khách thực nhận về
+                </p>
+                
+                <div className="font-medium text-lg mb-2">Vui lòng nhập thông tin cho HĐ Trả Góp Mới:</div>
+                
+                <div className="space-y-4">
+                  <div className="flex items-center">
+                    <div className="w-36 text-right mr-3">
+                      <label className="text-sm font-medium">Ngày vay <span className="text-red-500">*</span></label>
+                    </div>
+                    <div className="flex-1 max-w-xs">
+                      <DatePicker
+                        value={rotationLoanDate}
+                        onChange={(date) => setRotationLoanDate(date)}
+                        className="w-full"
+                      />
+                    </div>
+                    <div className="ml-3 text-sm text-gray-500">
+                      - Ngày vay của hợp đồng mới
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <div className="w-36 text-right mr-3">
+                      <label className="text-sm font-medium">Số tiền vay <span className="text-red-500">*</span></label>
+                    </div>
+                    <div className="flex-1 max-w-xs">
+                      <input 
+                        type="text" 
+                        className="border rounded p-2 w-full" 
+                        value={rotationLoanAmount}
+                        onChange={handleRotationLoanAmountChange}
+                      />
+                    </div>
+                    <div className="ml-3 text-sm text-gray-500">
+                      - Tổng tiền vay của hợp đồng mới
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <div className="w-36 text-right mr-3">
+                      <label className="text-sm font-medium">Tiền đưa khách <span className="text-red-500">*</span></label>
+                    </div>
+                    <div className="flex-1 max-w-xs">
+                      <input 
+                        type="text" 
+                        className="border rounded p-2 w-full" 
+                        value={rotationDownPayment}
+                        onChange={handleRotationDownPaymentChange}
+                      />
+                    </div>
+                    <div className="ml-3 text-sm text-gray-500">
+                      - Tổng tiền đưa khách trên hợp đồng mới<br />
+                      - Không trừ tiền còn phải trả của HĐ hiện tại vào đây. Hệ thống tự trừ bên dưới
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <div className="w-36 text-right mr-3">
+                      <label className="text-sm font-medium">Thời gian vay <span className="text-red-500">*</span></label>
+                    </div>
+                    <div className="flex-1 max-w-xs">
+                      <input 
+                        type="text" 
+                        className="border rounded p-2 w-full" 
+                        value={rotationDuration}
+                        onChange={(e) => setRotationDuration(e.target.value)}
+                      />
+                    </div>
+                    <div className="ml-3 text-sm text-gray-500">
+                      Ngày =&gt; ( {parseFormattedNumber(rotationLoanAmount) / parseInt(rotationDuration, 10) || 0 ? formatCurrency(parseFormattedNumber(rotationLoanAmount) / parseInt(rotationDuration, 10)) : formatCurrency(0)}/1 ngày )
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <div className="w-36 text-right mr-3">
+                      <label className="text-sm font-medium">Số ngày đóng tiền <span className="text-red-500">*</span></label>
+                    </div>
+                    <div className="flex-1 max-w-xs">
+                      <input 
+                        type="text" 
+                        className="border rounded p-2 w-full" 
+                        value={rotationPaymentPeriod}
+                        onChange={(e) => setRotationPaymentPeriod(e.target.value)}
+                      />
+                    </div>
+                    <div className="ml-3 text-sm text-gray-500">
+                      (VD : 3 ngày đóng 1 lần thì điền số 3 )
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center font-medium text-lg text-red-600">
+                    <div className="w-36 text-right mr-3">
+                      Tiền khách thực nhận
+                    </div>
+                    <div className="flex-1 max-w-xs">
+                      {formatCurrency(parseFormattedNumber(rotationDownPayment))} - {formatCurrency(parseFormattedNumber(rotationLoanAmount))} = {formatCurrency(calculateCustomerReceiveAmount())}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="mt-6 flex justify-center">
+                  <Button className="bg-blue-600 hover:bg-blue-700 text-white px-8" onClick={handleRotateContract}>
+                    Đảo Hợp Đồng
+                  </Button>
                 </div>
               </div>
             </div>
