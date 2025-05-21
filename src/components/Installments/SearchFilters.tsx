@@ -49,7 +49,7 @@ export function SearchFilters({
     start_date: '',
     end_date: '',
     duration: undefined,
-    status: ''
+    status: 'on_time'
   });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -85,7 +85,7 @@ export function SearchFilters({
       start_date: '',
       end_date: '',
       duration: undefined,
-      status: ''
+      status: 'on_time'
     });
     onReset();
   };

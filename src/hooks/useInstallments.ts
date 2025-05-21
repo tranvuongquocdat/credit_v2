@@ -14,7 +14,9 @@ export function useInstallments() {
   const [totalItems, setTotalItems] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  const [filters, setFilters] = useState<InstallmentFilters>({});
+  const [filters, setFilters] = useState<InstallmentFilters>({
+    status: InstallmentStatus.ON_TIME // Mặc định hiển thị các hợp đồng đang vay
+  });
   const { toast } = useToast();
 
   const fetchInstallments = async () => {
@@ -54,7 +56,9 @@ export function useInstallments() {
 
   // Handle reset filters
   const handleReset = () => {
-    setFilters({});
+    setFilters({
+      status: InstallmentStatus.ON_TIME // Khi reset vẫn giữ lại trạng thái mặc định là đang vay
+    });
     setCurrentPage(1);
   };
 
