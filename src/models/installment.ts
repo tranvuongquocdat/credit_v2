@@ -7,7 +7,8 @@ export enum InstallmentStatus {
   BAD_DEBT = "bad_debt",
   CLOSED = "closed",
   DELETED = "deleted",
-  DUE_TOMORROW = "due_tomorrow"
+  DUE_TOMORROW = "due_tomorrow",
+  FINISHED = "finished"
 }
 
 // Database model - maps directly to the database table

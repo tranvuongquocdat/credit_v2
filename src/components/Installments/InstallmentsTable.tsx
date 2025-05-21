@@ -1,4 +1,4 @@
-import { InstallmentWithCustomer } from "@/models/installment";
+import { InstallmentWithCustomer, InstallmentStatus } from "@/models/installment";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -8,13 +8,12 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { Edit2Icon, MoreVerticalIcon, TrashIcon, AlertTriangleIcon, CalendarIcon, ClockIcon, FileTextIcon, DollarSignIcon } from "lucide-react";
+import { Edit2Icon, MoreVerticalIcon, TrashIcon, AlertTriangleIcon, CalendarIcon, ClockIcon, FileTextIcon, DollarSignIcon, UnlockIcon } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import Spinner from "@/components/ui/spinner";
 import { useEffect, useState } from "react";
 import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
-import { getInstallmentPaymentPeriods } from "@/lib/installmentPayment";
-import { InstallmentStatus } from "@/models/installment";
+import { getInstallmentPaymentPeriods, updateInstallmentStatus } from "@/lib/installmentPayment";
 
 // Định nghĩa cấu trúc dữ liệu mở rộng bao gồm thông tin kỳ thanh toán
 interface InstallmentWithPayments extends InstallmentWithCustomer {
@@ -115,6 +114,33 @@ export function InstallmentsTable({
     
     loadPaymentData();
   }, [installments]);
+
+  // Add function to handle unlocking a closed installment
+  const handleUnlockInstallment = async (installment: InstallmentWithPayments) => {
+    try {
+      const { data, error } = await updateInstallmentStatus(installment.id, InstallmentStatus.FINISHED);
+      
+      if (error) {
+        console.error("Error unlocking installment:", error);
+        return;
+      }
+      
+      // Update the status in the local state
+      const updatedInstallments = installmentsWithPayments.map(item => {
+        if (item.id === installment.id) {
+          return {
+            ...item,
+            status: InstallmentStatus.FINISHED
+          };
+        }
+        return item;
+      });
+      
+      setInstallmentsWithPayments(updatedInstallments);
+    } catch (err) {
+      console.error("Error unlocking installment:", err);
+    }
+  };
 
   if (isLoading || loadingPayments) {
     return (
@@ -218,17 +244,37 @@ export function InstallmentsTable({
               const paymentPercentage = totalAmount > 0 ? (totalPaid / totalAmount) * 100 : 0;
               
               // Update status based on payment data
-              if (allPaid) {
-                installment.status = InstallmentStatus.CLOSED;
+              if (installment.status === InstallmentStatus.CLOSED) {
+                // Keep CLOSED status if it's already set in the database
+                // Do nothing, keep it CLOSED
               } else if (installment.status === InstallmentStatus.DELETED) {
                 // Keep DELETED status if it was set manually
+                // Do nothing, keep it DELETED
+              } else if (installment.status === InstallmentStatus.FINISHED) {
+                // Keep FINISHED status if it was set via unlock contract
+                // Do nothing, keep it FINISHED
               } else if (longestOverdueDays >= 60) { // More than 60 days overdue = BAD_DEBT
                 installment.status = InstallmentStatus.BAD_DEBT;
               } else if (hasOverduePayments) {
-                // If overdue and has paid more than 70%, consider it LATE_INTEREST
-                // Otherwise, it's OVERDUE
-                if (paymentPercentage > 70) {
-                  installment.status = InstallmentStatus.LATE_INTEREST;
+                // Find the latest payment period
+                const latestPeriod = installment.payments
+                  .filter(p => p.actualAmount && p.actualAmount > 0)
+                  .sort((a, b) => b.periodNumber - a.periodNumber)[0];
+                
+                if (latestPeriod && latestPeriod.paymentDate) {
+                  // Convert paymentDate string (DD/MM/YYYY) to Date object
+                  const [day, month, year] = latestPeriod.paymentDate.split('/').map(Number);
+                  const latestPaymentDate = new Date(year, month - 1, day); // month is 0-indexed in JS Date
+                  
+                  // If payment was made but too late, mark as LATE_INTEREST
+                  const dueDateParts = latestPeriod.dueDate.split('/').map(Number);
+                  const dueDate = new Date(dueDateParts[2], dueDateParts[1] - 1, dueDateParts[0]);
+                  
+                  if (latestPaymentDate > dueDate) {
+                    installment.status = InstallmentStatus.LATE_INTEREST;
+                  } else {
+                    installment.status = InstallmentStatus.OVERDUE;
+                  }
                 } else {
                   installment.status = InstallmentStatus.OVERDUE;
                 }
@@ -387,7 +433,16 @@ export function InstallmentsTable({
                         <CalendarIcon className="h-4 w-4 text-gray-500" />
                       </Button>
                     )}
-                    {onShowPaymentActions && (
+                    {installment.status === InstallmentStatus.CLOSED ? (
+                      <Button 
+                        variant="ghost" 
+                        className="h-8 w-8 p-0" 
+                        onClick={() => handleUnlockInstallment(installment)}
+                        title="Mở khoá hợp đồng"
+                      >
+                        <UnlockIcon className="h-4 w-4 text-amber-500" />
+                      </Button>
+                    ) : onShowPaymentActions && (
                       <Button 
                         variant="ghost" 
                         className="h-8 w-8 p-0" 
@@ -421,7 +476,11 @@ export function InstallmentsTable({
                             Lịch sử thanh toán
                           </DropdownMenuItem>
                         )}
-                        {onShowPaymentActions && (
+                        {installment.status === InstallmentStatus.CLOSED ? (
+                          <DropdownMenuItem onClick={() => handleUnlockInstallment(installment)}>
+                            Mở khoá hợp đồng
+                          </DropdownMenuItem>
+                        ) : onShowPaymentActions && (
                           <DropdownMenuItem onClick={() => onShowPaymentActions(installment)}>
                             Thao tác thanh toán
                           </DropdownMenuItem>

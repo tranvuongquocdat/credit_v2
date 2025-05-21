@@ -77,12 +77,14 @@ interface InstallmentPaymentHistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   installment: InstallmentWithCustomer;
+  onContractStatusChange?: () => void;
 }
 
 export function InstallmentPaymentHistoryModal({
   isOpen,
   onClose,
-  installment: initialInstallment
+  installment: initialInstallment,
+  onContractStatusChange
 }: InstallmentPaymentHistoryModalProps) {
   // State variables
   const [installment, setInstallment] = useState<InstallmentWithCustomer>(initialInstallment);
@@ -597,6 +599,69 @@ export function InstallmentPaymentHistoryModal({
     }
   };
 
+  // Handler for closing the installment
+  const handleCloseInstallment = async () => {
+    if (!installment?.id) return;
+    
+    try {
+      // Import necessary functions
+      const { 
+        saveInstallmentPayment,
+        updateInstallmentStatus
+      } = await import('@/lib/installmentPayment');
+      
+      // Get all periods including calculated ones
+      const allPeriods = calculateCombinedPaymentPeriods();
+      
+      // Find periods that need to be marked as paid
+      const periodsToUpdate = allPeriods.filter(p => !isPeriodInDatabase(p));
+      
+      if (periodsToUpdate.length > 0) {
+        // Mark all remaining periods as paid
+        for (const periodToUpdate of periodsToUpdate) {
+          const isCalculatedPeriod = periodToUpdate.id.startsWith('calculated-');
+          
+          await saveInstallmentPayment(
+            installment.id,
+            periodToUpdate,
+            periodToUpdate.expectedAmount,
+            isCalculatedPeriod
+          );
+        }
+      }
+      
+      // Update installment status to closed
+      await updateInstallmentStatus(installment.id, InstallmentStatus.CLOSED);
+      
+      // Refresh data
+      const { data, error } = await getInstallmentPaymentPeriods(installment.id);
+      if (!error && data) {
+        setPaymentPeriods(data);
+      }
+      
+      // Reload installment info to get updated status
+      await reloadInstallmentInfo();
+      
+      // Trigger page table reload if callback provided
+      if (onContractStatusChange) {
+        onContractStatusChange();
+      }
+      
+      toast({
+        title: "Thành công",
+        description: "Hợp đồng đã được đóng thành công!",
+      });
+      
+    } catch (error) {
+      console.error('Error closing installment:', error);
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: "Có lỗi xảy ra khi đóng hợp đồng. Vui lòng thử lại."
+      });
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent 
@@ -797,8 +862,17 @@ export function InstallmentPaymentHistoryModal({
           {activeTab === 'close' && (
             <div className="p-4 border rounded-md">
               <h3 className="text-lg font-medium mb-4">Đóng hợp đồng</h3>
-              <div className="text-center py-10 border rounded-md bg-gray-50">
-                <p className="text-gray-500">Tính năng đang được phát triển</p>
+              <div className="bg-red-50 border border-red-200 rounded-md p-4 text-center">
+                <div className="text-lg mb-2">Tổng số tiền phải thanh toán để đóng hợp đồng:</div>
+                <div className="text-red-600 font-medium">
+                  {formatCurrency(Math.max(0, installmentAmount - totalPaid))}
+                </div>
+              </div>
+              
+              <div className="mt-6 flex justify-center">
+                <Button className="bg-blue-600 hover:bg-blue-700 text-white px-8" onClick={handleCloseInstallment}>
+                  Đóng HĐ
+                </Button>
               </div>
             </div>
           )}

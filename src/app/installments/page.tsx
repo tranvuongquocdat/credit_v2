@@ -37,6 +37,7 @@ const statusMap: Record<string, { label: string, color: string }> = {
   [InstallmentStatus.CLOSED]: { label: 'Đã đóng', color: 'bg-blue-100 text-blue-800 border-blue-200' },
   [InstallmentStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800 border-gray-200' },
   [InstallmentStatus.DUE_TOMORROW]: { label: 'Ngày mai đóng', color: 'bg-amber-100 text-amber-800 border-amber-200' },
+  [InstallmentStatus.FINISHED]: { label: 'Hoàn thành', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
 };
 
 export default function InstallmentsPage() {
@@ -247,6 +248,10 @@ export default function InstallmentsPage() {
             isOpen={isPaymentActionsModalOpen}
             onClose={() => setIsPaymentActionsModalOpen(false)}
             installment={selectedInstallmentForPayment}
+            onContractStatusChange={() => {
+              refetch();
+              setIsPaymentActionsModalOpen(false);
+            }}
           />
         )}
         

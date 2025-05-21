@@ -1,3 +1,4 @@
+import { InstallmentStatus } from '@/models/installment';
 import { supabase } from './supabase';
 import { 
   InstallmentPaymentPeriodDB,
@@ -384,4 +385,31 @@ function transformPaymentPeriod(
     isOverdue,
     daysOverdue
   };
+}
+
+/**
+ * Update the status of an installment
+ */
+export async function updateInstallmentStatus(installmentId: string, status: InstallmentStatus) {
+  try {
+    const { data, error } = await supabase
+      .from('installments')
+      .update({ status: status.toString() as any })
+      .eq('id', installmentId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    return {
+      data,
+      error: null
+    };
+  } catch (error) {
+    logError('Error updating installment status', error);
+    return {
+      data: null,
+      error
+    };
+  }
 } 
