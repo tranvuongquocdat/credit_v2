@@ -47,9 +47,45 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Kiểm tra nếu người dùng đã đăng nhập và đang truy cập trang đăng nhập/đăng ký
-  if (user && (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup')) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+  // Kiểm tra trạng thái ban của người dùng nếu đã đăng nhập
+  if (user) {
+    try {
+      // Kiểm tra trạng thái người dùng trong bảng profiles hoặc user_status
+      const { data: userStatus, error: statusError } = await supabase
+        .from('profiles')
+        .select('is_banned')
+        .eq('id', user.id)
+        .single();
+      
+      if (statusError) {
+        console.error("Error checking user ban status:", statusError);
+      } else if (userStatus?.is_banned) {
+        // Người dùng đã bị ban, đăng xuất họ
+        console.log("User is banned, signing out:", user.id);
+        await supabase.auth.signOut();
+        
+        // Xóa tất cả cookies liên quan đến phiên đăng nhập
+        const cookies = request.cookies.getAll();
+        cookies.forEach(cookie => {
+          if (cookie.name.includes('supabase') || cookie.name.includes('sb')) {
+            response.cookies.set({
+              name: cookie.name,
+              value: '',
+              expires: new Date(0),
+            });
+          }
+        });
+        
+        return NextResponse.redirect(new URL('/login?error=account_banned', request.url));
+      }
+    } catch (err) {
+      console.error("Error in ban check:", err);
+    }
+
+    // Kiểm tra nếu người dùng đã đăng nhập và đang truy cập trang đăng nhập/đăng ký
+    if (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup') {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
   }
 
   return response;

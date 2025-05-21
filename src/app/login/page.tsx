@@ -1,7 +1,7 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { signIn } from '../../lib/auth';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
 export default function Login() {
@@ -10,6 +10,15 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    // Kiểm tra xem có thông báo lỗi từ URL không
+    const errorParam = searchParams.get('error');
+    if (errorParam === 'account_banned') {
+      setError('Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên để biết thêm chi tiết.');
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,7 +28,12 @@ export default function Login() {
     try {
       const { error } = await signIn(`${username}@creditapp.local`, password);
       if (error) {
-        setError(error.message || 'Đã có lỗi xảy ra khi đăng nhập');
+        // Kiểm tra nếu là lỗi banned
+        if (error.message.includes('banned') || error.message.includes('deactivated')) {
+          setError('Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên để biết thêm chi tiết.');
+        } else {
+          setError(error.message || 'Đã có lỗi xảy ra khi đăng nhập');
+        }
       } else {
         router.refresh();
         router.push('/dashboard');
@@ -80,7 +94,19 @@ export default function Login() {
             {loading ? 'Đang đăng nhập...' : 'Đăng Nhập'}
           </button>
         </form>
-        {error && <p style={{ color: 'red', marginTop: '15px', textAlign: 'center' }}>{error}</p>}
+        {error && (
+          <div style={{ 
+            backgroundColor: '#ffeded', 
+            border: '1px solid #f5c6cb', 
+            color: '#721c24', 
+            padding: '10px', 
+            borderRadius: '5px', 
+            marginTop: '15px', 
+            textAlign: 'center' 
+          }}>
+            {error}
+          </div>
+        )}
         <p style={{ marginTop: '20px', textAlign: 'center' }}>
           Chưa có tài khoản? <a href="/signup" style={{ color: '#007bff', textDecoration: 'none' }}>Đăng ký</a>
         </p>
