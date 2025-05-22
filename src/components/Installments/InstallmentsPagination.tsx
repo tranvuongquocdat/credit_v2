@@ -6,6 +6,7 @@ import {
   PaginationNext,
   PaginationPrevious
 } from '@/components/ui/pagination';
+import { useStore } from '@/contexts/StoreContext';
 
 interface InstallmentsPaginationProps {
   currentPage: number;
@@ -22,6 +23,9 @@ export function InstallmentsPagination({
   itemsPerPage,
   onPageChange,
 }: InstallmentsPaginationProps) {
+  // Get store context to display store name in pagination info
+  const { currentStore } = useStore();
+
   // Generate an array of page numbers to display
   const generatePagination = () => {
     // Always show first page, last page, current page, and pages adjacent to current
@@ -56,7 +60,7 @@ export function InstallmentsPagination({
   const pagination = generatePagination();
 
   // Calculate range of items being displayed
-  const startItem = (currentPage - 1) * itemsPerPage + 1;
+  const startItem = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
   const endItem = Math.min(startItem + itemsPerPage - 1, totalItems);
 
   const handlePrevious = () => {
@@ -72,63 +76,75 @@ export function InstallmentsPagination({
   };
 
   return (
-    <div className="flex justify-between items-center mb-4">
+    <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-3">
       <div className="text-sm text-gray-500">
-        Hiển thị {totalItems > 0 ? startItem : 0} đến {endItem} trong tổng số {totalItems} hợp đồng
+        {totalItems > 0 ? (
+          <>
+            Hiển thị <span className="font-medium">{startItem}</span> đến <span className="font-medium">{endItem}</span> trong tổng số <span className="font-medium">{totalItems}</span> hợp đồng
+            {currentStore && <span> tại <span className="font-medium text-primary">{currentStore.name}</span></span>}
+          </>
+        ) : (
+          <>
+            Không có hợp đồng nào
+            {currentStore && <span> tại <span className="font-medium text-primary">{currentStore.name}</span></span>}
+          </>
+        )}
       </div>
       
-      <Pagination>
-        <PaginationContent>
-          <PaginationItem>
-            <PaginationPrevious 
-              href="#" 
-              onClick={(e) => {
-                e.preventDefault();
-                handlePrevious();
-              }}
-              className={currentPage === 1 ? 'pointer-events-none opacity-50' : ''}
-            />
-          </PaginationItem>
-          
-          {pagination.map((page, index) => {
-            if (page === "ellipsis") {
+      {totalPages > 1 && (
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious 
+                href="#" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  handlePrevious();
+                }}
+                className={currentPage === 1 ? 'pointer-events-none opacity-50' : ''}
+              />
+            </PaginationItem>
+            
+            {pagination.map((page, index) => {
+              if (page === "ellipsis") {
+                return (
+                  <PaginationItem key={`ellipsis-${index}`}>
+                    <PaginationLink href="#" onClick={(e) => e.preventDefault()} className="pointer-events-none">
+                      ...
+                    </PaginationLink>
+                  </PaginationItem>
+                );
+              }
+              
               return (
-                <PaginationItem key={`ellipsis-${index}`}>
-                  <PaginationLink href="#" onClick={(e) => e.preventDefault()} className="pointer-events-none">
-                    ...
+                <PaginationItem key={page}>
+                  <PaginationLink 
+                    href="#" 
+                    isActive={page === currentPage}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onPageChange(page as number);
+                    }}
+                  >
+                    {page}
                   </PaginationLink>
                 </PaginationItem>
               );
-            }
+            })}
             
-            return (
-              <PaginationItem key={page}>
-                <PaginationLink 
-                  href="#" 
-                  isActive={page === currentPage}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onPageChange(page as number);
-                  }}
-                >
-                  {page}
-                </PaginationLink>
-              </PaginationItem>
-            );
-          })}
-          
-          <PaginationItem>
-            <PaginationNext 
-              href="#" 
-              onClick={(e) => {
-                e.preventDefault();
-                handleNext();
-              }}
-              className={currentPage === totalPages ? 'pointer-events-none opacity-50' : ''}
-            />
-          </PaginationItem>
-        </PaginationContent>
-      </Pagination>
+            <PaginationItem>
+              <PaginationNext 
+                href="#" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleNext();
+                }}
+                className={currentPage === totalPages ? 'pointer-events-none opacity-50' : ''}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      )}
     </div>
   );
 }

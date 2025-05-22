@@ -609,4 +609,31 @@ export async function bulkSaveInstallmentPayments(
       error
     };
   }
+}
+
+/**
+ * Check if an installment has any paid periods
+ */
+export async function hasInstallmentAnyPayments(installmentId: string) {
+  try {
+    const { data, error, count } = await supabase
+      .from('installment_payment_period')
+      .select('id', { count: 'exact' })
+      .eq('installment_id', installmentId)
+      .not('actual_amount', 'is', null)
+      .gt('actual_amount', 0);
+    
+    if (error) throw error;
+    
+    return {
+      hasPaidPeriods: (count || 0) > 0,
+      error: null
+    };
+  } catch (error) {
+    logError('Error checking if installment has payments', error);
+    return {
+      hasPaidPeriods: false,
+      error
+    };
+  }
 } 

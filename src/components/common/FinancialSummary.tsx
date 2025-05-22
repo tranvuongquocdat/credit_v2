@@ -1,20 +1,27 @@
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, StoreIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { getStoreFinancialData, StoreFinancialData } from '@/lib/store';
+import { useStore } from '@/contexts/StoreContext';
 
 interface FinancialSummaryProps {
   fundStatus?: StoreFinancialData; // Optional: cho phép truyền từ ngoài vào
   onRefresh?: () => void;          // Optional: cho phép truyền từ ngoài vào
-  storeId?: string;                // ID của cửa hàng (nếu không truyền, mặc định là '1')
+  storeId?: string;                // ID của cửa hàng (nếu không truyền, lấy từ context)
   autoFetch?: boolean;             // Có tự động lấy dữ liệu không (mặc định là true)
 }
 
 export function FinancialSummary({ 
   fundStatus: externalFundStatus, 
   onRefresh: externalOnRefresh,
-  storeId = '1',
+  storeId,
   autoFetch = true
 }: FinancialSummaryProps) {
+  // Get current store from context
+  const { currentStore } = useStore();
+  
+  // Use storeId from props if provided, otherwise use it from context
+  const currentStoreId = storeId || currentStore?.id || '1';
+  
   // State nội bộ khi không có dữ liệu từ ngoài vào
   const [internalFundStatus, setInternalFundStatus] = useState<StoreFinancialData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -25,7 +32,7 @@ export function FinancialSummary({
     
     setLoading(true);
     try {
-      const data = await getStoreFinancialData(storeId);
+      const data = await getStoreFinancialData(currentStoreId);
       setInternalFundStatus(data);
     } catch (error) {
       console.error('Error fetching financial data:', error);
@@ -39,7 +46,7 @@ export function FinancialSummary({
     if (autoFetch && !externalFundStatus) {
       fetchData();
     }
-  }, [storeId, autoFetch, externalFundStatus]);
+  }, [currentStoreId, autoFetch, externalFundStatus]);
   
   // Sử dụng dữ liệu từ props nếu có, nếu không thì dùng state nội bộ
   const fundStatus = externalFundStatus || internalFundStatus;
@@ -68,61 +75,63 @@ export function FinancialSummary({
   }
   
   return (
-    <div className="mb-4 flex py-1">
-      <div className="flex-1 text-center px-2">
-        <div className="flex items-center justify-center text-gray-500 text-sm mb-1">
-          <span>Quỹ tiền mặt</span>
-          <RefreshCw 
-            className="ml-1 h-3.5 w-3.5 cursor-pointer hover:text-blue-500" 
-            onClick={onRefresh}
-          />
+    <div className="mb-4">
+      <div className="flex py-1">
+        <div className="flex-1 text-center px-2">
+          <div className="flex items-center justify-center text-gray-500 text-sm mb-1">
+            <span>Quỹ tiền mặt</span>
+            <RefreshCw 
+              className="ml-1 h-3.5 w-3.5 cursor-pointer hover:text-blue-500" 
+              onClick={onRefresh}
+            />
+          </div>
+          <div className="text-base font-semibold text-gray-800">
+            {Math.floor(fundStatus.totalFund).toLocaleString()}
+          </div>
         </div>
-        <div className="text-base font-semibold text-gray-800">
-          {Math.floor(fundStatus.totalFund).toLocaleString()}
+        
+        <div className="w-px bg-gray-200 mx-2"></div>
+        
+        <div className="flex-1 text-center px-2">
+          <div className="text-gray-500 text-sm mb-1">
+            <span>Tiền cho vay</span>
+          </div>
+          <div className="text-base font-semibold text-gray-800">
+            {Math.floor(fundStatus.totalLoan).toLocaleString()}
+          </div>
         </div>
-      </div>
-      
-      <div className="w-px bg-gray-200 mx-2"></div>
-      
-      <div className="flex-1 text-center px-2">
-        <div className="text-gray-500 text-sm mb-1">
-          <span>Tiền cho vay</span>
+        
+        <div className="w-px bg-gray-200 mx-2"></div>
+        
+        <div className="flex-1 text-center px-2">
+          <div className="text-gray-500 text-sm mb-1">
+            <span>Tiền nợ</span>
+          </div>
+          <div className="text-base font-semibold text-gray-800">
+            {Math.floor(fundStatus.oldDebt).toLocaleString()}
+          </div>
         </div>
-        <div className="text-base font-semibold text-gray-800">
-          {Math.floor(fundStatus.totalLoan).toLocaleString()}
+        
+        <div className="w-px bg-gray-200 mx-2"></div>
+        
+        <div className="flex-1 text-center px-2">
+          <div className="text-gray-500 text-sm mb-1">
+            <span>Lãi phí dự kiến</span>
+          </div>
+          <div className="text-base font-semibold text-gray-800">
+            {Math.floor(fundStatus.profit).toLocaleString()}
+          </div>
         </div>
-      </div>
-      
-      <div className="w-px bg-gray-200 mx-2"></div>
-      
-      <div className="flex-1 text-center px-2">
-        <div className="text-gray-500 text-sm mb-1">
-          <span>Tiền nợ</span>
-        </div>
-        <div className="text-base font-semibold text-gray-800">
-          {Math.floor(fundStatus.oldDebt).toLocaleString()}
-        </div>
-      </div>
-      
-      <div className="w-px bg-gray-200 mx-2"></div>
-      
-      <div className="flex-1 text-center px-2">
-        <div className="text-gray-500 text-sm mb-1">
-          <span>Lãi phí dự kiến</span>
-        </div>
-        <div className="text-base font-semibold text-gray-800">
-          {Math.floor(fundStatus.profit).toLocaleString()}
-        </div>
-      </div>
-      
-      <div className="w-px bg-gray-200 mx-2"></div>
-      
-      <div className="flex-1 text-center px-2">
-        <div className="text-gray-500 text-sm mb-1">
-          <span>Lãi phí đã thu</span>
-        </div>
-        <div className="text-base font-semibold text-gray-800">
-          {Math.floor((fundStatus.collectedInterest || fundStatus.profit * 0.4)).toLocaleString()}
+        
+        <div className="w-px bg-gray-200 mx-2"></div>
+        
+        <div className="flex-1 text-center px-2">
+          <div className="text-gray-500 text-sm mb-1">
+            <span>Lãi phí đã thu</span>
+          </div>
+          <div className="text-base font-semibold text-gray-800">
+            {Math.floor((fundStatus.collectedInterest || fundStatus.profit * 0.4)).toLocaleString()}
+          </div>
         </div>
       </div>
     </div>

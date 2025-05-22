@@ -230,8 +230,26 @@ export async function getInstallmentById(id: string) {
 // Create a new installment
 export async function createInstallment(installment: CreateInstallmentParams) {
   try {
-    // Import recordContractCreation
+    // Import recordContractCreation and updateStoreCashFund
     const { recordContractCreation } = await import('./installmentAmountHistory');
+    const { updateStoreCashFund } = await import('./store');
+    
+    // Get employee info to find store_id
+    let storeId = '1'; // Default store_id
+    try {
+      const { data: employeeData } = await supabase
+        .from('employees')
+        .select('store_id')
+        .eq('id', installment.employee_id)
+        .single();
+      
+      if (employeeData && employeeData.store_id) {
+        storeId = employeeData.store_id;
+      }
+    } catch (err) {
+      console.error('Error getting employee store_id:', err);
+      // Continue with default store_id
+    }
 
     // Convert UI model to database model
     const newInstallment = {
@@ -268,6 +286,19 @@ export async function createInstallment(installment: CreateInstallmentParams) {
     const loanPeriod = data.loan_period || 0;
     const paymentPeriod = data.payment_period || 30;
     const loanDate = data.loan_date || new Date().toISOString();
+    
+    // Deduct down payment from store's cash fund
+    try {
+      // Negative amount to subtract from cash fund
+      const { success, error: fundError } = await updateStoreCashFund(storeId, -downPayment);
+      if (!success) {
+        console.error('Error updating store cash fund:', fundError);
+        // Continue anyway
+      }
+    } catch (fundError) {
+      console.error('Error updating store cash fund:', fundError);
+      // Continue anyway
+    }
     
     // Transform result to match UI requirements
     const result: Installment = {

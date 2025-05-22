@@ -1,18 +1,25 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { InstallmentStatus } from '@/models/installment';
-import { StoreFinancialData } from '@/lib/store';
+import { StoreFinancialData, getStoreFinancialData } from '@/lib/store';
+import { useStore } from '@/contexts/StoreContext';
 
 export function useInstallmentsSummary() {
   const [data, setData] = useState<StoreFinancialData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  
+  // Get current store from context
+  const { currentStore } = useStore();
 
   const fetchData = async () => {
     setLoading(true);
     setError(null);
     
     try {
+      // First, get the store financial data for cash_fund
+      const storeFinancialData = await getStoreFinancialData(currentStore?.id || '1');
+      
       // Lấy tháng và năm hiện tại
       const now = new Date();
       const currentMonth = now.getMonth() + 1; // Tháng bắt đầu từ 0
@@ -20,15 +27,16 @@ export function useInstallmentsSummary() {
       const firstDayOfMonth = `${currentYear}-${String(currentMonth).padStart(2, '0')}-01`;
       const lastDayOfMonth = new Date(currentYear, currentMonth, 0).toISOString().split('T')[0];
       
-      // Lấy tất cả hợp đồng chưa bị xóa và chưa đóng
-      const { data: activeInstallments, error: installmentsError } = await supabase
-        .from('installments')
+      // Lấy tất cả hợp đồng chưa bị xóa, chưa đóng và thuộc cửa hàng hiện tại
+      let query = supabase
+        .from('installments_by_store')
         .select(`
           id,
           contract_code,
           down_payment,
           installment_amount,
           status,
+          store_id,
           installment_payment_period (
             id,
             period_number,
@@ -40,16 +48,37 @@ export function useInstallmentsSummary() {
         .neq('status', InstallmentStatus.DELETED)
         .neq('status', InstallmentStatus.CLOSED);
       
+      // Filter by store if a store is selected
+      if (currentStore?.id) {
+        query = query.eq('store_id', currentStore.id);
+      }
+      
+      const { data: activeInstallments, error: installmentsError } = await query;
+      
       if (installmentsError) {
         throw installmentsError;
       }
       
       // Lấy tất cả các kỳ đóng tiền trong tháng hiện tại
-      const { data: currentMonthPayments, error: paymentsError } = await supabase
+      let paymentsQuery = supabase
         .from('installment_payment_period')
         .select('*')
         .gte('date', firstDayOfMonth)
         .lte('date', lastDayOfMonth);
+      
+      // Filter by contracts from the current store
+      if (activeInstallments && activeInstallments.length > 0) {
+        const installmentIds = activeInstallments
+          .map(inst => inst.id)
+          .filter((id): id is string => id !== null);
+        paymentsQuery = paymentsQuery.in('installment_id', installmentIds);
+      } else {
+        // No installments to check payments for
+        setData(storeFinancialData);
+        return;
+      }
+      
+      const { data: currentMonthPayments, error: paymentsError } = await paymentsQuery;
       
       if (paymentsError) {
         throw paymentsError;
@@ -114,8 +143,9 @@ export function useInstallmentsSummary() {
       }
       
       const summaryData: StoreFinancialData = {
-        totalFund: 0, // Để mặc định, sẽ lấy từ API khác nếu cần
-        availableFund: 0, // Để mặc định, sẽ lấy từ API khác nếu cần
+        // Use the cash_fund from the store financial data
+        totalFund: storeFinancialData.availableFund || 0,
+        availableFund: storeFinancialData.availableFund || 0,
         totalLoan: totalLoan,
         oldDebt: totalOldDebt,
         profit: expectedProfit,
@@ -131,9 +161,10 @@ export function useInstallmentsSummary() {
     }
   };
 
+  // Fetch data when component mounts or when store changes
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [currentStore?.id]);
 
   return { data, loading, error, refresh: fetchData };
 } 

@@ -13,14 +13,16 @@ import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, InfoIcon, LockIcon } from 'lucide-react';
 import { getInstallmentById, updateInstallment } from '@/lib/installment';
 import { getCustomers } from '@/lib/customer';
 import { getEmployees } from '@/lib/employee';
-import { Installment, InstallmentStatus } from '@/models/installment';
+import { hasInstallmentAnyPayments } from '@/lib/installmentPayment';
+import { Installment } from '@/models/installment';
 import { Customer } from '@/models/customer';
 import { Employee } from '@/models/employee';
 import Spinner from '@/components/ui/spinner';
+import { Alert } from "@/components/ui/alert";
 
 interface InstallmentEditModalProps {
   isOpen: boolean;
@@ -47,14 +49,10 @@ export function InstallmentEditModal({
   const [customerAmount, setCustomerAmount] = useState<string>('0');
   const [formattedCustomerAmount, setFormattedCustomerAmount] = useState<string>('0');
   const [interestRate, setInterestRate] = useState<string>('10');
-  const [interestRateType, setInterestRateType] = useState<string>('daily');
   const [duration, setDuration] = useState<string>('50');
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [paymentDate, setPaymentDate] = useState('');
   const [notes, setNotes] = useState('');
   const [advancePayment, setAdvancePayment] = useState(false);
-  const [status, setStatus] = useState<InstallmentStatus>(InstallmentStatus.ON_TIME);
-  const [amountPaid, setAmountPaid] = useState<string>('0');
   const [employeeId, setEmployeeId] = useState<string>('');
   
   // State for customers dropdown
@@ -64,14 +62,15 @@ export function InstallmentEditModal({
   // State for employees dropdown
   const [employees, setEmployees] = useState<Employee[]>([]);
   
+  // State to track if installment has payments
+  const [hasPayments, setHasPayments] = useState<boolean>(false);
+  
   // Loading and error states
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [installment, setInstallment] = useState<Installment | null>(null);
   
-  // Quick buttons for amount adjustments
-  const amountPresets = [1, 2, 3, 5, 10, 15, 20];
   
   // Format number with thousand separators
   const formatNumber = (value: string | number): string => {
@@ -109,6 +108,14 @@ export function InstallmentEditModal({
         
         setInstallment(installmentData);
         
+        // Check if installment has any payments
+        const { hasPaidPeriods, error: paymentsError } = await hasInstallmentAnyPayments(installmentId);
+        if (paymentsError) {
+          console.error('Error checking payments:', paymentsError);
+        } else {
+          setHasPayments(hasPaidPeriods);
+        }
+        
         // Set form values from installment data
         setCustomerName(installmentData.customer?.name || '');
         setContractCode(installmentData.contract_code || '');
@@ -125,13 +132,9 @@ export function InstallmentEditModal({
           setInterestRate(installmentData.interest_rate?.toString() || '10');
           setDuration(installmentData.duration?.toString() || '7');
           setStartDate(installmentData.start_date ? format(new Date(installmentData.start_date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
-          setStatus(installmentData.status || InstallmentStatus.ON_TIME);
-          setAmountPaid(installmentData.amount_paid?.toString() || '0');
           setSelectedCustomerId(installmentData.customer_id || '');
+          setEmployeeId(installmentData.employee_id || '');
         }
-        // Note: employee_id might be coming from a different relationship or field
-        // For now, we'll initialize it as empty if not found
-        setEmployeeId('');
         
         if (installmentData.customer_id) {
           setSelectedCustomerId(installmentData.customer_id);
@@ -197,24 +200,27 @@ export function InstallmentEditModal({
     
     try {
       // Prepare installment data
-      const installmentData = {
-        customer_id: selectedCustomerId,
-        customer_name: customerName,
-        contract_code: contractCode,
-        id_number: idNumber,
-        phone,
-        address,
-        amount_given: parseInt(amountGiven || '0'),
-        interest_rate: parseFloat(interestRate || '0'),
-        duration: parseInt(duration || '7'),
-        start_date: startDate,
-        notes,
-        status: status,
-        amount_paid: parseInt(amountPaid || '0'),
-        store_id: installment.store_id || '1',
-        employee_id: employeeId,
-        advance_payment: advancePayment
-      };
+      const installmentData: any = {};
+      
+      // Always include these fields
+      installmentData.notes = notes;
+      
+      // Only include these fields if no payments exist
+      if (!hasPayments) {
+        installmentData.customer_id = selectedCustomerId;
+        installmentData.customer_name = customerName;
+        installmentData.contract_code = contractCode;
+        installmentData.id_number = idNumber;
+        installmentData.phone = phone;
+        installmentData.address = address;
+        installmentData.amount_given = parseInt(amountGiven || '0');
+        installmentData.interest_rate = parseFloat(interestRate || '0');
+        installmentData.duration = parseInt(duration || '7');
+        installmentData.start_date = startDate;
+        installmentData.employee_id = employeeId;
+        installmentData.store_id = installment.store_id || '1';
+        installmentData.advance_payment = advancePayment;
+      }
       
       // Call API to update installment
       const { error } = await updateInstallment(installmentId, installmentData);
@@ -265,6 +271,7 @@ export function InstallmentEditModal({
               value={selectedCustomerId}
               onChange={(e) => handleCustomerChange(e.target.value)}
               required
+              disabled={hasPayments}
             >
               <option value="">Chọn khách hàng</option>
               {customers.map(customer => (
@@ -276,40 +283,48 @@ export function InstallmentEditModal({
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="contractCode" className="text-right">Mã HĐ</Label>
+            <Label htmlFor="contractCode" className="text-right">Mã HĐ
+            </Label>
             <Input 
               id="contractCode"
               value={contractCode}
               onChange={(e) => setContractCode(e.target.value)}
               placeholder="Mã hợp đồng"
+              disabled={hasPayments}
             />
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="idNumber" className="text-right">Số CCCD/Hộ chiếu</Label>
+            <Label htmlFor="idNumber" className="text-right">Số CCCD/Hộ chiếu
+            </Label>
             <Input 
               id="idNumber"
               value={idNumber}
               onChange={(e) => setIdNumber(e.target.value)}
+              disabled={hasPayments}
             />
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="phone" className="text-right">SĐT</Label>
+            <Label htmlFor="phone" className="text-right">SĐT
+            </Label>
             <Input 
               id="phone"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+              disabled={hasPayments}
             />
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-start">
-            <Label htmlFor="address" className="text-right mt-2">Địa chỉ</Label>
+            <Label htmlFor="address" className="text-right mt-2">Địa chỉ
+            </Label>
             <Textarea 
               id="address"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               rows={2}
+              disabled={hasPayments}
             />
           </div>
           
@@ -326,6 +341,7 @@ export function InstallmentEditModal({
                 required
                 inputMode="numeric"
                 className="w-48"
+                disabled={hasPayments}
               />
               <span className="text-sm text-gray-500">(Tổng tiền vay khách phải thanh toán)</span>
             </div>
@@ -344,6 +360,7 @@ export function InstallmentEditModal({
                 required
                 inputMode="numeric"
                 className="w-48"
+                disabled={hasPayments}
               />
               <span className="text-sm text-gray-500">(Tổng tiền khách nhận được)</span>
             </div>
@@ -362,6 +379,7 @@ export function InstallmentEditModal({
                   onChange={(e) => setDuration(e.target.value)}
                   required
                   className="w-24"
+                  disabled={hasPayments}
                 />
                 <span>ngày</span>
               </div>
@@ -384,6 +402,7 @@ export function InstallmentEditModal({
                   onChange={(e) => setInterestRate(e.target.value)}
                   required
                   className="w-24"
+                  disabled={hasPayments}
                 />
                 <span>ngày</span>
               </div>
@@ -398,33 +417,8 @@ export function InstallmentEditModal({
               value={startDate}
               onChange={setStartDate}
               required
+              disabled={hasPayments}
             />
-          </div>
-          
-          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="amountPaid" className="text-right">Đã đóng</Label>
-            <Input 
-              id="amountPaid"
-              type="number"
-              value={amountPaid}
-              onChange={(e) => setAmountPaid(e.target.value)}
-            />
-          </div>
-          
-          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="status" className="text-right">Trạng thái</Label>
-            <select
-              id="status"
-              className="border rounded-md p-2 w-full"
-              value={status}
-              onChange={(e) => setStatus(e.target.value as InstallmentStatus)}
-            >
-              <option value={InstallmentStatus.ON_TIME}>Đang vay</option>
-              <option value={InstallmentStatus.OVERDUE}>Trễ hẹn</option>
-              <option value={InstallmentStatus.LATE_INTEREST}>Chậm lãi</option>
-              <option value={InstallmentStatus.BAD_DEBT}>Nợ xấu</option>
-              <option value={InstallmentStatus.CLOSED}>Đã đóng</option>
-            </select>
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
@@ -437,6 +431,7 @@ export function InstallmentEditModal({
               value={employeeId}
               onChange={(e) => setEmployeeId(e.target.value)}
               required
+              disabled={hasPayments}
             >
               <option value="">Chọn nhân viên</option>
               {employees.map(employee => (

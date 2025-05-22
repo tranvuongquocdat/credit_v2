@@ -6,6 +6,7 @@ import {
 } from '@/lib/installment';
 import { InstallmentFilters, InstallmentStatus, InstallmentWithCustomer } from '@/models/installment';
 import { useToast } from '@/components/ui/use-toast';
+import { useStore } from '@/contexts/StoreContext';
 
 export function useInstallments() {
   const [installments, setInstallments] = useState<InstallmentWithCustomer[]>([]);
@@ -14,17 +15,39 @@ export function useInstallments() {
   const [totalItems, setTotalItems] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  
+  // Get current store from context
+  const { currentStore } = useStore();
+  
   const [filters, setFilters] = useState<InstallmentFilters>({
-    status: InstallmentStatus.ON_TIME // Mặc định hiển thị các hợp đồng đang vay
+    status: InstallmentStatus.ON_TIME, // Mặc định hiển thị các hợp đồng đang vay
+    store_id: currentStore?.id // Set default store_id from context
   });
+  
   const { toast } = useToast();
+
+  // Update filters when store changes
+  useEffect(() => {
+    if (currentStore?.id) {
+      setFilters(prevFilters => ({
+        ...prevFilters,
+        store_id: currentStore.id
+      }));
+    }
+  }, [currentStore]);
 
   const fetchInstallments = async () => {
     setLoading(true);
     setError(null);
     
+    // Always ensure store_id is set from context if available
+    const currentFilters = {
+      ...filters,
+      store_id: currentStore?.id || filters.store_id
+    };
+    
     try {
-      const { data, error, count } = await getInstallments(currentPage, itemsPerPage, filters);
+      const { data, error, count } = await getInstallments(currentPage, itemsPerPage, currentFilters);
       
       if (error) throw new Error(error.message);
       
@@ -43,21 +66,26 @@ export function useInstallments() {
     }
   };
 
-  // Re-fetch when filters or pagination changes
+  // Re-fetch when filters, pagination, or store changes
   useEffect(() => {
     fetchInstallments();
-  }, [currentPage, itemsPerPage, filters]);
+  }, [currentPage, itemsPerPage, filters, currentStore?.id]);
 
   // Handle search filters
   const handleSearch = (newFilters: InstallmentFilters) => {
-    setFilters(newFilters);
+    // Preserve the store_id from context
+    setFilters({
+      ...newFilters,
+      store_id: currentStore?.id || newFilters.store_id
+    });
     setCurrentPage(1);
   };
 
   // Handle reset filters
   const handleReset = () => {
     setFilters({
-      status: InstallmentStatus.ON_TIME // Khi reset vẫn giữ lại trạng thái mặc định là đang vay
+      status: InstallmentStatus.ON_TIME, // Khi reset vẫn giữ lại trạng thái mặc định là đang vay
+      store_id: currentStore?.id // Keep current store
     });
     setCurrentPage(1);
   };

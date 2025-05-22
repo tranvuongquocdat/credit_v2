@@ -14,6 +14,17 @@ import Spinner from "@/components/ui/spinner";
 import { useEffect, useState } from "react";
 import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
 import { getInstallmentPaymentPeriods, updateInstallmentStatus } from "@/lib/installmentPayment";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useStore } from "@/contexts/StoreContext";
 
 // Định nghĩa cấu trúc dữ liệu mở rộng bao gồm thông tin kỳ thanh toán
 interface InstallmentWithPayments extends InstallmentWithCustomer {
@@ -50,6 +61,13 @@ export function InstallmentsTable({
   // State để lưu trữ dữ liệu hợp đồng đã kèm thông tin thanh toán
   const [installmentsWithPayments, setInstallmentsWithPayments] = useState<InstallmentWithPayments[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
+  
+  // Get current store from store context
+  const { currentStore } = useStore();
+  
+  // State for unlock confirmation dialog
+  const [unlockConfirmOpen, setUnlockConfirmOpen] = useState(false);
+  const [installmentToUnlock, setInstallmentToUnlock] = useState<InstallmentWithPayments | null>(null);
 
   // Nạp dữ liệu thanh toán khi installments thay đổi
   useEffect(() => {
@@ -62,9 +80,14 @@ export function InstallmentsTable({
         // Tạo bản sao dữ liệu ban đầu
         const enhancedInstallments: InstallmentWithPayments[] = [...installments];
         
+        // Filter installments by store_id if currentStore is available
+        const filteredInstallments = currentStore ? 
+          enhancedInstallments.filter(installment => installment.store_id === currentStore.id) : 
+          enhancedInstallments;
+        
         // Nạp dữ liệu thanh toán cho từng hợp đồng
-        for (let i = 0; i < enhancedInstallments.length; i++) {
-          const installment = enhancedInstallments[i];
+        for (let i = 0; i < filteredInstallments.length; i++) {
+          const installment = filteredInstallments[i];
           
           // Lấy dữ liệu kỳ thanh toán từ API
           const { data, error } = await getInstallmentPaymentPeriods(installment.id);
@@ -213,7 +236,7 @@ export function InstallmentsTable({
           }
         }
         
-        setInstallmentsWithPayments(enhancedInstallments);
+        setInstallmentsWithPayments(filteredInstallments);
       } catch (err) {
         console.error("Error loading payment data:", err);
       } finally {
@@ -222,12 +245,26 @@ export function InstallmentsTable({
     }
     
     loadPaymentData();
-  }, [installments]);
+  }, [installments, currentStore]);
+
+  // Show confirmation dialog before unlocking
+  const confirmUnlockInstallment = (installment: InstallmentWithPayments) => {
+    setInstallmentToUnlock(installment);
+    setUnlockConfirmOpen(true);
+  };
 
   // Add function to handle unlocking a closed installment
   const handleUnlockInstallment = async (installment: InstallmentWithPayments) => {
+    // Close the dialog
+    setUnlockConfirmOpen(false);
+    
     try {
-      const { data, error } = await updateInstallmentStatus(installment.id, InstallmentStatus.FINISHED);
+      // Since updateInstallmentStatus doesn't support storeId parameter, we'll rely on the 
+      // implementation to handle the store context if needed
+      const { data, error } = await updateInstallmentStatus(
+        installment.id, 
+        InstallmentStatus.FINISHED
+      );
       
       if (error) {
         console.error("Error unlocking installment:", error);
@@ -263,7 +300,7 @@ export function InstallmentsTable({
     return (
       <div className="h-64 flex flex-col items-center justify-center text-gray-500">
         <AlertTriangleIcon size={40} className="mb-2 text-amber-500" />
-        <p className="text-lg font-medium">Không tìm thấy hợp đồng nào</p>
+        <p className="text-lg font-medium">Không tìm thấy hợp đồng nào{currentStore ? ` tại ${currentStore.name}` : ''}</p>
         <p className="text-sm">Vui lòng thử lại với bộ lọc khác hoặc tạo hợp đồng mới.</p>
       </div>
     );
@@ -573,7 +610,7 @@ export function InstallmentsTable({
                       <Button 
                         variant="ghost" 
                         className="h-8 w-8 p-0" 
-                        onClick={() => handleUnlockInstallment(installment)}
+                        onClick={() => confirmUnlockInstallment(installment)}
                         title="Mở khoá hợp đồng"
                       >
                         <UnlockIcon className="h-4 w-4 text-amber-500" />
@@ -613,7 +650,7 @@ export function InstallmentsTable({
                           </DropdownMenuItem>
                         )}
                         {installment.status === InstallmentStatus.CLOSED ? (
-                          <DropdownMenuItem onClick={() => handleUnlockInstallment(installment)}>
+                          <DropdownMenuItem onClick={() => confirmUnlockInstallment(installment)}>
                             Mở khoá hợp đồng
                           </DropdownMenuItem>
                         ) : onShowPaymentActions && (
@@ -634,6 +671,28 @@ export function InstallmentsTable({
           })}
         </tbody>
       </table>
+      
+      {/* Confirmation Dialog for Unlocking Contract */}
+      <AlertDialog open={unlockConfirmOpen} onOpenChange={setUnlockConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xác nhận mở khóa hợp đồng</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bạn có chắc chắn muốn mở khóa hợp đồng {installmentToUnlock?.contract_code || ''} không? 
+              Hành động này sẽ chuyển trạng thái hợp đồng từ "Đóng" thành "Hoàn thành".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => installmentToUnlock && handleUnlockInstallment(installmentToUnlock)}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              Xác nhận mở khóa
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

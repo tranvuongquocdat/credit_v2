@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Layout } from '@/components/Layout/Layout';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,7 @@ import { InstallmentPaymentHistoryModal } from '@/components/Installments/Instal
 // Import custom hooks
 import { useInstallments } from '@/hooks/useInstallments';
 import { useInstallmentsSummary } from '@/hooks/useInstallmentsSummary';
+import { useStore } from '@/contexts/StoreContext';
 
 // Import types and API functions
 import { InstallmentStatus, InstallmentWithCustomer } from '@/models/installment';
@@ -44,6 +45,9 @@ const statusMap: Record<string, { label: string, color: string }> = {
 export default function InstallmentsPage() {
   const router = useRouter();
   
+  // Get current store from context
+  const { currentStore } = useStore();
+  
   // Use our custom hook for installments data and operations
   const { 
     installments, 
@@ -62,6 +66,11 @@ export default function InstallmentsPage() {
   
   // Sử dụng custom hook để lấy dữ liệu tài chính
   const { data: financialSummary, refresh: refreshFinancial } = useInstallmentsSummary();
+  
+  // Refresh financial data when store changes
+  useEffect(() => {
+    refreshFinancial();
+  }, [currentStore?.id]);
   
   // State for dialogs
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);

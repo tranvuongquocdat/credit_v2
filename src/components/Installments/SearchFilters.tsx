@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -10,7 +10,8 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { InstallmentStatus } from '@/models/installment';
-import { PlusIcon } from 'lucide-react';
+import { PlusIcon, StoreIcon } from 'lucide-react';
+import { useStore } from '@/contexts/StoreContext';
 
 interface StatusMapType {
   [key: string]: { 
@@ -34,6 +35,7 @@ export interface SearchFilters {
   end_date: string;
   duration?: number;
   status: string;
+  store_id?: string;
 }
 
 export function SearchFilters({ 
@@ -43,14 +45,26 @@ export function SearchFilters({
   onCreateNew, 
   onExportExcel 
 }: SearchFiltersProps) {
+  // Get store context
+  const { currentStore, stores, setCurrentStore } = useStore();
+  
   const [filters, setFilters] = useState<SearchFilters>({
     contract_code: '',
     customer_name: '',
     start_date: '',
     end_date: '',
     duration: undefined,
-    status: 'on_time'
+    status: 'on_time',
+    store_id: currentStore?.id
   });
+  
+  // Update store_id when currentStore changes
+  useEffect(() => {
+    setFilters(prev => ({
+      ...prev,
+      store_id: currentStore?.id
+    }));
+  }, [currentStore]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
@@ -73,6 +87,15 @@ export function SearchFilters({
       duration: value === 'all' ? undefined : parseInt(value)
     }));
   };
+  
+  const handleStoreChange = (value: string) => {
+    // Find the store object from the stores array
+    const selectedStore = stores.find(store => store.id === value);
+    if (selectedStore) {
+      // Update the store in context
+      setCurrentStore(selectedStore);
+    }
+  };
 
   const handleSearch = () => {
     onSearch(filters);
@@ -85,7 +108,8 @@ export function SearchFilters({
       start_date: '',
       end_date: '',
       duration: undefined,
-      status: 'on_time'
+      status: 'on_time',
+      store_id: currentStore?.id
     });
     onReset();
   };

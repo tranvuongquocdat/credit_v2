@@ -29,6 +29,16 @@ import {
   InstallmentAmountHistory,
   getInstallmentAmountHistory,
 } from "@/lib/installmentAmountHistory";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // Define the tabs for this modal
 export type TabId =
@@ -156,6 +166,9 @@ export function InstallmentPaymentHistoryModal({
 
   // State for rotation processing
   const [isRotating, setIsRotating] = useState<boolean>(false);
+
+  // Confirmation dialog state
+  const [isCloseContractConfirmOpen, setIsCloseContractConfirmOpen] = useState(false);
 
   // Pre-load các modules cần thiết để tránh lag khi sử dụng dynamic imports
   useEffect(() => {
@@ -948,9 +961,17 @@ export function InstallmentPaymentHistoryModal({
     }
   };
 
+  // Handler for closing the installment - show confirmation first
+  const showCloseInstallmentConfirmation = () => {
+    setIsCloseContractConfirmOpen(true);
+  };
+
   // Handler for closing the installment
   const handleCloseInstallment = async () => {
     if (!installment?.id) return;
+    
+    // Close the confirmation dialog
+    setIsCloseContractConfirmOpen(false);
 
     try {
       // Import necessary functions
@@ -1546,11 +1567,36 @@ export function InstallmentPaymentHistoryModal({
               <div className="mt-6 flex justify-center">
                 <Button
                   className="bg-blue-600 hover:bg-blue-700 text-white px-8"
-                  onClick={handleCloseInstallment}
+                  onClick={showCloseInstallmentConfirmation}
                 >
                   Đóng HĐ
                 </Button>
               </div>
+              
+              {/* Confirmation Dialog for Closing Contract */}
+              <AlertDialog 
+                open={isCloseContractConfirmOpen} 
+                onOpenChange={setIsCloseContractConfirmOpen}
+              >
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Xác nhận đóng hợp đồng</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Bạn có chắc chắn muốn đóng hợp đồng này không? 
+                      Hành động này sẽ đánh dấu tất cả các kỳ còn lại là đã thanh toán và chuyển trạng thái hợp đồng thành "Đóng".
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Hủy</AlertDialogCancel>
+                    <AlertDialogAction 
+                      onClick={handleCloseInstallment}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      Xác nhận đóng hợp đồng
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           )}
 

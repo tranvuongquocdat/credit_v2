@@ -35,13 +35,11 @@ export async function getStores(
   if (searchQuery) {
     query = query.ilike('name', `%${searchQuery}%`);
   }
-
   // Phân trang
   const from = (page - 1) * limit;
   const to = from + limit - 1;
-  
   const { data, error, count } = await query.range(from, to);
-  
+  console.log(data);
   return { 
     data: data as Store[], 
     error, 
@@ -64,16 +62,21 @@ export async function getStoreById(id: string) {
 
 // Tạo cửa hàng mới
 export async function createStore(storeData: StoreFormData) {
+  // Ensure required fields are not null
+  const formattedData = {
+    ...storeData,
+    // Set required string fields to empty string if null
+    name: storeData.name || '',
+    address: storeData.address || '',
+    phone: storeData.phone || '',
+    is_deleted: false,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+
   const { data, error } = await supabase
     .from(TABLE_NAME)
-    .insert([
-      { 
-        ...storeData, 
-        is_deleted: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
-    ])
+    .insert(formattedData)
     .select();
   
   return { data: data?.[0] as Store | null, error };
@@ -81,12 +84,18 @@ export async function createStore(storeData: StoreFormData) {
 
 // Cập nhật thông tin cửa hàng
 export async function updateStore(id: string, storeData: Partial<StoreFormData>) {
+  // Ensure nullable fields are properly handled
+  const formattedData = {
+    ...storeData,
+    // Convert null to undefined for optional string fields
+    address: storeData.address === null ? undefined : storeData.address,
+    phone: storeData.phone === null ? undefined : storeData.phone,
+    updated_at: new Date().toISOString()
+  };
+
   const { data, error } = await supabase
     .from(TABLE_NAME)
-    .update({ 
-      ...storeData, 
-      updated_at: new Date().toISOString() 
-    })
+    .update(formattedData)
     .eq('id', id)
     .select();
   
@@ -111,19 +120,26 @@ export async function getStoreFinancialData(storeId: string = '1'): Promise<Stor
   try {
     const { data, error } = await supabase
       .from(TABLE_NAME)
-      .select('investment, cash_fund, total_loans, total_debt, total_interest, profit')
+      .select('investment, cash_fund')
       .eq('id', storeId)
       .single();
 
     if (error) throw error;
 
+    // Type assertion to handle the type mismatch
+    const storeData = data as unknown as {
+      investment?: number;
+      cash_fund?: number;
+    };
+
+    // Access properties safely with the correct type
     return {
-      totalFund: data.investment || 0,
-      availableFund: data.cash_fund || 0,
-      totalLoan: data.total_loans || 0,
-      oldDebt: data.total_debt || 0,
-      profit: data.profit || 0,
-      collectedInterest: data.total_interest || 0
+      totalFund: storeData.investment ?? 0,
+      availableFund: storeData.cash_fund ?? 0,
+      totalLoan: 0,
+      oldDebt: 0,
+      profit: 0,
+      collectedInterest: 0
     };
   } catch (error) {
     console.error('Error fetching store financial data:', error);
@@ -150,4 +166,42 @@ export async function getAllActiveStores() {
     .order('name');
   
   return { data: data as Pick<Store, 'id' | 'name'>[], error };
+}
+
+// Update the cash fund of a store (add or subtract amount)
+export async function updateStoreCashFund(storeId: string, amount: number) {
+  try {
+    // First get the current cash fund
+    const { data, error } = await supabase
+      .from(TABLE_NAME)
+      .select('cash_fund')
+      .eq('id', storeId)
+      .single();
+    
+    if (error) throw error;
+    
+    // If no data, throw error
+    if (!data) throw new Error('Store not found');
+    
+    // Calculate new cash fund (current + amount)
+    // Amount can be negative to subtract from the fund
+    const currentCashFund = data.cash_fund || 0;
+    const newCashFund = currentCashFund + amount;
+    
+    // Update the cash fund
+    const { error: updateError } = await supabase
+      .from(TABLE_NAME)
+      .update({ 
+        cash_fund: newCashFund,
+        updated_at: new Date().toISOString() 
+      })
+      .eq('id', storeId);
+    
+    if (updateError) throw updateError;
+    
+    return { success: true, error: null, newCashFund };
+  } catch (error) {
+    console.error('Error updating store cash fund:', error);
+    return { success: false, error };
+  }
 }
