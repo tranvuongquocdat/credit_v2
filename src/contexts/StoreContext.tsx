@@ -13,10 +13,6 @@ interface StoreContextType {
   error: Error | null;
 }
 
-// Debug helper function
-const debugLog = (message: string, data?: any) => {
-  console.log(`[StoreContext] ${message}`, data ? data : '');
-};
 
 // Try to get store from localStorage on initialization for faster loading
 const getInitialStoreFromLocalStorage = (): Store | null => {
@@ -26,11 +22,9 @@ const getInitialStoreFromLocalStorage = (): Store | null => {
     const savedStore = localStorage.getItem('selectedStore');
     if (savedStore) {
       const parsedStore = JSON.parse(savedStore) as Store;
-      debugLog('Pre-loaded store from localStorage:', parsedStore.name);
       return parsedStore;
     }
   } catch (err) {
-    debugLog('Error pre-loading from localStorage:', err);
   }
   
   return null;
@@ -56,7 +50,6 @@ interface StoreProviderProps {
 }
 
 export const StoreProvider = ({ children }: StoreProviderProps) => {
-  debugLog('StoreProvider rendering');
   
   // Try to load from localStorage immediately for faster initial render
   const [currentStore, setCurrentStoreState] = useState<Store | null>(getInitialStoreFromLocalStorage());
@@ -66,21 +59,17 @@ export const StoreProvider = ({ children }: StoreProviderProps) => {
 
   // Function to set current store and save to localStorage
   const setCurrentStore = (store: Store) => {
-    debugLog(`Setting current store: ${store.name} (${store.id})`);
-    setCurrentStoreState(store);
     
     // Use try-catch for localStorage operations as they can fail
     try {
       localStorage.setItem('selectedStore', JSON.stringify(store));
     } catch (err) {
-      debugLog('Error saving to localStorage:', err);
     }
   };
 
   // Load stores and verify/initialize current store
   useEffect(() => {
     let isMounted = true;
-    debugLog('Initializing StoreProvider - fetching stores');
     
     const fetchStores = async () => {
       try {
@@ -90,12 +79,10 @@ export const StoreProvider = ({ children }: StoreProviderProps) => {
         if (!isMounted) return;
         
         if (error) {
-          debugLog('Error fetching stores:', error);
           throw new Error(error.message);
         }
         
         if (data && data.length > 0) {
-          debugLog(`Fetched ${data.length} stores`);
           setStores(data);
           
           // We already tried to load from localStorage in the initial state
@@ -105,27 +92,21 @@ export const StoreProvider = ({ children }: StoreProviderProps) => {
             const storeExists = data.some(store => store.id === currentStore.id);
             
             if (!storeExists) {
-              debugLog('Pre-loaded store no longer exists, selecting first store');
               setCurrentStore(data[0]);
             }
           } else {
             // No store loaded yet, select the first one
-            debugLog('No store loaded, selecting first store');
             setCurrentStore(data[0]);
           }
-        } else {
-          debugLog('No stores found or empty data array');
         }
       } catch (err) {
         if (!isMounted) return;
         
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-        debugLog(`Error in store initialization: ${errorMessage}`);
         setError(err instanceof Error ? err : new Error('Unknown error occurred'));
       } finally {
         if (isMounted) {
           setLoading(false);
-          debugLog('Store initialization completed');
         }
       }
     };
@@ -146,13 +127,6 @@ export const StoreProvider = ({ children }: StoreProviderProps) => {
     loading,
     error
   }), [currentStore, stores, loading, error]);
-
-  debugLog('StoreProvider state:', { 
-    currentStore: currentStore?.name, 
-    storeId: currentStore?.id,
-    storesCount: stores.length,
-    loading
-  });
 
   return (
     <StoreContext.Provider value={contextValue}>

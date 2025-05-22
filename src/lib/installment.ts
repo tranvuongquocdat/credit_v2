@@ -87,12 +87,12 @@ export async function getInstallments(
         customer_id: item.customer_id || '',
         employee_id: item.employee_id || '',
         amount_given: downPayment,
-        interest_rate: calculateInterestRate(downPayment, installmentAmount, loanPeriod),
         duration: loanPeriod,
         payment_period: paymentPeriod,
         amount_paid: 0, // This will need to be calculated from payment records
         old_debt: 0, // This will need to be calculated or tracked separately
         daily_amount: installmentAmount / paymentPeriod,
+        installment_amount: installmentAmount,
         remaining_amount: downPayment,
         status: item.status as InstallmentStatus,
         due_date: calculateDueDate(loanDate, loanPeriod),
@@ -190,7 +190,6 @@ export async function getInstallmentById(id: string) {
       customer_id: data.customer_id || '',
       employee_id: data.employee_id || '',
       amount_given: downPayment,
-      interest_rate: calculateInterestRate(downPayment, installmentAmount, loanPeriod),
       duration: loanPeriod,
       payment_period: paymentPeriod,
       amount_paid: 0, // This will need to be calculated from payment records
@@ -309,7 +308,6 @@ export async function createInstallment(installment: CreateInstallmentParams) {
       
       // UI-specific mappings
       amount_given: downPayment,
-      interest_rate: calculateInterestRate(downPayment, installmentAmount, loanPeriod),
       duration: loanPeriod,
       payment_period: paymentPeriod,
       amount_paid: 0,
@@ -398,15 +396,6 @@ export async function updateInstallment(id: string, installment: Partial<Install
     
     if (installment.amount_given !== undefined) {
       dbInstallment.down_payment = installment.amount_given;
-      
-      // Recalculate installment_amount if interest_rate is also provided
-      if (installment.interest_rate !== undefined) {
-        dbInstallment.installment_amount = calculateInstallmentAmount(
-          installment.amount_given,
-          installment.interest_rate,
-          installment.duration || currentData.loan_period
-        );
-      }
     }
     
     if (installment.duration !== undefined) {
@@ -459,9 +448,6 @@ export async function updateInstallment(id: string, installment: Partial<Install
       customer_id: data.customer_id || '',
       employee_id: data.employee_id || '',
       amount_given: downPayment,
-      interest_rate: installment.interest_rate !== undefined ? 
-        installment.interest_rate : 
-        calculateInterestRate(downPayment, installmentAmount, loanPeriod),
       duration: loanPeriod,
       payment_period: paymentPeriod,
       amount_paid: installment.amount_paid || 0,
@@ -483,8 +469,6 @@ export async function updateInstallment(id: string, installment: Partial<Install
       let description = 'Cập nhật hợp đồng';
       if (installment.amount_given !== undefined) {
         description = `Cập nhật tiền đưa khách: ${formatCurrency(installment.amount_given)}`;
-      } else if (installment.interest_rate !== undefined) {
-        description = `Cập nhật lãi suất: ${installment.interest_rate}%`;
       } else if (installment.duration !== undefined) {
         description = `Cập nhật thời hạn: ${installment.duration} ngày`;
       }
@@ -546,7 +530,6 @@ export async function updateInstallmentStatus(id: string, status: InstallmentSta
       customer_id: data.customer_id || '',
       employee_id: data.employee_id || '',
       amount_given: downPayment,
-      interest_rate: calculateInterestRate(downPayment, installmentAmount, loanPeriod),
       duration: loanPeriod,
       payment_period: paymentPeriod,
       amount_paid: 0, // This should be calculated from payment records

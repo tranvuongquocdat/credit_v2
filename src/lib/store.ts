@@ -160,12 +160,12 @@ export async function getStoreFinancialData(storeId: string = '1'): Promise<Stor
 export async function getAllActiveStores() {
   const { data, error } = await supabase
     .from(TABLE_NAME)
-    .select('id, name')
+    .select('id, name, cash_fund, investment')
     .eq('is_deleted', false)
     .eq('status', 'active')
     .order('name');
   
-  return { data: data as Pick<Store, 'id' | 'name'>[], error };
+  return { data: data as Pick<Store, 'id' | 'name' | 'cash_fund' | 'investment'>[], error };
 }
 
 // Update the cash fund of a store (add or subtract amount)
@@ -174,7 +174,7 @@ export async function updateStoreCashFund(storeId: string, amount: number) {
     // First get the current cash fund
     const { data, error } = await supabase
       .from(TABLE_NAME)
-      .select('cash_fund')
+      .select('cash_fund, investment')
       .eq('id', storeId)
       .single();
     
@@ -186,20 +186,23 @@ export async function updateStoreCashFund(storeId: string, amount: number) {
     // Calculate new cash fund (current + amount)
     // Amount can be negative to subtract from the fund
     const currentCashFund = data.cash_fund || 0;
+    const currentInvestment = data.investment || 0;
     const newCashFund = currentCashFund + amount;
+    const newInvestment = currentInvestment + amount;
     
     // Update the cash fund
     const { error: updateError } = await supabase
       .from(TABLE_NAME)
       .update({ 
         cash_fund: newCashFund,
+        investment: newInvestment,
         updated_at: new Date().toISOString() 
       })
       .eq('id', storeId);
     
     if (updateError) throw updateError;
     
-    return { success: true, error: null, newCashFund };
+    return { success: true, error: null, newCashFund, newInvestment };
   } catch (error) {
     console.error('Error updating store cash fund:', error);
     return { success: false, error };

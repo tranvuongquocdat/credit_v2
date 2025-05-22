@@ -6,7 +6,8 @@ export interface InstallmentPaymentPeriodDB {
   installment_id: string;
   period_number: number;      // Kỳ trả góp số mấy
   date: string;               // Ngày dự kiến đóng tiền (ISO format)
-  payment_date?: string | null; // Ngày thực tế đã đóng (null nếu chưa đóng)
+  payment_end_date?: string | null; // Ngày kết thúc kỳ (ISO format)
+  payment_start_date?: string | null; // Ngày thực tế đã đóng (null nếu chưa đóng)
   expected_amount: number;    // Số tiền dự kiến phải đóng
   actual_amount?: number | null; // Số tiền thực tế đã đóng (null nếu chưa đóng)
   notes?: string | null;      // Ghi chú
@@ -22,7 +23,8 @@ export interface InstallmentPaymentPeriod {
   installmentId: string;
   periodNumber: number;
   dueDate: string;            // Ngày dự kiến đóng tiền (format for display)
-  paymentDate?: string;       // Ngày thực tế đã đóng (format for display)
+  endDate?: string;           // Ngày kết thúc kỳ (format for display)
+  paymentStartDate?: string;       // Ngày thực tế đã đóng (format for display)
   expectedAmount: number;
   actualAmount?: number;
   notes?: string;
@@ -42,9 +44,10 @@ export interface CreateInstallmentPaymentPeriodParams {
   installment_id: string;
   period_number: number;
   date: string;
+  payment_end_date?: string;
   expected_amount: number;
   actual_amount?: number;
-  payment_date?: string;
+  payment_start_date?: string;
   notes?: string;
 }
 
@@ -52,7 +55,8 @@ export interface CreateInstallmentPaymentPeriodParams {
  * Parameters for updating a payment period
  */
 export interface UpdateInstallmentPaymentPeriodParams {
-  payment_date?: string;
+  payment_start_date?: string;
+  payment_end_date?: string;
   actual_amount?: number;
   notes?: string;
 }

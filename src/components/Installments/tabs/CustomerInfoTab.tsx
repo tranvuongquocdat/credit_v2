@@ -18,20 +18,24 @@ export function CustomerInfoTab({ installment }: CustomerInfoTabProps) {
       <div>
         <h3 className="text-lg font-medium mb-4">Thông tin khách hàng</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <p className="text-sm text-gray-500">Tên khách hàng</p>
-            <p className="text-sm font-medium">{installment.customer.name}</p>
-          </div>
-          <div className="space-y-2">
-            <p className="text-sm text-gray-500">Địa chỉ</p>
-            <p className="text-sm font-medium">{installment.customer.address}</p>
-          </div>
-          {installment.customer.notes && (
-            <div className="space-y-2 col-span-2">
-              <p className="text-sm text-gray-500">Ghi chú</p>
-              <p className="text-sm font-medium">{installment.customer.notes}</p>
+          <div className="flex flex-col gap-4">
+            <div>
+              <h3 className="text-sm text-muted-foreground">Khách hàng</h3>
+              <p className="text-sm font-medium">{installment.customer?.name || "—"}</p>
             </div>
-          )}
+            
+            <div>
+              <h3 className="text-sm text-muted-foreground">Địa chỉ</h3>
+              <p className="text-sm font-medium">{installment.customer?.address || "—"}</p>
+            </div>
+            
+            {installment.customer?.notes && (
+              <div>
+                <h3 className="text-sm text-muted-foreground">Ghi chú</h3>
+                <p className="text-sm font-medium">{installment.customer.notes}</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

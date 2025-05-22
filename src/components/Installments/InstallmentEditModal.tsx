@@ -124,12 +124,11 @@ export function InstallmentEditModal({
         setAddress(installmentData.customer?.address || '');
         if (installmentData) {
           setContractCode(installmentData.contract_code || '');
-          setAmountGiven(installmentData.amount_given?.toString() || '0');
-          setFormattedAmountGiven(formatNumber(installmentData.amount_given?.toString() || '0'));
+          setAmountGiven(installmentData.installment_amount?.toString() || '0');
+          setFormattedAmountGiven(formatNumber(installmentData.installment_amount?.toString() || '0'));
           // Set customer amount to same as amountGiven initially, can be changed by user
           setCustomerAmount(installmentData.amount_given?.toString() || '0');
           setFormattedCustomerAmount(formatNumber(installmentData.amount_given?.toString() || '0'));
-          setInterestRate(installmentData.interest_rate?.toString() || '10');
           setDuration(installmentData.duration?.toString() || '7');
           setStartDate(installmentData.start_date ? format(new Date(installmentData.start_date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
           setSelectedCustomerId(installmentData.customer_id || '');

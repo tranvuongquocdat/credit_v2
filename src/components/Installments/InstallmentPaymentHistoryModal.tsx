@@ -170,6 +170,15 @@ export function InstallmentPaymentHistoryModal({
   // Confirmation dialog state
   const [isCloseContractConfirmOpen, setIsCloseContractConfirmOpen] = useState(false);
 
+  // Add a new state to track end date editing
+  const [isEditingEndDate, setIsEditingEndDate] = useState(false);
+  const [selectedEndDatePeriodId, setSelectedEndDatePeriodId] = useState<string | null>(null);
+  const [selectedEndDate, setSelectedEndDate] = useState<string>("");
+
+  // State for temporary edited values
+  const [tempEditedDate, setTempEditedDate] = useState<string | null>(null);
+  const [tempEditedAmount, setTempEditedAmount] = useState<number | null>(null);
+
   // Pre-load các modules cần thiết để tránh lag khi sử dụng dynamic imports
   useEffect(() => {
     if (isOpen) {
@@ -317,11 +326,7 @@ export function InstallmentPaymentHistoryModal({
 
   // Tính toán số tiền trả góp nếu không có trong DB
   const installmentAmount =
-    installment?.installment_amount ||
-    (installment?.amount_given && installment?.interest_rate
-      ? installment.amount_given * (1 + installment.interest_rate / 100)
-      : 0);
-
+    installment?.installment_amount
   // Calculate total expected amount from payment periods
   const totalExpected =
     paymentPeriods.length > 0
@@ -329,7 +334,7 @@ export function InstallmentPaymentHistoryModal({
           (sum, period) => sum + (period.expectedAmount || 0),
           0,
         )
-      : installmentAmount - (installment?.amount_given || 0);
+      : (installment?.installment_amount || 0) - (installment?.amount_given || 0);
 
   // Calculate total paid amount from payment periods
   const totalPaid = paymentPeriods.reduce(
@@ -344,7 +349,7 @@ export function InstallmentPaymentHistoryModal({
   const totalFees =
     databasePeriods.length > 0
       ? databasePeriods.reduce((sum, period) => sum + period.expectedAmount, 0)
-      : totalExpected;
+      : 0;
   const totalCustomerPayments = databasePeriods.reduce(
     (sum, period) => sum + (period.actualAmount || 0),
     0,
@@ -364,113 +369,88 @@ export function InstallmentPaymentHistoryModal({
     return !period.id.startsWith("calculated-") && Boolean(period.actualAmount);
   };
 
+  // Hàm cưỡng chế tính toán lại danh sách kỳ thanh toán
+  const forceRefreshCalculatedPeriods = useCallback(() => {
+    console.log("Force refreshing calculated periods");
+    // Hack: Tạo một bản sao mới của state để trigger useMemo recalculate
+    setPaymentPeriods(prevPeriods => [...prevPeriods]);
+  }, []);
+
   // Bắt đầu chỉnh sửa khoản thanh toán
-  const handleStartEditing = (period: InstallmentPaymentPeriod) => {
-    // Không sửa khoản đã thanh toán
-    if (isPeriodInDatabase(period)) return;
+  const handleStartEditing = (period: InstallmentPaymentPeriod, periodIndex: number) => {
+    // Không sửa khoản đã thanh toán và chỉ sửa kỳ chưa đóng cũ nhất
+    if (isPeriodInDatabase(period) || periodIndex !== findOldestUnpaidPeriodIndex) return;
 
     setSelectedPeriodId(period.id);
     // Đặt giá trị mặc định là số tiền lãi phí dự kiến
-    setPaymentAmount(period.expectedAmount || 0);
+    const amount = period.expectedAmount || 0;
+    setPaymentAmount(amount);
+    setTempEditedAmount(amount); // Store in temp variable
   };
 
   // Lưu khoản thanh toán
   const handleSavePayment = async (period: InstallmentPaymentPeriod) => {
-    if (!installment?.id) return;
-
-    try {
-      // Import necessary functions
-      const { saveInstallmentPayment } = await import(
-        "@/lib/installmentPayment"
-      );
-
-      const today = new Date().toISOString().split("T")[0];
-      const isCalculatedPeriod = period.id.startsWith("calculated-");
-
-      if (isCalculatedPeriod) {
-        // Nếu là kỳ tính toán, tạo mới kỳ trong DB
-        await saveInstallmentPayment(
-          installment.id,
-          period,
-          paymentAmount,
-          true, // isCalculatedPeriod
-        );
-      } else {
-        // Nếu là kỳ đã có trong DB, cập nhật
-        await saveInstallmentPayment(
-          installment.id,
-          period,
-          paymentAmount,
-          false, // isCalculatedPeriod
-        );
-      }
-
-      // Cập nhật UI
-      const updatedPeriods = paymentPeriods.map((p) => {
-        if (p.id === period.id) {
-          return {
-            ...p,
-            actualAmount: paymentAmount,
-            paymentDate: today,
-          };
-        }
-        return p;
-      });
-
-      setPaymentPeriods(updatedPeriods);
-      setSelectedPeriodId(null);
-
-      // Hiển thị thông báo thành công
-      toast({
-        title: "Lưu thành công",
-        description: "Đã cập nhật khoản thanh toán",
-      });
-
-      // Reset form
-      setPaymentAmount(0);
-
-      // Refresh dữ liệu
-      if (installment?.id) {
-        const { data, error } = await getInstallmentPaymentPeriods(
-          installment.id,
-        );
-        if (!error && data) {
-          setPaymentPeriods(data);
-        }
-      }
-
-      // Gọi callback để cập nhật summary
-      if (onPaymentUpdate) {
-        onPaymentUpdate();
-      }
-    } catch (error) {
-      console.error("Error saving payment:", error);
-      toast({
-        variant: "destructive",
-        title: "Lỗi",
-        description: "Có lỗi xảy ra khi lưu thanh toán. Vui lòng thử lại.",
-      });
-    }
+    // Store the payment amount in temporary variable
+    setTempEditedAmount(paymentAmount);
+    
+    // Update UI appearance but don't save to DB yet
+    setSelectedPeriodId(null);
   };
 
   // Handle date selection
-  const handleStartDateEditing = (period: InstallmentPaymentPeriod) => {
-    // Không sửa khoản đã thanh toán
-    if (isPeriodInDatabase(period)) return;
+  const handleStartDateEditing = (period: InstallmentPaymentPeriod, periodIndex: number) => {
+    // Không sửa khoản đã thanh toán và chỉ sửa kỳ chưa đóng cũ nhất
+    if (isPeriodInDatabase(period) || periodIndex !== findOldestUnpaidPeriodIndex) return;
 
     setSelectedDatePeriodId(period.id);
     setIsEditingDate(true);
 
-    // Set default date to period start date if not already set
-    const dateValue = period.paymentDate
-      ? period.paymentDate.split("/").reverse().join("-")
-      : period.dueDate.split("/").reverse().join("-");
+    // Set default date to today if not already set
+    const dateValue = period.paymentStartDate
+      ? period.paymentStartDate.split("/").reverse().join("-")
+      : format(new Date(), "yyyy-MM-dd");
 
     setSelectedDate(dateValue);
+    setTempEditedDate(dateValue); // Store in temp variable
   };
 
-  // Save selected date
-  const handleSaveDate = async (
+  // Modify handleSaveDate to store value in temp instead of saving to DB
+  const handleSaveDate = async (period: InstallmentPaymentPeriod, dateValue: string) => {
+    if (!dateValue) return;
+    
+    // Store the selected date in temporary variable
+    setTempEditedDate(dateValue);
+    
+    // Update UI appearance but don't save to DB yet
+    setSelectedDatePeriodId(null);
+    setIsEditingDate(false);
+  };
+
+  // Add function to start end date editing
+  const handleStartEndDateEditing = (period: InstallmentPaymentPeriod) => {
+    // Don't edit paid periods
+    if (isPeriodInDatabase(period)) return;
+
+    setSelectedEndDatePeriodId(period.id);
+    setIsEditingEndDate(true);
+
+    // Set default end date from period if available, otherwise calculate it
+    const dateValue = period.endDate
+      ? period.endDate.split("/").reverse().join("-")
+      : (() => {
+          // Calculate an end date based on start date and payment period
+          const startDate = new Date(period.dueDate.split("/").reverse().join("-"));
+          const endDate = new Date(startDate);
+          const periodDays = installment.payment_period || 30;
+          endDate.setDate(endDate.getDate() + (periodDays - 1)); // -1 because start day is included
+          return format(endDate, "yyyy-MM-dd");
+        })();
+
+    setSelectedEndDate(dateValue);
+  };
+
+  // Save selected end date
+  const handleSaveEndDate = async (
     period: InstallmentPaymentPeriod,
     dateValue: string,
   ) => {
@@ -490,7 +470,7 @@ export function InstallmentPaymentHistoryModal({
         installment.id,
         {
           ...period,
-          paymentDate: formattedDate,
+          endDate: formattedDate,
         },
         period.actualAmount || 0,
         isCalculatedPeriod,
@@ -501,20 +481,20 @@ export function InstallmentPaymentHistoryModal({
         if (p.id === period.id) {
           return {
             ...p,
-            paymentDate: format(new Date(formattedDate), "dd/MM/yyyy"),
+            endDate: format(new Date(formattedDate), "dd/MM/yyyy"),
           };
         }
         return p;
       });
 
       setPaymentPeriods(updatedPeriods);
-      setSelectedDatePeriodId(null);
-      setIsEditingDate(false);
+      setSelectedEndDatePeriodId(null);
+      setIsEditingEndDate(false);
 
       // Show success message
       toast({
         title: "Thành công",
-        description: "Đã cập nhật ngày giao dịch",
+        description: "Đã cập nhật ngày kết thúc kỳ",
       });
 
       // Refresh data from server
@@ -532,12 +512,12 @@ export function InstallmentPaymentHistoryModal({
         onPaymentUpdate();
       }
     } catch (error) {
-      console.error("Error saving payment date:", error);
+      console.error("Error saving end date:", error);
       toast({
         variant: "destructive",
         title: "Lỗi",
         description:
-          "Có lỗi xảy ra khi cập nhật ngày giao dịch. Vui lòng thử lại.",
+          "Có lỗi xảy ra khi cập nhật ngày kết thúc kỳ. Vui lòng thử lại.",
       });
     }
   };
@@ -560,119 +540,251 @@ export function InstallmentPaymentHistoryModal({
       const loanPeriod = installment.duration; // Thời gian vay (ngày)
       const paymentPeriod = installment.payment_period; // Thời gian mỗi kỳ (ngày)
       const totalPeriods = Math.ceil(loanPeriod / paymentPeriod); // Tổng số kỳ
-
-      // Nếu đã có dữ liệu từ DB, kiểm tra xem đã đủ số kỳ chưa
+      
+      // Nếu đã có dữ liệu từ DB
       if (paymentPeriods.length > 0) {
-        // Tìm kỳ có periodNumber lớn nhất trong dữ liệu hiện tại
-        const maxPeriodNumber = Math.max(
-          ...paymentPeriods.map((p) => p.periodNumber),
-        );
-
+        // Sắp xếp payment periods theo periodNumber
+        const sortedDBPeriods = [...paymentPeriods].sort((a, b) => a.periodNumber - b.periodNumber);
+        
+        // Kiểm tra xem đã đủ số kỳ chưa
+        const maxPeriodNumber = Math.max(...sortedDBPeriods.map(p => p.periodNumber));
+        
         // Nếu đã đủ số kỳ, trả về paymentPeriods
         if (maxPeriodNumber >= totalPeriods) {
-          return paymentPeriods;
+          return sortedDBPeriods;
         }
-
+        
         // Nếu chưa đủ số kỳ, cần tạo thêm các kỳ còn thiếu
-        // Sử dụng lại code tính toán bên dưới để tạo các kỳ còn thiếu
-        console.log(
-          "Cần tạo thêm các kỳ từ",
-          maxPeriodNumber + 1,
-          "đến",
-          totalPeriods,
-        );
+        
+        // Lấy dữ liệu cần thiết từ installment
+        const installmentAmount = installment.installment_amount || 50000000; // Dùng mặc định 50,000,000 nếu không có giá trị
+        
+        // Tạo map để kiểm tra kỳ đã tồn tại
+        const existingPeriods = new Map<number, InstallmentPaymentPeriod>();
+        sortedDBPeriods.forEach((period) => {
+          existingPeriods.set(period.periodNumber, period);
+        });
+        
+        // Xác định ngày bắt đầu cho kỳ tiếp theo bằng cách tôn trọng thông tin từ database
+        let currentDate: Date;
+        let remainingDays = loanPeriod;
+        
+        // Lấy kỳ cuối cùng từ database để tính ngày bắt đầu kỳ mới
+        const lastPeriod = sortedDBPeriods[sortedDBPeriods.length - 1];
+        if (lastPeriod) {
+          // Tôn trọng cả ngày kết thúc của kỳ cuối cùng nếu có trong DB
+          if (lastPeriod.endDate) {
+            // Sử dụng endDate từ database
+            const endDateParts = lastPeriod.endDate.split('/');
+            const lastPeriodEndDate = new Date(
+              parseInt(endDateParts[2]), // năm
+              parseInt(endDateParts[1]) - 1, // tháng (0-indexed)
+              parseInt(endDateParts[0]) // ngày
+            );
+            
+            // Ngày bắt đầu kỳ mới = ngày kết thúc kỳ cũ + 1
+            currentDate = new Date(lastPeriodEndDate);
+            currentDate.setDate(currentDate.getDate() + 1);
+          } else {
+            // Tách ngày từ dueDate (format DD/MM/YYYY)
+            const dateParts = lastPeriod.dueDate.split('/');
+            const lastPeriodStartDate = new Date(
+              parseInt(dateParts[2]), // năm
+              parseInt(dateParts[1]) - 1, // tháng (0-indexed)
+              parseInt(dateParts[0]) // ngày
+            );
+            
+            // Xác định độ dài kỳ cuối cùng từ database
+            // QUAN TRỌNG: Sử dụng độ dài kỳ THỰC TẾ từ database, không sử dụng payment_period hiện tại
+            let lastPeriodLength = paymentPeriod; // Mặc định
+            
+            if (lastPeriod.id && !lastPeriod.id.startsWith("calculated-")) {
+              // Đây là kỳ từ database, tôn trọng độ dài kỳ gốc
+              // Tìm kỳ tiếp theo để tính khoảng cách
+              const nextPeriodInDB = sortedDBPeriods.find(p => p.periodNumber === lastPeriod.periodNumber + 1);
+              
+              if (nextPeriodInDB) {
+                // Nếu có kỳ tiếp theo, tính số ngày giữa 2 kỳ
+                const nextDateParts = nextPeriodInDB.dueDate.split('/');
+                const nextPeriodDate = new Date(
+                  parseInt(nextDateParts[2]),
+                  parseInt(nextDateParts[1]) - 1,
+                  parseInt(nextDateParts[0])
+                );
+                
+                lastPeriodLength = calculateDaysBetween(lastPeriodStartDate, nextPeriodDate);
+              } else if (lastPeriod.periodNumber > 1) {
+                // Nếu không có kỳ tiếp theo, thử lấy từ kỳ trước đó
+                const prevPeriod = sortedDBPeriods.find(p => p.periodNumber === lastPeriod.periodNumber - 1);
+                
+                if (prevPeriod) {
+                  const prevDateParts = prevPeriod.dueDate.split('/');
+                  const prevPeriodDate = new Date(
+                    parseInt(prevDateParts[2]),
+                    parseInt(prevDateParts[1]) - 1,
+                    parseInt(prevDateParts[0])
+                  );
+                  
+                  // Tính số ngày giữa kỳ trước và kỳ hiện tại
+                  lastPeriodLength = calculateDaysBetween(prevPeriodDate, lastPeriodStartDate);
+                }
+              }
+            }
+            
+            // Ngày kết thúc của kỳ cuối = ngày bắt đầu + độ dài kỳ - 1
+            const lastPeriodEndDate = new Date(lastPeriodStartDate);
+            lastPeriodEndDate.setDate(lastPeriodEndDate.getDate() + lastPeriodLength - 1);
+            
+            // Ngày bắt đầu kỳ mới = ngày kết thúc kỳ cũ + 1
+            currentDate = new Date(lastPeriodEndDate);
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+          
+          // Tính số ngày còn lại
+          const startDateObj = new Date(installment.start_date);
+          const daysElapsed = Math.round(
+            (currentDate.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)
+          );
+          remainingDays = Math.max(0, loanPeriod - daysElapsed);
+        } else {
+          // Nếu không có kỳ nào trong DB, bắt đầu từ ngày đầu tiên
+          currentDate = new Date(installment.start_date);
+          remainingDays = loanPeriod;
+        }
+        
+        // Tính tiền mỗi kỳ từ số tiền trả góp và số kỳ
+        const amountPerPeriod = Math.round(installmentAmount / totalPeriods);
+        
+        // Tạo danh sách kết hợp
+        const combinedPeriods: InstallmentPaymentPeriod[] = [...sortedDBPeriods];
+        
+        // Tạo các kỳ còn thiếu
+        const remainingPeriods = totalPeriods - existingPeriods.size;
+        
+        if (remainingPeriods > 0 && remainingDays > 0) {
+          let periodIndex = existingPeriods.size;
+          
+          // Số kỳ mới cần tạo dựa trên số ngày còn lại và kỳ hiện tại
+          const newPeriodsCount = Math.min(remainingPeriods, Math.ceil(remainingDays / paymentPeriod));
+          
+          for (let i = 0; i < newPeriodsCount; i++) {
+            const periodNumber = periodIndex + 1;
+            const dueDate = new Date(currentDate);
+            
+            // Tính số ngày của kỳ này
+            let periodDays = paymentPeriod;
+            if (i === newPeriodsCount - 1) {
+              // Kỳ cuối có thể ngắn hơn, dựa vào tổng số ngày vay
+              const totalDays = loanPeriod;
+              const daysFromStart = Math.round(
+                (dueDate.getTime() - new Date(installment.start_date).getTime()) / (1000 * 60 * 60 * 24)
+              );
+              periodDays = Math.min(paymentPeriod, totalDays - daysFromStart);
+            }
+            
+            // Tính ngày kết thúc kỳ
+            const endDate = new Date(dueDate);
+            endDate.setDate(endDate.getDate() + periodDays - 1);
+            
+            // Tính số tiền dự kiến cho kỳ này
+            let expectedAmount = amountPerPeriod;
+            if (i === newPeriodsCount - 1) {
+              // Kỳ cuối điều chỉnh để tổng số tiền chính xác
+              const paidAmount = sortedDBPeriods.reduce((sum, p) => sum + p.expectedAmount, 0);
+              const calculatedAmount = combinedPeriods.filter(p => p.id.startsWith("calculated-"))
+                .reduce((sum, p) => sum + p.expectedAmount, 0);
+              expectedAmount = installmentAmount - paidAmount - calculatedAmount;
+            }
+            
+            // Thêm kỳ mới
+            combinedPeriods.push({
+              id: `calculated-${periodNumber}`,
+              installmentId: installment.id,
+              periodNumber,
+              dueDate: format(dueDate, 'dd/MM/yyyy'),
+              endDate: format(endDate, 'dd/MM/yyyy'),
+              paymentStartDate: undefined, // Kỳ mới chưa thanh toán
+              expectedAmount,
+              actualAmount: 0,
+              isOverdue: dueDate < new Date(),
+              daysOverdue:
+                dueDate < new Date()
+                  ? calculateDaysBetween(dueDate, new Date())
+                  : 0,
+            });
+            
+            // Cập nhật ngày bắt đầu cho kỳ tiếp theo
+            currentDate = new Date(endDate);
+            currentDate.setDate(currentDate.getDate() + 1);
+            
+            // Giảm số ngày còn lại
+            remainingDays -= periodDays;
+            periodIndex++;
+          }
+        }
+        
+        return combinedPeriods;
       }
-
+      
+      // Nếu không có dữ liệu từ DB, tạo toàn bộ kỳ mới
       // Lấy dữ liệu cần thiết từ installment
-      const amountGiven = installment.amount_given || 0;
-      const interestRate = installment.interest_rate || 0;
-      const installmentAmount = installment.installment_amount || 0;
-      const duration = installment.duration || 1;
-
-      // Tổng tiền trả góp - ưu tiên dùng installment_amount nếu có
-      const totalInstallmentAmount =
-        installmentAmount > 0
-          ? installmentAmount
-          : amountGiven * (1 + interestRate / 100);
-
-      // Tính tiền mỗi ngày
-      const dailyAmount = totalInstallmentAmount / duration;
-
-      // Tạo danh sách kỳ dự kiến hoặc chỉ các kỳ còn thiếu
+      const installmentAmount = installment.installment_amount || 50000000; // Dùng mặc định 50,000,000 nếu không có giá trị
+      
+      // Tính số tiền mỗi kỳ
+      const amountPerPeriod = Math.round(installmentAmount / totalPeriods);
+      
+      // Tạo các kỳ mới
       const calculatePeriods: InstallmentPaymentPeriod[] = [];
-      const startDate = new Date(installment.start_date);
-
-      // Nếu đã có dữ liệu DB, tạo một map để kiểm tra
-      const existingPeriods = new Map<number, InstallmentPaymentPeriod>();
-      paymentPeriods.forEach((period) => {
-        existingPeriods.set(period.periodNumber, period);
-      });
-
-      let currentDate = new Date(startDate);
-      let remainingDays = loanPeriod;
-
+      
       for (let i = 0; i < totalPeriods; i++) {
         const periodNumber = i + 1;
-
-        // Nếu kỳ này đã có trong DB, sử dụng dữ liệu từ DB
-        if (existingPeriods.has(periodNumber)) {
-          calculatePeriods.push(existingPeriods.get(periodNumber)!);
-
-          // Cập nhật ngày hiện tại để tính kỳ tiếp theo
-          if (i < totalPeriods - 1) {
-            const periodDays = installment.payment_period || 30;
-            currentDate.setDate(currentDate.getDate() + periodDays);
-            remainingDays -= periodDays;
-          }
-
-          continue;
-        }
-
-        // Tính ngày của kỳ này
-        const dueDate = new Date(currentDate);
-
-        // Tính toán số ngày của kỳ
-        let periodDays = installment.payment_period || 30;
+        const dueDate = new Date(installment.start_date);
+        dueDate.setDate(dueDate.getDate() + i * paymentPeriod);
+        
+        // Tính số ngày của kỳ này
+        let periodDays = paymentPeriod;
         if (i === totalPeriods - 1) {
-          // Last period - may be shorter
-          const totalDays = installment.duration || 0;
-          const previousDays = i * periodDays;
-          periodDays = Math.max(1, totalDays - previousDays);
+          // Kỳ cuối có thể ngắn hơn
+          const totalDays = loanPeriod;
+          const daysFromStart = i * paymentPeriod;
+          periodDays = Math.min(paymentPeriod, totalDays - daysFromStart);
         }
-
+        
         // Tính ngày kết thúc kỳ
         const endDate = new Date(dueDate);
         endDate.setDate(endDate.getDate() + periodDays - 1);
-
-        // Tính số tiền dự kiến cho kỳ này dựa trên số ngày của kỳ
-        const expectedAmount = Math.round(dailyAmount * periodDays);
-
+        
+        // Tính số tiền dự kiến cho kỳ này
+        let expectedAmount = amountPerPeriod;
+        if (i === totalPeriods - 1) {
+          // Kỳ cuối điều chỉnh để tổng số tiền chính xác
+          const calculatedAmount = calculatePeriods.reduce((sum, p) => sum + p.expectedAmount, 0);
+          expectedAmount = installmentAmount - calculatedAmount;
+        }
+        
         // Thêm vào danh sách kỳ dự kiến
         calculatePeriods.push({
           id: `calculated-${periodNumber}`,
           installmentId: installment.id,
           periodNumber,
-          dueDate: format(dueDate, "dd/MM/yyyy"),
-          paymentDate: format(dueDate, "dd/MM/yyyy"), // Mặc định ngày giao dịch là ngày đầu kỳ
+          dueDate: format(dueDate, 'dd/MM/yyyy'),
+          endDate: format(endDate, 'dd/MM/yyyy'),
+          paymentStartDate: undefined, // Mặc định chưa thanh toán
           expectedAmount,
-          actualAmount: 0, // Add default actualAmount
+          actualAmount: 0,
           isOverdue: dueDate < new Date(),
           daysOverdue:
             dueDate < new Date()
               ? calculateDaysBetween(dueDate, new Date())
               : 0,
         });
-
-        // Cập nhật ngày bắt đầu cho kỳ tiếp theo
-        currentDate = new Date(endDate);
-        currentDate.setDate(currentDate.getDate() + 1);
-
-        // Giảm số ngày còn lại
-        remainingDays -= periodDays;
       }
-
+      
       return calculatePeriods;
-    }, [installment, paymentPeriods, calculateDaysBetween]);
+    }, [
+      installment,
+      paymentPeriods,
+    ]);
 
   // Xử lý checkbox đánh dấu đã thanh toán
   const handleCheckboxChange = async (
@@ -684,6 +796,8 @@ export function InstallmentPaymentHistoryModal({
       period,
       checked,
       index,
+      tempEditedDate,
+      tempEditedAmount,
     });
 
     if (!installment?.id) {
@@ -705,260 +819,251 @@ export function InstallmentPaymentHistoryModal({
     setProcessingCheckbox(true);
     setProcessingPeriodId(period.id);
 
+    // Tạo một timeout để reset processing state nếu xử lý quá lâu
+    const timeoutId = setTimeout(() => {
+      console.log("Processing timeout reached - resetting state");
+      setProcessingCheckbox(false);
+      setProcessingPeriodId(null);
+      toast({
+        variant: "destructive",
+        title: "Xử lý quá lâu",
+        description: "Thao tác đang mất nhiều thời gian. Vui lòng thử lại sau.",
+      });
+    }, 15000); // 15 seconds timeout
+
     try {
-      // Import necessary functions
-      const {
-        saveInstallmentPayment,
-        deleteInstallmentPaymentPeriod,
-        bulkSaveInstallmentPayments,
-        updateInstallmentStatus,
-      } = await import("@/lib/installmentPayment");
-
-      if (checked) {
-        // Lấy tất cả các kỳ từ calculateCombinedPaymentPeriods
-        const allPeriods = calculateCombinedPaymentPeriods;
-
-        // Tìm các kỳ cần đánh dấu: từ kỳ đầu tiên chưa thanh toán cho đến kỳ hiện tại
-        const periodsToUpdate: InstallmentPaymentPeriod[] = [];
-
-        for (let i = 0; i <= index; i++) {
-          const p = allPeriods[i];
-          if (p && !isPeriodInDatabase(p)) {
-            periodsToUpdate.push(p);
+      // Pre-load các modules cần thiết để tăng tốc độ xử lý
+      const importPromise = import("@/lib/installmentPayment");
+      
+      // Tạo một hàm riêng để xử lý logic trong background
+      const processCheckbox = async () => {
+        try {
+          const startTime = performance.now();
+          
+          if (checked) {
+            // Xử lý khi check 
+            await handleCheckPeriod(period, index, importPromise);
+          } else {
+            // Xử lý khi uncheck
+            await handleUncheckPeriod(period, index, importPromise);
           }
-        }
-
-        // Nếu không có kỳ nào cần cập nhật, thoát sớm
-        if (periodsToUpdate.length === 0) {
-          setProcessingCheckbox(false);
-          setProcessingPeriodId(null);
-          return;
-        }
-
-        console.log("Các kỳ sẽ được cập nhật:", periodsToUpdate);
-
-        // Show toast thông báo đang xử lý
-        if (periodsToUpdate.length > 1) {
-          toast({
-            title: "Đang xử lý",
-            description: `Đang cập nhật ${periodsToUpdate.length} kỳ thanh toán...`,
-          });
-        }
-
-        // Optimistic UI update - cập nhật UI trước khi lưu vào DB để trải nghiệm mượt hơn
-        const optimisticPaymentPeriods = [...paymentPeriods];
-        const today = new Date().toISOString().split("T")[0];
-
-        // Tạo map của các kỳ hiện có để cập nhật
-        const updatedPeriodsMap = new Map<string, boolean>();
-
-        for (const p of periodsToUpdate) {
-          updatedPeriodsMap.set(p.id, true);
-        }
-
-        // Cập nhật UI trước cho người dùng thấy ngay
-        if (periodsToUpdate.length > 0) {
-          setPaymentPeriods((prev) => {
-            // Tránh việc thay đổi state nếu không cần thiết
-            let hasChanges = false;
-            const updatedPeriods = prev.map((p) => {
-              if (updatedPeriodsMap.has(p.id)) {
-                hasChanges = true;
-                return {
-                  ...p,
-                  actualAmount: p.expectedAmount,
-                  paymentDate: format(new Date(), "dd/MM/yyyy"),
-                };
-              }
-              return p;
-            });
-            return hasChanges ? updatedPeriods : prev;
-          });
-        }
-
-        // Phương pháp mới: Lưu tất cả các kỳ trong một giao dịch duy nhất
-        if (typeof bulkSaveInstallmentPayments === "function") {
-          // Sử dụng phương pháp mới hiệu quả hơn
-          await bulkSaveInstallmentPayments(
-            installment.id,
-            periodsToUpdate,
-            installment.employee_id,
-          );
-        } else {
-          // Fallback to previous batched method
-          // Cải thiện hiệu suất: Tách thành batch xử lý
-          const processInBatches = async (
-            items: InstallmentPaymentPeriod[],
-            batchSize: number = 5,
-          ) => {
-            // Tạo mảng chứa các batch
-            const batches = [];
-            for (let i = 0; i < items.length; i += batchSize) {
-              batches.push(items.slice(i, i + batchSize));
-            }
-
-            // Xử lý từng batch
-            for (let i = 0; i < batches.length; i++) {
-              const batch = batches[i];
-              const payments = batch.map((p) => ({
-                installmentId: installment.id,
-                periodData: p,
-                actualAmount: p.expectedAmount,
-                isCalculatedPeriod: p.id.startsWith("calculated-"),
-              }));
-
-              // Process in parallel for better performance
-              await Promise.all(
-                batch.map((p) =>
-                  saveInstallmentPayment(
-                    installment.id,
-                    p,
-                    p.expectedAmount,
-                    p.id.startsWith("calculated-"),
-                  ),
-                ),
-              );
-            }
-          };
-
-          // Xử lý các kỳ theo batch để cải thiện hiệu suất
-          await processInBatches(periodsToUpdate);
-        }
-
-        // Refresh dữ liệu từ API để cập nhật UI với data chính xác
-        const { data, error } = await getInstallmentPaymentPeriods(
-          installment.id,
-        );
-        if (!error && data) {
-          setPaymentPeriods(data);
-        }
-      } else {
-        // Lấy tất cả các kỳ từ calculateCombinedPaymentPeriods
-        const allPeriods = calculateCombinedPaymentPeriods;
-
-        // Kiểm tra xem có kỳ nào sau đã được thanh toán không
-        const laterPeriods = allPeriods.slice(index + 1);
-        const anyLaterPeriodPaid = laterPeriods.some(
-          (p: InstallmentPaymentPeriod) => p && isPeriodInDatabase(p),
-        );
-
-        if (anyLaterPeriodPaid) {
+          
+          const endTime = performance.now();
+          console.log(`Checkbox processing completed in ${endTime - startTime}ms`);
+        } catch (error) {
+          console.error("Error in processCheckbox:", error);
           toast({
             variant: "destructive",
             title: "Lỗi",
-            description:
-              "Không thể bỏ đánh dấu kỳ này vì có kỳ sau đã được thanh toán.",
+            description: "Có lỗi xảy ra khi xử lý. Vui lòng thử lại.",
           });
+        } finally {
+          // Luôn reset processing state khi hoàn thành
           setProcessingCheckbox(false);
           setProcessingPeriodId(null);
-          return;
+          clearTimeout(timeoutId);
         }
-
-        // Optimistic UI update
-        setPaymentPeriods((prev) => {
-          return prev.map((p) => {
-            if (p.id === period.id) {
-              return {
-                ...p,
-                actualAmount: 0,
-                paymentDate: undefined,
-              };
-            }
-            return p;
-          });
-        });
-
-        // Chỉ xóa kỳ trong DB nếu đã tồn tại (không phải kỳ tính toán)
-        if (!period.id.startsWith("calculated-")) {
-          await deleteInstallmentPaymentPeriod(period.id);
-
-          // Kiểm tra nếu hợp đồng đang ở trạng thái FINISHED
-          // và nếu vừa bỏ đánh dấu một kỳ, thì cần cập nhật lại trạng thái
-          if (installment.status === InstallmentStatus.FINISHED) {
-            // Kiểm tra xem tất cả các kỳ khác đã được thanh toán chưa
-            const { data: updatedPeriods } = await getInstallmentPaymentPeriods(
-              installment.id,
-            );
-            const allPeriodsCompleted = updatedPeriods?.every(
-              (p) => p.actualAmount && p.actualAmount >= p.expectedAmount,
-            );
-
-            // Nếu không phải tất cả các kỳ đều hoàn thành, cập nhật trạng thái thành ON_TIME
-            if (!allPeriodsCompleted) {
-              await updateInstallmentStatus(
-                installment.id,
-                InstallmentStatus.ON_TIME,
-              );
-              // Cập nhật state installment
-              setInstallment({
-                ...installment,
-                status: InstallmentStatus.ON_TIME,
-              });
-
-              toast({
-                title: "Trạng thái hợp đồng đã thay đổi",
-                description:
-                  "Hợp đồng đã chuyển từ 'Hoàn thành' sang 'Đang vay' do có kỳ chưa thanh toán.",
-              });
-            }
-          }
-
-          // Refresh dữ liệu từ API để cập nhật UI
-          const { data, error } = await getInstallmentPaymentPeriods(
-            installment.id,
-          );
-          if (!error && data) {
-            setPaymentPeriods(data);
-          }
-        }
-      }
-
-      // Hiển thị thông báo thành công
-      toast({
-        title: "Thành công",
-        description: checked
-          ? "Đã đánh dấu kỳ này và các kỳ trước là đã thanh toán"
-          : "Đã bỏ đánh dấu thanh toán cho kỳ này",
-      });
-
-      // Gọi callback để cập nhật summary
-      if (onPaymentUpdate) {
-        onPaymentUpdate();
-      }
-
-      // Gọi callback để cập nhật bảng hợp đồng nếu trạng thái hợp đồng thay đổi
-      if (
-        !checked &&
-        installment.status === InstallmentStatus.FINISHED &&
-        onContractStatusChange
-      ) {
-        onContractStatusChange();
-      }
+      };
+      
+      // Thực thi xử lý trong background
+      processCheckbox();
     } catch (error) {
-      console.error("Error updating payment status:", error);
+      console.error("Error in handleCheckboxChange:", error);
+      // Đảm bảo reset processing state nếu có lỗi
+      setProcessingCheckbox(false);
+      setProcessingPeriodId(null);
+      clearTimeout(timeoutId);
+      
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: "Có lỗi xảy ra khi xử lý. Vui lòng thử lại.",
+      });
+    }
+  };
+  
+  // Hàm xử lý check payment period
+  const handleCheckPeriod = async (
+    period: InstallmentPaymentPeriod,
+    index: number,
+    importPromise: Promise<any>
+  ) => {
+    if (!installment?.id) {
+      console.error("No installment id found");
+      return;
+    }
+    
+    // Get all periods from calculateCombinedPaymentPeriods
+    const allPeriods = calculateCombinedPaymentPeriods;
+
+    // Find periods that need to be marked as paid: from first unpaid period to current
+    const periodsToUpdate: InstallmentPaymentPeriod[] = [];
+
+    for (let i = 0; i <= index; i++) {
+      const p = allPeriods[i];
+      if (p && !isPeriodInDatabase(p)) {
+        // If this is the oldest unpaid period and we have temp values, apply them
+        if (i === findOldestUnpaidPeriodIndex && (tempEditedDate || tempEditedAmount !== null)) {
+          const updatedPeriod = {
+            ...p,
+            paymentStartDate: tempEditedDate 
+              ? format(new Date(tempEditedDate), "dd/MM/yyyy") 
+              : format(new Date(), "dd/MM/yyyy"),
+            actualAmount: tempEditedAmount !== null ? tempEditedAmount : p.expectedAmount,
+          };
+          
+          periodsToUpdate.push(updatedPeriod);
+        } else {
+          periodsToUpdate.push(p);
+        }
+      }
+    }
+
+    // If no periods to update, exit early
+    if (periodsToUpdate.length === 0) {
+      return;
+    }
+
+    // Show toast message if processing multiple periods
+    if (periodsToUpdate.length > 1) {
+      toast({
+        title: "Đang xử lý",
+        description: `Đang cập nhật ${periodsToUpdate.length} kỳ thanh toán...`,
+      });
+    }
+
+    // Import necessary functions
+    const { bulkSaveInstallmentPayments } = await importPromise;
+    
+    // Save data to server
+    const result = await bulkSaveInstallmentPayments(
+      installment.id,
+      periodsToUpdate,
+      installment.employee_id,
+    );
+    
+    console.log("Bulk save result:", result);
+    
+    // Refresh data from server để cập nhật UI
+    if (installment?.id) {
+      const { data } = await getInstallmentPaymentPeriods(installment.id);
+      if (data) {
+        console.log("Updating UI with fresh data after save");
+        setPaymentPeriods(data);
+      }
+    }
+    
+    // Call callback to update summary
+    if (onPaymentUpdate) {
+      onPaymentUpdate();
+    }
+    
+    // Show success message
+    toast({
+      title: "Thành công",
+      description: `Đã đánh dấu ${periodsToUpdate.length} kỳ đã thanh toán`
+    });
+    
+    // Reset temporary values
+    setTempEditedDate(null);
+    setTempEditedAmount(null);
+  };
+  
+  // Hàm xử lý uncheck payment period
+  const handleUncheckPeriod = async (
+    period: InstallmentPaymentPeriod,
+    index: number,
+    importPromise: Promise<any>
+  ) => {
+    if (!installment?.id) {
+      console.error("No installment id found");
+      return;
+    }
+    
+    // Lấy tất cả các kỳ từ calculateCombinedPaymentPeriods
+    const allPeriods = calculateCombinedPaymentPeriods;
+
+    // Check if any later periods have been paid
+    const laterPeriods = allPeriods.slice(index + 1);
+    const anyLaterPeriodPaid = laterPeriods.some(
+      (p: InstallmentPaymentPeriod) => p && isPeriodInDatabase(p),
+    );
+
+    if (anyLaterPeriodPaid) {
       toast({
         variant: "destructive",
         title: "Lỗi",
         description:
-          "Có lỗi xảy ra khi cập nhật trạng thái thanh toán. Vui lòng thử lại.",
+          "Không thể bỏ đánh dấu kỳ này vì có kỳ sau đã được thanh toán.",
       });
-
-      // Refresh dữ liệu từ API để khôi phục UI
-      try {
-        const { data } = await getInstallmentPaymentPeriods(installment.id);
-        if (data) {
-          setPaymentPeriods(data);
-        }
-      } catch (refreshError) {
-        console.error(
-          "Error refreshing payment periods after failure:",
-          refreshError,
-        );
-      }
-    } finally {
-      setProcessingCheckbox(false);
-      setProcessingPeriodId(null);
+      return;
     }
+
+    // Import necessary functions
+    const { deleteInstallmentPaymentPeriod, updateInstallmentStatus } = await importPromise;
+
+    // Only delete from DB if it's not a calculated period
+    if (!period.id.startsWith("calculated-")) {
+      // Use installmentId to optimize API call
+      const { data: deletedPeriod } = await deleteInstallmentPaymentPeriod(period.id, installment.id);
+      
+      // Check if contract status needs to be updated
+      if (installment.status === InstallmentStatus.FINISHED) {
+        // Check if all other periods are still completed
+        const currentPaymentPeriods = calculateCombinedPaymentPeriods.map(p => 
+          p.id === period.id ? { ...p, actualAmount: 0 } : p
+        );
+        
+        const allPeriodsCompleted = currentPaymentPeriods.every(
+          (p) => (p.id === period.id) ? false : (p.actualAmount && p.actualAmount >= p.expectedAmount)
+        );
+
+        // If not all periods are completed, update status to ON_TIME
+        if (!allPeriodsCompleted) {
+          await updateInstallmentStatus(
+            installment.id,
+            InstallmentStatus.ON_TIME,
+          );
+          
+          // Update installment state
+          setInstallment({
+            ...installment,
+            status: InstallmentStatus.ON_TIME,
+          });
+
+          toast({
+            title: "Trạng thái hợp đồng đã thay đổi",
+            description:
+              "Hợp đồng đã chuyển từ 'Hoàn thành' sang 'Đang vay' do có kỳ chưa thanh toán.",
+          });
+          
+          // Call callback to update contract table if status changed
+          if (onContractStatusChange) {
+            onContractStatusChange();
+          }
+        }
+      }
+    }
+    
+    // Always refresh data from server to ensure UI accuracy
+    if (installment?.id) {
+      const { data } = await getInstallmentPaymentPeriods(installment.id);
+      if (data) {
+        console.log("Updating UI with fresh data after uncheck");
+        setPaymentPeriods(data);
+      }
+    }
+    
+    // Call callback to update summary if provided
+    if (onPaymentUpdate) {
+      onPaymentUpdate();
+    }
+    
+    // Show success message
+    toast({
+      title: "Thành công",
+      description: "Đã bỏ đánh dấu thanh toán cho kỳ này"
+    });
   };
 
   // Handler for closing the installment - show confirmation first
@@ -1058,7 +1163,7 @@ export function InstallmentPaymentHistoryModal({
   // Calculate customer receive amount
   const calculateCustomerReceiveAmount = (): number => {
     const downPayment = parseFormattedNumber(rotationDownPayment);
-    const remainingDebt = Math.max(0, installmentAmount - totalPaid);
+    const remainingDebt = Math.max(0, (installment?.installment_amount || 0) - totalPaid);
 
     // Customer receives: downPayment - remainingDebt
     return downPayment - remainingDebt;
@@ -1152,7 +1257,7 @@ export function InstallmentPaymentHistoryModal({
           installment.id,
           data.id,
           installment.employee_id,
-          Math.max(0, installmentAmount - totalPaid),
+          Math.max(0, (installment?.installment_amount || 0) - totalPaid),
         );
       }
 
@@ -1195,6 +1300,11 @@ export function InstallmentPaymentHistoryModal({
     }
   };
 
+  // Find the oldest unpaid period - add this after calculateCombinedPaymentPeriods
+  const findOldestUnpaidPeriodIndex = useMemo(() => {
+    return calculateCombinedPaymentPeriods.findIndex(p => !isPeriodInDatabase(p));
+  }, [calculateCombinedPaymentPeriods, isPeriodInDatabase]);
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-[800px] md:max-w-[900px] max-h-[90vh] overflow-y-auto">
@@ -1226,14 +1336,14 @@ export function InstallmentPaymentHistoryModal({
                   <tr>
                     <td className="py-1 px-2 border font-bold">Trả góp</td>
                     <td className="py-1 px-2 text-right border">
-                      {formatCurrency(installmentAmount)}
+                      {formatCurrency(installment?.installment_amount || 0)}
                     </td>
                   </tr>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Tỷ lệ</td>
                     <td className="py-1 px-2 text-right border">
-                      {installment?.amount_given && installmentAmount
-                        ? `${(installmentAmount / 100000).toFixed(0)} ăn ${(installment.amount_given / 100000).toFixed(0)}`
+                      {installment?.amount_given && installment?.installment_amount
+                        ? `10 ăn ${(10 * installment?.amount_given / installment?.installment_amount).toFixed(0)}`
                         : "-"}
                     </td>
                   </tr>
@@ -1284,7 +1394,7 @@ export function InstallmentPaymentHistoryModal({
                       Tổng tiền phải đóng
                     </td>
                     <td className="py-1 px-2 text-right border text-red-600">
-                      {formatCurrency(installmentAmount)}
+                      {formatCurrency(installment?.installment_amount || 0)}
                     </td>
                   </tr>
                   <tr>
@@ -1299,7 +1409,7 @@ export function InstallmentPaymentHistoryModal({
                     </td>
                     <td className="py-1 px-2 text-right border text-red-600">
                       {formatCurrency(
-                        Math.max(0, installmentAmount - totalPaid),
+                        Math.max(0, (installment?.installment_amount || 0) - totalPaid),
                       )}
                     </td>
                   </tr>
@@ -1307,7 +1417,7 @@ export function InstallmentPaymentHistoryModal({
                     <td className="py-1 px-2 border font-bold">Tổng lãi phí</td>
                     <td className="py-1 px-2 text-right border">
                       {formatCurrency(
-                        installmentAmount - (installment?.amount_given || 0),
+                        (installment?.installment_amount || 0) - (installment?.amount_given || 0),
                       )}
                     </td>
                   </tr>
@@ -1363,34 +1473,43 @@ export function InstallmentPaymentHistoryModal({
                     <tbody className="divide-y divide-gray-200">
                       {calculateCombinedPaymentPeriods.map(
                         (period, index) => {
-                          // Tính toán số ngày của kỳ
-                          let periodDays = installment.payment_period || 30;
-                          if (
-                            index ===
-                            calculateCombinedPaymentPeriods.length - 1
-                          ) {
-                            // Last period - may be shorter
-                            const totalDays = installment.duration || 0;
-                            const previousDays = index * periodDays;
-                            periodDays = Math.max(1, totalDays - previousDays);
-                          }
-
-                          const actualAmount =
-                            period.actualAmount || period.expectedAmount;
+                          const actualAmount = period.actualAmount || period.expectedAmount;
                           const isPaid = isPeriodInDatabase(period);
                           const isEditing = selectedPeriodId === period.id;
-                          const isDateEditing =
-                            selectedDatePeriodId === period.id;
+                          const isDateEditing = selectedDatePeriodId === period.id;
 
-                          // Calculate date period range
-                          const startDate = period.dueDate
-                            ? new Date(
-                                period.dueDate.split("/").reverse().join("-"),
-                              )
-                            : new Date();
-                          const endDate = new Date(startDate);
-                          endDate.setDate(endDate.getDate() + (periodDays - 1));
-                          const dateRange = `${period.dueDate} → ${format(endDate, "dd/MM/yyyy")}`;
+                          // Calculate date range using endDate when available
+                          const dateRange = period.endDate 
+                            ? `${period.dueDate} → ${period.endDate}`
+                            : (() => {
+                                // Fallback calculation if endDate is not available
+                                let periodDays = installment.payment_period || 30;
+                                
+                                // For calculated periods, the last one may be shorter
+                                if (index === calculateCombinedPaymentPeriods.length - 1) {
+                                  const totalDays = installment.duration || 0;
+                                  const startDate = new Date(installment.start_date);
+                                  const currentDate = new Date(period.dueDate.split('/').reverse().join('-'));
+                                  
+                                  // Calculate days elapsed
+                                  const daysElapsed = Math.ceil(
+                                    (currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
+                                  );
+                                  
+                                  // Remaining days = total duration - days elapsed
+                                  const remainingDays = totalDays - daysElapsed;
+                                  if (remainingDays > 0 && remainingDays < periodDays) {
+                                    periodDays = remainingDays + 1; // +1 to include the start day
+                                  }
+                                }
+                                
+                                const startDate = period.dueDate
+                                  ? new Date(period.dueDate.split("/").reverse().join("-"))
+                                  : new Date();
+                                const endDate = new Date(startDate);
+                                endDate.setDate(endDate.getDate() + (periodDays - 1));
+                                return `${period.dueDate} → ${format(endDate, "dd/MM/yyyy")}`;
+                              })();
 
                           return (
                             <tr key={period.id} className="hover:bg-gray-50">
@@ -1400,8 +1519,9 @@ export function InstallmentPaymentHistoryModal({
                               <td className="px-2 py-2 text-center border">
                                 {dateRange}
                               </td>
+                              
                               <td className="px-2 py-2 text-center border">
-                                {isDateEditing ? (
+                                {isDateEditing && selectedDatePeriodId === period.id ? (
                                   <DatePicker
                                     value={selectedDate}
                                     onChange={(date) => {
@@ -1412,14 +1532,16 @@ export function InstallmentPaymentHistoryModal({
                                   />
                                 ) : (
                                   <span
-                                    className={`${!isPaid ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
+                                    className={`${index === findOldestUnpaidPeriodIndex && !isPaid ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
                                     onClick={
-                                      !isPaid
-                                        ? () => handleStartDateEditing(period)
+                                      index === findOldestUnpaidPeriodIndex && !isPaid
+                                        ? () => handleStartDateEditing(period, index)
                                         : undefined
                                     }
                                   >
-                                    {period.paymentDate || "—"}
+                                    {index === findOldestUnpaidPeriodIndex && tempEditedDate 
+                                      ? format(new Date(tempEditedDate), "dd/MM/yyyy")
+                                      : period.paymentStartDate || format(new Date(), "dd/MM/yyyy")}
                                   </span>
                                 )}
                               </td>
@@ -1458,14 +1580,16 @@ export function InstallmentPaymentHistoryModal({
                                   </div>
                                 ) : (
                                   <span
-                                    className={`${!isPaid ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
+                                    className={`${index === findOldestUnpaidPeriodIndex && !isPaid ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
                                     onClick={
-                                      !isPaid
-                                        ? () => handleStartEditing(period)
+                                      index === findOldestUnpaidPeriodIndex && !isPaid
+                                        ? () => handleStartEditing(period, index)
                                         : undefined
                                     }
                                   >
-                                    {formatCurrency(actualAmount)}
+                                    {index === findOldestUnpaidPeriodIndex && tempEditedAmount !== null
+                                      ? formatCurrency(tempEditedAmount)
+                                      : formatCurrency(actualAmount)}
                                   </span>
                                 )}
                               </td>
@@ -1511,7 +1635,7 @@ export function InstallmentPaymentHistoryModal({
                         Tổng tiền trả góp
                       </td>
                       <td className="px-4 py-2 text-right font-medium border">
-                        {formatCurrency(installmentAmount)}
+                        {formatCurrency(installment?.installment_amount || 0)}
                       </td>
                     </tr>
                     <tr>
@@ -1530,7 +1654,7 @@ export function InstallmentPaymentHistoryModal({
                       <td className="px-4 py-2 border">Còn phải đóng</td>
                       <td className="px-4 py-2 text-right border text-red-600">
                         {formatCurrency(
-                          Math.max(0, installmentAmount - totalPaid),
+                          Math.max(0, (installment?.installment_amount || 0) - totalPaid),
                         )}
                       </td>
                     </tr>
@@ -1551,7 +1675,7 @@ export function InstallmentPaymentHistoryModal({
                         {formatCurrency(
                           Math.max(
                             0,
-                            installmentAmount -
+                            (installment?.installment_amount || 0) -
                               totalPaid +
                               (remainingAmount < 0
                                 ? Math.abs(remainingAmount)
@@ -1906,7 +2030,7 @@ export function InstallmentPaymentHistoryModal({
                     </div>
                     <div className="text-red-600 font-medium">
                       {formatCurrency(
-                        Math.max(0, installmentAmount - totalPaid),
+                        Math.max(0, (installment?.installment_amount || 0) - totalPaid),
                       )}
                     </div>
                   </div>
@@ -1970,7 +2094,7 @@ export function InstallmentPaymentHistoryModal({
                       )}{" "}
                       -{" "}
                       {formatCurrency(
-                        Math.max(0, installmentAmount - totalPaid),
+                        Math.max(0, (installment?.installment_amount || 0) - totalPaid),
                       )}{" "}
                       = {formatCurrency(calculateCustomerReceiveAmount())}
                     </div>

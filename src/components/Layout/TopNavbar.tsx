@@ -6,10 +6,6 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useState, useEffect, memo, useCallback } from "react";
 import { useStore } from "@/contexts/StoreContext";
 
-// Debug helper
-const debugLog = (message: string, data?: any) => {
-  console.log(`[TopNavbar] ${message}`, data ? data : '');
-};
 
 // This interface will represent the notification data structure
 interface NotificationCounts {
@@ -91,14 +87,12 @@ export function TopNavbar() {
   
   // Handler for store selection - memoized to prevent recreating on every render
   const handleStoreChange = useCallback((store: any) => {
-    debugLog(`Changing store in TopNavbar to: ${store.name} (${store.id}), type: ${typeof store.id}`);
     setCurrentStore(store);
   }, [setCurrentStore]);
   
   // Log when component mounts and when current store changes
   useEffect(() => {
     if (currentStore) {
-      debugLog(`Current store updated: ${currentStore.name} (${currentStore.id})`);
       
       // Replace with your actual API call to get notifications for the selected store
       const fetchNotificationsForStore = async () => {
@@ -114,9 +108,8 @@ export function TopNavbar() {
           };
           
           setNotificationCounts(mockData);
-          debugLog('Updated notifications for store', mockData);
         } catch (error) {
-          debugLog('Error fetching notifications', error);
+          console.error('Error fetching notifications', error);
         }
       };
       

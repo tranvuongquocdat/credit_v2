@@ -38,7 +38,6 @@ export interface Installment {
   
   // UI-specific fields (mapping from DB)
   amount_given: number;       // down_payment (Tiền đưa khách)
-  interest_rate: number;      // Tỷ lệ lãi suất (calculated)
   duration: number;           // loan_period (Thời gian vay)
   payment_period: number;     // Số ngày đóng tiền
   

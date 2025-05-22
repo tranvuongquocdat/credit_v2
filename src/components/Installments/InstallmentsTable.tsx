@@ -79,7 +79,6 @@ export function InstallmentsTable({
       try {
         // Tạo bản sao dữ liệu ban đầu
         const enhancedInstallments: InstallmentWithPayments[] = [...installments];
-        
         // Filter installments by store_id if currentStore is available
         const filteredInstallments = currentStore ? 
           enhancedInstallments.filter(installment => installment.store_id === currentStore.id) : 
@@ -116,7 +115,7 @@ export function InstallmentsTable({
           // Tính còn phải đóng
           // Ưu tiên dùng installment_amount nếu có, nếu không tính dựa trên amount_given và interest_rate
           const installmentAmount = installment.installment_amount || 
-            (installment.amount_given * (1 + installment.interest_rate / 100));
+            (installment.amount_given);
           
           // Adjust remaining calculation based on oldDebt
           // If oldDebt is negative (customer owes more), add it to remaining amount
@@ -383,11 +382,6 @@ export function InstallmentsTable({
               // Store the overdue days for display
               installment.overdueDays = longestOverdueDays > 0 ? longestOverdueDays : undefined;
               
-              // Calculate the percentage of the total amount that has been paid
-              const totalPaid = installment.totalPaid || 0;
-              const totalAmount = installment.installment_amount || 
-                (installment.amount_given * (1 + installment.interest_rate / 100));
-              
               // Update status based on payment data
               if (installment.status === InstallmentStatus.CLOSED) {
                 // Keep CLOSED status if it's already set in the database
@@ -406,9 +400,9 @@ export function InstallmentsTable({
                   .filter(p => p.actualAmount && p.actualAmount > 0)
                   .sort((a, b) => b.periodNumber - a.periodNumber)[0];
                 
-                if (latestPeriod && latestPeriod.paymentDate) {
-                  // Convert paymentDate string (DD/MM/YYYY) to Date object
-                  const [day, month, year] = latestPeriod.paymentDate.split('/').map(Number);
+                if (latestPeriod && latestPeriod.paymentStartDate) {
+                  // Convert paymentStartDate string (DD/MM/YYYY) to Date object
+                  const [day, month, year] = latestPeriod.paymentStartDate.split('/').map(Number);
                   const latestPaymentDate = new Date(year, month - 1, day); // month is 0-indexed in JS Date
                   
                   // If payment was made but too late, mark as LATE_INTEREST
@@ -418,7 +412,7 @@ export function InstallmentsTable({
                   if (latestPaymentDate > dueDate) {
                     installment.status = InstallmentStatus.LATE_INTEREST;
                   } else {
-                    installment.status = InstallmentStatus.OVERDUE;
+                    installment.status = InstallmentStatus.ON_TIME;
                   }
                 } else {
                   installment.status = InstallmentStatus.OVERDUE;
@@ -471,11 +465,6 @@ export function InstallmentsTable({
                       
                       const downAmount = installment.amount_given;
                       
-                      // Handle edge cases
-                      if (!installmentAmount || installmentAmount <= 0) {
-                        return `${installment.interest_rate}%`;
-                      }
-                      
                       // Calculate ratio: if installment is 10, what is the down payment value
                       const ratio = 10 / installmentAmount * downAmount;
                       
@@ -486,7 +475,7 @@ export function InstallmentsTable({
                       return `10 ăn ${formatValue(ratio)}`;
                     } catch (error) {
                       // Fallback to showing percentage
-                      return `${installment.interest_rate}%`;
+                      return `-`;
                     }
                   })()}
                 </td>

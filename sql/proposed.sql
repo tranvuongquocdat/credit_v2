@@ -187,7 +187,8 @@ CREATE TABLE installment_payment_period (
   date TIMESTAMP WITH TIME ZONE NOT NULL,
   expected_amount NUMERIC NOT NULL,
   actual_amount NUMERIC,
-  payment_date TIMESTAMP WITH TIME ZONE,
+  payment_start_date TIMESTAMP WITH TIME ZONE,
+  payment_end_date TIMESTAMP WITH TIME ZONE,
   notes TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
