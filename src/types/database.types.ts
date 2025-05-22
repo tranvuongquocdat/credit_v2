@@ -59,6 +59,60 @@ export type Database = {
           },
         ]
       }
+      credit_extension_histories: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          credit_id: string
+          days: number
+          extension_date: string
+          from_date: string
+          id: string
+          notes: string | null
+          to_date: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          credit_id: string
+          days: number
+          extension_date: string
+          from_date: string
+          id?: string
+          notes?: string | null
+          to_date: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          credit_id?: string
+          days?: number
+          extension_date?: string
+          from_date?: string
+          id?: string
+          notes?: string | null
+          to_date?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extensions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extensions_credit_id_fkey"
+            columns: ["credit_id"]
+            isOneToOne: false
+            referencedRelation: "credits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       credit_payment_periods: {
         Row: {
           actual_amount: number
@@ -288,60 +342,6 @@ export type Database = {
           },
         ]
       }
-      extensions: {
-        Row: {
-          created_at: string | null
-          created_by: string | null
-          credit_id: string
-          days: number
-          extension_date: string
-          from_date: string
-          id: string
-          notes: string | null
-          to_date: string
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          created_by?: string | null
-          credit_id: string
-          days: number
-          extension_date: string
-          from_date: string
-          id?: string
-          notes?: string | null
-          to_date: string
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          created_by?: string | null
-          credit_id?: string
-          days?: number
-          extension_date?: string
-          from_date?: string
-          id?: string
-          notes?: string | null
-          to_date?: string
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "extensions_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "extensions_credit_id_fkey"
-            columns: ["credit_id"]
-            isOneToOne: false
-            referencedRelation: "credits"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       installment_amount_history: {
         Row: {
           created_at: string | null
@@ -540,6 +540,41 @@ export type Database = {
           username?: string
         }
         Relationships: []
+      }
+      store_fund_history: {
+        Row: {
+          created_at: string | null
+          fund_amount: number
+          id: string
+          note: string | null
+          store_id: string
+          transaction_type: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          fund_amount: number
+          id?: string
+          note?: string | null
+          store_id: string
+          transaction_type?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          fund_amount?: number
+          id?: string
+          note?: string | null
+          store_id?: string
+          transaction_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_fund_history_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       stores: {
         Row: {

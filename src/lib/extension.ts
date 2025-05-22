@@ -9,7 +9,7 @@ import { addDays, format } from 'date-fns';
 export async function getExtensions(creditId: string): Promise<Extension[]> {
   try {
     const { data, error } = await supabase
-      .from('extensions')
+      .from('credit_extension_histories')
       .select('*')
       .eq('credit_id', creditId)
       .order('extension_date', { ascending: false });
@@ -51,7 +51,7 @@ export async function addExtension(extension: Extension): Promise<Extension> {
     // Thêm vào bảng extensions
     // Lưu ý: from_date và to_date sẽ được tự động điền bởi trigger
     const { data, error } = await supabase
-      .from('extensions')
+      .from('credit_extension_histories')
       .insert({
         credit_id: extension.credit_id,
         days: extension.days,
@@ -84,7 +84,7 @@ export async function deleteExtension(id: string): Promise<void> {
   try {
     // Trigger trước khi xóa sẽ tự động điều chỉnh loan_period của credit
     const { error } = await supabase
-      .from('extensions')
+      .from('credit_extension_histories')
       .delete()
       .eq('id', id);
 
