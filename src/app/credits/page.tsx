@@ -25,6 +25,7 @@ import { CreditEditModal } from '@/components/Credits/CreditEditModal';
 
 // Import custom hooks
 import { useCredits } from '@/hooks/useCredits';
+import { useStore } from '@/contexts/StoreContext';
 
 // Import types and API functions
 import { CreditStatus, CreditWithCustomer } from '@/models/credit';
@@ -51,6 +52,8 @@ interface FundStatus {
 
 export default function CreditsPage() {
   const router = useRouter();
+  // Lấy thông tin store từ context
+  const { currentStore } = useStore();
   
   // Use our custom hook for credits data and operations
   const { 
@@ -178,7 +181,6 @@ export default function CreditsPage() {
         
         {/* Thông tin tài chính */}
         <FinancialSummary 
-          storeId="1" 
           autoFetch={true} 
         />
         

@@ -314,6 +314,14 @@ export function PaymentTab({
               return calculateInterestForPeriod(startDate, endDate);
             }}
             creditId={credit.id}
+            // Truyền thêm các thông tin về kỳ thanh toán
+            loanDate={credit.loan_date}
+            loanPeriod={credit.loan_period}
+            interestPeriod={credit.interest_period}
+            // Truyền thông tin về kỳ thanh toán cuối cùng
+            lastPaymentEndDate={combinedPaymentPeriods.length > 0 ? 
+              combinedPaymentPeriods[combinedPaymentPeriods.length - 1].end_date : 
+              undefined}
           />
         </div>
       )}

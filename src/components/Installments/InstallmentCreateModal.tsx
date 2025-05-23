@@ -77,6 +77,9 @@ export function InstallmentCreateModal({
   const [customerAmount, setCustomerAmount] = useState<string>('');
   const [formattedCustomerAmount, setFormattedCustomerAmount] = useState<string>('');
   
+  // Additional state for contract code generation
+  const [autoGenerateCode, setAutoGenerateCode] = useState<boolean>(true);
+  
   // Function to reset form fields
   const resetForm = () => {
     setCustomerType('new');
@@ -96,6 +99,7 @@ export function InstallmentCreateModal({
     setCustomerAmount('');
     setFormattedCustomerAmount('');
     setError(null);
+    setAutoGenerateCode(true);
   };
   
   // Format number with thousand separators
@@ -184,6 +188,17 @@ export function InstallmentCreateModal({
       setFormattedCustomerAmount(formatNumber(newAmount));
     }
   };
+  
+  // Auto-generate contract code when modal opens
+  useEffect(() => {
+    if (isOpen && autoGenerateCode) {
+      // Generate a numerical code: current timestamp + random 3 digits
+      const timestamp = Date.now().toString().slice(-6); // Last 6 digits of timestamp
+      const randomDigits = Math.floor(Math.random() * 900 + 100); // Random 3 digits (100-999)
+      const generatedCode = `${timestamp}${randomDigits}`;
+      setContractCode(generatedCode);
+    }
+  }, [isOpen, autoGenerateCode]);
   
   // Form submission handler
   const handleSubmit = async (e: React.FormEvent) => {
@@ -411,12 +426,30 @@ export function InstallmentCreateModal({
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
             <Label htmlFor="contractCode" className="text-right">Mã HĐ</Label>
-            <Input 
-              id="contractCode"
-              value={contractCode}
-              onChange={(e) => setContractCode(e.target.value)}
-              placeholder="Mã hợp đồng"
-            />
+            <div className="flex items-center gap-2">
+              <Input 
+                id="contractCode"
+                value={contractCode}
+                onChange={(e) => {
+                  setContractCode(e.target.value);
+                  setAutoGenerateCode(false);
+                }}
+                placeholder="Mã hợp đồng"
+              />
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => {
+                  const timestamp = Date.now().toString().slice(-6);
+                  const randomDigits = Math.floor(Math.random() * 900 + 100);
+                  const generatedCode = `${timestamp}${randomDigits}`;
+                  setContractCode(generatedCode);
+                }}
+                className="px-2"
+              >
+                Tạo mã
+              </Button>
+            </div>
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
@@ -462,7 +495,7 @@ export function InstallmentCreateModal({
                 className="w-48"
                 placeholder="0"
               />
-              <span className="text-sm text-gray-500">(Tổng tiền vay khách phải thanh toán - installment_amount)</span>
+              <span className="text-sm text-gray-500">(Tổng tiền vay khách phải thanh toán)</span>
             </div>
           </div>
           
@@ -481,7 +514,7 @@ export function InstallmentCreateModal({
                 className="w-48"
                 placeholder="0"
               />
-              <span className="text-sm text-gray-500">(Tiền khách nhận được - down_payment)</span>
+              <span className="text-sm text-gray-500">(Tổng tiền khách nhận được)</span>
             </div>
           </div>
           
@@ -502,13 +535,32 @@ export function InstallmentCreateModal({
                 <span>ngày</span>
               </div>
               <span className="text-sm text-gray-500">
-                {`(loan_period: Thanh toán ${formatNumber(Math.round(parseInt(amountGiven || '0') / (parseInt(duration || '50') || 1)))} / 1 ngày)`}
+                {`(Thanh toán ${formatNumber(Math.round(parseInt(amountGiven || '0') / (parseInt(duration || '50') || 1)))} / 1 ngày)`}
               </span>
             </div>
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="startDate" className="text-right">Ngày vay (loan_date)</Label>
+            <Label htmlFor="paymentPeriod" className="text-right">
+              Số ngày đóng tiền <span className="text-red-500">*</span>
+            </Label>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Input 
+                  id="paymentPeriod"
+                  type="number"
+                  value={paymentPeriod}
+                  onChange={(e) => setPaymentPeriod(e.target.value)}
+                  required
+                  className="w-24"
+                />
+                <span>ngày</span>
+              </div>
+              <span className="text-sm text-gray-500">(10 ngày đóng 1 lần thì điền số 10)</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
+            <Label htmlFor="startDate" className="text-right">Ngày vay</Label>
             <DatePicker 
               id="startDate"
               value={startDate}
@@ -537,25 +589,6 @@ export function InstallmentCreateModal({
             </select>
           </div>
           
-          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="paymentPeriod" className="text-right">
-              Kỳ hạn trả nợ <span className="text-red-500">*</span>
-            </Label>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Input 
-                  id="paymentPeriod"
-                  type="number"
-                  value={paymentPeriod}
-                  onChange={(e) => setPaymentPeriod(e.target.value)}
-                  required
-                  className="w-24"
-                />
-                <span>ngày</span>
-              </div>
-              <span className="text-sm text-gray-500">(Kỳ hạn payment_period: 10 ngày đóng 1 lần thì điền số 10)</span>
-            </div>
-          </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-start">
             <Label htmlFor="notes" className="text-right mt-2">Ghi chú</Label>

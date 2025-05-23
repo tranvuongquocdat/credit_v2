@@ -21,6 +21,8 @@ import { createCredit } from '@/lib/credit';
 import { getCustomers, createCustomer } from '@/lib/customer';
 import { Customer } from '@/models/customer';
 import { CreateCreditParams, InterestType, CreditStatus } from '@/models/credit';
+import { getStoreFinancialData, updateStoreCashFundOnly } from '@/lib/store';
+import { AlertCircle } from 'lucide-react';
 
 interface CreditCreateModalProps {
   isOpen: boolean;
@@ -63,6 +65,14 @@ export function CreditCreateModal({
   
   // Quick buttons for loan amount
   const loanAmountPresets = [-5, +5, 10, 20, 30, 40, 50];
+  
+  // Thêm state cho validate quỹ
+  const [fundStatus, setFundStatus] = useState<any>(null);
+  const [isFundLoading, setIsFundLoading] = useState(false);
+  const [fundError, setFundError] = useState<string | null>(null);
+  
+  // Additional state for contract code generation
+  const [autoGenerateCode, setAutoGenerateCode] = useState<boolean>(true);
   
   // Format number with thousand separators
   const formatNumber = (value: string | number): string => {
@@ -157,6 +167,37 @@ export function CreditCreateModal({
   // Get current store from context
   const { currentStore } = useStore();
   
+  // Load fund status for the current store
+  useEffect(() => {
+    if (!isOpen || !currentStore?.id) return;
+    
+    async function loadFundStatus() {
+      setIsFundLoading(true);
+      try {
+        const storeFinancialData = await getStoreFinancialData(currentStore?.id || '');
+        setFundStatus(storeFinancialData);
+      } catch (err) {
+        console.error('Error loading fund status:', err);
+        setFundError('Không thể tải thông tin quỹ tiền mặt. Vui lòng thử lại sau.');
+      } finally {
+        setIsFundLoading(false);
+      }
+    }
+    
+    loadFundStatus();
+  }, [isOpen, currentStore?.id]);
+  
+  // Auto-generate contract code when modal opens
+  useEffect(() => {
+    if (isOpen && autoGenerateCode) {
+      // Generate a numerical code: current timestamp + random 3 digits
+      const timestamp = Date.now().toString().slice(-6); // Last 6 digits of timestamp
+      const randomDigits = Math.floor(Math.random() * 900 + 100); // Random 3 digits (100-999)
+      const generatedCode = `${timestamp}${randomDigits}`;
+      setContractCode(generatedCode);
+    }
+  }, [isOpen, autoGenerateCode]);
+  
   // Form submission handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,6 +208,12 @@ export function CreditCreateModal({
       // Ensure we have a store selected
       if (!currentStore?.id) {
         throw new Error('Vui lòng chọn chi nhánh trước khi tạo hợp đồng');
+      }
+      
+      // Validate loan amount against available funds
+      const loanAmountValue = parseInt(loanAmount || '0');
+      if (!fundStatus || fundStatus.availableFund < loanAmountValue) {
+        throw new Error(`Quỹ tiền mặt không đủ. Hiện có ${fundStatus ? Math.floor(fundStatus.availableFund).toLocaleString() : 0} VND.`);
       }
       
       // For new customers, create a customer record first
@@ -219,7 +266,7 @@ export function CreditCreateModal({
         phone,
         address,
         collateral,
-        loan_amount: parseInt(loanAmount || '0'),
+        loan_amount: loanAmountValue,
         interest_type: backendInterestType,
         interest_value: parseFloat(interestValue || '0'),
         interest_ui_type: interestType, // Store the UI interest type
@@ -237,6 +284,15 @@ export function CreditCreateModal({
       
       if (error) throw error;
       
+      // Update store fund after successful credit creation
+      try {
+        // Trừ quỹ tiền mặt sau khi tạo hợp đồng thành công
+        await updateStoreCashFundOnly(currentStore.id, -loanAmountValue);
+      } catch (fundError) {
+        console.error('Error updating store fund:', fundError);
+        // Vẫn cho phép tiếp tục mặc dù cập nhật quỹ bị lỗi
+      }
+      
       // Success - close modal and notify parent
       if (onSuccess && data?.id) {
         onSuccess(data.id);
@@ -244,7 +300,7 @@ export function CreditCreateModal({
       onClose();
     } catch (err) {
       console.error('Error creating credit:', err);
-      setError('Có lỗi xảy ra khi tạo hợp đồng. Vui lòng thử lại.');
+      setError(err instanceof Error ? err.message : 'Có lỗi xảy ra khi tạo hợp đồng. Vui lòng thử lại.');
     } finally {
       setIsLoading(false);
     }
@@ -319,12 +375,30 @@ export function CreditCreateModal({
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
             <Label htmlFor="contractCode" className="text-right">Mã HĐ</Label>
-            <Input 
-              id="contractCode"
-              value={contractCode}
-              onChange={(e) => setContractCode(e.target.value)}
-              placeholder="Mã hợp đồng"
-            />
+            <div className="flex items-center gap-2">
+              <Input 
+                id="contractCode"
+                value={contractCode}
+                onChange={(e) => {
+                  setContractCode(e.target.value);
+                  setAutoGenerateCode(false);
+                }}
+                placeholder="Mã hợp đồng"
+              />
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => {
+                  const timestamp = Date.now().toString().slice(-6);
+                  const randomDigits = Math.floor(Math.random() * 900 + 100);
+                  const generatedCode = `${timestamp}${randomDigits}`;
+                  setContractCode(generatedCode);
+                }}
+                className="px-2"
+              >
+                Tạo mã
+              </Button>
+            </div>
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
@@ -379,6 +453,9 @@ export function CreditCreateModal({
                 inputMode="numeric"
                 placeholder="0"
               />
+              {fundError && (
+                <div className="text-sm text-red-500 mt-1">{fundError}</div>
+              )}
               <div className="flex flex-wrap gap-2 mt-2">
                 {loanAmountPresets.map(amount => (
                   <Button 
@@ -577,7 +654,12 @@ export function CreditCreateModal({
           </div>
           
           {error && (
-            <div className="text-red-500 text-center">{error}</div>
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
+              <span className="flex items-center">
+                <AlertCircle className="h-4 w-4 mr-2" />
+                {error}
+              </span>
+            </div>
           )}
           
           <div className="text-center text-red-500 text-sm mt-2">

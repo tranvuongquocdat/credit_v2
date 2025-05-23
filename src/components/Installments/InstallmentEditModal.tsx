@@ -205,7 +205,7 @@ export function InstallmentEditModal({
       
       // Always include these fields
       installmentData.notes = notes;
-      
+      installmentData.payment_period = parseInt(paymentPeriod || '10');
       // Only include these fields if no payments exist
       if (!hasPayments) {
         installmentData.customer_id = selectedCustomerId;
@@ -223,7 +223,7 @@ export function InstallmentEditModal({
         installmentData.store_id = installment.store_id || '1';
         installmentData.advance_payment = advancePayment;
       }
-      
+      debugger;
       // Call API to update installment
       const { error } = await updateInstallment(installmentId, installmentData);
       
@@ -394,27 +394,6 @@ export function InstallmentEditModal({
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="interestRate" className="text-right">
-              Số ngày đóng tiền <span className="text-red-500">*</span>
-            </Label>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Input 
-                  id="interestRate"
-                  type="number"
-                  value={interestRate}
-                  onChange={(e) => setInterestRate(e.target.value)}
-                  required
-                  className="w-24"
-                  disabled={hasPayments}
-                />
-                <span>ngày</span>
-              </div>
-              <span className="text-sm text-gray-500">(VD: 3 ngày đóng 1 lần thì điền số 3)</span>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
             <Label htmlFor="paymentPeriod" className="text-right">
               Số ngày đóng tiền <span className="text-red-500">*</span>
             </Label>
@@ -430,7 +409,7 @@ export function InstallmentEditModal({
                 />
                 <span>ngày</span>
               </div>
-              <span className="text-sm text-gray-500">(Kỳ hạn payment_period: 10 ngày đóng 1 lần thì điền số 10)</span>
+              <span className="text-sm text-gray-500">(10 ngày đóng 1 lần thì điền số 10)</span>
             </div>
           </div>
           
@@ -464,22 +443,6 @@ export function InstallmentEditModal({
                 </option>
               ))}
             </select>
-          </div>
-          
-          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="advancePayment" className="text-right">Thu tiền trước</Label>
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="advancePayment"
-                checked={advancePayment}
-                onChange={(e) => setAdvancePayment(e.target.checked)}
-                className="mr-2 h-4 w-4"
-              />
-              <Label htmlFor="advancePayment" className="text-sm font-normal">
-                Đánh dấu nếu thu tiền trước
-              </Label>
-            </div>
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-start">

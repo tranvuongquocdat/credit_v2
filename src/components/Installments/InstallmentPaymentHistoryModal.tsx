@@ -274,7 +274,13 @@ export function InstallmentPaymentHistoryModal({
 
   // Load transaction history when the modal opens
   useEffect(() => {
-    async function loadTransactionHistory() {
+    if (isOpen && activeTab === "history") {
+      loadTransactionHistory();
+    }
+  }, [isOpen, installment?.id, activeTab]);
+
+  // Function to load transaction history (moved outside useEffect to be reusable)
+  const loadTransactionHistory = async () => {
       if (!installment?.id) return;
 
       setLoadingHistory(true);
@@ -294,12 +300,7 @@ export function InstallmentPaymentHistoryModal({
       } finally {
         setLoadingHistory(false);
       }
-    }
-
-    if (isOpen && activeTab === "history") {
-      loadTransactionHistory();
-    }
-  }, [isOpen, installment?.id, activeTab]);
+  };
 
   // Format date helper
   const formatDate = (dateString: string | null | undefined): string => {
@@ -1037,6 +1038,7 @@ export function InstallmentPaymentHistoryModal({
 
     // Import necessary functions
     const { bulkSaveInstallmentPayments } = await importPromise;
+    const { recordBulkPayment } = await import('@/lib/installmentAmountHistory');
     
     // Tính tổng số tiền cần cộng vào quỹ
     const totalAmount = periodsToUpdate.reduce((sum, p) => sum + (p.actualAmount || p.expectedAmount), 0);
@@ -1068,12 +1070,25 @@ export function InstallmentPaymentHistoryModal({
     
     console.log("Bulk save result:", result);
     
+    // Ghi vào lịch sử giao dịch
+    await recordBulkPayment(
+      installment.id,
+      installment.employee_id,
+      totalAmount,
+      periodsToUpdate.length
+    );
+    
     // Refresh data from server để cập nhật UI
     if (installment?.id) {
       const { data } = await getInstallmentPaymentPeriods(installment.id);
       if (data) {
         console.log("Updating UI with fresh data after save");
         setPaymentPeriods(data);
+      }
+      
+      // Cập nhật lịch sử giao dịch nếu đang ở tab history
+      if (activeTab === "history") {
+        loadTransactionHistory();
       }
     }
     
@@ -1125,6 +1140,7 @@ export function InstallmentPaymentHistoryModal({
 
     // Import necessary functions
     const { deleteInstallmentPaymentPeriod, updateInstallmentStatus } = await importPromise;
+    const { recordCancelPayment } = await import('@/lib/installmentAmountHistory');
 
     // Only delete from DB if it's not a calculated period
     if (!period.id.startsWith("calculated-")) {
@@ -1145,7 +1161,7 @@ export function InstallmentPaymentHistoryModal({
           return;
         }
       }
-    
+      
       // Use installmentId to optimize API call
       const { data: deletedPeriod } = await deleteInstallmentPaymentPeriod(period.id, installment.id);
       
@@ -1193,6 +1209,11 @@ export function InstallmentPaymentHistoryModal({
       if (data) {
         console.log("Updating UI with fresh data after uncheck");
         setPaymentPeriods(data);
+      }
+      
+      // Cập nhật lịch sử giao dịch nếu đang ở tab history
+      if (activeTab === "history") {
+        loadTransactionHistory();
       }
     }
     
@@ -2013,7 +2034,7 @@ export function InstallmentPaymentHistoryModal({
                                 ? formatCurrency(history.debitAmount)
                                 : ""}
                             </td>
-                            <td className="px-4 py-3 text-sm text-gray-700 text-right text-blue-600">
+                            <td className="px-4 py-3 text-sm text-right text-blue-600">
                               {history.creditAmount > 0
                                 ? formatCurrency(history.creditAmount)
                                 : ""}

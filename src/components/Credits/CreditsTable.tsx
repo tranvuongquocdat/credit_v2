@@ -67,16 +67,16 @@ export function CreditsTable({
       <Table className="border-collapse">
         <TableHeader className="bg-gray-50">
           <TableRow>
-            <TableHead className="py-2 px-3 text-left font-medium w-12 border-b border-r border-gray-200">#</TableHead>
-            <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Mã HĐ</TableHead>
-            <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Tên KH</TableHead>
-            <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Tài sản</TableHead>
-            <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Số tiền</TableHead>
-            <TableHead className="py-2 px-3 text-left font-medium w-28 border-b border-r border-gray-200">Ngày vay</TableHead>
-            <TableHead className="py-2 px-3 text-left font-medium w-28 border-b border-r border-gray-200">Ngày trả</TableHead>
-            <TableHead className="py-2 px-3 text-right font-medium w-28 border-b border-r border-gray-200">Lãi phí đã đóng</TableHead>
-            <TableHead className="py-2 px-3 text-right font-medium w-28 border-b border-r border-gray-200">Nợ cũ</TableHead>
-            <TableHead className="py-2 px-3 text-right font-medium w-28 border-b border-r border-gray-200">Lãi phí đến hôm nay</TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium w-12 border-b border-r border-gray-200">#</TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Mã HĐ</TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Tên KH</TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Tài sản</TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Số tiền</TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium w-28 border-b border-r border-gray-200">Ngày vay</TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium w-28 border-b border-r border-gray-200">Ngày trả</TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium w-28 border-b border-r border-gray-200">Lãi phí đã đóng</TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium w-28 border-b border-r border-gray-200">Nợ cũ</TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium w-28 border-b border-r border-gray-200">Lãi phí đến hôm nay</TableHead>
             <TableHead className="py-2 px-3 text-center font-medium w-28 border-b border-r border-gray-200">Tình trạng</TableHead>
             <TableHead className="py-2 px-3 text-center font-medium w-24 border-b border-gray-200">Thao tác</TableHead>
           </TableRow>
@@ -91,21 +91,21 @@ export function CreditsTable({
           ) : (
             credits.map((credit, index) => (
               <TableRow key={credit.id} className="hover:bg-gray-50 transition-colors">
-                <TableCell className="py-3 px-3 text-gray-500 border-b border-r border-gray-200">{index + 1}</TableCell>
+                <TableCell className="py-3 px-3 text-gray-500 text-center border-b border-r border-gray-200">{index + 1}</TableCell>
                 <TableCell 
-                  className="py-3 px-3 font-medium text-blue-600 cursor-pointer border-b border-r border-gray-200" 
+                  className="py-3 px-3 font-medium text-blue-600 cursor-pointer text-center border-b border-r border-gray-200" 
                   onClick={() => onEdit(credit.id)}
                 >
                   {credit.contract_code || '-'}
                 </TableCell>
-                <TableCell className="py-3 px-3 border-b border-r border-gray-200">
+                <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
                   {credit.customer?.name || '-'}
                 </TableCell>
-                <TableCell className="py-3 px-3 border-b border-r border-gray-200">
+                <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
                   {credit.collateral || '-'}
                 </TableCell>
-                <TableCell className="py-3 px-3 border-b border-r border-gray-200">
-                  <div>
+                <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
+                  <div className="flex flex-col items-center">
                     {formatCurrency(credit.loan_amount)}
                     <div className="text-xs text-red-800 mt-1">
                       {credit.interest_type === 'percentage' 
@@ -114,25 +114,27 @@ export function CreditsTable({
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className="py-3 px-3 text-gray-600 border-b border-r border-gray-200">
-                  <div>
-                    {formatDate(credit.loan_date)}
+                <TableCell className="py-3 px-3 text-gray-600 text-center border-b border-r border-gray-200">
+                  <div className="flex flex-col items-center">
+                    <span className="text-base">{formatDate(credit.loan_date)}</span>
                     <div className="text-xs text-gray-400 mt-1">
                       Kỳ lãi: {credit.interest_period} ngày
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className="py-3 px-3 text-gray-600 border-b border-r border-gray-200">
-                  {formatDate(new Date(new Date(credit.loan_date).getTime() + credit.loan_period * 24 * 60 * 60 * 1000).toISOString())}
+                <TableCell className="py-3 px-3 text-gray-600 text-center border-b border-r border-gray-200">
+                  <span className="text-base">
+                    {formatDate(new Date(new Date(credit.loan_date).getTime() + credit.loan_period * 24 * 60 * 60 * 1000).toISOString())}
+                  </span>
                 </TableCell>
-                <TableCell className="py-3 px-3 text-right border-b border-r border-gray-200">
+                <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
                   {formatCurrency(credit.interest_value)}
                 </TableCell>
-                <TableCell className="py-3 px-3 text-right border-b border-r border-gray-200">
+                <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
                   {/* Assuming old_debt is a field in your data model */}
                   {formatCurrency(0)} {/* Replace with actual old debt if available */}
                 </TableCell>
-                <TableCell className="py-3 px-3 text-right text-rose-600 font-medium border-b border-r border-gray-200">
+                <TableCell className="py-3 px-3 text-center text-rose-600 font-medium border-b border-r border-gray-200">
                   -
                 </TableCell>
                 <TableCell className="py-3 px-3 border-b border-r border-gray-200">

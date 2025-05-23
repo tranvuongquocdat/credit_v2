@@ -128,110 +128,149 @@ export function InstallmentsTable({
           console.log('installment.payments', installment.payments);
           // Find next payment date based on payment periods
           if (installment.payments && installment.payments.length > 0) {
-            console.log('Calculating next payment date using same logic as payment history modal');
+            console.log('Calculating next payment date for installment:', installment.id);
             
-            // Lấy dữ liệu cần thiết từ installment
-            const loanPeriod = installment.duration || 0; // Thời gian vay (ngày)
-            const paymentPeriod = installment.payment_period || 10; // Thời gian mỗi kỳ (ngày)
-            const totalPeriods = Math.ceil(loanPeriod / paymentPeriod); // Tổng số kỳ
+            // Lấy kỳ mới nhất từ DB (có period_number lớn nhất)
+            const latestPeriod = [...installment.payments]
+              .sort((a, b) => b.periodNumber - a.periodNumber)[0];
+            
+            // Tính ngày kết thúc hợp đồng
             const startDate = new Date(installment.start_date);
+            const contractEndDate = new Date(startDate);
+            contractEndDate.setDate(startDate.getDate() + installment.duration - 1);
             
-            console.log('Contract params:', { loanPeriod, paymentPeriod, totalPeriods, startDate: installment.start_date });
-            
-            // Sắp xếp payment periods theo periodNumber và lấy cái cao nhất
-            const sortedPeriods = [...installment.payments].sort((a, b) => a.periodNumber - b.periodNumber);
-            const maxPeriodNumber = Math.max(...sortedPeriods.map(p => p.periodNumber));
-            
-            console.log('Max period number in data:', maxPeriodNumber);
-            
-            // Hàm tính ngày của kỳ cụ thể
-            const calculatePeriodDates = (periodNumber: number) => {
-              // Cần tính toán chính xác ngày bắt đầu và kết thúc của kỳ
-              // Dựa trên ngày bắt đầu của hợp đồng và thời gian của mỗi kỳ
-              let currentDate = new Date(startDate);
-              let periodDays = paymentPeriod;
-              
-              for (let i = 0; i < periodNumber; i++) {
-                if (i === periodNumber - 1) {
-                  // Kỳ cuối cùng có thể ngắn hơn
-                  if (i === totalPeriods - 1) {
-                    const totalDays = loanPeriod;
-                    const previousDays = i * periodDays;
-                    periodDays = Math.max(1, totalDays - previousDays);
-                  }
-                }
-                
-                // Nếu không phải kỳ cuối cùng, cập nhật ngày cho kỳ tiếp theo
-                if (i < periodNumber - 1) {
-                  currentDate.setDate(currentDate.getDate() + periodDays);
-                }
-              }
-              
-              // Tính ngày kết thúc kỳ
-              const endDate = new Date(currentDate);
-              endDate.setDate(endDate.getDate() + periodDays - 1);
-              
-              return {
-                startDate: currentDate,
-                endDate: endDate,
-                periodDays: periodDays
-              };
-            };
-            
-            // Tính ngày cho kỳ tiếp theo
-            const nextPeriodNumber = maxPeriodNumber + 1;
-            
-            // Chỉ tính kỳ tiếp theo nếu chưa đạt đến tổng số kỳ
-            if (nextPeriodNumber <= totalPeriods) {
-              const { startDate: nextPeriodStartDate } = calculatePeriodDates(nextPeriodNumber);
-              
-              // Format in DD/MM/YYYY
-              const day = nextPeriodStartDate.getDate().toString().padStart(2, '0');
-              const month = (nextPeriodStartDate.getMonth() + 1).toString().padStart(2, '0');
-              const year = nextPeriodStartDate.getFullYear();
-              const nextPaymentDate = `${day}/${month}/${year}`;
-              
-              console.log('Calculated next payment date for period', nextPeriodNumber, ':', nextPaymentDate);
-              
-              // Store the next payment date
-              installment.nextPaymentDate = nextPaymentDate;
+            // Parse payment_end_date từ kỳ mới nhất
+            let latestPeriodEndDate: Date;
+            if (latestPeriod.endDate && latestPeriod.endDate.includes('/')) {
+              // Format: DD/MM/YYYY
+              const [day, month, year] = latestPeriod.endDate.split('/').map(Number);
+              latestPeriodEndDate = new Date(year, month - 1, day);
+            } else if (latestPeriod.dueDate && latestPeriod.dueDate.includes('/')) {
+              // Fallback to dueDate if endDate is not available
+              const [day, month, year] = latestPeriod.dueDate.split('/').map(Number);
+              latestPeriodEndDate = new Date(year, month - 1, day);
             } else {
-              // Nếu đã đạt đến tổng số kỳ, tính ngày dựa trên kỳ cuối cùng + payment_period
-              const lastPeriod = sortedPeriods[sortedPeriods.length - 1];
-              let lastDueDate: Date;
-              
-              if (lastPeriod.dueDate.includes('/')) {
-                // Format: DD/MM/YYYY
-                const [day, month, year] = lastPeriod.dueDate.split('/').map(Number);
-                lastDueDate = new Date(year, month - 1, day);
-              } else {
-                // ISO format
-                lastDueDate = new Date(lastPeriod.dueDate);
-              }
-              
-              // Tính ngày kết thúc của kỳ cuối
-              const { endDate: lastPeriodEndDate } = calculatePeriodDates(maxPeriodNumber);
-              
-              // Ngày bắt đầu kỳ tiếp theo là ngày sau ngày kết thúc kỳ cuối
-              const nextDate = new Date(lastPeriodEndDate);
-              nextDate.setDate(nextDate.getDate() + 1);
-              
-              // Format in DD/MM/YYYY
-              const day = nextDate.getDate().toString().padStart(2, '0');
-              const month = (nextDate.getMonth() + 1).toString().padStart(2, '0');
-              const year = nextDate.getFullYear();
-              const nextPaymentDate = `${day}/${month}/${year}`;
-              
-              console.log('Calculated next payment date after max periods:', nextPaymentDate);
-              
-              // Store the next payment date
-              installment.nextPaymentDate = nextPaymentDate;
+              // Fallback to dueDate as ISO string
+              latestPeriodEndDate = new Date(latestPeriod.dueDate);
             }
             
+            // Kiểm tra nếu payment_end_date bằng ngày kết thúc hợp đồng
+            if (
+              latestPeriodEndDate.getDate() === contractEndDate.getDate() &&
+              latestPeriodEndDate.getMonth() === contractEndDate.getMonth() &&
+              latestPeriodEndDate.getFullYear() === contractEndDate.getFullYear()
+            ) {
+              // Đã đến kỳ cuối cùng của hợp đồng
+              installment.nextPaymentDate = "Hoàn thành";
+            } else if (latestPeriodEndDate < contractEndDate) {
+              // Tính ngày ngay sau payment_end_date + payment_period
+              const nextStartDate = new Date(latestPeriodEndDate);
+              nextStartDate.setDate(nextStartDate.getDate() + 1);
+              
+              const paymentPeriod = installment.payment_period || 10;
+              let nextEndDate = new Date(nextStartDate);
+              nextEndDate.setDate(nextStartDate.getDate() + paymentPeriod - 1);
+              
+              // Kiểm tra nếu vượt quá ngày kết thúc hợp đồng
+              if (nextEndDate > contractEndDate) {
+                nextEndDate = new Date(contractEndDate);
+              }
+              
+              // Format the end date as DD/MM/YYYY
+              const day = nextEndDate.getDate().toString().padStart(2, '0');
+              const month = (nextEndDate.getMonth() + 1).toString().padStart(2, '0');
+              const year = nextEndDate.getFullYear();
+              installment.nextPaymentDate = `${day}/${month}/${year}`;
+              
+              // Check if it's due today
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              
+              // So sánh ngày chuẩn xác hơn
+              const isSameDay = (date1: Date, date2: Date) => {
+                return date1.getDate() === date2.getDate() &&
+                       date1.getMonth() === date2.getMonth() &&
+                       date1.getFullYear() === date2.getFullYear();
+              };
+              
+              if (isSameDay(today, nextEndDate)) {
+                installment.isDueToday = true;
+                // Đánh dấu là ngày hôm nay để hiển thị "Hôm nay" thay vì ngày tháng
+                installment.nextPaymentDate = "Hôm nay";
+              } else {
+                // Đảm bảo không đánh dấu là hôm nay khi không phải
+                installment.isDueToday = false;
+              }
+              
+              // Kiểm tra ngày mai
+              const tomorrow = new Date(today);
+              tomorrow.setDate(today.getDate() + 1);
+              
+              if (!installment.isDueToday && isSameDay(tomorrow, nextEndDate)) {
+                installment.nextPaymentDate = "Ngày mai";
+              }
+              
+              // Check if period is overdue
+              if (today > nextEndDate) {
+                installment.overdueDays = Math.floor((today.getTime() - nextEndDate.getTime()) / (1000 * 60 * 60 * 24));
+              }
+            } else {
+              // Nếu payment_end_date > contract_end_date (trường hợp dữ liệu bất thường)
+              // Trả về ngày kết thúc hợp đồng
+              const day = contractEndDate.getDate().toString().padStart(2, '0');
+              const month = (contractEndDate.getMonth() + 1).toString().padStart(2, '0');
+              const year = contractEndDate.getFullYear();
+              installment.nextPaymentDate = `${day}/${month}/${year}`;
+            }
           } else {
-            // If no payment periods, use the contract start date
-            console.log('No payment periods found, using start_date:', installment.start_date);
-            installment.nextPaymentDate = installment.start_date;
+            // If no payment periods, use the first period end date
+            console.log('No payment periods found, calculating first period end date');
+            
+            // Calculate the first period end date
+            const startDate = new Date(installment.start_date);
+            const paymentPeriod = installment.payment_period || 10;
+            
+            const firstPeriodEndDate = new Date(startDate);
+            firstPeriodEndDate.setDate(startDate.getDate() + paymentPeriod - 1);
+            
+            // Format the end date as DD/MM/YYYY
+            const day = firstPeriodEndDate.getDate().toString().padStart(2, '0');
+            const month = (firstPeriodEndDate.getMonth() + 1).toString().padStart(2, '0');
+            const year = firstPeriodEndDate.getFullYear();
+            installment.nextPaymentDate = `${day}/${month}/${year}`;
+            
+            // Check if it's due today
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            // So sánh ngày chuẩn xác hơn
+            const isSameDay = (date1: Date, date2: Date) => {
+              return date1.getDate() === date2.getDate() &&
+                     date1.getMonth() === date2.getMonth() &&
+                     date1.getFullYear() === date2.getFullYear();
+            };
+            
+            if (isSameDay(today, firstPeriodEndDate)) {
+              installment.isDueToday = true;
+              // Đánh dấu là ngày hôm nay để hiển thị "Hôm nay" thay vì ngày tháng
+              installment.nextPaymentDate = "Hôm nay";
+            } else {
+              // Đảm bảo không đánh dấu là hôm nay khi không phải
+              installment.isDueToday = false;
+            }
+            
+            // Kiểm tra ngày mai
+            const tomorrow = new Date(today);
+            tomorrow.setDate(today.getDate() + 1);
+            
+            if (!installment.isDueToday && isSameDay(tomorrow, firstPeriodEndDate)) {
+              installment.nextPaymentDate = "Ngày mai";
+            }
+            
+            // Check if period is overdue
+            if (today > firstPeriodEndDate) {
+              installment.overdueDays = Math.floor((today.getTime() - firstPeriodEndDate.getTime()) / (1000 * 60 * 60 * 24));
+            }
           }
         }
         
@@ -545,7 +584,7 @@ export function InstallmentsTable({
                   </Badge>
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  <div className={`flex items-center justify-center gap-1 ${installment.overdueDays ? 'text-red-500 font-medium' : installment.isDueToday ? 'text-amber-500 font-medium' : ''}`}>
+                  <div className={`flex items-center justify-center gap-1 ${installment.overdueDays ? 'text-red-500 font-medium' : installment.isDueToday ? 'text-amber-500 font-medium' : installment.nextPaymentDate === "Ngày mai" ? 'text-blue-500 font-medium' : ''}`}>
                     {(() => {
                       // If remaining amount is 0 or less, show "Hoàn thành"
                       if (installment.remainingToPay !== undefined && installment.remainingToPay <= 0) {
@@ -556,31 +595,47 @@ export function InstallmentsTable({
                         );
                       }
                       
+                      // If nextPaymentDate is "Hoàn thành", show that
+                      if (installment.nextPaymentDate === "Hoàn thành") {
+                        return (
+                          <span className="text-green-600 font-medium">
+                            Hoàn thành
+                          </span>
+                        );
+                      }
+                      
+                      // If nextPaymentDate is "Hôm nay", show that
+                      if (installment.nextPaymentDate === "Hôm nay") {
+                        return (
+                          <span className="text-amber-500 font-medium">
+                            Hôm nay
+                          </span>
+                        );
+                      }
+                      
+                      // If nextPaymentDate is "Ngày mai", show that
+                      if (installment.nextPaymentDate === "Ngày mai") {
+                        return (
+                          <span className="text-blue-500 font-medium">
+                            Ngày mai
+                          </span>
+                        );
+                      }
+                      
                       // Format the next payment date for display
                       if (installment.nextPaymentDate) {
-                        // Handle both date formats (DD/MM/YYYY and ISO)
-                        let displayDate: Date;
+                        // For better readability, extract only the day and month (DD/MM)
                         if (installment.nextPaymentDate.includes('/')) {
-                          const [day, month, year] = installment.nextPaymentDate.split('/').map(Number);
-                          displayDate = new Date(year, month - 1, day);
+                          const [day, month] = installment.nextPaymentDate.split('/');
+                          return `${day}/${month}`;
                         } else {
-                          displayDate = new Date(installment.nextPaymentDate);
+                          const date = new Date(installment.nextPaymentDate);
+                          return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}`;
                         }
-                        return displayDate.toLocaleDateString('vi-VN');
                       } else {
                         return new Date(installment.due_date).toLocaleDateString('vi-VN');
                       }
                     })()}
-                    {installment.overdueDays && installment.overdueDays > 0 && (
-                      <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
-                        quá hạn
-                      </span>
-                    )}
-                    {installment.isDueToday && (
-                      <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-                        hôm nay
-                      </span>
-                    )}
                   </div>
                 </td>
                 <td className="py-3 px-3 text-center">

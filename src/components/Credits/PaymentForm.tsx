@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
-import { format, addDays, differenceInDays } from 'date-fns';
+import { format, addDays, differenceInDays, parseISO } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
 interface PaymentFormProps {
@@ -22,6 +22,12 @@ interface PaymentFormProps {
     otherAmount: number;
     totalAmount: number;
   }) => void;
+  // Thêm các thông tin về kỳ hạn từ credit
+  loanDate?: string;
+  loanPeriod?: number;
+  interestPeriod?: number;
+  // Thêm thông tin về kỳ thanh toán cuối cùng
+  lastPaymentEndDate?: string;
 }
 
 export function PaymentForm({
@@ -31,7 +37,11 @@ export function PaymentForm({
   defaultAmount = 128000,
   creditId,
   interestCalculator,
-  onSubmit
+  onSubmit,
+  loanDate,
+  loanPeriod = 30,
+  interestPeriod = 10,
+  lastPaymentEndDate
 }: PaymentFormProps) {
   // Format number with thousand separators
   const formatNumber = (value: string | number): string => {
@@ -39,9 +49,33 @@ export function PaymentForm({
     return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   };
 
-  const [startDate, setStartDate] = useState(format(defaultStartDate, 'yyyy-MM-dd'));
-  const [endDate, setEndDate] = useState(format(defaultEndDate, 'yyyy-MM-dd'));
-  const [days, setDays] = useState(differenceInDays(defaultEndDate, defaultStartDate).toString());
+  // Hàm tính khoảng cách giữa hai ngày (bao gồm cả ngày cuối)
+  const calculateDaysBetween = (startDate: Date, endDate: Date): number => {
+    return differenceInDays(endDate, startDate) + 1;
+  };
+
+  // Tính ngày bắt đầu dựa trên kỳ thanh toán cuối cùng
+  const [startDate, setStartDate] = useState<string>(() => {
+    if (lastPaymentEndDate) {
+      // Ngày bắt đầu = ngày kết thúc kỳ thanh toán cuối + 1
+      const nextDay = addDays(new Date(lastPaymentEndDate), 1);
+      return format(nextDay, 'yyyy-MM-dd');
+    } else if (loanDate) {
+      // Nếu không có kỳ thanh toán nào, sử dụng ngày vay
+      return format(new Date(loanDate), 'yyyy-MM-dd');
+    }
+    return format(defaultStartDate, 'yyyy-MM-dd');
+  });
+
+  // Mặc định số ngày = interestPeriod nếu có
+  const [days, setDays] = useState<string>(interestPeriod ? interestPeriod.toString() : '8');
+  
+  // Tính ngày kết thúc dựa trên ngày bắt đầu và số ngày
+  const [endDate, setEndDate] = useState<string>(() => {
+    const start = new Date(startDate);
+    const end = addDays(start, parseInt(days) - 1); // trừ 1 vì đã bao gồm ngày bắt đầu
+    return format(end, 'yyyy-MM-dd');
+  });
   
   // State for monetary amounts with formatting
   const [interestAmount, setInterestAmount] = useState(defaultAmount.toString());
@@ -50,40 +84,31 @@ export function PaymentForm({
   const [otherAmount, setOtherAmount] = useState('0');
   const [formattedOtherAmount, setFormattedOtherAmount] = useState('0');
 
+  // Recalculate end date when days change
+  useEffect(() => {
+    const start = new Date(startDate);
+    const end = addDays(start, parseInt(days) - 1);
+    setEndDate(format(end, 'yyyy-MM-dd'));
+  }, [days, startDate]);
+  
   // Recalculate interest when dates change
   useEffect(() => {
     try {
       if (interestCalculator && startDate && endDate) {
-        // Calculate days between dates
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        const daysDiff = differenceInDays(end, start) + 1;
-        setDays(daysDiff.toString());
-        
         // Calculate interest using the provided calculator
         const calculatedInterest = interestCalculator(startDate, endDate);
         setInterestAmount(calculatedInterest.toString());
         setFormattedInterestAmount(formatNumber(calculatedInterest));
-      } else {
-        // Calculate days between dates
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        const daysDiff = differenceInDays(end, start) + 1;
-        setDays(daysDiff.toString());
       }
     } catch (err) {
       console.error('Error calculating interest:', err);
     }
   }, [startDate, endDate, interestCalculator]);
   
-  // Handle start date change
-  const handleStartDateChange = (value: string) => {
-    setStartDate(value);
-  };
-  
-  // Handle end date change
-  const handleEndDateChange = (value: string) => {
-    setEndDate(value);
+  // Handle days change
+  const handleDaysChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newDays = e.target.value;
+    setDays(newDays);
   };
   
   // Handle interest amount change
@@ -103,11 +128,36 @@ export function PaymentForm({
   // Tính tổng tiền
   const totalAmount = Number(interestAmount) + Number(otherAmount);
   
-  // Tính ngày đóng tiếp theo
-  const nextPaymentDate = format(
-    addDays(new Date(endDate), Number(days)),
-    'dd-MM-yyyy'
-  );
+  // Tính ngày đóng tiếp theo dựa trên kỳ hạn
+  const nextPaymentDate = (() => {
+    const end = new Date(endDate);
+    
+    if (interestPeriod) {
+      // Nếu có interestPeriod, sử dụng nó để tính ngày đóng tiếp theo
+      const nextStartDate = new Date(end);
+      nextStartDate.setDate(end.getDate() + 1);
+      
+      const nextEndDate = new Date(nextStartDate);
+      nextEndDate.setDate(nextStartDate.getDate() + interestPeriod - 1);
+      
+      // Nếu có loanPeriod, kiểm tra không vượt quá thời hạn vay
+      if (loanDate && loanPeriod) {
+        const loanStartDate = new Date(loanDate);
+        const contractEndDate = new Date(loanStartDate);
+        contractEndDate.setDate(loanStartDate.getDate() + loanPeriod - 1);
+        
+        if (nextEndDate > contractEndDate) {
+          // Nếu vượt quá ngày kết thúc hợp đồng, trả về "Hoàn thành"
+          return "Hoàn thành";
+        }
+      }
+      
+      return format(nextEndDate, 'dd-MM-yyyy');
+    } else {
+      // Nếu không có interestPeriod, dùng số ngày của kỳ hiện tại
+      return format(addDays(end, Number(days)), 'dd-MM-yyyy');
+    }
+  })();
   
   // Xử lý nộp form
   const handleSubmit = (e: React.FormEvent) => {
@@ -122,40 +172,46 @@ export function PaymentForm({
     });
   };
   
+  // Format ngày để hiển thị
+  const formattedStartDate = format(new Date(startDate), 'dd/MM/yyyy');
+  const formattedEndDate = format(new Date(endDate), 'dd/MM/yyyy');
+  
   return (
     <div className="border rounded-md p-4 bg-white">
       <h3 className="font-medium mb-4">Đóng lãi phí tùy biến theo ngày</h3>
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-[150px_1fr] gap-y-4 items-center">
           <div className="text-right pr-2">Từ ngày :</div>
-          <div>
+          <div className="flex items-center gap-2">
             <DatePicker 
               value={startDate} 
-              onChange={handleStartDateChange}
+              onChange={() => {}} // không cho phép thay đổi
               className="w-64"
+              disabled={true}
             />
-          </div>
-          
-          <div className="text-right pr-2">Đến ngày :</div>
-          <div className="flex items-center gap-3">
-            <DatePicker 
-              value={endDate} 
-              onChange={handleEndDateChange}
-              className="w-64"
-            />
-            <span>( Ngày đóng lãi phí tiếp : <span className="text-blue-600">{nextPaymentDate}</span> )</span>
+            <span className="text-gray-500">(Tự động tính từ kỳ trước)</span>
           </div>
           
           <div className="text-right pr-2">Số ngày :</div>
           <div className="flex items-center gap-2">
             <Input 
               value={days} 
-              onChange={(e) => setDays(e.target.value)}
+              onChange={handleDaysChange}
               className="w-64"
               type="number"
-              readOnly={!!interestCalculator}
+              min="1"
             />
             <span className="text-blue-600">Ngày</span>
+          </div>
+          
+          <div className="text-right pr-2">Đến ngày :</div>
+          <div className="text-blue-600">
+            {formattedEndDate}
+            <span className="ml-3 text-gray-500">
+              {nextPaymentDate === "Hoàn thành" 
+                ? "( Đây là kỳ cuối cùng )" 
+                : `( Ngày đóng lãi phí tiếp: ${nextPaymentDate} )`}
+            </span>
           </div>
           
           <div className="text-right pr-2">Tiền lãi phí :</div>
