@@ -231,7 +231,6 @@ export async function createInstallment(installment: CreateInstallmentParams) {
   try {
     // Import recordContractCreation and updateStoreCashFund
     const { recordContractCreation } = await import('./installmentAmountHistory');
-    const { updateStoreCashFund } = await import('./store');
     
     // Get employee info to find store_id
     let storeId = '1'; // Default store_id
@@ -286,18 +285,7 @@ export async function createInstallment(installment: CreateInstallmentParams) {
     const paymentPeriod = data.payment_period || 30;
     const loanDate = data.loan_date || new Date().toISOString();
     
-    // Deduct down payment from store's cash fund
-    try {
-      // Negative amount to subtract from cash fund
-      const { success, error: fundError } = await updateStoreCashFund(storeId, -downPayment);
-      if (!success) {
-        console.error('Error updating store cash fund:', fundError);
-        // Continue anyway
-      }
-    } catch (fundError) {
-      console.error('Error updating store cash fund:', fundError);
-      // Continue anyway
-    }
+    // REMOVED: Deduct down payment from store's cash fund - Việc cập nhật quỹ tiền mặt sẽ được thực hiện ở phía client
     
     // Transform result to match UI requirements
     const result: Installment = {

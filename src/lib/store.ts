@@ -208,3 +208,41 @@ export async function updateStoreCashFund(storeId: string, amount: number) {
     return { success: false, error };
   }
 }
+
+// Update only the cash fund of a store without affecting investment
+export async function updateStoreCashFundOnly(storeId: string, amount: number) {
+  try {
+    // First get the current cash fund
+    const { data, error } = await supabase
+      .from(TABLE_NAME)
+      .select('cash_fund')
+      .eq('id', storeId)
+      .single();
+    
+    if (error) throw error;
+    
+    // If no data, throw error
+    if (!data) throw new Error('Store not found');
+    
+    // Calculate new cash fund (current + amount)
+    // Amount can be negative to subtract from the fund
+    const currentCashFund = data.cash_fund || 0;
+    const newCashFund = currentCashFund + amount;
+    
+    // Update only the cash fund
+    const { error: updateError } = await supabase
+      .from(TABLE_NAME)
+      .update({ 
+        cash_fund: newCashFund,
+        updated_at: new Date().toISOString() 
+      })
+      .eq('id', storeId);
+    
+    if (updateError) throw updateError;
+    
+    return { success: true, error: null, newCashFund };
+  } catch (error) {
+    console.error('Error updating store cash fund (only):', error);
+    return { success: false, error };
+  }
+}

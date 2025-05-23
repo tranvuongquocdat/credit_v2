@@ -13,35 +13,15 @@ interface StoreContextType {
   error: Error | null;
 }
 
-
-// Try to get store from localStorage on initialization for faster loading
-const getInitialStoreFromLocalStorage = (): Store | null => {
-  if (typeof window === 'undefined') return null;
-  
-  try {
-    const savedStore = localStorage.getItem('selectedStore');
-    if (savedStore) {
-      const parsedStore = JSON.parse(savedStore) as Store;
-      return parsedStore;
-    }
-  } catch (err) {
-  }
-  
-  return null;
-};
-
 // Create the context with default values
-const StoreContext = createContext<StoreContextType>({
-  currentStore: null,
-  stores: [],
-  setCurrentStore: () => {},
-  loading: true,
-  error: null
-});
+const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 // Custom hook to use the store context
 export const useStore = () => {
   const context = useContext(StoreContext);
+  if (context === undefined) {
+    throw new Error('useStore must be used within a StoreProvider');
+  }
   return context;
 };
 
@@ -51,21 +31,10 @@ interface StoreProviderProps {
 
 export const StoreProvider = ({ children }: StoreProviderProps) => {
   
-  // Try to load from localStorage immediately for faster initial render
-  const [currentStore, setCurrentStoreState] = useState<Store | null>(getInitialStoreFromLocalStorage());
   const [stores, setStores] = useState<Store[]>([]);
+  const [currentStore, setCurrentStoreState] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-
-  // Function to set current store and save to localStorage
-  const setCurrentStore = (store: Store) => {
-    
-    // Use try-catch for localStorage operations as they can fail
-    try {
-      localStorage.setItem('selectedStore', JSON.stringify(store));
-    } catch (err) {
-    }
-  };
 
   // Load stores and verify/initialize current store
   useEffect(() => {
@@ -85,18 +54,21 @@ export const StoreProvider = ({ children }: StoreProviderProps) => {
         if (data && data.length > 0) {
           setStores(data);
           
-          // We already tried to load from localStorage in the initial state
-          // Now we just need to verify it exists in the fetched stores
-          if (currentStore) {
-            // Verify the store still exists in the list
-            const storeExists = data.some(store => store.id === currentStore.id);
-            
-            if (!storeExists) {
-              setCurrentStore(data[0]);
+          // Lấy store đã chọn từ localStorage nếu có
+          const savedStoreId = localStorage.getItem('currentStoreId');
+          if (savedStoreId) {
+            const savedStore = data.find(store => store.id === savedStoreId);
+            if (savedStore) {
+              setCurrentStoreState(savedStore);
+            } else {
+              // Nếu không tìm thấy store đã lưu, mặc định chọn store đầu tiên
+              setCurrentStoreState(data[0]);
+              localStorage.setItem('currentStoreId', data[0].id);
             }
           } else {
-            // No store loaded yet, select the first one
-            setCurrentStore(data[0]);
+            // Nếu không có store nào được lưu, mặc định chọn store đầu tiên
+            setCurrentStoreState(data[0]);
+            localStorage.setItem('currentStoreId', data[0].id);
           }
         }
       } catch (err) {
@@ -117,7 +89,18 @@ export const StoreProvider = ({ children }: StoreProviderProps) => {
     return () => {
       isMounted = false;
     };
-  }, [currentStore]);
+  }, []);
+
+  // Hàm để cập nhật currentStore
+  const setCurrentStore = (store: Store) => {
+    // Lưu vào state (quan trọng để trigger re-render)
+    setCurrentStoreState(store);
+    
+    // Lưu vào localStorage
+    localStorage.setItem('currentStoreId', store.id);
+    
+    console.log('Store context updated:', store);
+  };
 
   // Use useMemo to prevent unnecessary re-renders
   const contextValue = useMemo(() => ({

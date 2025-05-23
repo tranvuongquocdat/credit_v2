@@ -17,6 +17,7 @@ import { AlertCircle } from 'lucide-react';
 import { createInstallment } from '@/lib/installment';
 import { getCustomers, createCustomer } from '@/lib/customer';
 import { getEmployees } from '@/lib/employee';
+import { updateStoreCashFundOnly, getStoreById } from '@/lib/store';
 import { Customer } from '@/models/customer';
 import { Employee } from '@/models/employee';
 import { InstallmentStatus } from '@/models/installment';
@@ -48,8 +49,8 @@ export function InstallmentCreateModal({
   const [idNumber, setIdNumber] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
-  const [amountGiven, setAmountGiven] = useState<string>('0');
-  const [formattedAmountGiven, setFormattedAmountGiven] = useState<string>('0');
+  const [amountGiven, setAmountGiven] = useState<string>('');
+  const [formattedAmountGiven, setFormattedAmountGiven] = useState<string>('');
   const [duration, setDuration] = useState<string>('50');
   const [paymentPeriod, setPaymentPeriod] = useState<string>('10');
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -73,8 +74,8 @@ export function InstallmentCreateModal({
   const amountPresets = [-5, 10, 15, 20, 25, 30, 40, 50];
   
   // For the second input field - tiền đưa khách
-  const [customerAmount, setCustomerAmount] = useState<string>('0');
-  const [formattedCustomerAmount, setFormattedCustomerAmount] = useState<string>('0');
+  const [customerAmount, setCustomerAmount] = useState<string>('');
+  const [formattedCustomerAmount, setFormattedCustomerAmount] = useState<string>('');
   
   // Function to reset form fields
   const resetForm = () => {
@@ -84,16 +85,16 @@ export function InstallmentCreateModal({
     setIdNumber('');
     setPhone('');
     setAddress('');
-    setAmountGiven('0');
-    setFormattedAmountGiven('0');
+    setAmountGiven('');
+    setFormattedAmountGiven('');
     setDuration('50');
     setPaymentPeriod('10');
     setStartDate(format(new Date(), 'yyyy-MM-dd'));
     setNotes('');
     setEmployeeId('');
     setSelectedCustomerId('');
-    setCustomerAmount('0');
-    setFormattedCustomerAmount('0');
+    setCustomerAmount('');
+    setFormattedCustomerAmount('');
     setError(null);
   };
   
@@ -236,8 +237,21 @@ export function InstallmentCreateModal({
         throw new Error('Kỳ hạn trả nợ phải lớn hơn 0');
       }
       
+      // Kiểm tra số dư quỹ của cửa hàng
+      const { data: storeData, error: storeError } = await getStoreById(selectedEmployee.store_id);
+      if (storeError) {
+        throw new Error('Không thể lấy thông tin cửa hàng');
+      }
+      
+      // Kiểm tra xem quỹ có đủ tiền không
+      const currentCashFund = storeData?.cash_fund || 0;
+      if (currentCashFund < downPayment) {
+        throw new Error(`Quỹ tiền mặt không đủ để tạo hợp đồng. Quỹ hiện tại: ${formatNumber(currentCashFund)}, Cần: ${formatNumber(downPayment)}`);
+      }
+      
       // Get or create customer
       let finalCustomerId = selectedCustomerId;
+      let finalCustomerName = '';
       
       // For new customers, create in database first
       if (customerType === 'new') {
@@ -261,12 +275,12 @@ export function InstallmentCreateModal({
         }
         
         finalCustomerId = createdCustomer.id;
+        finalCustomerName = customerName;
+      } else {
+        // Get customer name for existing customer
+        const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
+        finalCustomerName = selectedCustomer?.name || '';
       }
-      
-      // Calculate interest rate based on the difference between amountGiven and customerAmount
-      const interestRate = downPayment > 0 
-        ? Math.round(((installmentAmount - downPayment) / downPayment) * 100 * 100) / 100
-        : 0;
       
       // Prepare installment data
       const installmentData = {
@@ -283,9 +297,20 @@ export function InstallmentCreateModal({
       };
       
       // Call API to create installment
-      const { error } = await createInstallment(installmentData);
+      const { data: newInstallment, error } = await createInstallment(installmentData);
       
       if (error) throw error;
+      
+      // Cập nhật số dư quỹ tiền của cửa hàng - trừ đi số tiền đã giao cho khách
+      const { success, error: updateError } = await updateStoreCashFundOnly(
+        selectedEmployee.store_id,
+        -downPayment // Trừ số tiền giao khách (down_payment)
+      );
+      
+      if (!success || updateError) {
+        console.error('Error updating store cash fund:', updateError);
+        throw new Error('Không thể cập nhật quỹ tiền mặt của cửa hàng');
+      }
       
       // Success - close modal and notify parent
       const successMessage = customerType === 'new' 
@@ -435,6 +460,7 @@ export function InstallmentCreateModal({
                 required
                 inputMode="numeric"
                 className="w-48"
+                placeholder="0"
               />
               <span className="text-sm text-gray-500">(Tổng tiền vay khách phải thanh toán - installment_amount)</span>
             </div>
@@ -453,6 +479,7 @@ export function InstallmentCreateModal({
                 required
                 inputMode="numeric"
                 className="w-48"
+                placeholder="0"
               />
               <span className="text-sm text-gray-500">(Tiền khách nhận được - down_payment)</span>
             </div>

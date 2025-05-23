@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useState, useEffect, memo, useCallback } from "react";
 import { useStore } from "@/contexts/StoreContext";
-
+import { useRouter } from "next/navigation";
 
 // This interface will represent the notification data structure
 interface NotificationCounts {
@@ -21,12 +21,14 @@ const StoreDropdown = memo(({
   currentStore, 
   stores, 
   loading, 
-  onSelectStore 
+  onSelectStore,
+  storeVersion
 }: { 
   currentStore: any, 
   stores: any[], 
   loading: boolean, 
-  onSelectStore: (store: any) => void 
+  onSelectStore: (store: any) => void,
+  storeVersion: number
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   
@@ -82,13 +84,24 @@ export function TopNavbar() {
     installmentInvoices: 0
   });
   
+  // Thêm state để theo dõi phiên bản cửa hàng, dùng để buộc StoreDropdown re-render
+  const [storeVersion, setStoreVersion] = useState(0);
+  
   // Use the store context instead of local state
   const { currentStore, stores, setCurrentStore, loading } = useStore();
+  const router = useRouter();
   
   // Handler for store selection - memoized to prevent recreating on every render
   const handleStoreChange = useCallback((store: any) => {
+    console.log('handleStoreChange', store);
     setCurrentStore(store);
-  }, [setCurrentStore]);
+    
+    // Tăng phiên bản cửa hàng để buộc component re-render
+    setStoreVersion(prev => prev + 1);
+    
+    // Buộc router refresh để làm mới dữ liệu trang
+    router.refresh();
+  }, [setCurrentStore, router]);
   
   // Log when component mounts and when current store changes
   useEffect(() => {
@@ -115,7 +128,7 @@ export function TopNavbar() {
       
       fetchNotificationsForStore();
     }
-  }, [currentStore]);
+  }, [currentStore, storeVersion]);
   
   // Helper function to render notification badge
   const renderNotificationBadge = (count: number) => {
@@ -189,12 +202,13 @@ export function TopNavbar() {
           {renderNotificationBadge(notificationCounts.installmentInvoices)}
         </button>
         
-        {/* Memomized Store Dropdown Component */}
+        {/* Memomized Store Dropdown Component với storeVersion để buộc re-render */}
         <StoreDropdown
           currentStore={currentStore}
           stores={stores}
           loading={loading}
           onSelectStore={handleStoreChange}
+          storeVersion={storeVersion}
         />
         
         {/* User profile with dropdown */}
@@ -221,8 +235,6 @@ export function TopNavbar() {
               onClick={async () => {
                 try {
                   const { signOut } = await import('@/lib/auth');
-                  const { useRouter } = await import('next/navigation');
-                  const router = useRouter();
                   await signOut();
                   router.push('/login');
                   router.refresh();

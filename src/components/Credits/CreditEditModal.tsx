@@ -39,11 +39,11 @@ export function CreditEditModal({
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [collateral, setCollateral] = useState('');
-  const [loanAmount, setLoanAmount] = useState<string>('0');
-  const [formattedLoanAmount, setFormattedLoanAmount] = useState<string>('0');
+  const [loanAmount, setLoanAmount] = useState<string>('');
+  const [formattedLoanAmount, setFormattedLoanAmount] = useState<string>('');
   const [interestType, setInterestType] = useState<string>('daily');
   const [interestNotation, setInterestNotation] = useState<string>('k_per_million');  // For tracking the selected radio button option
-  const [interestValue, setInterestValue] = useState<string>('0');
+  const [interestValue, setInterestValue] = useState<string>('');
   const [loanPeriod, setLoanPeriod] = useState<string>('30');
   const [interestPeriod, setInterestPeriod] = useState<string>('10');
   const [loanDate, setLoanDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -140,7 +140,7 @@ export function CreditEditModal({
         setPhone(creditData.phone || '');
         setAddress(creditData.address || '');
         setCollateral(creditData.collateral || '');
-        const loanAmountStr = creditData.loan_amount?.toString() || '0';
+        const loanAmountStr = creditData.loan_amount?.toString() || '';
         setLoanAmount(loanAmountStr);
         setFormattedLoanAmount(formatNumber(loanAmountStr));
         // Get interest UI type and notation from the credit data
@@ -173,7 +173,7 @@ export function CreditEditModal({
         }
         setInterestType(detectedInterestType);
         setInterestNotation(detectedNotation);
-        setInterestValue(creditData.interest_value?.toString() || '0');
+        setInterestValue(creditData.interest_value?.toString() || '');
         setLoanPeriod(creditData.loan_period?.toString() || '30');
         setInterestPeriod(creditData.interest_period?.toString() || '10');
         setLoanDate(creditData.loan_date ? format(new Date(creditData.loan_date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
@@ -366,6 +366,7 @@ export function CreditEditModal({
                   onChange={handleLoanAmountChange}
                   required
                   inputMode="numeric"
+                  placeholder="0"
                 />
                 <div className="flex flex-wrap gap-2 mt-2">
                   {loanAmountPresets.map(amount => (
@@ -411,6 +412,7 @@ export function CreditEditModal({
                   onChange={(e) => setInterestValue(e.target.value)}
                   required
                   className="w-32"
+                  placeholder="0"
                 />
                 <div className="flex flex-wrap gap-4 items-center">
                   {interestType === 'daily' && (

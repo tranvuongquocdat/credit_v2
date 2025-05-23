@@ -222,4 +222,107 @@ export async function deleteStoreFundHistory(id: string) {
       error
     };
   }
+}
+
+export async function recordInstallmentPaymentFundTransaction(
+  storeId: string,
+  amount: number,
+  isAddingFunds: boolean,
+  installmentId: string,
+  periodNumber: number
+) {
+  try {
+    const transactionType = isAddingFunds ? 'interest' : 'withdrawal';
+    const operation = isAddingFunds ? 'Cộng' : 'Trừ';
+    
+    // Create the fund history record
+    const historyData: StoreFundHistoryFormData = {
+      store_id: storeId,
+      fund_amount: Math.abs(amount), // Always store as positive
+      transaction_type: transactionType,
+      created_at: new Date().toISOString(),
+      note: `${operation} tiền kỳ ${periodNumber} cho HĐ trả góp ${installmentId}`
+    };
+    
+    // Create transaction record
+    const { data: newRecord, error } = await supabase
+      .from(TABLE_NAME)
+      .insert({
+        store_id: historyData.store_id,
+        fund_amount: historyData.fund_amount,
+        transaction_type: historyData.transaction_type,
+        note: historyData.note,
+        created_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Update store cash fund based on transaction type
+    // If adding funds (payment), add to cash fund; if removing (uncheck), subtract from cash fund
+    const amountChange = isAddingFunds ? Math.abs(amount) : -Math.abs(amount);
+
+    await updateStoreCashFund(storeId, amountChange);
+
+    return {
+      data: newRecord as StoreFundHistory,
+      error: null
+    };
+  } catch (error) {
+    console.error('Error recording installment payment fund transaction:', error);
+    return {
+      data: null,
+      error
+    };
+  }
+}
+
+// Record a transaction for a new installment creation (deduct the amount given to customer)
+export async function recordNewInstallmentFundTransaction(
+  storeId: string,
+  customerId: string,
+  customerName: string,
+  amount: number,
+  installmentId: string
+) {
+  try {
+    // Create the fund history record - this is a withdrawal since we're giving money to customer
+    const historyData: StoreFundHistoryFormData = {
+      store_id: storeId,
+      fund_amount: Math.abs(amount), // Always store as positive
+      transaction_type: 'withdrawal',
+      created_at: new Date().toISOString(),
+      note: `Tiền giao khách ${customerName} (ID: ${customerId}) cho HĐ trả góp ${installmentId}`
+    };
+    
+    // Create transaction record
+    const { data: newRecord, error } = await supabase
+      .from(TABLE_NAME)
+      .insert({
+        store_id: historyData.store_id,
+        fund_amount: historyData.fund_amount,
+        transaction_type: historyData.transaction_type,
+        note: historyData.note,
+        created_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Update store cash fund - deduct the amount given to customer
+    await updateStoreCashFund(storeId, -Math.abs(amount));
+
+    return {
+      data: newRecord as StoreFundHistory,
+      error: null
+    };
+  } catch (error) {
+    console.error('Error recording new installment fund transaction:', error);
+    return {
+      data: null,
+      error
+    };
+  }
 } 

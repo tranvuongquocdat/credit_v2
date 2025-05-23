@@ -44,12 +44,13 @@ export function InstallmentEditModal({
   const [idNumber, setIdNumber] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
-  const [amountGiven, setAmountGiven] = useState<string>('0');
-  const [formattedAmountGiven, setFormattedAmountGiven] = useState<string>('0');
-  const [customerAmount, setCustomerAmount] = useState<string>('0');
-  const [formattedCustomerAmount, setFormattedCustomerAmount] = useState<string>('0');
+  const [amountGiven, setAmountGiven] = useState<string>('');
+  const [formattedAmountGiven, setFormattedAmountGiven] = useState<string>('');
+  const [customerAmount, setCustomerAmount] = useState<string>('');
+  const [formattedCustomerAmount, setFormattedCustomerAmount] = useState<string>('');
   const [interestRate, setInterestRate] = useState<string>('10');
   const [duration, setDuration] = useState<string>('50');
+  const [paymentPeriod, setPaymentPeriod] = useState<string>('10');
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [notes, setNotes] = useState('');
   const [advancePayment, setAdvancePayment] = useState(false);
@@ -124,12 +125,13 @@ export function InstallmentEditModal({
         setAddress(installmentData.customer?.address || '');
         if (installmentData) {
           setContractCode(installmentData.contract_code || '');
-          setAmountGiven(installmentData.installment_amount?.toString() || '0');
-          setFormattedAmountGiven(formatNumber(installmentData.installment_amount?.toString() || '0'));
+          setAmountGiven(installmentData.installment_amount?.toString() || '');
+          setFormattedAmountGiven(formatNumber(installmentData.installment_amount?.toString() || ''));
           // Set customer amount to same as amountGiven initially, can be changed by user
-          setCustomerAmount(installmentData.amount_given?.toString() || '0');
-          setFormattedCustomerAmount(formatNumber(installmentData.amount_given?.toString() || '0'));
+          setCustomerAmount(installmentData.amount_given?.toString() || '');
+          setFormattedCustomerAmount(formatNumber(installmentData.amount_given?.toString() || ''));
           setDuration(installmentData.duration?.toString() || '7');
+          setPaymentPeriod(installmentData.payment_period?.toString() || '10');
           setStartDate(installmentData.start_date ? format(new Date(installmentData.start_date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
           setSelectedCustomerId(installmentData.customer_id || '');
           setEmployeeId(installmentData.employee_id || '');
@@ -215,6 +217,7 @@ export function InstallmentEditModal({
         installmentData.amount_given = parseInt(amountGiven || '0');
         installmentData.interest_rate = parseFloat(interestRate || '0');
         installmentData.duration = parseInt(duration || '7');
+        installmentData.payment_period = parseInt(paymentPeriod || '10');
         installmentData.start_date = startDate;
         installmentData.employee_id = employeeId;
         installmentData.store_id = installment.store_id || '1';
@@ -340,6 +343,7 @@ export function InstallmentEditModal({
                 required
                 inputMode="numeric"
                 className="w-48"
+                placeholder="0"
                 disabled={hasPayments}
               />
               <span className="text-sm text-gray-500">(Tổng tiền vay khách phải thanh toán)</span>
@@ -359,6 +363,7 @@ export function InstallmentEditModal({
                 required
                 inputMode="numeric"
                 className="w-48"
+                placeholder="0"
                 disabled={hasPayments}
               />
               <span className="text-sm text-gray-500">(Tổng tiền khách nhận được)</span>
@@ -406,6 +411,26 @@ export function InstallmentEditModal({
                 <span>ngày</span>
               </div>
               <span className="text-sm text-gray-500">(VD: 3 ngày đóng 1 lần thì điền số 3)</span>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
+            <Label htmlFor="paymentPeriod" className="text-right">
+              Số ngày đóng tiền <span className="text-red-500">*</span>
+            </Label>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Input 
+                  id="paymentPeriod"
+                  type="number"
+                  value={paymentPeriod}
+                  onChange={(e) => setPaymentPeriod(e.target.value)}
+                  required
+                  className="w-24"
+                />
+                <span>ngày</span>
+              </div>
+              <span className="text-sm text-gray-500">(Kỳ hạn payment_period: 10 ngày đóng 1 lần thì điền số 10)</span>
             </div>
           </div>
           

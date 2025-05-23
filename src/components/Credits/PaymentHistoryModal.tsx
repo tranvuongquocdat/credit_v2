@@ -136,7 +136,7 @@ export function PaymentHistoryModal({
   const formatDate = (dateString: string | null | undefined): string => {
     if (!dateString) return '-';
     try {
-      return format(new Date(dateString), 'dd-MM-yyyy', { locale: vi });
+      return format(new Date(dateString), 'dd/MM/yyyy', { locale: vi });
     } catch (error) {
       return '-';
     }
@@ -471,7 +471,7 @@ export function PaymentHistoryModal({
           {/* Thông tin khách hàng */}
           <div className="flex justify-between items-center mb-2">
             <h3 className="font-medium">{credit?.customer?.name || 'Khách hàng'}</h3>
-            <h3 className="font-medium text-red-600">Tổng lãi phí: {formatCurrency(totalExpected)}</h3>
+            <h3 className="font-medium">Tổng lãi phí: {formatCurrency(totalExpected)}</h3>
           </div>
           
           {/* Tổng hợp chi tiết */}
