@@ -279,7 +279,7 @@ export function PaymentTab({
                 await savePaymentWithOtherAmount(
                   credit.id,
                   {
-                    period_number: 0, // Custom payment
+                    period_number: combinedPaymentPeriods.filter(p => p.status === PaymentPeriodStatus.PAID || p.status === PaymentPeriodStatus.PARTIALLY_PAID).length + 1, // Custom payment
                     start_date: data.startDate,
                     end_date: data.endDate,
                     expected_amount: interestAmount,

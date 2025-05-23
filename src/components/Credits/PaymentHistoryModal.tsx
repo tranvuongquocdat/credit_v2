@@ -23,6 +23,7 @@ import { CreditActionTabs, DEFAULT_CREDIT_TABS, TabId } from './CreditActionTabs
 import { AdditionalLoanTab, BadCreditTab, CloseTab, DocumentsTab, ExtensionTab, PaymentTab, PrincipalRepaymentTab } from './tabs';
 import { getCreditById } from '@/lib/credit';
 import { getPrincipalChangesForCredit } from '@/lib/credit-principal-changes';
+import { CreditAmountHistory, CreditTransactionType, getCreditAmountHistory } from '@/lib/credit-amount-history';
 
 
 interface PaymentHistoryModalProps {
@@ -47,6 +48,8 @@ export function PaymentHistoryModal({
   const [refreshRepayments, setRefreshRepayments] = useState(0); // Counter để refresh danh sách trả bớt gốc
   const [refreshAdditionalLoans, setRefreshAdditionalLoans] = useState(0); // Counter để refresh danh sách vay thêm
   const [principalChanges, setPrincipalChanges] = useState<PrincipalChange[]>([]);
+  const [creditHistory, setCreditHistory] = useState<CreditAmountHistory[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   
   // State cho modal nhập tiền khách trả
   const [showPaymentInput, setShowPaymentInput] = useState(false);
@@ -76,6 +79,71 @@ export function PaymentHistoryModal({
     } catch (err) {
       console.error('Error reloading credit info:', err);
     }
+  };
+
+  // Load credit amount history when tab changes to history or when credit changes
+  useEffect(() => {
+    async function loadCreditHistory() {
+      if (!credit?.id || activeTab !== 'history') return;
+      
+      setHistoryLoading(true);
+      try {
+        const { data, error } = await getCreditAmountHistory(credit.id);
+        
+        if (error) {
+          throw error;
+        }
+        
+        // Force cast data to CreditAmountHistory[]
+        setCreditHistory(data ? [...data] as unknown as CreditAmountHistory[] : []);
+      } catch (err) {
+        console.error('Error loading credit history:', err);
+      } finally {
+        setHistoryLoading(false);
+      }
+    }
+    
+    loadCreditHistory();
+  }, [credit?.id, activeTab, refreshRepayments, refreshAdditionalLoans]);
+
+  // Helper function to get transaction type display text
+  const getTransactionTypeDisplay = (type: CreditTransactionType | string): string => {
+    switch (type) {
+      case CreditTransactionType.INITIAL_LOAN:
+        return 'Tạo hợp đồng';
+      case CreditTransactionType.ADDITIONAL_LOAN:
+        return 'Vay thêm';
+      case CreditTransactionType.PRINCIPAL_REPAYMENT:
+        return 'Trả bớt gốc';
+      case 'payment':
+        return 'Đóng lãi phí';
+      case 'payment_cancel':
+        return 'Hủy đóng lãi phí';
+      case 'contract_close':
+        return 'Đóng hợp đồng';
+      case 'contract_reopen':
+        return 'Mở lại hợp đồng';
+      default:
+        return 'Giao dịch khác';
+    }
+  };
+
+  // Helper function to calculate history totals
+  const calculateHistoryTotals = () => {
+    let totalDebit = 0;
+    let totalCredit = 0;
+
+    creditHistory.forEach(history => {
+      // Add debit and credit amounts
+      totalDebit += history.debit_amount || 0;
+      totalCredit += history.credit_amount || 0;
+    });
+
+    return {
+      totalDebit,
+      totalCredit,
+      balance: totalDebit - totalCredit
+    };
   };
 
   // Helper function to calculate interest amount based on credit details
@@ -137,6 +205,16 @@ export function PaymentHistoryModal({
     if (!dateString) return '-';
     try {
       return format(new Date(dateString), 'dd/MM/yyyy', { locale: vi });
+    } catch (error) {
+      return '-';
+    }
+  };
+  
+  // Format datetime helper for history display
+  const formatDateTime = (dateString: string | null | undefined): string => {
+    if (!dateString) return '-';
+    try {
+      return format(new Date(dateString), 'dd-MM-yyyy HH:mm:ss', { locale: vi });
     } catch (error) {
       return '-';
     }
@@ -401,6 +479,9 @@ export function PaymentHistoryModal({
   // Giải thích: Chúng ta trừ 1 vì khi tính số ngày, ngày đầu và ngày cuối đều được tính vào (inclusive)
   // Ví dụ: từ 18/5 đến 17/6 là 31 ngày, nhưng khi tính số ngày cần nhảy là 30 ngày
   
+  // Calculate totals for history display
+  const historyTotals = calculateHistoryTotals();
+  
   // Hàm xử lý việc lưu thanh toán khi người dùng nhập xong
   const handleSavePayment = async () => {
     if (!selectedPeriodId || !credit) return;
@@ -599,60 +680,6 @@ export function PaymentHistoryModal({
           
           {activeTab === 'history' && credit && (
             <div className="p-4">
-              {/* Ghi chú */}
-              <div className="mb-6">
-                <div className="flex items-center mb-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                  </svg>
-                  <h3 className="text-lg font-medium">Ghi Chú</h3>
-                </div>
-                <div>
-                  <textarea 
-                    className="w-full border rounded-md p-3 min-h-[100px] text-sm"
-                    placeholder="Nhập ghi chú..."
-                  ></textarea>
-                  <div className="flex justify-end mt-2">
-                    <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-                      Lưu
-                    </Button>
-                  </div>
-                </div>
-              </div>
-              {/* Lịch sử nhắc nợ */}
-              <div className="mb-6">
-                <div className="flex items-center mb-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
-                    <rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect>
-                    <line x1="3" y1="9" x2="21" y2="9"></line>
-                    <line x1="9" y1="21" x2="9" y2="9"></line>
-                  </svg>
-                  <h3 className="text-lg font-medium">Lịch sử nhắc nợ</h3>
-                </div>
-                <div className="border rounded-md overflow-hidden">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-100">
-                      <tr>
-                        <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700 w-16 text-center">STT</th>
-                        <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Ngày</th>
-                        <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Người Thao tác</th>
-                        <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Nội dung</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {/* No data placeholder */}
-                      <tr>
-                        <td colSpan={4} className="px-4 py-4 text-sm text-gray-500 text-center">
-                          Chưa có dữ liệu
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-
               {/* Lịch sử thao tác */}
               <div>
                 <div className="flex items-center mb-2">
@@ -662,50 +689,85 @@ export function PaymentHistoryModal({
                   </svg>
                   <h3 className="text-lg font-medium">Lịch sử thao tác</h3>
                 </div>
-                <div className="text-sm text-amber-600 italic mb-2">
-                  *Lưu ý : Tiền khác đã được cộng vào tiền ghi có / ghi nợ
-                </div>
-                <div className="border rounded-md overflow-hidden">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-100">
-                      <tr>
-                        <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700 w-16 text-center">STT</th>
-                        <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Ngày</th>
-                        <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Giao dịch viên</th>
-                        <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700 text-right">Số tiền ghi nợ</th>
-                        <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700 text-right">Số tiền ghi có</th>
-                        <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Nội dung</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      <tr>
-                        <td className="px-4 py-3 text-sm text-gray-700 text-center">1</td>
-                        <td className="px-4 py-3 text-sm text-gray-700">{format(new Date(), 'dd-MM-yyyy HH:mm:ss')}</td>
-                        <td className="px-4 py-3 text-sm text-gray-700">Admin</td>
-                        <td className="px-4 py-3 text-sm text-gray-700 text-right text-red-600">
-                          {credit?.loan_amount?.toLocaleString('vi-VN')}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-700 text-right">0</td>
-                        <td className="px-4 py-3 text-sm text-gray-700">Cho vay</td>
-                      </tr>
-                      <tr className="bg-amber-50">
-                        <td colSpan={3} className="px-4 py-2 text-sm font-medium text-right">Tổng Tiền</td>
-                        <td className="px-4 py-2 text-sm font-medium text-right text-red-600">
-                          {credit?.loan_amount?.toLocaleString('vi-VN')}
-                        </td>
-                        <td className="px-4 py-2 text-sm font-medium text-right text-blue-600">0</td>
-                        <td></td>
-                      </tr>
-                      <tr className="bg-amber-100">
-                        <td colSpan={3} className="px-4 py-2 text-sm font-medium text-right">Chênh lệch</td>
-                        <td colSpan={2} className="px-4 py-2 text-sm font-medium text-right text-red-600">
-                          -{credit?.loan_amount?.toLocaleString('vi-VN')}
-                        </td>
-                        <td></td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                
+                {historyLoading ? (
+                  <div className="flex justify-center items-center py-10">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700"></div>
+                  </div>
+                ) : creditHistory.length === 0 ? (
+                  <div className="flex justify-center items-center py-10">
+                    <p className="text-gray-500">Chưa có lịch sử giao dịch</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-sm text-amber-600 italic mb-2">
+                      *Lưu ý: Ghi nợ (debit) là tiền ra, ghi có (credit) là tiền vào
+                    </div>
+                    <div className="border rounded-md overflow-hidden">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-100">
+                          <tr>
+                            <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700 w-16 text-center">STT</th>
+                            <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Ngày</th>
+                            <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Loại giao dịch</th>
+                            <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700 text-right">Số tiền ghi nợ</th>
+                            <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700 text-right">Số tiền ghi có</th>
+                            <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Nội dung</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {creditHistory.map((history, index) => (
+                            <tr key={history.id}>
+                              <td className="px-4 py-3 text-sm text-gray-700 text-center">{index + 1}</td>
+                              <td className="px-4 py-3 text-sm text-gray-700">{formatDateTime(history.created_at)}</td>
+                              <td className="px-4 py-3 text-sm text-gray-700">{getTransactionTypeDisplay(history.transaction_type)}</td>
+                              <td className="px-4 py-3 text-sm text-gray-700 text-right text-red-600">
+                                {history.debit_amount > 0 ? formatCurrency(history.debit_amount) : ""}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-700 text-right text-green-600">
+                                {history.credit_amount > 0 ? formatCurrency(history.credit_amount) : ""}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-700">{history.description || '-'}</td>
+                            </tr>
+                          ))}
+                          
+                          {/* Initial loan entry */}
+                          <tr>
+                            <td className="px-4 py-3 text-sm text-gray-700 text-center">{creditHistory.length + 1}</td>
+                            <td className="px-4 py-3 text-sm text-gray-700">{formatDate(credit.loan_date)}</td>
+                            <td className="px-4 py-3 text-sm text-gray-700">Tạo hợp đồng</td>
+                            <td className="px-4 py-3 text-sm text-gray-700 text-right text-red-600">
+                              {formatCurrency(credit?.loan_amount || 0)}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-700 text-right">0</td>
+                            <td className="px-4 py-3 text-sm text-gray-700">Cho vay</td>
+                          </tr>
+                          
+                          {/* Summary rows */}
+                          <tr className="bg-amber-50">
+                            <td colSpan={3} className="px-4 py-2 text-sm font-medium text-right">Tổng Tiền</td>
+                            <td className="px-4 py-2 text-sm font-medium text-right text-red-600">
+                              {formatCurrency(historyTotals.totalDebit + (credit.loan_amount || 0))}
+                            </td>
+                            <td className="px-4 py-2 text-sm font-medium text-right text-green-600">
+                              {formatCurrency(historyTotals.totalCredit)}
+                            </td>
+                            <td></td>
+                          </tr>
+                          <tr className="bg-amber-100">
+                            <td colSpan={3} className="px-4 py-2 text-sm font-medium text-right">Chênh lệch</td>
+                            <td colSpan={2} className="px-4 py-2 text-sm font-medium text-right">
+                              <span className={(historyTotals.totalDebit + (credit.loan_amount || 0)) - historyTotals.totalCredit >= 0 ? "text-red-600" : "text-green-600"}>
+                                {formatCurrency((historyTotals.totalDebit + (credit.loan_amount || 0)) - historyTotals.totalCredit)}
+                              </span>
+                            </td>
+                            <td></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}

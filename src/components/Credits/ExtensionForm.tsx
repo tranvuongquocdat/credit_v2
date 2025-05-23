@@ -1,8 +1,6 @@
 import { useState } from 'react';
-import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
-import { DatePicker } from '@/components/ui/date-picker';
 
 interface ExtensionFormProps {
   customerName?: string; // Tên khách hàng để hiển thị
@@ -15,12 +13,6 @@ interface ExtensionFormProps {
 export function ExtensionForm({ customerName, onSubmit }: ExtensionFormProps) {
   const [days, setDays] = useState<number>(10); // Mặc định gia hạn 10 ngày
   const [notes, setNotes] = useState<string>('');
-  const [extensionDate, setExtensionDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
-
-  // Format số với dấu phẩy ngăn cách hàng nghìn
-  const formatNumber = (num: number): string => {
-    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,17 +45,6 @@ export function ExtensionForm({ customerName, onSubmit }: ExtensionFormProps) {
             <span className="font-medium">{customerName}</span>
           </div>
         )}
-        
-        {/* Ngày gia hạn */}
-        <div className="flex items-center">
-          <label htmlFor="extensionDate" className="w-48 text-right mr-4">Ngày gia hạn</label>
-          <DatePicker
-            id="extensionDate"
-            value={extensionDate}
-            onChange={setExtensionDate}
-            className="w-64"
-          />
-        </div>
         
         {/* Số ngày gia hạn */}
         <div className="flex items-center">

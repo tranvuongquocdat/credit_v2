@@ -96,12 +96,49 @@ export async function updatePaymentPeriod(periodId: string, updateData: UpdatePa
  * Xóa một kỳ thanh toán
  */
 export async function deletePaymentPeriod(periodId: string) {
-  const { error } = await supabase
-    .from('credit_payment_periods')
-    .delete()
-    .eq('id', periodId);
-  
-  return { error };
+  try {
+    // Lấy thông tin kỳ thanh toán trước khi xóa
+    const { data: periodData, error: fetchError } = await supabase
+      .from('credit_payment_periods')
+      .select('*')
+      .eq('id', periodId)
+      .single();
+      
+    if (fetchError) {
+      return { error: fetchError };
+    }
+    
+    // Xóa kỳ thanh toán
+    const { error } = await supabase
+      .from('credit_payment_periods')
+      .delete()
+      .eq('id', periodId);
+    
+    if (error) {
+      return { error };
+    }
+    
+    // Ghi nhận việc hủy đóng lãi vào lịch sử
+    if (periodData && periodData.actual_amount && periodData.actual_amount > 0) {
+      try {
+        const { recordCancelInterestPayment } = await import('./credit-amount-history');
+        
+        // Ghi nhận không đồng bộ (không chờ đợi)
+        recordCancelInterestPayment(
+          periodData.credit_id,
+          periodData.actual_amount,
+          `Hủy đóng lãi kỳ ${periodData.period_number}`
+        ).catch(e => console.error('Error recording cancel interest payment:', e));
+      } catch (historyError) {
+        console.error('Error importing recordCancelInterestPayment:', historyError);
+      }
+    }
+    
+    return { error: null };
+  } catch (error) {
+    console.error('Error deleting payment period:', error);
+    return { error };
+  }
 }
 
 /**
@@ -227,7 +264,7 @@ export async function savePaymentWithOtherAmount(
   isCalculatedPeriod: boolean = false
 ) {
   if (!creditId) return { data: null, error: new Error('Credit ID is required') };
-  
+  debugger
   try {
     const now = new Date().toISOString();
     
@@ -286,6 +323,21 @@ export async function savePaymentWithOtherAmount(
       const statusStr = response.data.status as string;
       const period = {...response.data};
       period.status = statusStr as unknown as PaymentPeriodStatus;
+      
+      // Ghi nhận vào lịch sử
+      try {
+        const { recordInterestPayment } = await import('./credit-amount-history');
+        
+        // Ghi nhận không đồng bộ (không chờ đợi)
+        recordInterestPayment(
+          creditId,
+          actualAmount,
+          now,
+          `Đóng lãi kỳ ${period.period_number}`
+        ).catch(e => console.error('Error recording interest payment:', e));
+      } catch (historyError) {
+        console.error('Error importing recordInterestPayment:', historyError);
+      }
       
       return { data: period, error: null };
     }

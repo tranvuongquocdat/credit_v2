@@ -197,6 +197,7 @@ export function TopNavbar() {
         <button 
           className="p-2 hover:bg-[#3a5a75] transition-colors border-l border-r border-[rgba(0,0,0,0.2)] relative" 
           title={`Trả góp có ${notificationCounts.installmentInvoices} hóa đơn cần xử lý`}
+          onClick={() => router.push('/installment-warnings')}
         >
           <Salad className="h-6 w-6" />
           {renderNotificationBadge(notificationCounts.installmentInvoices)}

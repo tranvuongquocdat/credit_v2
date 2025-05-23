@@ -15,7 +15,8 @@ import {
   FiShoppingBag,
   FiUsers,
   FiLogOut,
-  FiDollarSign
+  FiDollarSign,
+  FiAlertTriangle
 } from 'react-icons/fi';
 
 interface SidebarItem {
@@ -31,6 +32,7 @@ const sidebarItems: SidebarItem[] = [
   { title: 'Nhân viên', path: '/employees', icon: <FiUsers size={20} /> },
   { title: 'Tín chấp', path: '/credits', icon: <FiCreditCard size={20} /> },
   { title: 'Trả góp', path: '/installments', icon: <FiCreditCard size={20} /> },
+  { title: 'Cảnh báo trả góp', path: '/installment-warnings', icon: <FiAlertTriangle size={20} /> },
   { title: 'Nguồn vốn', path: '/capital', icon: <FiDollarSign size={20} /> },
   { title: 'Activities', path: '/activities', icon: <FiActivity size={20} /> },
   { title: 'Profile', path: '/profile', icon: <FiUser size={20} /> },

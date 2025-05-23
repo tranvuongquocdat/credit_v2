@@ -13,7 +13,7 @@ export async function getAdditionalLoans(creditId: string): Promise<AdditionalLo
       .select('*')
       .eq('credit_id', creditId)
       .eq('transaction_type', CreditTransactionType.ADDITIONAL_LOAN)
-      .order('transaction_date', { ascending: false });
+      .order('created_at', { ascending: false });
       
     if (error) {
       console.error('Error fetching additional loans:', error);
@@ -24,9 +24,9 @@ export async function getAdditionalLoans(creditId: string): Promise<AdditionalLo
     const additionalLoans: AdditionalLoan[] = (data || []).map(record => ({
       id: record.id,
       credit_id: record.credit_id,
-      amount: record.amount, // Already positive
-      loan_date: record.transaction_date,
-      notes: record.notes || undefined,
+      amount: record.debit_amount || 0, // For additional loan, money goes out as debit
+      loan_date: record.created_at,
+      notes: record.description || undefined,
       created_at: record.created_at
     }));
     
@@ -62,17 +62,26 @@ export async function addAdditionalLoan(loan: AdditionalLoan): Promise<Additiona
     const previousLoanAmount = creditData.loan_amount;
     const newLoanAmount = previousLoanAmount + loan.amount;
     
+    // Update credit with new loan amount
+    const { error: updateError } = await supabase
+      .from('credits')
+      .update({ loan_amount: newLoanAmount })
+      .eq('id', loan.credit_id);
+      
+    if (updateError) {
+      console.error('Error updating credit loan amount:', updateError);
+      throw new Error(`Error updating credit loan amount: ${updateError.message}`);
+    }
+    
     // Insert into credit_amount_history
     const { data, error } = await supabase
       .from('credit_amount_history')
       .insert({
         credit_id: loan.credit_id,
         transaction_type: CreditTransactionType.ADDITIONAL_LOAN,
-        amount: loan.amount, // Positive for additional loan
-        previous_loan_amount: previousLoanAmount,
-        new_loan_amount: newLoanAmount,
-        transaction_date: loan.loan_date,
-        notes: loan.notes || null
+        debit_amount: loan.amount, // Positive for debit (money going out)
+        credit_amount: 0, // No credit for additional loan
+        description: loan.notes || null
       })
       .select()
       .single();
@@ -86,9 +95,9 @@ export async function addAdditionalLoan(loan: AdditionalLoan): Promise<Additiona
     return {
       id: data.id,
       credit_id: data.credit_id,
-      amount: data.amount,
-      loan_date: data.transaction_date,
-      notes: data.notes || undefined,
+      amount: data.debit_amount || 0,
+      loan_date: data.created_at,
+      notes: data.description || undefined,
       created_at: data.created_at
     };
   } catch (error) {
@@ -119,10 +128,26 @@ export async function deleteAdditionalLoan(id: string): Promise<void> {
       throw new Error('Additional loan record not found');
     }
     
-    // Restore the previous loan amount
+    // Need to get the current loan amount
+    const { data: creditData, error: creditError } = await supabase
+      .from('credits')
+      .select('loan_amount')
+      .eq('id', record.credit_id)
+      .single();
+      
+    if (creditError) {
+      console.error('Error fetching credit:', creditError);
+      throw new Error(`Error fetching credit: ${creditError.message}`);
+    }
+    
+    // Restore the loan amount by subtracting the additional loan amount
+    const additionalAmount = record.debit_amount || 0;
+    const restoredAmount = Math.max(0, (creditData?.loan_amount || 0) - additionalAmount);
+    
+    // Update credit with restored loan amount
     const { error: updateError } = await supabase
       .from('credits')
-      .update({ loan_amount: record.previous_loan_amount })
+      .update({ loan_amount: restoredAmount })
       .eq('id', record.credit_id);
       
     if (updateError) {

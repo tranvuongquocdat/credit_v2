@@ -12,7 +12,7 @@ export async function getExtensions(creditId: string): Promise<Extension[]> {
       .from('credit_extension_histories')
       .select('*')
       .eq('credit_id', creditId)
-      .order('extension_date', { ascending: false });
+      .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Error fetching extensions:', error);
@@ -55,11 +55,9 @@ export async function addExtension(extension: Extension): Promise<Extension> {
       .insert({
         credit_id: extension.credit_id,
         days: extension.days,
-        extension_date: extension.extension_date,
         notes: extension.notes || null,
         // Add temporary values that will be overwritten by the database trigger
-        from_date: new Date().toISOString(),
-        to_date: new Date().toISOString()
+        from_date: creditData.loan_date,
       })
       .select()
       .single();

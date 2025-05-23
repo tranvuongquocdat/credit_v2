@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { format } from 'date-fns';
+import { addDays, format } from 'date-fns';
 import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
@@ -138,13 +138,13 @@ export function ExtensionList({
                     {formatDate(extension.from_date)}
                   </td>
                   <td className="px-2 py-2 text-center border">
-                    {formatDate(extension.to_date)}
+                    {formatDate(addDays(new Date(extension.from_date || ''), extension.days).toISOString())}
                   </td>
                   <td className="px-2 py-2 text-center border">
                     {extension.days}
                   </td>
                   <td className="px-2 py-2 text-left border">
-                    {extension.notes || 'Gia hạn hợp đồng'}
+                    {extension.notes}
                   </td>
                   <td className="px-2 py-2 text-center border">
                     <Button 

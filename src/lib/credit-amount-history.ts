@@ -3,21 +3,37 @@ import { supabase } from '@/lib/supabase';
 export enum CreditTransactionType {
   PRINCIPAL_REPAYMENT = 'principal_repayment',
   ADDITIONAL_LOAN = 'additional_loan',
-  INITIAL_LOAN = 'initial_loan'
+  INITIAL_LOAN = 'initial_loan',
+  PAYMENT = 'payment',
+  PAYMENT_CANCEL = 'payment_cancel',
+  CONTRACT_CLOSE = 'contract_close',
+  CONTRACT_REOPEN = 'contract_reopen'
 }
 
+// Updated interface to match the new database schema
 export interface CreditAmountHistory {
   id: string;
   credit_id: string;
-  transaction_type: CreditTransactionType;
-  amount: number;
-  previous_loan_amount: number;
-  new_loan_amount: number;
-  transaction_date: string;
-  notes: string | null;
-  created_by: string | null;
+  transaction_type: string;
+  debit_amount: number;
+  credit_amount: number;
+  description: string | null;
+  employee_id: string | null;
   created_at: string;
-  updated_at: string;
+}
+
+// Function to transform database record to UI model
+function transformHistory(record: any): CreditAmountHistory {
+  return {
+    id: record.id,
+    credit_id: record.credit_id,
+    transaction_type: record.transaction_type,
+    debit_amount: record.debit_amount || 0,
+    credit_amount: record.credit_amount || 0,
+    description: record.description,
+    employee_id: record.employee_id,
+    created_at: record.created_at
+  };
 }
 
 /**
@@ -63,17 +79,16 @@ export async function recordPrincipalRepayment(
       throw updateError;
     }
 
-    // 2. Insert the history record
+    // 2. Insert the history record with new schema format
     const { data, error } = await supabase
       .from('credit_amount_history')
       .insert({
         credit_id: creditId,
-        transaction_type: CreditTransactionType.PRINCIPAL_REPAYMENT,
-        amount: -repaymentAmount, // Negative for repayment
-        previous_loan_amount: previousLoanAmount,
-        new_loan_amount: newLoanAmount,
-        transaction_date: transactionDate,
-        notes: notes || null
+        transaction_type: 'principal_repayment',
+        credit_amount: repaymentAmount, // Positive for credit (incoming money)
+        debit_amount: 0,
+        description: notes || 'Trả bớt gốc'
+        // transaction_date field is no longer used, created_at is set automatically
       })
       .select()
       .single();
@@ -134,17 +149,16 @@ export async function recordAdditionalLoan(
       throw updateError;
     }
 
-    // 2. Insert the history record
+    // 2. Insert the history record with new schema format
     const { data, error } = await supabase
       .from('credit_amount_history')
       .insert({
         credit_id: creditId,
-        transaction_type: CreditTransactionType.ADDITIONAL_LOAN,
-        amount: additionalAmount, // Positive for additional loan
-        previous_loan_amount: previousLoanAmount,
-        new_loan_amount: newLoanAmount,
-        transaction_date: transactionDate,
-        notes: notes || null
+        transaction_type: 'additional_loan',
+        debit_amount: additionalAmount, // Positive for debit (outgoing money)
+        credit_amount: 0,
+        description: notes || 'Vay thêm'
+        // transaction_date field is no longer used, created_at is set automatically
       })
       .select()
       .single();
@@ -175,15 +189,143 @@ export async function getCreditAmountHistory(creditId: string) {
       .from('credit_amount_history')
       .select('*')
       .eq('credit_id', creditId)
-      .order('transaction_date', { ascending: false });
+      .order('created_at', { ascending: false });
 
     if (error) {
       throw error;
     }
+    
+    // Transform data from DB model to UI model
+    const history = data ? data.map(item => transformHistory(item)) : [];
+
+    return { data: history, error: null };
+  } catch (error) {
+    console.error('Error getting credit amount history:', error);
+    return { data: null, error };
+  }
+}
+
+/**
+ * Record an interest payment
+ */
+export async function recordInterestPayment(
+  creditId: string,
+  amount: number,
+  transactionDate: string,
+  description?: string
+) {
+  try {
+    const { data, error } = await supabase
+      .from('credit_amount_history')
+      .insert({
+        credit_id: creditId,
+        transaction_type: 'payment',
+        credit_amount: amount, // Positive for credit (incoming money)
+        debit_amount: 0,
+        description: description || 'Đóng lãi phí'
+        // transaction_date field is no longer used, created_at is set automatically
+      } as any)
+      .select()
+      .single();
+
+    if (error) throw error;
 
     return { data, error: null };
   } catch (error) {
-    console.error('Error getting credit amount history:', error);
+    console.error('Error recording interest payment:', error);
+    return { data: null, error };
+  }
+}
+
+/**
+ * Record cancellation of interest payment
+ */
+export async function recordCancelInterestPayment(
+  creditId: string,
+  amount: number,
+  description?: string
+) {
+  try {
+    const { data, error } = await supabase
+      .from('credit_amount_history')
+      .insert({
+        credit_id: creditId,
+        transaction_type: 'payment_cancel',
+        debit_amount: amount, // Positive for debit (money going out)
+        credit_amount: 0,
+        description: description || 'Hủy đóng lãi phí'
+      } as any)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error recording interest payment cancellation:', error);
+    return { data: null, error };
+  }
+}
+
+/**
+ * Record contract closing
+ */
+export async function recordContractClosure(
+  creditId: string,
+  amount: number,
+  transactionDate: string,
+  description?: string
+) {
+  try {
+    const { data, error } = await supabase
+      .from('credit_amount_history')
+      .insert({
+        credit_id: creditId,
+        transaction_type: 'contract_close',
+        credit_amount: amount, // Positive for credit (incoming money)
+        debit_amount: 0,
+        description: description || 'Đóng hợp đồng'
+        // transaction_date field is no longer used, created_at is set automatically
+      } as any)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error recording contract closure:', error);
+    return { data: null, error };
+  }
+}
+
+/**
+ * Record contract reopening
+ */
+export async function recordContractReopening(
+  creditId: string,
+  transactionDate: string,
+  description?: string
+) {
+  try {
+    const { data, error } = await supabase
+      .from('credit_amount_history')
+      .insert({
+        credit_id: creditId,
+        transaction_type: 'contract_reopen',
+        credit_amount: 0,
+        debit_amount: 0,
+        description: description || 'Mở lại hợp đồng'
+        // transaction_date field is no longer used, created_at is set automatically
+      } as any)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error recording contract reopening:', error);
     return { data: null, error };
   }
 } 
