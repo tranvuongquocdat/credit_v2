@@ -318,10 +318,21 @@ export function PaymentTab({
             loanDate={credit.loan_date}
             loanPeriod={credit.loan_period}
             interestPeriod={credit.interest_period}
-            // Truyền thông tin về kỳ thanh toán cuối cùng
-            lastPaymentEndDate={combinedPaymentPeriods.length > 0 ? 
-              combinedPaymentPeriods[combinedPaymentPeriods.length - 1].end_date : 
-              undefined}
+            // Truyền thông tin về kỳ thanh toán cuối cùng ĐÃ THANH TOÁN
+            lastPaymentEndDate={(() => {
+              // Tìm kỳ cuối cùng đã thanh toán
+              const paidPeriods = combinedPaymentPeriods.filter(
+                p => p.status === PaymentPeriodStatus.PAID || p.status === PaymentPeriodStatus.PARTIALLY_PAID
+              );
+              
+              // Nếu có kỳ đã thanh toán, trả về ngày kết thúc của kỳ cuối cùng
+              if (paidPeriods.length > 0) {
+                return paidPeriods[paidPeriods.length - 1].end_date;
+              }
+              
+              // Nếu không có kỳ nào đã thanh toán, trả về undefined để sử dụng loan_date
+              return undefined;
+            })()}
           />
         </div>
       )}
