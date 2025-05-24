@@ -213,11 +213,11 @@ export default function InstallmentWarningsPage() {
   
   return (
     <Layout>
-      <div className="container mx-auto p-4">
+      <div className="container mx-auto">
         {/* Title */}
         <div className="flex items-center justify-between border-b pb-2 mb-2">
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold">Quản lý hợp đồng trả góp</h1>
+            <h1 className="text-lg font-bold">Cảnh báo trả góp</h1>
           </div>
         </div>
         <div className="mt-6">

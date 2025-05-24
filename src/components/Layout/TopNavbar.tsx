@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useState, useEffect, memo, useCallback } from "react";
 import { useStore } from "@/contexts/StoreContext";
 import { useRouter } from "next/navigation";
+import { countOverdueInstallments } from "@/lib/installmentPayment";
 
 // This interface will represent the notification data structure
 interface NotificationCounts {
@@ -110,6 +111,13 @@ export function TopNavbar() {
       // Replace with your actual API call to get notifications for the selected store
       const fetchNotificationsForStore = async () => {
         try {
+          // Get real count of overdue installments
+          const { count: overdueInstallments, error } = await countOverdueInstallments(currentStore.id);
+          
+          if (error) {
+            console.error('Error fetching overdue installments count:', error);
+          }
+          
           // Simulate different notification counts based on store ID to demonstrate it works
           const storeIdNum = parseInt(currentStore.id) || 0;
           const mockData = {
@@ -117,7 +125,7 @@ export function TopNavbar() {
             appointments: 3 + storeIdNum,
             pawnInvoices: 4 + storeIdNum,
             loanInvoices: 6 + storeIdNum,
-            installmentInvoices: 9 + storeIdNum
+            installmentInvoices: error ? (9 + storeIdNum) : overdueInstallments // Use real count if available
           };
           
           setNotificationCounts(mockData);
@@ -196,7 +204,7 @@ export function TopNavbar() {
         </button>
         <button 
           className="p-2 hover:bg-[#3a5a75] transition-colors border-l border-r border-[rgba(0,0,0,0.2)] relative" 
-          title={`Trả góp có ${notificationCounts.installmentInvoices} hóa đơn cần xử lý`}
+          title={`Trả góp có ${notificationCounts.installmentInvoices} hợp đồng cần xử lý`}
           onClick={() => router.push('/installment-warnings')}
         >
           <Salad className="h-6 w-6" />

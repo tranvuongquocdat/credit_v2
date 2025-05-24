@@ -781,4 +781,71 @@ export async function hasInstallmentAnyPayments(installmentId: string) {
       error
     };
   }
+}
+
+/**
+ * Count overdue installment payments for notifications
+ */
+export async function countOverdueInstallments(storeId?: string) {
+  try {
+    // Get the current date in ISO format
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayISO = format(today, 'yyyy-MM-dd');
+    
+    // First get installments that are not closed or deleted
+    const installmentQuery = supabase
+      .from('installments_by_store')
+      .select('id')
+      .not('status', 'eq', 'closed')
+      .not('status', 'eq', 'deleted');
+    
+    // Add store filter if provided
+    if (storeId) {
+      installmentQuery.eq('store_id', storeId);
+    }
+    
+    const { data: installmentData, error: installmentError } = await installmentQuery;
+    
+    if (installmentError) throw installmentError;
+    
+    if (!installmentData || installmentData.length === 0) {
+      return { count: 0, error: null };
+    }
+    
+    // Get all installment IDs and filter out any null values
+    const installmentIds = installmentData
+      .map(i => i.id)
+      .filter((id): id is string => id !== null);
+    
+    // Find periods that are overdue
+    const { data: periodData, error: periodError, count } = await supabase
+      .from('installment_payment_period')
+      .select('installment_id', { count: 'exact' })
+      .in('installment_id', installmentIds)
+      .lt('date', todayISO) // date is before today
+      .or('payment_start_date.is.null, actual_amount.is.null') // Either no payment date or no payment amount
+    
+    if (periodError) throw periodError;
+    
+    // Count unique installment IDs with overdue periods
+    const uniqueInstallments = new Set();
+    
+    if (periodData) {
+      periodData.forEach(period => {
+        uniqueInstallments.add(period.installment_id);
+      });
+    }
+    
+    return {
+      count: uniqueInstallments.size,
+      error: null
+    };
+  } catch (error) {
+    logError('Error counting overdue installments', error);
+    return {
+      count: 0,
+      error
+    };
+  }
 } 
