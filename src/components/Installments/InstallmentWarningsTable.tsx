@@ -7,6 +7,7 @@ import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
 import { getInstallmentPaymentPeriods } from "@/lib/installmentPayment";
 import { AlertTriangleIcon } from "lucide-react";
 import { useStore } from "@/contexts/StoreContext";
+import { useRouter } from "next/navigation";
 
 // Extended interface with warning-specific fields
 interface InstallmentWarning extends InstallmentWithCustomer {
@@ -21,12 +22,14 @@ interface InstallmentWarningsTableProps {
   installments: InstallmentWithCustomer[];
   isLoading: boolean;
   onPayment?: (installment: InstallmentWithCustomer, amount: number) => void;
+  onCustomerClick?: (installment: InstallmentWithCustomer) => void; // Optional callback for customer click
 }
 
 export function InstallmentWarningsTable({
   installments,
   isLoading,
   onPayment,
+  onCustomerClick,
 }: InstallmentWarningsTableProps) {
   // State for storing processed warnings
   const [warnings, setWarnings] = useState<InstallmentWarning[]>([]);
@@ -34,6 +37,20 @@ export function InstallmentWarningsTable({
   
   // Get current store from store context
   const { currentStore } = useStore();
+  
+  // Router for navigation
+  const router = useRouter();
+  
+  // Handle customer name click
+  const handleCustomerClick = (warning: InstallmentWarning) => {
+    if (onCustomerClick) {
+      // Use callback if provided
+      onCustomerClick(warning);
+    } else {
+      // Default behavior: redirect to installments page with contract filter
+      router.push(`/installments?contract=${warning.contract_code}`);
+    }
+  };
   
   // Process installments to identify warnings
   useEffect(() => {
@@ -280,7 +297,10 @@ export function InstallmentWarningsTable({
                   {warning.contract_code}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  <span className="text-blue-600 cursor-pointer hover:underline">
+                  <span 
+                    className="text-blue-600 cursor-pointer hover:underline"
+                    onClick={() => handleCustomerClick(warning)}
+                  >
                     {warning.customer?.name || "N/A"}
                   </span>
                 </td>

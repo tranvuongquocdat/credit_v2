@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useRouter } from "next/navigation";
 
 export default function InstallmentWarningsPage() {
   const [installments, setInstallments] = useState<InstallmentWithCustomer[]>([]);
@@ -38,6 +39,8 @@ export default function InstallmentWarningsPage() {
     amount: number;
     periods: number;
   } | null>(null);
+  
+  const router = useRouter();
   
   // Load all installments when the page loads or store changes
   useEffect(() => {
@@ -110,6 +113,11 @@ export default function InstallmentWarningsPage() {
     
     // Open confirmation dialog
     setPaymentConfirmOpen(true);
+  };
+  
+  // Handle customer click to navigate to credits
+  const handleCustomerClick = (installment: InstallmentWithCustomer) => {
+    router.push(`/credits?contract=${installment.contract_code}`);
   };
   
   // Process payment after confirmation
@@ -283,6 +291,7 @@ export default function InstallmentWarningsPage() {
             installments={filteredInstallments}
             isLoading={isLoading}
             onPayment={handlePayment}
+            onCustomerClick={handleCustomerClick}
           />
         </div>
       </div>

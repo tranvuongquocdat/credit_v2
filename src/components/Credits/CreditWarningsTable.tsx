@@ -7,6 +7,7 @@ import { CreditPaymentPeriod } from "@/models/credit-payment";
 import { getCreditPaymentPeriods } from "@/lib/credit-payment";
 import { AlertTriangleIcon } from "lucide-react";
 import { useStore } from "@/contexts/StoreContext";
+import { useRouter } from "next/navigation";
 
 // Extended interface with warning-specific fields
 interface CreditWarning extends CreditWithCustomer {
@@ -21,12 +22,14 @@ interface CreditWarningsTableProps {
   credits: CreditWithCustomer[];
   isLoading: boolean;
   onPayment?: (credit: CreditWithCustomer, amount: number) => void;
+  onCustomerClick?: (credit: CreditWithCustomer) => void; // Optional callback for customer click
 }
 
 export function CreditWarningsTable({
   credits,
   isLoading,
   onPayment,
+  onCustomerClick,
 }: CreditWarningsTableProps) {
   // State for storing processed warnings
   const [warnings, setWarnings] = useState<CreditWarning[]>([]);
@@ -34,6 +37,20 @@ export function CreditWarningsTable({
   
   // Get current store from store context
   const { currentStore } = useStore();
+  
+  // Router for navigation
+  const router = useRouter();
+  
+  // Handle customer name click
+  const handleCustomerClick = (warning: CreditWarning) => {
+    if (onCustomerClick) {
+      // Use callback if provided
+      onCustomerClick(warning);
+    } else {
+      // Default behavior: redirect to credits page with contract filter
+      router.push(`/credits?contract=${warning.contract_code}`);
+    }
+  };
   
   // Process credits to identify warnings
   useEffect(() => {
@@ -72,9 +89,6 @@ export function CreditWarningsTable({
             const loanDate = new Date(credit.loan_date);
             // Reset time part of loanDate to 00:00:00
             loanDate.setHours(0, 0, 0, 0);
-            const loanEndDate = new Date(credit.loan_date);
-            loanEndDate.setDate(loanEndDate.getDate() + credit.loan_period - 1);
-            loanEndDate.setHours(0, 0, 0, 0);
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             
@@ -87,7 +101,7 @@ export function CreditWarningsTable({
             }
             
             // Calculate days since loan date to today
-            const daysSinceStart = loanEndDate > today ? Math.floor((today.getTime() - loanDate.getTime()) / (1000 * 60 * 60 * 24) + 1) : Math.floor((loanEndDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24) + 1);
+            const daysSinceStart = Math.floor((today.getTime() - loanDate.getTime()) / (1000 * 60 * 60 * 24) + 1);
             
             // If at least one interest period has passed
             if (daysSinceStart >= interestPeriod) {
@@ -310,7 +324,10 @@ export function CreditWarningsTable({
                   {warning.contract_code}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  <span className="text-blue-600 cursor-pointer hover:underline">
+                  <span 
+                    className="text-blue-600 cursor-pointer hover:underline"
+                    onClick={() => handleCustomerClick(warning)}
+                  >
                     {warning.customer?.name || "N/A"}
                   </span>
                 </td>

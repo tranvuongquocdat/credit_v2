@@ -34,6 +34,7 @@ interface SubMenuItem {
   title: string;
   path: string;
   icon: React.ReactElement;
+  redColor?: boolean;
 }
 
 interface SidebarItem {
@@ -41,18 +42,21 @@ interface SidebarItem {
   path: string;
   icon: React.ReactElement;
   submenu?: SubMenuItem[];
+  redColor?: boolean;
 }
 
 const sidebarItems: SidebarItem[] = [
   { 
     title: 'Cầm đồ', 
     path: '/pawns', 
-    icon: <FiShoppingBag size={20} />
+    icon: <FiShoppingBag size={20} />,
+    redColor: true,
   },
   { 
     title: 'Tín chấp', 
     path: '/credits', 
-    icon: <FiCreditCard size={20} />
+    icon: <FiCreditCard size={20} />,
+    redColor: true,
   },
   { 
     title: 'Trả góp', 
@@ -65,21 +69,21 @@ const sidebarItems: SidebarItem[] = [
     icon: <FiUsers size={20} />
   },
   { 
-    title: 'Danh sách khách hàng', 
-    path: '/customers/list', 
-    icon: <FiUsers size={18} /> 
-  },
-  { 
     title: 'Cửa hàng', 
     path: '/stores', 
     icon: <FiShoppingBag size={20} />,
     submenu: [
-      { title: 'Tổng quát chuỗi cửa hàng', path: '/customers/list', icon: <FiUsers size={18} /> },
-      { title: 'Thông tin chi tiết cửa hàng', path: '/customers/create', icon: <FiUserPlus size={18} /> },
-      { title: 'Danh sách cửa hàng', path: '/customers/vip', icon: <FiUserCheck size={18} /> },
-      { title: 'Cấu hình hàng hóa', path: '/customers/vip', icon: <FiUserCheck size={18} /> },
-      { title: 'Nhập tiền quỹ đầu ngày', path: '/customers/vip', icon: <FiUserCheck size={18} /> },
+      { title: 'Tổng quát chuỗi cửa hàng', path: '/stores', icon: <FiUsers size={18} />, redColor: true },
+      { title: 'Thông tin chi tiết cửa hàng', path: '/stores', icon: <FiUserPlus size={18} />, redColor: true },
+      { title: 'Danh sách cửa hàng', path: '/stores', icon: <FiUserCheck size={18} /> },
+      { title: 'Cấu hình hàng hóa', path: '/stores', icon: <FiUserCheck size={18} />, redColor: true },
+      { title: 'Nhập tiền quỹ đầu ngày', path: '/stores', icon: <FiUserCheck size={18} />, redColor: true },
     ]
+  },
+  {
+    title: 'Nguồn vốn',
+    path: '/capital',
+    icon: <FiDollarSign size={20} />
   },
   { 
     title: 'Thu chi', 
@@ -88,21 +92,23 @@ const sidebarItems: SidebarItem[] = [
     submenu: [
       { title: 'Hoạt động thu', path: '/income', icon: <FiDollarSign size={18} /> },
       { title: 'Hoạt động chi', path: '/capital', icon: <FiDollarSign size={18} /> },
-    ]
+    ],
+    redColor: true,
   },
   { 
     title: 'Nhân viên', 
-    path: '/employees', 
+    path: '/employees',   
     icon: <FiUsers size={20} />,
     submenu: [
-      { title: 'Danh sách nhân viên', path: '/employees/list', icon: <FiUsers size={18} /> },
-      { title: 'Phân quyền nhân viên', path: '/employees/permissions', icon: <FiUserPlus size={18} /> },
+      { title: 'Danh sách nhân viên', path: '/employees', icon: <FiUsers size={18} /> },
+      { title: 'Phân quyền nhân viên', path: '/employees', icon: <FiUserPlus size={18} />, redColor: true },
     ]
   },
   { 
     title: 'Thống kê', 
     path: '/activities', 
     icon: <FiActivity size={20} />,
+    redColor: true,
     submenu: [
       { title: 'Thu tiền tín chấp', path: '/activities/overview', icon: <FiPieChart size={18} /> },
       { title: 'Thu tiền trả góp', path: '/activities/daily', icon: <FiBarChart size={18} /> },
@@ -112,6 +118,7 @@ const sidebarItems: SidebarItem[] = [
     title: 'Báo cáo', 
     path: '/reports', 
     icon: <FiActivity size={20} />,
+    redColor: true,
     submenu: [
       { title: 'Số quỹ tiền mặt', path: '/reports/revenue', icon: <FiDollarSign size={18} /> },
       { title: 'Tổng kết giao dịch', path: '/reports/bad-debt', icon: <FiAlertTriangle size={18} /> },
@@ -190,7 +197,7 @@ export default function Sidebar() {
                   >
                     <div className="flex items-center space-x-3">
                       <span className="flex-shrink-0">{item.icon}</span>
-                      {!isCollapsed && <span>{item.title}</span>}
+                      {!isCollapsed && <span className={item.redColor ? 'text-red-600' : ''}>{item.title}</span>}
                     </div>
                     {!isCollapsed && (
                       <span className="flex-shrink-0">
@@ -216,7 +223,7 @@ export default function Sidebar() {
                             }`}
                           >
                             <span className="flex-shrink-0">{subItem.icon}</span>
-                            <span>{subItem.title}</span>
+                            <span className={subItem.redColor ? 'text-red-600' : ''}>{subItem.title}</span>
                           </Link>
                         </li>
                       ))}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Layout } from '@/components/Layout/Layout';
 import { Button } from '@/components/ui/button';
 import { 
@@ -44,6 +44,7 @@ const statusMap: Record<string, { label: string, color: string }> = {
 
 export default function InstallmentsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   
   // Get current store from context
   const { currentStore } = useStore();
@@ -71,6 +72,21 @@ export default function InstallmentsPage() {
   useEffect(() => {
     refreshFinancial();
   }, [currentStore?.id]);
+  
+  // Xử lý query parameter từ URL
+  useEffect(() => {
+    const contractParam = searchParams.get('contract');
+    if (contractParam) {
+      // Nếu có tham số contract, thực hiện tìm kiếm với mã hợp đồng
+      handleSearch({
+        contract_code: contractParam,
+        customer_name: '',
+        start_date: '',
+        end_date: '',
+        status: 'all' // Sử dụng 'all' để hiển thị tất cả trạng thái
+      });
+    }
+  }, [searchParams]);
   
   // State for dialogs
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);

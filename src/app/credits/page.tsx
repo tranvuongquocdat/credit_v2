@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { 
@@ -165,6 +165,8 @@ function useCreditsSummary() {
 
 export default function CreditsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  
   // Lấy thông tin store từ context
   const { currentStore } = useStore();
   
@@ -205,6 +207,21 @@ export default function CreditsPage() {
   
   // Calculate total pages
   const totalPages = Math.ceil(totalItems / itemsPerPage);
+  
+  // Xử lý query parameter từ URL
+  useEffect(() => {
+    const contractParam = searchParams.get('contract');
+    if (contractParam) {
+      // Nếu có tham số contract, thực hiện tìm kiếm với mã hợp đồng
+      handleSearch({
+        contractCode: contractParam,
+        customerName: '',
+        startDate: '',
+        endDate: '',
+        status: 'all' // Sử dụng 'all' để hiển thị tất cả trạng thái
+      });
+    }
+  }, [searchParams]);
   
   // Handle search filters
   const handleSearchFilters = (filters: any) => {
@@ -402,14 +419,10 @@ export default function CreditsPage() {
         {editCreditId && (
           <CreditEditModal
             isOpen={isCreditEditModalOpen}
-            onClose={() => {
-              setIsCreditEditModalOpen(false);
-              setEditCreditId('');
-            }}
+            onClose={() => setIsCreditEditModalOpen(false)}
             creditId={editCreditId}
             onSuccess={(creditId) => {
               setIsCreditEditModalOpen(false);
-              setEditCreditId('');
               refetch(); // Refresh danh sách hợp đồng sau khi cập nhật
             }}
           />
