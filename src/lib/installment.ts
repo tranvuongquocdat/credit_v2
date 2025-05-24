@@ -91,7 +91,7 @@ export async function getInstallments(
         payment_period: paymentPeriod,
         amount_paid: 0, // This will need to be calculated from payment records
         old_debt: 0, // This will need to be calculated or tracked separately
-        daily_amount: installmentAmount / paymentPeriod,
+        daily_amount: installmentAmount / loanPeriod,
         installment_amount: installmentAmount,
         remaining_amount: downPayment,
         status: item.status as InstallmentStatus,
@@ -194,7 +194,7 @@ export async function getInstallmentById(id: string) {
       payment_period: paymentPeriod,
       amount_paid: 0, // This will need to be calculated from payment records
       old_debt: 0, // This will need to be calculated or tracked separately
-      daily_amount: installmentAmount / paymentPeriod,
+      daily_amount: installmentAmount / loanPeriod,
       remaining_amount: downPayment,
       status: data.status as InstallmentStatus,
       due_date: calculateDueDate(loanDate, loanPeriod),
@@ -300,7 +300,7 @@ export async function createInstallment(installment: CreateInstallmentParams) {
       payment_period: paymentPeriod,
       amount_paid: 0,
       old_debt: 0,
-      daily_amount: installmentAmount / paymentPeriod,
+      daily_amount: installmentAmount / loanPeriod,
       remaining_amount: downPayment,
       status: data.status as InstallmentStatus,
       due_date: calculateDueDate(loanDate, loanPeriod),
@@ -440,7 +440,7 @@ export async function updateInstallment(id: string, installment: Partial<Install
       payment_period: paymentPeriod,
       amount_paid: installment.amount_paid || 0,
       old_debt: installment.old_debt || 0,
-      daily_amount: installmentAmount / paymentPeriod,
+      daily_amount: installmentAmount / loanPeriod,
       remaining_amount: downPayment - (installment.amount_paid || 0),
       status: data.status as InstallmentStatus,
       due_date: calculateDueDate(loanDate, loanPeriod),
@@ -522,7 +522,7 @@ export async function updateInstallmentStatus(id: string, status: InstallmentSta
       payment_period: paymentPeriod,
       amount_paid: 0, // This should be calculated from payment records
       old_debt: 0, // This should be calculated or tracked separately
-      daily_amount: installmentAmount / paymentPeriod,
+      daily_amount: installmentAmount / loanPeriod,
       remaining_amount: downPayment,
       status: data.status as InstallmentStatus,
       due_date: calculateDueDate(loanDate, loanPeriod),

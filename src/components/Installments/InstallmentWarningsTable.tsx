@@ -70,9 +70,11 @@ export function InstallmentWarningsTable({
           if (!data || data.length === 0) {
             // For contracts with no payment records, check if they're past due based on start date
             const startDate = new Date(installment.start_date);
+            const endDate = new Date(installment.start_date);
+            endDate.setDate(endDate.getDate() + installment.duration - 1);
             // Reset time part of startDate to 00:00:00
             startDate.setHours(0, 0, 0, 0);
-            
+            endDate.setHours(0, 0, 0, 0);
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             
@@ -84,9 +86,9 @@ export function InstallmentWarningsTable({
               continue;
             }
             
-            // Calculate days since start date
-            const daysSinceStart = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-            
+            // Calculate days since start date to today if end date is in the future else calculate days since start date to end date
+            const daysSinceStart = endDate > today ? Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24) + 1) : Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24) + 1);
+            console.log(daysSinceStart, paymentPeriod);
             // If at least one payment period has passed
             if (daysSinceStart >= paymentPeriod) {
               // Calculate number of late periods
@@ -95,13 +97,19 @@ export function InstallmentWarningsTable({
               // Calculate amount per period
               const amountPerPeriod = installment.installment_amount ? installment.installment_amount / (installment.duration) * paymentPeriod : 0;
               
+              // Set total due amount to 0 for installments with no payment records in the database
+              // Old debt (nợ cũ) only comes from payment periods in the database
+              const totalDueAmount = 0;
+              
+              console.log(`[Warning] Installment ${installment.id} - ${installment.contract_code}: No payment records. Old debt is 0.`);
+              
               // Add to warnings - using a dummy "first period" based on contract start date
               warningResults.push({
                 ...installment,
                 payments: [],
                 latePeriods,
                 amountPerPeriod,
-                totalDueAmount: amountPerPeriod * latePeriods
+                totalDueAmount
               });
             }
             
@@ -130,13 +138,16 @@ export function InstallmentWarningsTable({
           
           if (endDate < today) {
             // Calculate the day after the end date
+            // Compare with contract end date too
             const nextDay = new Date(endDate);
             nextDay.setDate(endDate.getDate() + 1);
+            const contractEndDate = new Date(installment.start_date);
+            contractEndDate.setDate(contractEndDate.getDate() + installment.duration - 1);
+            contractEndDate.setHours(0, 0, 0, 0);
+            // Calculate days between next day and today or end date if today exceeds end date
+            const daysDifference = today > contractEndDate ? Math.floor((contractEndDate.getTime() - nextDay.getTime()) / (1000 * 60 * 60 * 24) + 1) : Math.floor((today.getTime() - nextDay.getTime()) / (1000 * 60 * 60 * 24) + 1);
             
-            // Calculate days between next day and today
-            const daysDifference = Math.floor((today.getTime() - nextDay.getTime()) / (1000 * 60 * 60 * 24));
-            
-            // Get payment period (default to 10 if not set)
+            // Get  payment period (default to 10 if not set)
             const paymentPeriod = installment.payment_period || 10;
             
             // Calculate number of late periods
@@ -146,6 +157,24 @@ export function InstallmentWarningsTable({
               // Calculate amount per period
               const amountPerPeriod = installment.daily_amount * paymentPeriod;
               
+              // Calculate total due amount by summing the difference between expected and actual amounts
+              // for each period in the database
+              let totalDueAmount = 0;
+              
+              // Process each period to calculate remaining amounts
+              data.forEach(period => {
+                const expectedAmount = period.expectedAmount || 0;
+                const actualAmount = period.actualAmount || 0;
+                const difference = expectedAmount - actualAmount;
+                
+                // Only add positive differences (where expected > actual)
+                if (difference > 0) {
+                  totalDueAmount += difference;
+                }
+              });
+              
+              console.log(`[Warning] Installment ${installment.id} - ${installment.contract_code}: Calculated totalDueAmount=${totalDueAmount} from ${data.length} periods`);
+              
               // Add to warnings
               warningResults.push({
                 ...installment,
@@ -153,7 +182,7 @@ export function InstallmentWarningsTable({
                 latestPeriod,
                 latePeriods,
                 amountPerPeriod,
-                totalDueAmount: amountPerPeriod * latePeriods
+                totalDueAmount
               });
             }
           }
@@ -248,10 +277,13 @@ export function InstallmentWarningsTable({
                   {warning.customer?.address || ""}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  {formatCurrency(warning.totalDueAmount)}
+                  {warning.payments && warning.payments.length > 0 
+                    ? formatCurrency(warning.totalDueAmount)
+                    : formatCurrency(0)
+                  }
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  {formatCurrency(warning.amountPerPeriod)}
+                  {formatCurrency(warning.amountPerPeriod * warning.latePeriods)}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
                   <span className="text-red-600 font-medium">
