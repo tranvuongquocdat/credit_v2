@@ -218,7 +218,7 @@ export default function CreditsPage() {
         customerName: '',
         startDate: '',
         endDate: '',
-        status: 'all' // Sử dụng 'all' để hiển thị tất cả trạng thái
+        status: 'on_time' // Sử dụng 'all' để hiển thị tất cả trạng thái
       });
     }
   }, [searchParams]);

@@ -83,7 +83,7 @@ export default function InstallmentsPage() {
         customer_name: '',
         start_date: '',
         end_date: '',
-        status: 'all' // Sử dụng 'all' để hiển thị tất cả trạng thái
+        status: "on_time" as InstallmentStatus // Sử dụng 'all' để hiển thị tất cả trạng thái
       });
     }
   }, [searchParams]);

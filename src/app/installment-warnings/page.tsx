@@ -117,7 +117,7 @@ export default function InstallmentWarningsPage() {
   
   // Handle customer click to navigate to credits
   const handleCustomerClick = (installment: InstallmentWithCustomer) => {
-    router.push(`/credits?contract=${installment.contract_code}`);
+    router.push(`/installments?contract=${installment.contract_code}`);
   };
   
   // Process payment after confirmation
