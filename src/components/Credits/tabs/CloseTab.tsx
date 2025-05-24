@@ -5,7 +5,7 @@ import { CreditWithCustomer } from '@/models/credit';
 import { Button } from '@/components/ui/button';
 import { calculateInterestAmount, calculateDailyRateForCredit } from '@/lib/interest-calculator';
 import { formatCurrency } from '@/lib/utils';
-import { CreditPaymentPeriod, PaymentPeriodStatus } from '@/models/credit-payment';
+import { CreditPaymentPeriod } from '@/models/credit-payment';
 import { getCreditPaymentPeriods } from '@/lib/credit-payment';
 
 interface CloseTabProps {
@@ -86,8 +86,6 @@ export function CloseTab({ credit }: CloseTabProps) {
         if (data && data.length > 0) {
           // Filter periods that have been paid
           const paidPeriods = data.filter(p => 
-            p.status === PaymentPeriodStatus.PAID || 
-            p.status === PaymentPeriodStatus.PARTIALLY_PAID || 
             p.actual_amount > 0
           );
           

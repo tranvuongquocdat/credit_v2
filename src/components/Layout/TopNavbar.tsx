@@ -198,6 +198,7 @@ export function TopNavbar() {
         <button 
           className="p-2 hover:bg-[#3a5a75] transition-colors border-l border-r border-[rgba(0,0,0,0.2)] relative" 
           title={`Tín chấp có ${notificationCounts.loanInvoices} hóa đơn cần xử lý`}
+          onClick={() => router.push('/credit-warnings')}
         >
           <DollarSign className="h-6 w-6" />
           {renderNotificationBadge(notificationCounts.loanInvoices)}

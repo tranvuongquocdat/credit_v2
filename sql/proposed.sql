@@ -7,7 +7,6 @@ CREATE TYPE credit_transaction_type AS ENUM ('principal_repayment', 'additional_
 CREATE TYPE installment_payment_status AS ENUM ('pending', 'paid', 'partial', 'overdue', 'cancelled');
 CREATE TYPE installment_status AS ENUM ('on_time', 'overdue', 'late_interest', 'bad_debt', 'closed', 'deleted', 'finished');
 CREATE TYPE interest_type AS ENUM ('percentage', 'fixed_amount');
-CREATE TYPE payment_period_status AS ENUM ('pending', 'paid', 'overdue', 'partially_paid');
 
 -- Main users table for authentication
 CREATE TABLE users (
@@ -126,7 +125,6 @@ CREATE TABLE credit_payment_periods (
   actual_amount NUMERIC DEFAULT 0,
   other_amount NUMERIC,
   payment_date TIMESTAMP WITH TIME ZONE,
-  status payment_period_status DEFAULT 'pending',
   notes TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -314,7 +312,7 @@ BEGIN
   -- Insert new periods from JSON
   INSERT INTO credit_payment_periods (
     credit_id, period_number, start_date, end_date, expected_amount, 
-    status, created_at, updated_at
+    created_at, updated_at
   )
   SELECT 
     credit_id_param,
@@ -322,7 +320,6 @@ BEGIN
     (p->>'start_date')::TIMESTAMP WITH TIME ZONE,
     (p->>'end_date')::TIMESTAMP WITH TIME ZONE,
     (p->>'expected_amount')::NUMERIC,
-    'pending'::payment_period_status,
     NOW(),
     NOW()
   FROM jsonb_array_elements(periods_param) AS p;

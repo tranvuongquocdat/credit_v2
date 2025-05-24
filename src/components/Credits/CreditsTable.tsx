@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { CreditWithCustomer, CreditStatus } from '@/models/credit';
-import { FileEditIcon, MoreVertical, Trash2Icon, CalendarIcon, ClockIcon } from 'lucide-react';
+import { FileEditIcon, MoreVertical, Trash2Icon, CalendarIcon, ClockIcon, DollarSignIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { getInterestDisplayString, calculateDailyRateForCredit } from '@/lib/interest-calculator';
@@ -514,20 +514,6 @@ export function CreditsTable({
                 </TableCell>
                 <TableCell className="py-3 px-3 border-b border-gray-200">
                   <div className="flex justify-center space-x-1">
-                    <Button 
-                      variant="ghost" 
-                      className="h-8 w-8 p-0" 
-                      onClick={() => onEdit(credit.id)}
-                    >
-                      <FileEditIcon className="h-4 w-4 text-gray-500" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      className="h-8 w-8 p-0" 
-                      onClick={() => onDelete(credit)}
-                    >
-                      <Trash2Icon className="h-4 w-4 text-gray-500" />
-                    </Button>
                     {onShowPaymentHistory && (
                       <Button 
                         variant="ghost" 
@@ -535,7 +521,7 @@ export function CreditsTable({
                         onClick={() => onShowPaymentHistory(credit)}
                         title="Lịch sử thanh toán"
                       >
-                        <CalendarIcon className="h-4 w-4 text-gray-500" />
+                        <DollarSignIcon className="h-4 w-4 text-gray-500" />
                       </Button>
                     )}
                     <DropdownMenu>

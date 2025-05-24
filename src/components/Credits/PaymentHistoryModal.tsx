@@ -10,7 +10,7 @@ import {
   DialogTitle 
 } from '@/components/ui/dialog';
 import { CreditWithCustomer, InterestType, Credit } from '@/models/credit';
-import { CreditPaymentPeriod, PaymentPeriodStatus } from '@/models/credit-payment';
+import { CreditPaymentPeriod } from '@/models/credit-payment';
 import { getCreditPaymentPeriods, savePaymentWithOtherAmount } from '@/lib/credit-payment';
 import { getInterestDisplayString, calculateInterestAmount as calculateInterestForPeriod, calculateInterestWithPrincipalChanges, PrincipalChange } from '@/lib/interest-calculator';
 import { addPrincipalRepayment, updateCreditPrincipal } from '@/lib/principal-repayment';
@@ -170,11 +170,7 @@ export function PaymentHistoryModal({
           throw error;
         }
         
-        // Ensure status is properly typed as PaymentPeriodStatus
-        setPaymentPeriods(data ? data.map(period => ({
-          ...period,
-          status: period.status as PaymentPeriodStatus
-        })) : []);
+        setPaymentPeriods(data || []);
       } catch (err) {
         console.error('Error loading payment periods:', err);
         setError('Không thể tải dữ liệu thanh toán');
@@ -339,7 +335,6 @@ export function PaymentHistoryModal({
         expected_amount: expectedAmount,
         actual_amount: 0,
         payment_date: null,
-        status: PaymentPeriodStatus.PENDING,
         notes: null,
         other_amount: 0
       });
@@ -440,7 +435,6 @@ export function PaymentHistoryModal({
           expected_amount: expectedAmount,
           actual_amount: 0,
           payment_date: null,
-          status: PaymentPeriodStatus.PENDING,
           notes: null,
           other_amount: 0
         };
@@ -542,7 +536,6 @@ export function PaymentHistoryModal({
             actual_amount: paymentAmount,
             other_amount: otherAmount,
             payment_date: new Date().toISOString(),
-            status: PaymentPeriodStatus.PENDING
           };
         }
         
@@ -652,10 +645,7 @@ export function PaymentHistoryModal({
                       return;
                     }
                     
-                    setPaymentPeriods(data ? data.map(period => ({
-                      ...period,
-                      status: period.status as PaymentPeriodStatus
-                    })) : []);
+                    setPaymentPeriods(data || []);
                   });
                 }
               }}

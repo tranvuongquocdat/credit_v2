@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { CreditPaymentPeriod, CreatePaymentPeriodData, UpdatePaymentPeriodData, PaymentPeriodStatus } from '@/models/credit-payment';
+import { CreditPaymentPeriod, CreatePaymentPeriodData, UpdatePaymentPeriodData } from '@/models/credit-payment';
 
 /**
  * Lấy danh sách kỳ thanh toán của một hợp đồng
@@ -148,7 +148,6 @@ export async function markPeriodAsPaid(periodId: string, actualAmount: number, p
   const updateData: UpdatePaymentPeriodData = {
     actual_amount: actualAmount,
     payment_date: paymentDate,
-    status: PaymentPeriodStatus.PAID,
     notes: notes
   };
   
@@ -162,7 +161,6 @@ export async function markPeriodAsPartiallyPaid(periodId: string, actualAmount: 
   const updateData: UpdatePaymentPeriodData = {
     actual_amount: actualAmount,
     payment_date: paymentDate,
-    status: PaymentPeriodStatus.PARTIALLY_PAID,
     notes: notes
   };
   
@@ -174,7 +172,6 @@ export async function markPeriodAsPartiallyPaid(periodId: string, actualAmount: 
  */
 export async function markPeriodAsOverdue(periodId: string, notes?: string) {
   const updateData: UpdatePaymentPeriodData = {
-    status: PaymentPeriodStatus.OVERDUE,
     notes: notes
   };
   
@@ -263,25 +260,26 @@ export async function savePaymentWithOtherAmount(
   otherAmount: number,
   isCalculatedPeriod: boolean = false
 ) {
-  if (!creditId) return { data: null, error: new Error('Credit ID is required') };
-  debugger
   try {
-    const now = new Date().toISOString();
+    console.log('savePaymentWithOtherAmount called with:', { 
+      creditId, 
+      periodData, 
+      actualAmount, 
+      otherAmount, 
+      isCalculatedPeriod 
+    });
     
-    // Dữ liệu cập nhật cho DB (sử dụng chuỗi thay vì enum)
-    const paymentDate = now;
-    const confirmedStatus = PaymentPeriodStatus.PAID;
+    const now = new Date().toISOString();
     
     let response;
     
-    // Nếu là kỳ tính toán (chưa lưu trong DB), tạo mới
     if (isCalculatedPeriod) {
-      // Đảm bảo có đủ các trường cần thiết
+      // Trường hợp kỳ tính toán động chưa được lưu
+      // Tạo mới kỳ trong DB
       if (!periodData.period_number || !periodData.start_date || !periodData.end_date || !periodData.expected_amount) {
         return { data: null, error: new Error('Missing required period data') };
       }
-      
-      // Tạo mới kỳ trong DB
+
       response = await supabase
         .from('credit_payment_periods')
         .insert({
@@ -290,16 +288,17 @@ export async function savePaymentWithOtherAmount(
           start_date: periodData.start_date,
           end_date: periodData.end_date,
           expected_amount: periodData.expected_amount,
-          notes: periodData.notes || null,
           actual_amount: actualAmount,
           other_amount: otherAmount,
           payment_date: now,
-          status: PaymentPeriodStatus.PAID
+          notes: periodData.notes || null
         })
         .select()
         .single();
     } else {
-      // Nếu là kỳ đã có trong DB, cập nhật
+      // Cập nhật kỳ đã tồn tại
+      const paymentDate = now;
+      
       if (!periodData.id) {
         return { data: null, error: new Error('Period ID is required for update') };
       }
@@ -309,21 +308,20 @@ export async function savePaymentWithOtherAmount(
         .update({
           actual_amount: actualAmount,
           other_amount: otherAmount,
-          payment_date: paymentDate,
-          status: confirmedStatus as any
+          payment_date: paymentDate
         })
         .eq('id', periodData.id)
         .select()
         .single();
     }
     
+    if (response.error) {
+      console.error('DB Error in savePaymentWithOtherAmount:', response.error);
+      return { data: null, error: response.error };
+    }
+    
     // Chuyển đổi dữ liệu trả về để sử dụng trong code
     if (response?.data) {
-      // Sử dụng as để ép kiểu dữ liệu
-      const statusStr = response.data.status as string;
-      const period = {...response.data};
-      period.status = statusStr as unknown as PaymentPeriodStatus;
-      
       // Ghi nhận vào lịch sử
       try {
         const { recordInterestPayment } = await import('./credit-amount-history');
@@ -333,18 +331,18 @@ export async function savePaymentWithOtherAmount(
           creditId,
           actualAmount,
           now,
-          `Đóng lãi kỳ ${period.period_number}`
+          `Đóng lãi kỳ ${response.data.period_number}`
         ).catch(e => console.error('Error recording interest payment:', e));
       } catch (historyError) {
         console.error('Error importing recordInterestPayment:', historyError);
       }
       
-      return { data: period, error: null };
+      return { data: response.data, error: null };
     }
     
-    return response;
+    return { data: null, error: new Error('No data returned from database') };
   } catch (e) {
-    console.error('Error saving payment with other amount:', e);
-    return { data: null, error: e };
+    console.error('Unexpected error in savePaymentWithOtherAmount:', e);
+    return { data: null, error: e as Error };
   }
 }

@@ -5,7 +5,7 @@ import { ChevronDown } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PaymentForm } from '../PaymentForm';
 import { CreditWithCustomer } from '@/models/credit';
-import { CreditPaymentPeriod, PaymentPeriodStatus } from '@/models/credit-payment';
+import { CreditPaymentPeriod } from '@/models/credit-payment';
 import { toast } from '@/components/ui/use-toast';
 import { PrincipalChange, calculateInterestWithPrincipalChanges } from '@/lib/interest-calculator';
 import { getPrincipalChangesForCredit } from '@/lib/credit-principal-changes';
@@ -53,6 +53,8 @@ export function PaymentTab({
   const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [localPrincipalChanges, setLocalPrincipalChanges] = useState<PrincipalChange[]>(principalChanges);
+  // Add loading state for checkbox operations
+  const [loadingPeriods, setLoadingPeriods] = useState<Record<string, boolean>>({});
   
   // Load principal changes if not provided
   useEffect(() => {
@@ -103,7 +105,7 @@ export function PaymentTab({
   
   // Start editing a payment
   const startEditing = (period: CreditPaymentPeriod) => {
-    if (period.status === PaymentPeriodStatus.PAID) return; // Don't edit paid periods
+    if (period.actual_amount >= period.expected_amount) return; // Don't edit paid periods
     
     setEditingPeriodId(period.id || `temp-${period.period_number}`);
     setPaymentAmount(period.actual_amount || period.expected_amount || 0);
@@ -157,6 +159,10 @@ export function PaymentTab({
   const handleCheckboxChange = async (period: CreditPaymentPeriod, checked: boolean, index: number) => {
     if (!credit?.id) return;
     
+    // Set loading state for this period
+    const periodId = period.id || `temp-${period.period_number}`;
+    setLoadingPeriods(prev => ({ ...prev, [periodId]: true }));
+    
     try {
       // Import necessary functions
       const { savePaymentWithOtherAmount, markPeriodAsPaid, deletePaymentPeriod } = await import('@/lib/credit-payment');
@@ -169,75 +175,103 @@ export function PaymentTab({
         for (let i = 0; i <= index; i++) {
           const p = combinedPaymentPeriods[i];
           // Only include periods that aren't already paid
-          if (p.status !== PaymentPeriodStatus.PAID && p.status !== PaymentPeriodStatus.PARTIALLY_PAID) {
+          if (p.actual_amount < p.expected_amount) {
             periodsToCheck.push(p);
           }
         }
         
         // If no periods to check, exit early
         if (periodsToCheck.length === 0) {
+          setLoadingPeriods(prev => ({ ...prev, [periodId]: false }));
           return;
         }
         
-        const today = new Date().toISOString().split('T')[0];
+        // Tính tổng số tiền cần cộng vào quỹ
+        const totalAmount = periodsToCheck.reduce((sum, p) => 
+          sum + (p.expected_amount || 0) + (p.other_amount || 0), 0);
         
-        // Process each period that needs to be checked
-        for (const periodToCheck of periodsToCheck) {
-          const isCalculatedPeriod = !periodToCheck.id || periodToCheck.id.startsWith('calculated-');
+        // Perform all actions for all selected periods
+        for (const p of periodsToCheck) {
+          // Kiểm tra xem đây là kỳ tạm thời hay không
+          const isCalculatedPeriod = !p.id || p.id.startsWith('calculated-') || p.id.startsWith('temp-');
           
           if (isCalculatedPeriod) {
-            // For calculated periods, use savePaymentWithOtherAmount to create a new record
-            if (credit.id) {
-              await savePaymentWithOtherAmount(
-                credit.id,
-                periodToCheck,
-                periodToCheck.expected_amount || 0,
-                periodToCheck.other_amount || 0,
-                true // isCalculatedPeriod = true
-              );
-            }
+            // Đối với kỳ tạm thời, sử dụng savePaymentWithOtherAmount để tạo mới
+            await savePaymentWithOtherAmount(
+              credit.id,
+              p,
+              p.expected_amount || 0,
+              p.other_amount || 0,
+              true // isCalculatedPeriod = true
+            );
           } else {
-            // For existing periods, use markPeriodAsPaid to update the record
+            // Đối với kỳ đã tồn tại, sử dụng markPeriodAsPaid để cập nhật
             await markPeriodAsPaid(
-              periodToCheck.id!, 
-              periodToCheck.expected_amount || 0, 
-              today
+              p.id, 
+              p.expected_amount, 
+              new Date().toISOString(),
+              "Đóng lãi qua checkbox"
             );
           }
         }
-      } else {
-        // Check if any later periods are checked
-        const laterPeriods = combinedPaymentPeriods.slice(index + 1);
-        const anyLaterPeriodPaid = laterPeriods.some(p => 
-          p.status === PaymentPeriodStatus.PAID || p.status === PaymentPeriodStatus.PARTIALLY_PAID
-        );
         
-        if (anyLaterPeriodPaid) {
-          toast({
-            variant: "destructive",
-            title: "Lỗi",
-            description: "Không thể bỏ chọn kỳ thanh toán này vì đã có kỳ thanh toán sau đã được thanh toán."
-          });
+        // Notify success
+        toast({
+          title: 'Thành công',
+          description: 'Đã đánh dấu các kỳ là đã thanh toán',
+        });
+        
+        // Trigger data change
+        if (onDataChange) onDataChange();
+      } else {
+        // If unchecking, find all checked periods from this one to the newest
+        const periodsToUncheck = [];
+        
+        // Go through all periods from the current one to the end
+        for (let i = combinedPaymentPeriods.length - 1; i >= index; i--) {
+          const p = combinedPaymentPeriods[i];
+          // Only include periods that are fully paid
+          if (p.actual_amount >= p.expected_amount) {
+            periodsToUncheck.push(p);
+          }
+        }
+        
+        // If no periods to uncheck, exit early
+        if (periodsToUncheck.length === 0) {
+          setLoadingPeriods(prev => ({ ...prev, [periodId]: false }));
           return;
         }
         
-        // Remove payment - but only if it's an existing period (has ID)
-        if (period.id && !period.id.startsWith('calculated-')) {
-          await deletePaymentPeriod(period.id);
+        // Calculate total amount to deduct from store fund
+        const totalAmount = periodsToUncheck.reduce((sum, p) => 
+          sum + p.actual_amount + (p.other_amount || 0), 0);
+        
+        // Perform all actions for all selected periods
+        for (const p of periodsToUncheck) {
+          // Chỉ xóa kỳ nếu đã có trong database (có ID hợp lệ)
+          if (p.id && !p.id.startsWith('calculated-') && !p.id.startsWith('temp-')) {
+            await deletePaymentPeriod(p.id);
+          }
         }
-      }
-      
-      // Reload data to reflect changes
-      if (onDataChange) {
-        onDataChange();
+        
+        // Notify success
+        toast({
+          title: 'Thành công',
+          description: 'Đã đánh dấu các kỳ là chưa thanh toán',
+        });
+        
+        // Trigger data change
+        if (onDataChange) onDataChange();
       }
     } catch (error) {
-      console.error('Error updating payment status:', error);
+      console.error('Error changing payment status:', error);
       toast({
-        variant: "destructive",
-        title: "Lỗi",
-        description: "Có lỗi xảy ra khi cập nhật trạng thái thanh toán. Vui lòng thử lại."
+        title: 'Lỗi',
+        description: 'Không thể thay đổi trạng thái thanh toán',
+        variant: 'destructive'
       });
+    } finally {
+      setLoadingPeriods(prev => ({ ...prev, [periodId]: false }));
     }
   };
 
@@ -279,7 +313,7 @@ export function PaymentTab({
                 await savePaymentWithOtherAmount(
                   credit.id,
                   {
-                    period_number: combinedPaymentPeriods.filter(p => p.status === PaymentPeriodStatus.PAID || p.status === PaymentPeriodStatus.PARTIALLY_PAID).length + 1, // Custom payment
+                    period_number: combinedPaymentPeriods.filter(p => p.actual_amount >= p.expected_amount).length + 1, // Custom payment
                     start_date: data.startDate,
                     end_date: data.endDate,
                     expected_amount: interestAmount,
@@ -322,7 +356,7 @@ export function PaymentTab({
             lastPaymentEndDate={(() => {
               // Tìm kỳ cuối cùng đã thanh toán
               const paidPeriods = combinedPaymentPeriods.filter(
-                p => p.status === PaymentPeriodStatus.PAID || p.status === PaymentPeriodStatus.PARTIALLY_PAID
+                p => p.actual_amount >= p.expected_amount
               );
               
               // Nếu có kỳ đã thanh toán, trả về ngày kết thúc của kỳ cuối cùng
@@ -377,12 +411,14 @@ export function PaymentTab({
               const actual = period.actual_amount || (period.expected_amount || 0) + (period.other_amount || 0);
               const other = period.other_amount || 0;
               const total = expected + other; // Tổng lãi phí = expected + other
-              const isPaid = period.status === PaymentPeriodStatus.PAID;
-              const isPartiallyPaid = period.status === PaymentPeriodStatus.PARTIALLY_PAID;
+              const isPaid = period.actual_amount >= period.expected_amount;
+              const isPartiallyPaid = period.actual_amount > 0 && period.actual_amount < period.expected_amount;
               const isEditing = editingPeriodId === period.id || editingPeriodId === `temp-${period.period_number}`;
+              const periodId = period.id || `temp-${period.period_number}`;
+              const isLoading = loadingPeriods[periodId];
               
               return (
-                <tr key={period.id || `temp-${period.period_number}`} className="hover:bg-gray-50">
+                <tr key={periodId} className="hover:bg-gray-50">
                   <td className="px-2 py-2 text-center border">{period.period_number}</td>
                   <td className="px-2 py-2 text-center border">
                     {formatDate(period.start_date)} 
@@ -432,10 +468,16 @@ export function PaymentTab({
                     )}
                   </td>
                   <td className="px-2 py-2 text-center border">
-                    <Checkbox 
-                      checked={isPaid || isPartiallyPaid} 
-                      onCheckedChange={(checked) => handleCheckboxChange(period, !!checked, index)}
-                    />
+                    {isLoading ? (
+                      <div className="flex justify-center">
+                        <div className="h-4 w-4 rounded-full border-2 border-t-transparent border-blue-600 animate-spin"></div>
+                      </div>
+                    ) : (
+                      <Checkbox 
+                        checked={isPaid || isPartiallyPaid} 
+                        onCheckedChange={(checked) => handleCheckboxChange(period, !!checked, index)}
+                      />
+                    )}
                   </td>
                 </tr>
               );

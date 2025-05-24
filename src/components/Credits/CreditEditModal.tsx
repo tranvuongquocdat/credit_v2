@@ -32,6 +32,9 @@ export function CreditEditModal({
   creditId,
   onSuccess
 }: CreditEditModalProps) {
+  // Get current store from context
+  const { currentStore } = useStore();
+  
   // State for form values
   const [customerName, setCustomerName] = useState('');
   const [contractCode, setContractCode] = useState('');
@@ -293,9 +296,6 @@ export function CreditEditModal({
         backendInterestType = InterestType.FIXED_AMOUNT;
       }
       
-      // Get current store from context
-      const { currentStore } = useStore();
-
       // Ensure we have a store selected
       if (!currentStore?.id) {
         throw new Error('Vui lòng chọn chi nhánh trước khi cập nhật hợp đồng');

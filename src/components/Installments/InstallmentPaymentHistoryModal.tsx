@@ -19,7 +19,6 @@ import {
 import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
 import { getInstallmentPaymentPeriods } from "@/lib/installmentPayment";
 import { getInstallmentById } from "@/lib/installment";
-import { updateStoreCashFundOnly } from "@/lib/store";
 import { formatCurrency } from "@/lib/utils";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -1043,24 +1042,6 @@ export function InstallmentPaymentHistoryModal({
     // Tính tổng số tiền cần cộng vào quỹ
     const totalAmount = periodsToUpdate.reduce((sum, p) => sum + (p.actualAmount || p.expectedAmount), 0);
     
-    // Cập nhật quỹ tiền mặt của cửa hàng - cộng số tiền thanh toán thực tế
-    if (installment.store_id) {
-      const { success, error: updateError } = await updateStoreCashFundOnly(
-        installment.store_id,
-        totalAmount // Cộng số tiền thanh toán vào quỹ
-      );
-      
-      if (!success || updateError) {
-        console.error('Error updating store cash fund:', updateError);
-        toast({
-          variant: "destructive",
-          title: "Lỗi",
-          description: "Không thể cập nhật quỹ tiền mặt của cửa hàng",
-        });
-        return;
-      }
-    }
-    
     // Save data to server
     const result = await bulkSaveInstallmentPayments(
       installment.id,
@@ -1144,24 +1125,6 @@ export function InstallmentPaymentHistoryModal({
 
     // Only delete from DB if it's not a calculated period
     if (!period.id.startsWith("calculated-")) {
-      // Cập nhật quỹ tiền mặt của cửa hàng - trừ đi số tiền đã thanh toán
-      if (installment.store_id && period.actualAmount) {
-        const { success, error: updateError } = await updateStoreCashFundOnly(
-          installment.store_id,
-          -period.actualAmount // Trừ số tiền đã thanh toán ra khỏi quỹ
-        );
-        
-        if (!success || updateError) {
-          console.error('Error updating store cash fund:', updateError);
-          toast({
-            variant: "destructive",
-            title: "Lỗi",
-            description: "Không thể cập nhật quỹ tiền mặt của cửa hàng",
-          });
-          return;
-        }
-      }
-      
       // Use installmentId to optimize API call
       const { data: deletedPeriod } = await deleteInstallmentPaymentPeriod(period.id, installment.id);
       

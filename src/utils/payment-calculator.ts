@@ -1,6 +1,6 @@
 import { add, format, differenceInDays, addDays, isBefore, parseISO } from 'date-fns';
 import { Credit, InterestType } from '@/models/credit';
-import { CreditPaymentPeriod, PaymentPeriodStatus, CreditPaymentSummary } from '@/models/credit-payment';
+import { CreditPaymentPeriod, CreditPaymentSummary } from '@/models/credit-payment';
 
 /**
  * Tính toán danh sách các kỳ đóng lãi dựa trên thông tin hợp đồng
@@ -71,7 +71,6 @@ export function calculatePaymentPeriods(credit: Credit): CreditPaymentPeriod[] {
       expected_amount: i === totalPeriods - 1 ? remainingAmount : amountPerPeriod,
       actual_amount: 0,
       payment_date: null,
-      status: PaymentPeriodStatus.PENDING,
       notes: null
     });
   }
@@ -99,15 +98,15 @@ export function calculatePaymentSummary(periods: CreditPaymentPeriod[]): CreditP
   // Tổng số tiền đã đóng
   const total_paid = periods.reduce((sum, period) => sum + period.actual_amount, 0);
   
-  // Số kỳ đã hoàn thành
-  const completed_periods = periods.filter(p => p.status === PaymentPeriodStatus.PAID).length;
+  // Số kỳ đã hoàn thành - đánh dấu kỳ đã hoàn thành nếu actual_amount >= expected_amount
+  const completed_periods = periods.filter(p => p.actual_amount >= p.expected_amount).length;
   
   // Số kỳ còn lại
   const remaining_periods = periods.length - completed_periods;
   
   // Tìm kỳ thanh toán tiếp theo (kỳ gần nhất chưa hoàn thành)
   const pendingPeriods = periods
-    .filter(p => p.status === PaymentPeriodStatus.PENDING || p.status === PaymentPeriodStatus.PARTIALLY_PAID)
+    .filter(p => p.actual_amount < p.expected_amount)
     .sort((a, b) => {
       const dateA = parseISO(a.end_date);
       const dateB = parseISO(b.end_date);
@@ -143,7 +142,6 @@ export function createCustomPaymentPeriod(
     expected_amount: amount,
     actual_amount: 0,
     payment_date: null,
-    status: PaymentPeriodStatus.PENDING,
     notes: 'Kỳ thanh toán tùy chỉnh'
   };
 }
@@ -337,7 +335,6 @@ export function recalculateRemainingPeriodsAfterIrregular(
       expected_amount: Math.round(expectedAmount),
       actual_amount: 0,
       payment_date: null,
-      status: PaymentPeriodStatus.PENDING,
       notes: ''
     };
     
