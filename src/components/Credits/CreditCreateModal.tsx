@@ -129,30 +129,61 @@ export function CreditCreateModal({
     switch(value) {
       case 'daily':
         setInterestNotation('k_per_million');
-        // Để nguyên interest period vì đã đúng đơn vị ngày
+        // Default daily period to 10 days
+        setInterestPeriod('10');
+        
+        // Update loan period to days if coming from a different format
+        if (interestType.startsWith('weekly') || interestType.startsWith('monthly')) {
+          const currentPeriod = parseInt(loanPeriod || '0');
+          // Convert from weeks/months to days
+          const newPeriod = interestType.startsWith('weekly') 
+            ? currentPeriod * 7  // weeks to days
+            : currentPeriod * 30; // months to days
+          setLoanPeriod(newPeriod.toString());
+        }
         break;
+        
       case 'monthly_30':
-        setInterestNotation('percent_per_month');
-        // Cập nhật thành 30 ngày (1 tháng 30 ngày)
-        setInterestPeriod('30');
-        break;
       case 'monthly_custom':
         setInterestNotation('percent_per_month');
-        // Cập nhật thành 30 ngày (1 tháng mặc định)
+        // Set to 30 days (fixed month period)
         setInterestPeriod('30');
+        
+        // Update loan period to months if coming from a different format
+        if (!interestType.startsWith('monthly')) {
+          const currentPeriod = parseInt(loanPeriod || '0');
+          // Convert to months (rounded)
+          let newPeriod = interestType.startsWith('weekly')
+            ? Math.ceil(currentPeriod / 4) // weeks to months (rough approximation)
+            : Math.ceil(currentPeriod / 30); // days to months
+          // Ensure minimum 1 month
+          newPeriod = Math.max(1, newPeriod);
+          setLoanPeriod(newPeriod.toString());
+        }
         break;
+        
       case 'weekly_percent':
-        setInterestNotation('percent_per_week');
-        // Cập nhật thành 7 ngày (1 tuần)
-        setInterestPeriod('7');
-        break;
       case 'weekly_k':
-        setInterestNotation('k_per_week');
-        // Cập nhật thành 7 ngày (1 tuần)
+        setInterestNotation(value === 'weekly_percent' ? 'percent_per_week' : 'k_per_week');
+        // Set to 7 days (1 week)
         setInterestPeriod('7');
+        
+        // Update loan period to weeks if coming from a different format
+        if (!interestType.startsWith('weekly')) {
+          const currentPeriod = parseInt(loanPeriod || '0');
+          // Convert to weeks (rounded)
+          let newPeriod = interestType.startsWith('monthly')
+            ? currentPeriod * 4 // months to weeks (rough approximation)
+            : Math.ceil(currentPeriod / 7); // days to weeks
+          // Ensure minimum 1 week
+          newPeriod = Math.max(1, newPeriod);
+          setLoanPeriod(newPeriod.toString());
+        }
         break;
+        
       default:
         setInterestNotation('k_per_million');
+        setInterestPeriod('10');
     }
   };
   
@@ -249,14 +280,44 @@ export function CreditCreateModal({
       
       // Map the UI interest type to the backend interest type
       let backendInterestType = InterestType.PERCENTAGE;
+      let actualInterestValue = parseFloat(interestValue || '0');
+      
+      // Convert interest value based on notation
       if (interestType === 'daily') {
         backendInterestType = InterestType.FIXED_AMOUNT;
-      } else if (interestType === 'monthly_30' || interestType === 'monthly_custom' || 
-                 interestType === 'weekly_percent') {
+      } else if (interestType === 'monthly_30' || interestType === 'monthly_custom') {
         backendInterestType = InterestType.PERCENTAGE;
+        // Keep percentage as is
+      } else if (interestType === 'weekly_percent') {
+        backendInterestType = InterestType.PERCENTAGE;
+        // Keep percentage as is
       } else if (interestType === 'weekly_k') {
         backendInterestType = InterestType.FIXED_AMOUNT;
       }
+      
+      // Convert loan period to days based on interest type
+      const convertLoanPeriodToDays = (period: string, type: string): number => {
+        const periodNum = parseInt(period || '0');
+        if (type.startsWith('weekly')) {
+          return periodNum * 7; // weeks to days
+        } else if (type.startsWith('monthly')) {
+          return periodNum * 30; // months to days
+        }
+        return periodNum; // already in days
+      };
+      
+      // Convert interest period based on interest type
+      const convertInterestPeriodForStorage = (period: string, type: string): number => {
+        const periodNum = parseInt(period || '0');
+        // For weekly interest types, if user enters 1, it means 1 week (7 days)
+        // For monthly interest types, if user enters 1, it means 1 month (30 days)
+        if (type.startsWith('weekly') && periodNum > 0) {
+          return periodNum * 7; // weeks to days
+        } else if (type.startsWith('monthly') && periodNum > 0) {
+          return periodNum * 30; // months to days
+        }
+        return periodNum; // already in days
+      };
       
       // Prepare credit data
       const creditData: CreateCreditParams = {
@@ -268,11 +329,11 @@ export function CreditCreateModal({
         collateral,
         loan_amount: loanAmountValue,
         interest_type: backendInterestType,
-        interest_value: parseFloat(interestValue || '0'),
+        interest_value: actualInterestValue,
         interest_ui_type: interestType, // Store the UI interest type
         interest_notation: interestNotation, // Store the notation format
-        loan_period: parseInt(loanPeriod || '30'),
-        interest_period: parseInt(interestPeriod || '10'),
+        loan_period: convertLoanPeriodToDays(loanPeriod, interestType),
+        interest_period: convertInterestPeriodForStorage(interestPeriod, interestType),
         loan_date: new Date(loanDate),
         status: CreditStatus.ON_TIME,
         notes: notes,
@@ -569,7 +630,8 @@ export function CreditCreateModal({
                         type="radio" 
                         id="interestWeeklyK1" 
                         name="interestWeeklyK" 
-                        checked={true}
+                        checked={interestNotation === 'k_per_week'}
+                        onChange={() => setInterestNotation('k_per_week')}
                         className="mr-2"
                       />
                       <label htmlFor="interestWeeklyK1" className="text-sm">k/1 tuần (VD: 100k/1 tuần)</label>
@@ -582,7 +644,9 @@ export function CreditCreateModal({
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
             <Label htmlFor="loanPeriod" className="text-right">
-              Số ngày vay <span className="text-red-500">*</span>
+              {interestType.startsWith('weekly') ? 'Số tuần vay' : 
+               interestType.startsWith('monthly') ? 'Số tháng vay' : 
+               'Số ngày vay'} <span className="text-red-500">*</span>
             </Label>
             <Input 
               id="loanPeriod"
@@ -595,7 +659,9 @@ export function CreditCreateModal({
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
             <Label htmlFor="interestPeriod" className="text-right">
-              Kỳ lãi phí <span className="text-red-500">*</span>
+              {interestType.startsWith('weekly') ? 'Kỳ lãi (tuần)' : 
+               interestType.startsWith('monthly') ? 'Kỳ lãi (tháng)' : 
+               'Kỳ lãi (ngày)'} <span className="text-red-500">*</span>
             </Label>
             <div className="flex items-center space-x-2">
               <Input 

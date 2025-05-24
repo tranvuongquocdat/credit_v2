@@ -47,7 +47,7 @@ export function SearchFilters({
     customerName: '',
     startDate: '',
     endDate: '',
-    status: ''
+    status: 'on_time'
   });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,7 +75,7 @@ export function SearchFilters({
       customerName: '',
       startDate: '',
       endDate: '',
-      status: ''
+      status: 'on_time'
     });
     onReset();
   };

@@ -31,12 +31,12 @@ export async function getCredits(
     
     // Áp dụng các filter nếu có
     if (searchQuery) {
-      query = query.or(`
-        contract_code.ilike.%${searchQuery}%,
-        id_number.ilike.%${searchQuery}%,
-        phone.ilike.%${searchQuery}%,
-        customers.name.ilike.%${searchQuery}%
-      `);
+      // Manually construct the or filter with a simple syntax to avoid parsing issues
+      const filter = 
+        `contract_code.ilike.%${searchQuery}%,` +
+        `id_number.ilike.%${searchQuery}%,` +
+        `phone.ilike.%${searchQuery}%`;
+      query = query.or(filter);
     }
     
     if (storeId) {
@@ -124,6 +124,8 @@ export async function createCredit(params: CreateCreditParams) {
         loan_amount: params.loan_amount,
         interest_type: params.interest_type,
         interest_value: params.interest_value,
+        interest_ui_type: params.interest_ui_type,
+        interest_notation: params.interest_notation,
         loan_period: params.loan_period,
         interest_period: params.interest_period,
         loan_date: loanDate,
@@ -163,6 +165,8 @@ export async function updateCredit(id: string, params: UpdateCreditParams) {
     if (params.loan_amount !== undefined) updateData.loan_amount = params.loan_amount;
     if (params.interest_type !== undefined) updateData.interest_type = params.interest_type;
     if (params.interest_value !== undefined) updateData.interest_value = params.interest_value;
+    if (params.interest_ui_type !== undefined) updateData.interest_ui_type = params.interest_ui_type;
+    if (params.interest_notation !== undefined) updateData.interest_notation = params.interest_notation;
     if (params.loan_period !== undefined) updateData.loan_period = params.loan_period;
     if (params.interest_period !== undefined) updateData.interest_period = params.interest_period;
     if (params.loan_date !== undefined) {

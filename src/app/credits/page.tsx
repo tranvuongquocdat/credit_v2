@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
@@ -29,6 +29,8 @@ import { useStore } from '@/contexts/StoreContext';
 
 // Import types and API functions
 import { CreditStatus, CreditWithCustomer } from '@/models/credit';
+import { supabase } from '@/lib/supabase';
+import { StoreFinancialData } from '@/lib/store';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -48,6 +50,117 @@ interface FundStatus {
   availableFund: number; // Quỹ khả dụng
   oldDebt: number; // Tiền nợ
   collectedInterest?: number; // Lãi phí đã thu
+}
+
+// Custom hook để lấy thông tin tài chính tổng hợp
+function useCreditsSummary() {
+  const [financialData, setFinancialData] = useState<StoreFinancialData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const { currentStore } = useStore();
+  
+  const fetchFinancialData = async () => {
+    try {
+      setLoading(true);
+      
+      // 1. Lấy thông tin cơ bản từ store
+      const storeId = currentStore?.id || '1';
+      const { data: storeData } = await supabase
+        .from('stores')
+        .select('investment, cash_fund')
+        .eq('id', storeId)
+        .single();
+      
+      // 2. Lấy tổng tiền cho vay (tổng loan_amount của các hợp đồng đang vay)
+      const { data: activeCreditsData, error: activeCreditsError } = await supabase
+        .from('credits')
+        .select('loan_amount')
+        .neq('status', CreditStatus.CLOSED)
+        .neq('status', CreditStatus.DELETED);
+      
+      if (activeCreditsError) {
+        console.error('Lỗi khi lấy dữ liệu hợp đồng đang hoạt động:', activeCreditsError);
+      }
+      
+      // Tính tổng tiền cho vay
+      const totalLoan = activeCreditsData?.reduce((sum, credit) => sum + (credit.loan_amount || 0), 0) || 0;
+      
+      // 3. Lấy tổng tiền nợ cũ
+      const { data: oldDebtData, error: oldDebtError } = await supabase
+        .from('credit_payment_periods')
+        .select(`
+          expected_amount,
+          actual_amount,
+          credits!inner(status)
+        `)
+        .neq('credits.status', CreditStatus.CLOSED)
+        .neq('credits.status', CreditStatus.DELETED);
+      
+      if (oldDebtError) {
+        console.error('Lỗi khi lấy dữ liệu nợ cũ:', oldDebtError);
+      }
+      
+      // Tính tổng tiền nợ cũ
+      let oldDebt = 0;
+      oldDebtData?.forEach(period => {
+        const expected = period.expected_amount || 0;
+        const actual = period.actual_amount || 0;
+        if (expected > actual) {
+          oldDebt += (expected - actual);
+        }
+      });
+      
+      // 4. Lấy tổng lãi phí đã thu (tổng actual_amount của các kỳ thanh toán)
+      const { data: collectedInterestData, error: collectedInterestError } = await supabase
+        .from('credit_payment_periods')
+        .select('actual_amount');
+      
+      if (collectedInterestError) {
+        console.error('Lỗi khi lấy dữ liệu lãi phí đã thu:', collectedInterestError);
+      }
+      
+      // Tính tổng lãi phí đã thu
+      const collectedInterest = collectedInterestData?.reduce((sum, period) => sum + (period.actual_amount || 0), 0) || 0;
+      
+      // 5. Lấy tổng lãi phí dự kiến (tổng expected_amount của các kỳ thanh toán của hợp đồng đang hoạt động)
+      const { data: expectedInterestData, error: expectedInterestError } = await supabase
+        .from('credit_payment_periods')
+        .select(`
+          expected_amount,
+          credits!inner(status)
+        `)
+        .neq('credits.status', CreditStatus.CLOSED)
+        .neq('credits.status', CreditStatus.DELETED);
+      
+      if (expectedInterestError) {
+        console.error('Lỗi khi lấy dữ liệu lãi phí dự kiến:', expectedInterestError);
+      }
+      
+      // Tính tổng lãi phí dự kiến
+      const profit = expectedInterestData?.reduce((sum, period) => sum + (period.expected_amount || 0), 0) || 0;
+      
+      // 6. Tổng hợp dữ liệu
+      const financialSummary: StoreFinancialData = {
+        totalFund: storeData?.investment || 0,
+        availableFund: storeData?.cash_fund || 0,
+        totalLoan: totalLoan,
+        oldDebt: oldDebt,
+        profit: profit,
+        collectedInterest: collectedInterest
+      };
+      
+      setFinancialData(financialSummary);
+    } catch (error) {
+      console.error('Lỗi khi lấy dữ liệu tài chính:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  useEffect(() => {
+    fetchFinancialData();
+  }, [currentStore?.id]);
+  
+  return { data: financialData, loading, refresh: fetchFinancialData };
 }
 
 export default function CreditsPage() {
@@ -70,6 +183,9 @@ export default function CreditsPage() {
     handleUpdateStatus: updateCreditStatus,
     refetch
   } = useCredits();
+  
+  // Lấy dữ liệu tài chính tổng hợp
+  const { data: financialSummary, refresh: refreshFinancial } = useCreditsSummary();
   
   // State for dialogs
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
@@ -167,6 +283,9 @@ export default function CreditsPage() {
   const handleClosePaymentHistory = () => {
     setIsPaymentHistoryModalOpen(false);
     setPaymentHistoryCredit(null);
+    // Refresh financial data when payment history modal is closed (in case payments were updated)
+    refreshFinancial();
+    refetch();
   };
   
   return (
@@ -181,7 +300,9 @@ export default function CreditsPage() {
         
         {/* Thông tin tài chính */}
         <FinancialSummary 
-          autoFetch={true} 
+          fundStatus={financialSummary || undefined}
+          onRefresh={refreshFinancial}
+          autoFetch={false}
         />
         
         {/* Bộ lọc và tìm kiếm */}

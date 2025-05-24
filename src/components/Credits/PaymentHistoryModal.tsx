@@ -9,9 +9,6 @@ import {
   DialogHeader, 
   DialogTitle 
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { X, ChevronDown } from 'lucide-react';
 import { CreditWithCustomer, InterestType, Credit } from '@/models/credit';
 import { CreditPaymentPeriod, PaymentPeriodStatus } from '@/models/credit-payment';
 import { getCreditPaymentPeriods, savePaymentWithOtherAmount } from '@/lib/credit-payment';
@@ -312,13 +309,24 @@ export function PaymentHistoryModal({
         );
       } else {
         // Sử dụng tính toán cũ nếu không có thay đổi gốc
-      if (credit.interest_type === InterestType.PERCENTAGE) {
-        // Lãi suất phần trăm
-        expectedAmount = Math.round(credit.loan_amount * (credit.interest_value / 100 / 30) * dayCount * 30);
-      } else {
-        // Lãi suất cố định
-        const loanAmountInMillions = credit.loan_amount / 1000;
-        expectedAmount = Math.round(credit.interest_value * loanAmountInMillions * dayCount);
+        if (credit.interest_type === InterestType.PERCENTAGE) {
+          // Xử lý dựa trên loại lãi suất (tuần, tháng, ngày)
+          if (credit.interest_ui_type?.startsWith('weekly')) {
+            // Lãi suất theo tuần (ví dụ 1%/tuần)
+            const weeksCount = Math.ceil(dayCount / 7);
+            expectedAmount = Math.round(credit.loan_amount * (credit.interest_value / 100) * weeksCount);
+          } else if (credit.interest_ui_type?.startsWith('monthly')) {
+            // Lãi suất theo tháng (ví dụ 3%/tháng)
+            const monthsCount = Math.ceil(dayCount / 30);
+            expectedAmount = Math.round(credit.loan_amount * (credit.interest_value / 100) * monthsCount);
+          } else {
+            // Lãi suất theo ngày (mặc định)
+            expectedAmount = Math.round(credit.loan_amount * (credit.interest_value / 100 / 30) * dayCount * 30);
+          }
+        } else {
+          // Lãi suất cố định
+          const loanAmountInMillions = credit.loan_amount / 1000;
+          expectedAmount = Math.round(credit.interest_value * loanAmountInMillions * dayCount);
         }
       }
       
@@ -402,10 +410,21 @@ export function PaymentHistoryModal({
         } else {
           // Sử dụng tính toán cũ nếu không có thay đổi gốc
           if (credit.interest_type === InterestType.PERCENTAGE) {
-            // Lãi suất phần trăm - sử dụng cùng công thức với generatePaymentPeriods
-            expectedAmount = Math.round(credit.loan_amount * (credit.interest_value / 100 / 30) * daysCount * 30);
+            // Xử lý dựa trên loại lãi suất (tuần, tháng, ngày)
+            if (credit.interest_ui_type?.startsWith('weekly')) {
+              // Lãi suất theo tuần (ví dụ 1%/tuần)
+              const weeksCount = Math.ceil(daysCount / 7);
+              expectedAmount = Math.round(credit.loan_amount * (credit.interest_value / 100) * weeksCount);
+            } else if (credit.interest_ui_type?.startsWith('monthly')) {
+              // Lãi suất theo tháng (ví dụ 3%/tháng)
+              const monthsCount = Math.ceil(daysCount / 30);
+              expectedAmount = Math.round(credit.loan_amount * (credit.interest_value / 100) * monthsCount);
+            } else {
+              // Lãi suất theo ngày (mặc định)
+              expectedAmount = Math.round(credit.loan_amount * (credit.interest_value / 100 / 30) * daysCount * 30);
+            }
           } else {
-            // Lãi suất cố định - sử dụng cùng công thức với generatePaymentPeriods
+            // Lãi suất cố định
             const loanAmountInMillions = credit.loan_amount / 1000;
             expectedAmount = Math.round(credit.interest_value * loanAmountInMillions * daysCount);
           }

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { CreditWithCustomer, CreditStatus } from '@/models/credit';
 import { getCredits, deleteCredit, updateCredit } from '@/lib/credit';
 import { SearchFilters } from '@/components/Credits/SearchFilters';
+import { useStore } from '@/contexts/StoreContext';
 
 export function useCredits() {
   const [credits, setCredits] = useState<CreditWithCustomer[]>([]);
@@ -15,8 +16,11 @@ export function useCredits() {
     customerName: '',
     startDate: '',
     endDate: '',
-    status: ''
+    status: 'on_time'
   });
+  
+  // Get current store from store context
+  const { currentStore } = useStore();
 
   // Fetch credits with filters
   const fetchCredits = useCallback(async () => {
@@ -33,7 +37,7 @@ export function useCredits() {
         currentPage,
         itemsPerPage,
         searchQuery,
-        '', // storeId (not used in this UI)
+        currentStore?.id || '', // Use current store ID from context
         filters.status
       );
       
@@ -49,7 +53,7 @@ export function useCredits() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, itemsPerPage, filters]);
+  }, [currentPage, itemsPerPage, filters, currentStore]);
 
   // Initial load
   useEffect(() => {
@@ -69,7 +73,7 @@ export function useCredits() {
       customerName: '',
       startDate: '',
       endDate: '',
-      status: ''
+      status: 'on_time'
     });
     setCurrentPage(1);
   };

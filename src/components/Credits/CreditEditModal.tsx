@@ -88,27 +88,56 @@ export function CreditEditModal({
       case 'daily':
         setInterestNotation('k_per_million');
         // Để nguyên interest period vì đã đúng đơn vị ngày
+        
+        // Update loan period to days if coming from a different format
+        if (interestType.startsWith('weekly') || interestType.startsWith('monthly')) {
+          const currentPeriod = parseInt(loanPeriod || '0');
+          // Convert from weeks/months to days
+          const newPeriod = interestType.startsWith('weekly') 
+            ? currentPeriod * 7  // weeks to days
+            : currentPeriod * 30; // months to days
+          setLoanPeriod(newPeriod.toString());
+        }
         break;
+        
       case 'monthly_30':
+      case 'monthly_custom':
         setInterestNotation('percent_per_month');
         // Cập nhật thành 30 ngày (1 tháng 30 ngày)
         setInterestPeriod('30');
+        
+        // Update loan period to months if coming from a different format
+        if (!interestType.startsWith('monthly')) {
+          const currentPeriod = parseInt(loanPeriod || '0');
+          // Convert to months (rounded)
+          let newPeriod = interestType.startsWith('weekly')
+            ? Math.ceil(currentPeriod / 4) // weeks to months (rough approximation)
+            : Math.ceil(currentPeriod / 30); // days to months
+          // Ensure minimum 1 month
+          newPeriod = Math.max(1, newPeriod);
+          setLoanPeriod(newPeriod.toString());
+        }
         break;
-      case 'monthly_custom':
-        setInterestNotation('percent_per_month');
-        // Cập nhật thành 30 ngày (1 tháng mặc định)
-        setInterestPeriod('30');
-        break;
+        
       case 'weekly_percent':
-        setInterestNotation('percent_per_week');
-        // Cập nhật thành 7 ngày (1 tuần)
-        setInterestPeriod('7');
-        break;
       case 'weekly_k':
-        setInterestNotation('k_per_week');
+        setInterestNotation(value === 'weekly_percent' ? 'percent_per_week' : 'k_per_week');
         // Cập nhật thành 7 ngày (1 tuần)
         setInterestPeriod('7');
+        
+        // Update loan period to weeks if coming from a different format
+        if (!interestType.startsWith('weekly')) {
+          const currentPeriod = parseInt(loanPeriod || '0');
+          // Convert to weeks (rounded)
+          let newPeriod = interestType.startsWith('monthly')
+            ? currentPeriod * 4 // months to weeks (rough approximation)
+            : Math.ceil(currentPeriod / 7); // days to weeks
+          // Ensure minimum 1 week
+          newPeriod = Math.max(1, newPeriod);
+          setLoanPeriod(newPeriod.toString());
+        }
         break;
+        
       default:
         setInterestNotation('k_per_million');
     }
@@ -174,8 +203,42 @@ export function CreditEditModal({
         setInterestType(detectedInterestType);
         setInterestNotation(detectedNotation);
         setInterestValue(creditData.interest_value?.toString() || '');
-        setLoanPeriod(creditData.loan_period?.toString() || '30');
-        setInterestPeriod(creditData.interest_period?.toString() || '10');
+        
+        // Convert loan_period from days to the appropriate unit based on interest type
+        const periodInDays = creditData.loan_period || 30;
+        let periodToDisplay = periodInDays;
+        
+        if (detectedInterestType.startsWith('weekly')) {
+          // Convert days to weeks
+          periodToDisplay = Math.round(periodInDays / 7);
+          // Ensure at least 1 week
+          periodToDisplay = Math.max(1, periodToDisplay);
+        } else if (detectedInterestType.startsWith('monthly')) {
+          // Convert days to months
+          periodToDisplay = Math.round(periodInDays / 30);
+          // Ensure at least 1 month
+          periodToDisplay = Math.max(1, periodToDisplay);
+        }
+        
+        setLoanPeriod(periodToDisplay.toString());
+        
+        // Convert interest_period from days to the appropriate unit based on interest type
+        const interestPeriodInDays = creditData.interest_period || 10;
+        let interestPeriodToDisplay = interestPeriodInDays;
+        
+        if (detectedInterestType.startsWith('weekly')) {
+          // Convert days to weeks
+          interestPeriodToDisplay = Math.round(interestPeriodInDays / 7);
+          // Ensure at least 1 week
+          interestPeriodToDisplay = Math.max(1, interestPeriodToDisplay);
+        } else if (detectedInterestType.startsWith('monthly')) {
+          // Convert days to months
+          interestPeriodToDisplay = Math.round(interestPeriodInDays / 30);
+          // Ensure at least 1 month
+          interestPeriodToDisplay = Math.max(1, interestPeriodToDisplay);
+        }
+        
+        setInterestPeriod(interestPeriodToDisplay.toString());
         setLoanDate(creditData.loan_date ? format(new Date(creditData.loan_date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
         setNotes(creditData.notes || '');
         setStatus(creditData.status as CreditStatus || CreditStatus.ON_TIME);
@@ -238,6 +301,30 @@ export function CreditEditModal({
         throw new Error('Vui lòng chọn chi nhánh trước khi cập nhật hợp đồng');
       }
       
+      // Convert loan period to days based on interest type
+      const convertLoanPeriodToDays = (period: string, type: string): number => {
+        const periodNum = parseInt(period || '0');
+        if (type.startsWith('weekly')) {
+          return periodNum * 7; // weeks to days
+        } else if (type.startsWith('monthly')) {
+          return periodNum * 30; // months to days
+        }
+        return periodNum; // already in days
+      };
+      
+      // Convert interest period based on interest type
+      const convertInterestPeriodForStorage = (period: string, type: string): number => {
+        const periodNum = parseInt(period || '0');
+        // For weekly interest types, if user enters 1, it means 1 week (7 days)
+        // For monthly interest types, if user enters 1, it means 1 month (30 days)
+        if (type.startsWith('weekly') && periodNum > 0) {
+          return periodNum * 7; // weeks to days
+        } else if (type.startsWith('monthly') && periodNum > 0) {
+          return periodNum * 30; // months to days
+        }
+        return periodNum; // already in days
+      };
+      
       // Prepare update data
       const updateData: UpdateCreditParams = {
         customer_id: selectedCustomerId,
@@ -251,8 +338,8 @@ export function CreditEditModal({
         interest_value: parseFloat(interestValue || '0'),
         interest_ui_type: interestType, // Save the UI interest type
         interest_notation: interestNotation, // Save the notation format
-        loan_period: parseInt(loanPeriod || '30'),
-        interest_period: parseInt(interestPeriod || '10'),
+        loan_period: convertLoanPeriodToDays(loanPeriod, interestType),
+        interest_period: convertInterestPeriodForStorage(interestPeriod, interestType),
         loan_date: new Date(loanDate),
         notes: notes, // Keep notes clean, don't append the interest type information
         status,
@@ -494,7 +581,9 @@ export function CreditEditModal({
             
             <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
               <Label htmlFor="loanPeriod" className="text-right">
-                Số ngày vay <span className="text-red-500">*</span>
+                {interestType.startsWith('weekly') ? 'Số tuần vay' : 
+                 interestType.startsWith('monthly') ? 'Số tháng vay' : 
+                 'Số ngày vay'} <span className="text-red-500">*</span>
               </Label>
               <Input 
                 id="loanPeriod"
@@ -507,7 +596,9 @@ export function CreditEditModal({
             
             <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
               <Label htmlFor="interestPeriod" className="text-right">
-                Kỳ lãi phí <span className="text-red-500">*</span>
+                {interestType.startsWith('weekly') ? 'Kỳ lãi (tuần)' : 
+                 interestType.startsWith('monthly') ? 'Kỳ lãi (tháng)' : 
+                 'Kỳ lãi (ngày)'} <span className="text-red-500">*</span>
               </Label>
               <div className="flex items-center space-x-2">
                 <Input 

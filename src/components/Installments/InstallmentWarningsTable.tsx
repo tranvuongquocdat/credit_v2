@@ -13,8 +13,8 @@ interface InstallmentWarning extends InstallmentWithCustomer {
   payments?: InstallmentPaymentPeriod[];
   latestPeriod?: InstallmentPaymentPeriod;
   latePeriods: number;
-  amountPerPeriod: number;
   totalDueAmount: number;
+  buttonValues: number[];
 }
 
 interface InstallmentWarningsTableProps {
@@ -88,7 +88,6 @@ export function InstallmentWarningsTable({
             
             // Calculate days since start date to today if end date is in the future else calculate days since start date to end date
             const daysSinceStart = endDate > today ? Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24) + 1) : Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24) + 1);
-            console.log(daysSinceStart, paymentPeriod);
             // If at least one payment period has passed
             if (daysSinceStart >= paymentPeriod) {
               // Calculate number of late periods
@@ -100,15 +99,18 @@ export function InstallmentWarningsTable({
               // Set total due amount to 0 for installments with no payment records in the database
               // Old debt (nợ cũ) only comes from payment periods in the database
               const totalDueAmount = 0;
-              
-              console.log(`[Warning] Installment ${installment.id} - ${installment.contract_code}: No payment records. Old debt is 0.`);
-              
+              var periodAmount = 0;
+              const buttonValues: number[] = [];
+              for (let i = 0; i < latePeriods; i++) {
+                periodAmount += amountPerPeriod;
+                buttonValues.push(periodAmount)
+              }
               // Add to warnings - using a dummy "first period" based on contract start date
               warningResults.push({
                 ...installment,
                 payments: [],
                 latePeriods,
-                amountPerPeriod,
+                buttonValues,
                 totalDueAmount
               });
             }
@@ -120,7 +122,7 @@ export function InstallmentWarningsTable({
           // Process installments that have payment periods
           // Find the latest period (highest period number)
           const latestPeriod = [...data].sort((a, b) => b.periodNumber - a.periodNumber)[0];
-          
+          const sum = data.reduce((acc, curr) => acc + (curr.expectedAmount || 0), 0);
           // Parse the end date (format DD/MM/YYYY)
           let endDate: Date;
           if (latestPeriod.endDate && latestPeriod.endDate.includes('/')) {
@@ -144,47 +146,52 @@ export function InstallmentWarningsTable({
             const contractEndDate = new Date(installment.start_date);
             contractEndDate.setDate(contractEndDate.getDate() + installment.duration - 1);
             contractEndDate.setHours(0, 0, 0, 0);
+            const selectedDate = today > contractEndDate ? contractEndDate : today;
             // Calculate days between next day and today or end date if today exceeds end date
-            const daysDifference = today > contractEndDate ? Math.floor((contractEndDate.getTime() - nextDay.getTime()) / (1000 * 60 * 60 * 24) + 1) : Math.floor((today.getTime() - nextDay.getTime()) / (1000 * 60 * 60 * 24) + 1);
+            const daysDifference =  Math.floor((selectedDate.getTime() - nextDay.getTime()) / (1000 * 60 * 60 * 24) + 1) 
             
             // Get  payment period (default to 10 if not set)
             const paymentPeriod = installment.payment_period || 10;
-            
-            // Calculate number of late periods
-            const latePeriods = Math.ceil(daysDifference / paymentPeriod);
-            
-            if (latePeriods > 0) {
-              // Calculate amount per period
-              const amountPerPeriod = installment.daily_amount * paymentPeriod;
+            const remainingToPay = installment.installment_amount ? installment.installment_amount - sum : 0;
+            // Tính tổng số kỳ chậm thanh toán
+            const latePeriods = Math.floor(daysDifference / paymentPeriod);
+            // Check phần dư
+            const daysInLastPeriod = daysDifference % paymentPeriod;
+            var buttonValues = []
+            var periodAmount = 0;
+            for (let i = 0; i < latePeriods; i++) {
+              periodAmount += remainingToPay / daysDifference * paymentPeriod;
+              buttonValues.push(periodAmount)
+            }
+            // Ngày dư => Kì cuối
+            if (daysInLastPeriod > 0) {
+              periodAmount += remainingToPay / daysDifference * daysInLastPeriod;
+              buttonValues.push(periodAmount)
+            }
+
+            let totalDueAmount = 0;
               
-              // Calculate total due amount by summing the difference between expected and actual amounts
-              // for each period in the database
-              let totalDueAmount = 0;
+            data.forEach(period => {
+              const expectedAmount = period.expectedAmount || 0;
+              const actualAmount = period.actualAmount || 0;
+              const difference = expectedAmount - actualAmount;
               
-              // Process each period to calculate remaining amounts
-              data.forEach(period => {
-                const expectedAmount = period.expectedAmount || 0;
-                const actualAmount = period.actualAmount || 0;
-                const difference = expectedAmount - actualAmount;
-                
-                // Only add positive differences (where expected > actual)
-                if (difference > 0) {
-                  totalDueAmount += difference;
-                }
-              });
+              // Only add positive differences (where expected > actual)
+              if (difference > 0) {
+                totalDueAmount += difference;
+              }
+            });
               
-              console.log(`[Warning] Installment ${installment.id} - ${installment.contract_code}: Calculated totalDueAmount=${totalDueAmount} from ${data.length} periods`);
-              
-              // Add to warnings
+            //   // Add to warnings
               warningResults.push({
                 ...installment,
                 payments: data,
                 latestPeriod,
-                latePeriods,
-                amountPerPeriod,
+                latePeriods: Math.ceil(daysDifference / paymentPeriod),
+                buttonValues,
                 totalDueAmount
               });
-            }
+            // }
           }
         }
         
@@ -241,20 +248,27 @@ export function InstallmentWarningsTable({
         <tbody className="bg-white divide-y divide-gray-200">
           {warnings.map((warning, index) => {
             // Generate quick payment buttons (max 10)
-            const maxButtons = Math.min(10, warning.latePeriods);
+            const maxButtons = Math.min(10, warning.buttonValues.length);
             const quickPayButtons = [];
             
-            for (let i = 1; i <= maxButtons; i++) {
-              const paymentAmount = Math.round(warning.amountPerPeriod * i / 1000); // Convert to thousands
+            // Tính tổng số tiền cần thanh toán - lấy phần tử cuối cùng trong mảng buttonValues
+            const totalAmountToDisplay = warning.buttonValues.length > 0 
+              ? warning.buttonValues[warning.buttonValues.length - 1] 
+              : 0;
+            
+            for (let i = 0; i < maxButtons; i++) {
+              // Lấy giá trị từ mảng buttonValues đã được tính toán
+              const buttonAmount = Math.round(warning.buttonValues[i] / 1000); // Convert to thousands
+              
               quickPayButtons.push(
                 <Button
                   key={i}
                   variant="outline" 
                   size="sm"
                   className="mx-1 bg-green-100 hover:bg-green-200 text-green-800 border-green-300"
-                  onClick={() => onPayment && onPayment(warning, warning.amountPerPeriod * i)}
+                  onClick={() => onPayment && onPayment(warning, warning.buttonValues[i])}
                 >
-                  {paymentAmount}
+                  {buttonAmount}
                 </Button>
               );
             }
@@ -283,7 +297,7 @@ export function InstallmentWarningsTable({
                   }
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  {formatCurrency(warning.amountPerPeriod * warning.latePeriods)}
+                  {formatCurrency(totalAmountToDisplay)}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
                   <span className="text-red-600 font-medium">
