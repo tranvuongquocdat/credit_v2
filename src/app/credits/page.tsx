@@ -70,12 +70,16 @@ function useCreditsSummary() {
         .eq('id', storeId)
         .single();
       
+      // Get credits for interest calculation
+      const today = new Date();
+      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      
       // 2. Lấy tổng tiền cho vay (tổng loan_amount của các hợp đồng đang vay)
       const { data: activeCreditsData, error: activeCreditsError } = await supabase
         .from('credits')
         .select('loan_amount')
-        .neq('status', CreditStatus.CLOSED)
-        .neq('status', CreditStatus.DELETED);
+        .in('status', [CreditStatus.ON_TIME, CreditStatus.OVERDUE, CreditStatus.LATE_INTEREST, CreditStatus.BAD_DEBT]);
       
       if (activeCreditsError) {
         console.error('Lỗi khi lấy dữ liệu hợp đồng đang hoạt động:', activeCreditsError);
@@ -112,7 +116,9 @@ function useCreditsSummary() {
       // 4. Lấy tổng lãi phí đã thu (tổng actual_amount của các kỳ thanh toán)
       const { data: collectedInterestData, error: collectedInterestError } = await supabase
         .from('credit_payment_periods')
-        .select('actual_amount');
+        .select('actual_amount, credits!inner(status)')
+        .neq('credits.status', CreditStatus.CLOSED)
+        .neq('credits.status', CreditStatus.DELETED);
       
       if (collectedInterestError) {
         console.error('Lỗi khi lấy dữ liệu lãi phí đã thu:', collectedInterestError);
@@ -121,22 +127,99 @@ function useCreditsSummary() {
       // Tính tổng lãi phí đã thu
       const collectedInterest = collectedInterestData?.reduce((sum, period) => sum + (period.actual_amount || 0), 0) || 0;
       
-      // 5. Lấy tổng lãi phí dự kiến (tổng expected_amount của các kỳ thanh toán của hợp đồng đang hoạt động)
-      const { data: expectedInterestData, error: expectedInterestError } = await supabase
-        .from('credit_payment_periods')
+      // 5. Lấy dữ liệu credits đang hoạt động để tính lãi dự kiến trong tháng này
+      const { data: activeCredits, error: expectedInterestError } = await supabase
+        .from('credits')
         .select(`
-          expected_amount,
-          credits!inner(status)
+          id, 
+          loan_amount, 
+          interest_type, 
+          interest_value, 
+          loan_period,
+          interest_period,
+          interest_ui_type,
+          interest_notation,
+          loan_date,
+          status
         `)
-        .neq('credits.status', CreditStatus.CLOSED)
-        .neq('credits.status', CreditStatus.DELETED);
+        .in('status', [CreditStatus.ON_TIME, CreditStatus.OVERDUE, CreditStatus.LATE_INTEREST, CreditStatus.BAD_DEBT])
+        .lte('loan_date', lastDayOfMonth.toISOString());
       
       if (expectedInterestError) {
-        console.error('Lỗi khi lấy dữ liệu lãi phí dự kiến:', expectedInterestError);
+        console.error('Lỗi khi lấy dữ liệu tín dụng đang hoạt động:', expectedInterestError);
       }
       
-      // Tính tổng lãi phí dự kiến
-      const profit = expectedInterestData?.reduce((sum, period) => sum + (period.expected_amount || 0), 0) || 0;
+      // Tính tổng lãi phí dự kiến trong tháng này
+      let monthlyInterestAmount = 0;
+      
+      if (activeCredits) {
+        monthlyInterestAmount = activeCredits.reduce((total, credit) => {
+          let interestPerMonth = 0;
+          
+          // Đã vay được bao nhiêu ngày
+          const loanDate = new Date(credit.loan_date);
+          const daysSinceLoan = Math.max(0, Math.floor((today.getTime() - loanDate.getTime()) / (1000 * 60 * 60 * 24)));
+          
+          // Không tính nếu khoản vay bắt đầu sau tháng này
+          if (loanDate > lastDayOfMonth) return total;
+          
+          // Kiểm tra credit còn trong thời hạn vay không
+          const isWithinLoanPeriod = daysSinceLoan <= credit.loan_period;
+          if (!isWithinLoanPeriod) return total;
+          
+          // Tính toán lãi dựa trên loại lãi và cách tính
+          switch (credit.interest_ui_type) {
+            case 'daily':
+              // Số ngày trong tháng này mà khoản vay đang hoạt động
+              const daysInMonth = Math.min(
+                lastDayOfMonth.getDate(),
+                credit.loan_period - (daysSinceLoan - today.getDate())
+              );
+              
+              if (credit.interest_notation === 'k_per_million') {
+                // k/triệu/ngày
+                interestPerMonth = (credit.loan_amount / 1000000) * credit.interest_value * daysInMonth * 1000;
+              } else if (credit.interest_notation === 'k_per_day') {
+                // k/ngày
+                interestPerMonth = credit.interest_value * daysInMonth * 1000;
+              }
+              break;
+              
+            case 'monthly_30':
+            case 'monthly_custom':
+              if (credit.interest_notation === 'percent_per_month') {
+                // %/tháng
+                const monthlyRate = credit.interest_value / 100;
+                interestPerMonth = credit.loan_amount * monthlyRate;
+              }
+              break;
+              
+            case 'weekly_percent':
+              if (credit.interest_notation === 'percent_per_week') {
+                // %/tuần
+                const weeklyRate = credit.interest_value / 100;
+                // Số tuần trong tháng này (xấp xỉ 4.35 tuần/tháng)
+                const weeksInMonth = 4.35;
+                interestPerMonth = credit.loan_amount * weeklyRate * weeksInMonth;
+              }
+              break;
+              
+            case 'weekly_k':
+              if (credit.interest_notation === 'k_per_week') {
+                // k/tuần
+                // Số tuần trong tháng này (xấp xỉ 4.35 tuần/tháng)
+                const weeksInMonth = 4.35;
+                interestPerMonth = credit.interest_value * weeksInMonth * 1000;
+              }
+              break;
+          }
+          
+          return total + interestPerMonth;
+        }, 0);
+      }
+      
+      // Sử dụng monthlyInterestAmount làm profit
+      const profit = Math.round(monthlyInterestAmount);
       
       // 6. Tổng hợp dữ liệu
       const financialSummary: StoreFinancialData = {

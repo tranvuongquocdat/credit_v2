@@ -24,7 +24,41 @@ export function CloseTab({ credit }: CloseTabProps) {
   const loanAmount = credit?.loan_amount || 0;
   const interestAmount = calculateInterestAmount(credit, 30) || 0;
   const totalAmount = loanAmount + interestAmount;
-  
+  const handleCloseCredit = async (creditId: string) => {
+    console.log('Closing credit:', creditId);
+    // get start date of credit
+    const startDate = new Date(credit.loan_date);
+    startDate.setHours(0, 0, 0, 0);
+    // get end date of credit
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + credit.loan_period - 1);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    // chia 3 trường họp: quá khứ, hiện tại, tương lai
+    if (endDate < today) {
+      // quá khứ, truy vấn các kỳ thanh toán của credit
+      const { data: paymentPeriods, error } = await getCreditPaymentPeriods(creditId + "");
+      if (error) {
+        console.error('Error fetching payment periods:', error);
+      } else {
+        console.log('Payment periods:', paymentPeriods);
+      }
+      // nếu không có kỳ nào, thêm 1 kỳ payment_period mới từ startDate đến hôm nay
+      if (paymentPeriods && paymentPeriods.length === 0) {
+        const amount = calculateInterestAmount(credit, 30) || 0;
+        const newPeriod = {
+          start_date: startDate,
+          end_date: today,
+          expected_amount: amount,
+          actual_amount: 0,
+        };
+      }
+    } else if (startDate > today) {
+      // tương lai
+      console.log('Future credit');
+    }
+  }
   useEffect(() => {
     async function fetchPaymentPeriods() {
       if (!credit?.id) return;
@@ -289,11 +323,11 @@ export function CloseTab({ credit }: CloseTabProps) {
         let remaining = 0;
         if (type === 'past') {
           // For past contracts: A - B
-          remaining = totalPaid - amountB;
+          remaining = amountB - totalPaid;
           console.log('Past contract - Remaining Amount (A - B):', remaining);
         } else {
           // For present and future contracts: B - A
-          remaining = amountB - totalPaid;
+          remaining =  amountB - totalPaid;
           console.log('Present/Future contract - Remaining Amount (B - A):', remaining);
         }
         
@@ -345,7 +379,7 @@ export function CloseTab({ credit }: CloseTabProps) {
                 <td className="px-4 py-2 text-right border text-red-600">
                   {remainingAmount >= 0 
                     ? formatCurrency(remainingAmount)
-                    : <span className="text-green-600">-{formatCurrency(Math.abs(remainingAmount))}</span>
+                    : <span className="text-green-600">{formatCurrency((remainingAmount))}</span>
                   }
                 </td>
               </tr>
@@ -362,7 +396,7 @@ export function CloseTab({ credit }: CloseTabProps) {
         </div>
         
         <div className="mt-6 flex justify-center">
-          <Button className="bg-blue-600 hover:bg-blue-700 text-white px-8">
+          <Button onClick={() => handleCloseCredit(credit.id)} className="bg-blue-600 hover:bg-blue-700 text-white px-8">
             Đóng HĐ
           </Button>
         </div>

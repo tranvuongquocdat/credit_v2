@@ -422,7 +422,7 @@ export function PaymentTab({
                   <td className="px-2 py-2 text-center border">{period.period_number}</td>
                   <td className="px-2 py-2 text-center border">
                     {formatDate(period.start_date)} 
-                    {' →'} 
+                    {' → '} 
                     {formatDate(period.end_date)}
                   </td>
                   <td className="px-2 py-2 text-center border">

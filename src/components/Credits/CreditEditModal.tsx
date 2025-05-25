@@ -18,6 +18,7 @@ import { getCreditById, updateCredit } from '@/lib/credit';
 import { getCustomers } from '@/lib/customer';
 import { Customer } from '@/models/customer';
 import { UpdateCreditParams, InterestType, CreditStatus, Credit, CreditWithCustomer } from '@/models/credit';
+import { toast } from '@/components/ui/use-toast';
 
 interface CreditEditModalProps {
   isOpen: boolean;
@@ -46,9 +47,9 @@ export function CreditEditModal({
   const [formattedLoanAmount, setFormattedLoanAmount] = useState<string>('');
   const [interestType, setInterestType] = useState<string>('daily');
   const [interestNotation, setInterestNotation] = useState<string>('k_per_million');  // For tracking the selected radio button option
-  const [interestValue, setInterestValue] = useState<string>('');
-  const [loanPeriod, setLoanPeriod] = useState<string>('30');
-  const [interestPeriod, setInterestPeriod] = useState<string>('10');
+  const [interestValue, setInterestValue] = useState<string>('0');
+  const [loanPeriod, setLoanPeriod] = useState<string>('0');
+  const [interestPeriod, setInterestPeriod] = useState<string>('0');
   const [loanDate, setLoanDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState<CreditStatus>(CreditStatus.ON_TIME);
@@ -205,7 +206,7 @@ export function CreditEditModal({
         }
         setInterestType(detectedInterestType);
         setInterestNotation(detectedNotation);
-        setInterestValue(creditData.interest_value?.toString() || '');
+        setInterestValue(creditData.interest_value?.toString() || '0');
         
         // Convert loan_period from days to the appropriate unit based on interest type
         const periodInDays = creditData.loan_period || 30;
@@ -345,6 +346,35 @@ export function CreditEditModal({
         status,
         store_id: currentStore.id, // Use store ID from context
       };
+      
+      // Validate
+      if (!interestValue || interestValue === '0') {
+        setIsLoading(false);
+        toast({
+          variant: 'destructive',
+          title: 'Lỗi',
+          description: 'Vui lòng nhập lãi phí khác 0',
+        });
+        return;
+      }
+      if (!loanPeriod || loanPeriod === '0') {
+        setIsLoading(false);
+        toast({
+          variant: 'destructive',
+          title: 'Lỗi',
+          description: 'Vui lòng nhập số ngày/tuần/tháng vay khác 0',
+        });
+        return;
+      }
+      if (!interestPeriod || interestPeriod === '0') {
+        setIsLoading(false);
+        toast({
+          variant: 'destructive',
+          title: 'Lỗi',
+          description: 'Vui lòng nhập kỳ lãi khác 0',
+        });
+        return;
+      }
       
       // Call API to update credit
       const { data, error } = await updateCredit(creditId, updateData);

@@ -17,7 +17,7 @@ import {
   InstallmentStatus,
 } from "@/models/installment";
 import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
-import { getInstallmentPaymentPeriods } from "@/lib/installmentPayment";
+import { bulkSaveInstallmentPayments, getInstallmentPaymentPeriods } from "@/lib/installmentPayment";
 import { getInstallmentById } from "@/lib/installment";
 import { formatCurrency } from "@/lib/utils";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -39,6 +39,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { PaymentTab } from "./tabs/PaymentTab";
 
 // Define the tabs for this modal
 export type TabId =
@@ -1219,20 +1220,12 @@ export function InstallmentPaymentHistoryModal({
 
       // Find periods that need to be marked as paid
       const periodsToUpdate = allPeriods.filter((p: InstallmentPaymentPeriod) => !isPeriodInDatabase(p));
-
       if (periodsToUpdate.length > 0) {
-        // Mark all remaining periods as paid
-        for (const periodToUpdate of periodsToUpdate) {
-          const isCalculatedPeriod =
-            periodToUpdate.id.startsWith("calculated-");
-
-          await saveInstallmentPayment(
-            installment.id,
-            periodToUpdate,
-            periodToUpdate.expectedAmount,
-            isCalculatedPeriod,
-          );
-        }
+        await bulkSaveInstallmentPayments(
+          installment.id,
+          periodsToUpdate,
+          installment.employee_id
+        );
       }
 
       // Update installment status to closed
@@ -1560,190 +1553,30 @@ export function InstallmentPaymentHistoryModal({
 
           {/* Content based on active tab */}
           {activeTab === "payment" && (
-            <div>
-              {loading ? (
-                <div className="text-center py-20">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700 mx-auto"></div>
-                  <p className="mt-2 text-gray-500">Đang tải dữ liệu...</p>
-                </div>
-              ) : error ? (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-                  <p>{error}</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
-                    <thead className="bg-gray-50 sticky top-0">
-                      <tr>
-                        <th className="px-2 py-2 text-left text-sm font-medium text-gray-500 border">
-                          STT
-                        </th>
-                        <th className="px-2 py-2 text-left text-sm font-medium text-gray-500 border">
-                          Ngày (Từ → Đến)
-                        </th>
-                        <th className="px-2 py-2 text-center text-sm font-medium text-gray-500 border">
-                          Ngày giao dịch
-                        </th>
-                        <th className="px-2 py-2 text-right text-sm font-medium text-gray-500 border">
-                          Tiền lãi phí
-                        </th>
-                        <th className="px-2 py-2 text-right text-sm font-medium text-gray-500 border">
-                          Tiền khách trả
-                        </th>
-                        <th className="px-2 py-2 text-center text-sm font-medium text-gray-500 border w-10"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {calculateCombinedPaymentPeriods.map(
-                        (period, index) => {
-                          const actualAmount = period.actualAmount || period.expectedAmount;
-                          const isPaid = isPeriodInDatabase(period);
-                          const isEditing = selectedPeriodId === period.id;
-                          const isDateEditing = selectedDatePeriodId === period.id;
-
-                          // Calculate date range using endDate when available
-                          const dateRange = period.endDate 
-                            ? `${period.dueDate} → ${period.endDate}`
-                            : (() => {
-                                // Fallback calculation if endDate is not available
-                                let periodDays = installment.payment_period || 30;
-                                
-                                // For calculated periods, the last one may be shorter
-                                if (index === calculateCombinedPaymentPeriods.length - 1) {
-                                  const totalDays = installment.duration || 0;
-                                  const startDate = new Date(installment.start_date);
-                                  const currentDate = new Date(period.dueDate.split('/').reverse().join('-'));
-                                  
-                                  // Calculate days elapsed
-                                  const daysElapsed = Math.ceil(
-                                    (currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
-                                  );
-                                  
-                                  // Remaining days = total duration - days elapsed
-                                  const remainingDays = totalDays - daysElapsed;
-                                  if (remainingDays > 0 && remainingDays < periodDays) {
-                                    periodDays = remainingDays + 1; // +1 to include the start day
-                                  }
-                                }
-                                
-                                const startDate = period.dueDate
-                                  ? new Date(period.dueDate.split("/").reverse().join("-"))
-                                  : new Date();
-                                const endDate = new Date(startDate);
-                                endDate.setDate(endDate.getDate() + (periodDays - 1));
-                                return `${period.dueDate} → ${format(endDate, "dd/MM/yyyy")}`;
-                              })();
-
-                          return (
-                            <tr key={period.id} className="hover:bg-gray-50">
-                              <td className="px-2 py-2 text-center border">
-                                {period.periodNumber}
-                              </td>
-                              <td className="px-2 py-2 text-center border">
-                                {dateRange}
-                              </td>
-                              
-                              <td className="px-2 py-2 text-center border">
-                                {isDateEditing && selectedDatePeriodId === period.id ? (
-                                  <DatePicker
-                                    value={selectedDate}
-                                    onChange={(date) => {
-                                      setSelectedDate(date);
-                                      handleSaveDate(period, date);
-                                    }}
-                                    className="w-32 text-center mx-auto"
-                                  />
-                                ) : (
-                                  <span
-                                    className={`${index === findOldestUnpaidPeriodIndex && !isPaid ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
-                                    onClick={
-                                      index === findOldestUnpaidPeriodIndex && !isPaid
-                                        ? () => handleStartDateEditing(period, index)
-                                        : undefined
-                                    }
-                                  >
-                                    {index === findOldestUnpaidPeriodIndex && tempEditedDate 
-                                      ? format(new Date(tempEditedDate), "dd/MM/yyyy")
-                                      : period.paymentStartDate || format(new Date(), "dd/MM/yyyy")}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-2 py-2 text-right border">
-                                {formatCurrency(period.expectedAmount)}
-                              </td>
-                              <td className="px-2 py-2 text-right border">
-                                {isEditing ? (
-                                  <div className="flex items-center justify-end space-x-1">
-                                    <input
-                                      type="text"
-                                      className="border rounded w-24 px-1 py-0.5 text-right text-sm"
-                                      value={formatNumberWithDot(paymentAmount)}
-                                      onChange={(e) =>
-                                        setPaymentAmount(
-                                          parseFloat(
-                                            e.target.value.replace(/\./g, ""),
-                                          ) || 0,
-                                        )
-                                      }
-                                      autoFocus
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter") {
-                                          handleSavePayment(period);
-                                        } else if (e.key === "Escape") {
-                                          setSelectedPeriodId(null);
-                                        }
-                                      }}
-                                    />
-                                    <button
-                                      className="text-xs bg-blue-500 text-white px-1 rounded"
-                                      onClick={() => handleSavePayment(period)}
-                                    >
-                                      OK
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <span
-                                    className={`${index === findOldestUnpaidPeriodIndex && !isPaid ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
-                                    onClick={
-                                      index === findOldestUnpaidPeriodIndex && !isPaid
-                                        ? () => handleStartEditing(period, index)
-                                        : undefined
-                                    }
-                                  >
-                                    {index === findOldestUnpaidPeriodIndex && tempEditedAmount !== null
-                                      ? formatCurrency(tempEditedAmount)
-                                      : formatCurrency(actualAmount)}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-2 py-2 text-center border">
-                                <Checkbox
-                                  checked={isPaid}
-                                  disabled={processingCheckbox}
-                                  onCheckedChange={(checked) => {
-                                    if (period && period.id) {
-                                      handleCheckboxChange(
-                                        period,
-                                        !!checked,
-                                        index,
-                                      );
-                                    }
-                                  }}
-                                />
-                                {processingCheckbox &&
-                                  processingPeriodId === period.id && (
-                                    <div className="inline-block ml-2 animate-spin rounded-full h-3 w-3 border-b-2 border-blue-700"></div>
-                                  )}
-                              </td>
-                            </tr>
-                          );
-                        },
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+            <PaymentTab
+              loading={loading}
+              error={error}
+              calculateCombinedPaymentPeriods={calculateCombinedPaymentPeriods}
+              isPeriodInDatabase={isPeriodInDatabase}
+              selectedPeriodId={selectedPeriodId}
+              selectedDatePeriodId={selectedDatePeriodId}
+              selectedDate={selectedDate}
+              tempEditedDate={tempEditedDate}
+              tempEditedAmount={tempEditedAmount}
+              paymentAmount={paymentAmount}
+              installment={installment}
+              findOldestUnpaidPeriodIndex={findOldestUnpaidPeriodIndex}
+              handleStartEditing={handleStartEditing}
+              handleSavePayment={handleSavePayment}
+              setPaymentAmount={setPaymentAmount}
+              setSelectedPeriodId={setSelectedPeriodId}
+              handleStartDateEditing={handleStartDateEditing}
+              handleSaveDate={handleSaveDate}
+              setSelectedDate={setSelectedDate}
+              processingCheckbox={processingCheckbox}
+              processingPeriodId={processingPeriodId}
+              handleCheckboxChange={handleCheckboxChange}
+            />
           )}
 
           {activeTab === "close" && (

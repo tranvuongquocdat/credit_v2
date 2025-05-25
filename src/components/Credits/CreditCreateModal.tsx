@@ -23,6 +23,7 @@ import { Customer } from '@/models/customer';
 import { CreateCreditParams, InterestType, CreditStatus } from '@/models/credit';
 import { getStoreFinancialData, updateStoreCashFundOnly } from '@/lib/store';
 import { AlertCircle } from 'lucide-react';
+import { toast } from '@/components/ui/use-toast';
 
 interface CreditCreateModalProps {
   isOpen: boolean;
@@ -47,9 +48,9 @@ export function CreditCreateModal({
   const [formattedLoanAmount, setFormattedLoanAmount] = useState<string>('');
   const [interestType, setInterestType] = useState<string>('daily');
   const [interestNotation, setInterestNotation] = useState<string>('k_per_million');  // For tracking the selected radio button option
-  const [interestValue, setInterestValue] = useState<string>('');
-  const [loanPeriod, setLoanPeriod] = useState<string>('30');
-  const [interestPeriod, setInterestPeriod] = useState<string>('10');
+  const [interestValue, setInterestValue] = useState<string>('0');
+  const [loanPeriod, setLoanPeriod] = useState<string>('0');
+  const [interestPeriod, setInterestPeriod] = useState<string>('0');
   const [loanDate, setLoanDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [notes, setNotes] = useState('');
   const [advancePayment, setAdvancePayment] = useState(false);
@@ -147,7 +148,7 @@ export function CreditCreateModal({
       case 'monthly_custom':
         setInterestNotation('percent_per_month');
         // Set to 30 days (fixed month period)
-        setInterestPeriod('30');
+        setInterestPeriod('1');
         
         // Update loan period to months if coming from a different format
         if (!interestType.startsWith('monthly')) {
@@ -166,7 +167,7 @@ export function CreditCreateModal({
       case 'weekly_k':
         setInterestNotation(value === 'weekly_percent' ? 'percent_per_week' : 'k_per_week');
         // Set to 7 days (1 week)
-        setInterestPeriod('7');
+        setInterestPeriod('1');
         
         // Update loan period to weeks if coming from a different format
         if (!interestType.startsWith('weekly')) {
@@ -339,6 +340,39 @@ export function CreditCreateModal({
         notes: notes,
         store_id: currentStore.id, // Use store ID from context
       };
+      
+      // Validate interest value
+      if (!interestValue || interestValue === '0') {
+        setIsLoading(false);
+        toast({
+          variant: 'destructive',
+          title: 'Lỗi',
+          description: 'Vui lòng nhập lãi phí khác 0',
+        });
+        return;
+      }
+      
+      // Validate loan period
+      if (!loanPeriod || loanPeriod === '0') {
+        setIsLoading(false);
+        toast({
+          variant: 'destructive',
+          title: 'Lỗi',
+          description: 'Vui lòng nhập số ngày/tuần/tháng vay khác 0',
+        });
+        return;
+      }
+      
+      // Validate interest period
+      if (!interestPeriod || interestPeriod === '0') {
+        setIsLoading(false);
+        toast({
+          variant: 'destructive',
+          title: 'Lỗi',
+          description: 'Vui lòng nhập kỳ lãi khác 0',
+        });
+        return;
+      }
       
       // Call API to create credit
       const { data, error } = await createCredit(creditData);

@@ -83,7 +83,7 @@ export function useInstallmentsSummary() {
       if (paymentsError) {
         throw paymentsError;
       }
-      
+      debugger
       // Tính toán các giá trị theo yêu cầu
       let totalLoan = 0; // Tổng tiền giao khách
       let totalOldDebt = 0; // Tổng nợ cũ
@@ -120,25 +120,21 @@ export function useInstallmentsSummary() {
           
           // Tính nợ cũ: nếu đã đóng ít hơn dự kiến
           const oldDebt = expectedAmount - paidAmount;
-          if (oldDebt > 0) {
-            totalOldDebt += oldDebt;
+          if (oldDebt < 0) {
+            totalOldDebt += Math.abs(oldDebt);
           }
           
-          // Tính lãi phí đã thu: tiền đã đóng - tiền giao khách, nếu dương
-          const profit = paidAmount - (installment.down_payment || 0);
+          // Tính lãi phí đã thu: cộng tất cả actual_amount của các kỳ đóng tiền của installment
+          const profit = installment.installment_payment_period?.reduce((sum: number, period: any) => {
+            return sum + (period.actual_amount || 0);
+          }, 0) || 0;
           if (profit > 0) {
             collectedProfit += profit;
           }
           
-          // Tính lãi phí dự kiến trong tháng
-          const monthlyPayments = paymentsByInstallment.get(installment.id) || [];
-          const monthlyExpectedAmount = monthlyPayments.reduce((sum: number, payment: any) => {
-            return sum + (payment.expected_amount || 0);
-          }, 0);
-          
           // Lãi phí dự kiến = kỳ đóng tiền trong tháng - tiền giao khách (nếu dương)
-          const expectedMonthlyProfit = Math.max(0, monthlyExpectedAmount - (installment.down_payment || 0));
-          expectedProfit += expectedMonthlyProfit;
+          expectedProfit += installment.installment_amount || 0;
+          console.log("expectedMonthlyProfit", expectedProfit);
         });
       }
       

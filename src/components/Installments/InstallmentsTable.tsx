@@ -431,9 +431,11 @@ export function InstallmentsTable({
               } else if (installment.status === InstallmentStatus.FINISHED) {
                 // Keep FINISHED status if it was set via unlock contract
                 // Do nothing, keep it FINISHED
-              } else if (longestOverdueDays >= 60) { // More than 60 days overdue = BAD_DEBT
-                installment.status = InstallmentStatus.BAD_DEBT;
-              } else if (hasOverduePayments) {
+              } 
+              // else if (longestOverdueDays >= 60) { // More than 60 days overdue = BAD_DEBT
+              //   installment.status = InstallmentStatus.BAD_DEBT;
+              // } 
+              else if (hasOverduePayments) {
                 // Find the latest payment period
                 const latestPeriod = installment.payments
                   .filter(p => p.actualAmount && p.actualAmount > 0)
