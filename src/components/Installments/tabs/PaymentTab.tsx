@@ -87,7 +87,7 @@ export const PaymentTab: React.FC<PaymentTabProps> = ({
             <tbody className="divide-y divide-gray-200">
               {calculateCombinedPaymentPeriods.map((period, index) => {
                 const actualAmount = period.actualAmount || period.expectedAmount;
-                const isPaid = isPeriodInDatabase(period);
+                const isPaid = period.id !== undefined;
                 const isEditing = selectedPeriodId === period.id;
                 const isDateEditing = selectedDatePeriodId === period.id;
 

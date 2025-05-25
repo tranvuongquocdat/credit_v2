@@ -1,18 +1,24 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CreditWithCustomer } from '@/models/credit';
+import { CreditStatus, CreditWithCustomer } from '@/models/credit';
 import { Button } from '@/components/ui/button';
 import { calculateInterestAmount, calculateDailyRateForCredit } from '@/lib/interest-calculator';
 import { formatCurrency } from '@/lib/utils';
 import { CreditPaymentPeriod } from '@/models/credit-payment';
-import { getCreditPaymentPeriods } from '@/lib/credit-payment';
+import { getCreditPaymentPeriods, savePaymentWithOtherAmount, deletePaymentPeriod } from '@/lib/credit-payment';
+import { updateCredit } from '@/lib/credit';
+import { useToast } from '@/components/ui/use-toast';
+import { InterestType } from '@/models/credit';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 interface CloseTabProps {
   credit: CreditWithCustomer;
+  onClose: () => void;
 }
 
-export function CloseTab({ credit }: CloseTabProps) {
+export function CloseTab({ credit, onClose }: CloseTabProps) {
+  const { toast } = useToast();
   const [paymentPeriods, setPaymentPeriods] = useState<CreditPaymentPeriod[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalActualAmount, setTotalActualAmount] = useState(0);
@@ -20,45 +26,275 @@ export function CloseTab({ credit }: CloseTabProps) {
   const [remainingAmount, setRemainingAmount] = useState(0);
   const [oldDebt, setOldDebt] = useState(0);
   const [contractType, setContractType] = useState<'past' | 'present' | 'future'>('present');
+  const [showConfirm, setShowConfirm] = useState(false);
   
   const loanAmount = credit?.loan_amount || 0;
   const interestAmount = calculateInterestAmount(credit, 30) || 0;
   const totalAmount = loanAmount + interestAmount;
   const handleCloseCredit = async (creditId: string) => {
     console.log('Closing credit:', creditId);
+    
     // get start date of credit
     const startDate = new Date(credit.loan_date);
     startDate.setHours(0, 0, 0, 0);
+    
     // get end date of credit
     const endDate = new Date(startDate);
     endDate.setDate(startDate.getDate() + credit.loan_period - 1);
 
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    // chia 3 trường họp: quá khứ, hiện tại, tương lai
-    if (endDate < today) {
-      // quá khứ, truy vấn các kỳ thanh toán của credit
-      const { data: paymentPeriods, error } = await getCreditPaymentPeriods(creditId + "");
+    // Set to end of day to ensure today is included
+    today.setHours(23, 59, 59, 999);
+
+    try {
+      // Get all payment periods
+      const { data: paymentPeriods, error } = await getCreditPaymentPeriods(creditId);
       if (error) {
         console.error('Error fetching payment periods:', error);
-      } else {
-        console.log('Payment periods:', paymentPeriods);
+        return;
       }
-      // nếu không có kỳ nào, thêm 1 kỳ payment_period mới từ startDate đến hôm nay
-      if (paymentPeriods && paymentPeriods.length === 0) {
-        const amount = calculateInterestAmount(credit, 30) || 0;
+
+      if (!paymentPeriods) {
+        console.error('No payment periods found');
+        return;
+      }
+
+      // Case 1: Future contract (start, end > today)
+      if (startDate > today) {
+        console.log('Future contract - deleting all periods');
+        // Delete all periods
+        for (const period of paymentPeriods) {
+          if (period.id) {
+            await deletePaymentPeriod(period.id);
+          }
+        }
+        return;
+      }
+
+      // Case 2: Find period containing today
+      const periodContainingToday = paymentPeriods.find(period => {
+        const periodStart = new Date(period.start_date);
+        const periodEnd = new Date(period.end_date);
+        periodStart.setHours(0, 0, 0, 0);
+        periodEnd.setHours(0, 0, 0, 0);
+        return today >= periodStart && today <= periodEnd;
+      });
+
+      if (periodContainingToday) {
+        console.log('Found period containing today:', periodContainingToday);
+        
+        // Calculate new period amount based on ratio
+        const originalDays = Math.floor(
+          (new Date(periodContainingToday.end_date).getTime() - new Date(periodContainingToday.start_date).getTime()) 
+          / (1000 * 60 * 60 * 24)
+        ) + 1; // +1 to include both start and end dates
+        
+        const newDays = Math.floor(
+          (today.getTime() - new Date(periodContainingToday.start_date).getTime()) 
+          / (1000 * 60 * 60 * 24)
+        ) + 1; // +1 to include both start and end dates
+        
+        const ratio = newDays / originalDays;
+        const newAmount = Math.round(periodContainingToday.expected_amount * ratio);
+
+        // Delete all periods from this one onwards
+        const periodsToDelete = paymentPeriods.filter(p => 
+          new Date(p.start_date) >= new Date(periodContainingToday.start_date)
+        );
+        
+        for (const period of periodsToDelete) {
+          if (period.id) {
+            await deletePaymentPeriod(period.id);
+          }
+        }
+
+        // Create new period with today as end date
         const newPeriod = {
-          start_date: startDate,
-          end_date: today,
-          expected_amount: amount,
-          actual_amount: 0,
+          credit_id: creditId,
+          period_number: periodContainingToday.period_number,
+          start_date: periodContainingToday.start_date,
+          end_date: today.toLocaleDateString('en-CA'),
+          expected_amount: newAmount,
+          actual_amount: newAmount,
+          payment_date: null,
+          notes: 'Kỳ lãi cuối cùng khi tất toán hợp đồng'
         };
+
+        await savePaymentWithOtherAmount(
+          creditId,
+          newPeriod,
+          newAmount,
+          0,
+          true
+        );
+      } else {
+        console.log('No period containing today found');
+        
+        // Find the last period
+        const sortedPeriods = [...paymentPeriods].sort((a, b) => {
+          const dateA = new Date(a.end_date);
+          const dateB = new Date(b.end_date);
+          return dateA.getTime() - dateB.getTime();
+        });
+        
+        const lastPeriod = sortedPeriods[sortedPeriods.length - 1];
+        
+        if (lastPeriod) {
+          console.log('Found last period:', lastPeriod);
+          
+          // Calculate start date of new period (day after last period end)
+          const newPeriodStartDate = new Date(lastPeriod.end_date);
+          newPeriodStartDate.setDate(newPeriodStartDate.getDate() + 1);
+          newPeriodStartDate.setHours(0, 0, 0, 0);
+          
+          // Calculate days between new period start and today (including today)
+          const daysInNewPeriod = Math.floor(
+            (today.getTime() - newPeriodStartDate.getTime()) 
+            / (1000 * 60 * 60 * 24)
+          ) + 1; // +1 to include both start and end dates
+          
+          // Calculate daily interest rate
+          const dailyRate = calculateDailyRateForCredit(credit);
+          
+          // Calculate expected amount for new period based on interest type
+          let newAmount = 0;
+          if (credit.interest_type === InterestType.PERCENTAGE) {
+            if (credit.interest_ui_type?.startsWith('weekly')) {
+              // Lãi suất theo tuần (ví dụ 1%/tuần)
+              const weeksCount = Math.ceil(daysInNewPeriod / 7);
+              newAmount = Math.round(credit.loan_amount * (credit.interest_value / 100) * weeksCount);
+            } else if (credit.interest_ui_type?.startsWith('monthly')) {
+              // Lãi suất theo tháng (ví dụ 3%/tháng)
+              const monthsCount = Math.ceil(daysInNewPeriod / 30);
+              newAmount = Math.round(credit.loan_amount * (credit.interest_value / 100) * monthsCount);
+            } else {
+              // Lãi suất theo ngày (mặc định)
+              newAmount = Math.round(credit.loan_amount * (credit.interest_value / 100 / 30) * daysInNewPeriod * 30);
+            }
+          } else {
+            // Lãi suất cố định
+            const loanAmountInMillions = credit.loan_amount / 1000;
+            newAmount = Math.round(credit.interest_value * loanAmountInMillions * daysInNewPeriod);
+          }
+          
+          // Create new period with today as end date
+          const newPeriod = {
+            credit_id: creditId,
+            period_number: lastPeriod.period_number + 1,
+            start_date: newPeriodStartDate.toLocaleDateString('en-CA'),
+            end_date: today.toLocaleDateString('en-CA'),
+            expected_amount: newAmount,
+            actual_amount: newAmount,
+            payment_date: null,
+            notes: 'Kỳ lãi cuối cùng khi tất toán hợp đồng'
+          };
+          
+          await savePaymentWithOtherAmount(
+            creditId,
+            newPeriod,
+            newAmount,
+            0,
+            true
+          );
+        } else {
+          console.log('No periods found at all');
+          
+          // If no periods exist, create a period from loan start date to today
+          const loanStartDate = new Date(credit.loan_date);
+          loanStartDate.setHours(0, 0, 0, 0);
+          
+          const daysFromStart = Math.floor(
+            (today.getTime() - loanStartDate.getTime()) 
+            / (1000 * 60 * 60 * 24)
+          ) + 1; // +1 to include both start and end dates
+          
+          // Calculate daily interest rate
+          const dailyRate = calculateDailyRateForCredit(credit);
+          
+          // Calculate expected amount for new period based on interest type
+          let newAmount = 0;
+          if (credit.interest_type === InterestType.PERCENTAGE) {
+            if (credit.interest_ui_type?.startsWith('weekly')) {
+              // Lãi suất theo tuần
+              const weeksCount = Math.ceil(daysFromStart / 7);
+              newAmount = Math.round(credit.loan_amount * (credit.interest_value / 100) * weeksCount);
+            } else if (credit.interest_ui_type?.startsWith('monthly')) {
+              // Lãi suất theo tháng
+              const monthsCount = Math.ceil(daysFromStart / 30);
+              newAmount = Math.round(credit.loan_amount * (credit.interest_value / 100) * monthsCount);
+            } else {
+              // Lãi suất theo ngày
+              newAmount = Math.round(credit.loan_amount * (credit.interest_value / 100 / 30) * daysFromStart * 30);
+            }
+          } else {
+            // Lãi suất cố định
+            const loanAmountInMillions = credit.loan_amount / 1000;
+            newAmount = Math.round(credit.interest_value * loanAmountInMillions * daysFromStart);
+          }
+          
+          const newPeriod = {
+            credit_id: creditId,
+            period_number: 1,
+            start_date: loanStartDate.toLocaleDateString('en-CA'),
+            end_date: today.toLocaleDateString('en-CA'),
+            expected_amount: newAmount,
+            actual_amount: newAmount,
+            payment_date: null,
+            notes: 'Kỳ lãi cuối cùng khi tất toán hợp đồng'
+          };
+          
+          await savePaymentWithOtherAmount(
+            creditId,
+            newPeriod,
+            newAmount,
+            0,
+            true
+          );
+        }
       }
-    } else if (startDate > today) {
-      // tương lai
-      console.log('Future credit');
+
+      // After all period operations are complete, update credit status
+      const { error: updateError } = await updateCredit(creditId, { status: 'closed' as CreditStatus });
+      
+      if (updateError) {
+        console.error('Error updating credit status:', updateError);
+        toast({
+          title: "Lỗi",
+          description: "Không thể cập nhật trạng thái hợp đồng",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Reload payment periods data
+      const { data: reloadedPeriods, error: reloadError } = await getCreditPaymentPeriods(creditId);
+      if (reloadError) {
+        console.error('Error reloading payment periods:', reloadError);
+      } else {
+        setPaymentPeriods(reloadedPeriods || []);
+      }
+
+      // Show success toast
+      toast({
+        title: "Thành công",
+        description: "Đã đóng hợp đồng thành công",
+      });
+
+      // Close the modal
+      onClose();
+
+      // Reload the page
+      window.location.reload();
+
+    } catch (error) {
+      console.error('Error in handleCloseCredit:', error);
+      toast({
+        title: "Lỗi",
+        description: "Có lỗi xảy ra khi đóng hợp đồng",
+        variant: "destructive"
+      });
     }
-  }
+  };
   useEffect(() => {
     async function fetchPaymentPeriods() {
       if (!credit?.id) return;
@@ -396,11 +632,24 @@ export function CloseTab({ credit }: CloseTabProps) {
         </div>
         
         <div className="mt-6 flex justify-center">
-          <Button onClick={() => handleCloseCredit(credit.id)} className="bg-blue-600 hover:bg-blue-700 text-white px-8">
+          <Button onClick={() => setShowConfirm(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-8">
             Đóng HĐ
           </Button>
         </div>
       </div>
+      {/* Confirmation Dialog */}
+      <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xác nhận đóng hợp đồng</DialogTitle>
+          </DialogHeader>
+          <div>Bạn có chắc chắn muốn đóng hợp đồng này không? Sau khi đóng, hợp đồng sẽ không thể chỉnh sửa.</div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConfirm(false)}>Huỷ</Button>
+            <Button className="bg-blue-600 text-white" onClick={() => { setShowConfirm(false); handleCloseCredit(credit.id); }}>Xác nhận</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

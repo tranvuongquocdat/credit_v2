@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { 
@@ -142,19 +142,6 @@ export function PaymentHistoryModal({
       balance: totalDebit - totalCredit
     };
   };
-
-  // Helper function to calculate interest amount based on credit details
-  const calculateInterestAmount = (credit: CreditWithCustomer | null) => {
-    if (!credit) return 0;
-    
-    if (credit.interest_type === InterestType.PERCENTAGE) {
-      // For percentage interest: loan_amount * (interest_value/100/30) * days * 30
-      return Math.round(credit.loan_amount * (credit.interest_value / 100 / 30) * credit.interest_period * 30);
-    } else {
-      // For fixed interest: (interest_value/interest_period) * days * interest_period
-      return Math.round((credit.interest_value / credit.interest_period) * credit.interest_period * credit.interest_period);
-    }
-  }
 
   useEffect(() => {
     async function loadPaymentPeriods() {
@@ -346,12 +333,13 @@ export function PaymentHistoryModal({
   // Kết hợp kỳ thanh toán tính toán với dữ liệu thực từ database
   const mergePaymentPeriods = (calculated: CreditPaymentPeriod[], actual: CreditPaymentPeriod[]): CreditPaymentPeriod[] => {
     if (!credit) return actual;
+    console.log('mergePaymentPeriods - actual:', actual.length);
     if (actual.length === 0) return calculated;
     if (calculated.length === 0) return actual;
     
     // Sắp xếp các kỳ thực tế theo số thứ tự
     const sortedActual = [...actual].sort((a, b) => a.period_number - b.period_number);
-    
+    debugger
     // Tìm kỳ đã xác nhận sau cùng
     const lastConfirmedPeriod = sortedActual[sortedActual.length - 1];
     
@@ -461,18 +449,29 @@ export function PaymentHistoryModal({
     return result.sort((a, b) => a.period_number - b.period_number);
   };
 
-  // Generate calculated payment periods
-  const calculatedPeriods = generatePaymentPeriods(credit);
+  // Generate calculated payment periods with useMemo
+  const calculatedPeriods = useMemo(() => {
+    return generatePaymentPeriods(credit);
+  }, [credit]);
+
+  // Merge with actual data from database with useMemo
+  const combinedPaymentPeriods = useMemo(() => {
+    return mergePaymentPeriods(calculatedPeriods, paymentPeriods);
+  }, [calculatedPeriods, paymentPeriods]);
+
+  // Calculate total amounts with useMemo
+  const totalAmount = useMemo(() => credit?.loan_amount || 0, [credit?.loan_amount]);
   
-  // Merge with actual data from database
-  const combinedPaymentPeriods = mergePaymentPeriods(calculatedPeriods, paymentPeriods);
-  
-  // Calculate total amounts
-  const totalAmount = credit?.loan_amount || 0;
-  
-  // Calculate total expected, paid, and remaining amounts from payment periods
-  const totalExpected = combinedPaymentPeriods.reduce((sum, period) => sum + (period.expected_amount || 0), 0);
-  const totalPaid = combinedPaymentPeriods.reduce((sum, period) => sum + (period.actual_amount || 0), 0);
+  // Calculate total expected, paid, and remaining amounts from payment periods with useMemo
+  const totalExpected = useMemo(() => 
+    combinedPaymentPeriods.reduce((sum, period) => sum + (period.expected_amount || 0), 0),
+    [combinedPaymentPeriods]
+  );
+
+  const totalPaid = useMemo(() => 
+    combinedPaymentPeriods.reduce((sum, period) => sum + (period.actual_amount || 0), 0),
+    [combinedPaymentPeriods]
+  );
   
   // Calculate old debt as the difference between customer payments and (interest fees + other fees) in database
   // Only consider periods that exist in database (not calculated ones)
@@ -681,7 +680,7 @@ export function PaymentHistoryModal({
           )}
           
           {activeTab === 'close' && (
-            <CloseTab credit={credit} />
+            <CloseTab credit={credit} onClose={onClose} />
           )}
           
           {activeTab === 'documents' && (

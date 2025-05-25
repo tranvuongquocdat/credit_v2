@@ -16,13 +16,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { CreditWithCustomer, CreditStatus } from '@/models/credit';
-import { FileEditIcon, MoreVertical, Trash2Icon, CalendarIcon, ClockIcon, DollarSignIcon } from 'lucide-react';
+import { FileEditIcon, MoreVertical, Trash2Icon, CalendarIcon, ClockIcon, DollarSignIcon, UnlockIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { getInterestDisplayString, calculateDailyRateForCredit } from '@/lib/interest-calculator';
 import { useState, useEffect, useCallback } from 'react';
 import { getCreditPaymentPeriods } from '@/lib/credit-payment';
 import { CreditPaymentPeriod } from '@/models/credit-payment';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 interface StatusMapType {
   [key: string]: { 
@@ -78,6 +79,10 @@ export function CreditsTable({
   
   // State để lưu trữ thông tin lãi phí đến hôm nay
   const [interestTodayInfo, setInterestTodayInfo] = useState<Record<string, InterestTodayInfo>>({});
+  
+  // State for reopen confirmation
+  const [reopenDialogOpen, setReopenDialogOpen] = useState(false);
+  const [reopenCredit, setReopenCredit] = useState<CreditWithCustomer | null>(null);
   
   // Format tiền tệ
   const formatCurrency = (amount: number): string => {
@@ -515,14 +520,28 @@ export function CreditsTable({
                 <TableCell className="py-3 px-3 border-b border-gray-200">
                   <div className="flex justify-center space-x-1">
                     {onShowPaymentHistory && (
-                      <Button 
-                        variant="ghost" 
-                        className="h-8 w-8 p-0" 
-                        onClick={() => onShowPaymentHistory(credit)}
-                        title="Lịch sử thanh toán"
-                      >
-                        <DollarSignIcon className="h-4 w-4 text-gray-500" />
-                      </Button>
+                      credit.status === 'closed' ? (
+                        <>
+                          <Button 
+                            variant="ghost" 
+                            className="h-8 w-8 p-0 text-green-700" 
+                            onClick={() => { setReopenCredit(credit); setReopenDialogOpen(true); }}
+                            title="Mở lại hợp đồng"
+                          >
+                            <UnlockIcon className="h-4 w-4 text-amber-500" />
+
+                          </Button>
+                        </>
+                      ) : (
+                        <Button 
+                          variant="ghost" 
+                          className="h-8 w-8 p-0" 
+                          onClick={() => onShowPaymentHistory(credit)}
+                          title="Lịch sử thanh toán"
+                        >
+                          <DollarSignIcon className="h-4 w-4 text-gray-500" />
+                        </Button>
+                      )
                     )}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -556,6 +575,22 @@ export function CreditsTable({
           )}
         </TableBody>
       </Table>
+      {/* Dialog xác nhận mở lại hợp đồng */}
+      <Dialog open={reopenDialogOpen} onOpenChange={setReopenDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xác nhận mở lại hợp đồng</DialogTitle>
+          </DialogHeader>
+          <div>Bạn có chắc chắn muốn mở lại hợp đồng này không? Sau khi mở lại, hợp đồng sẽ trở về trạng thái đang vay.</div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReopenDialogOpen(false)}>Huỷ</Button>
+            <Button className="bg-green-600 text-white" onClick={() => {
+              setReopenDialogOpen(false);
+              if (reopenCredit) onUpdateStatus({ ...reopenCredit, status: CreditStatus.ON_TIME });
+            }}>Xác nhận</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

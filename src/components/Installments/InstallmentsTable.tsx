@@ -657,7 +657,7 @@ export function InstallmentsTable({
                         variant="ghost" 
                         className="h-8 w-8 p-0" 
                         onClick={() => confirmUnlockInstallment(installment)}
-                        title="Mở khoá hợp đồng"
+                        title="Mở lại hợp đồng"
                       >
                         <UnlockIcon className="h-4 w-4 text-amber-500" />
                       </Button>

@@ -291,6 +291,7 @@ export async function savePaymentWithOtherAmount(
           actual_amount: actualAmount,
           other_amount: otherAmount,
           payment_date: now,
+          status: 'paid',
           notes: periodData.notes || null
         })
         .select()
