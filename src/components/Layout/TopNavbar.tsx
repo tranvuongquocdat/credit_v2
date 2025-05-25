@@ -1,6 +1,6 @@
 "use client";
 
-import { Settings, Lock, User, Clock, Bike, DollarSign, Salad, Folder, ChevronDown, LogOut } from "lucide-react";
+import { Settings, Lock, User, Clock, Bike, DollarSign, Salad, Folder, ChevronDown, LogOut, Menu } from "lucide-react";
 import Link from "next/link";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useState, useEffect, memo, useCallback } from "react";
@@ -75,7 +75,11 @@ const StoreDropdown = memo(({
 
 StoreDropdown.displayName = 'StoreDropdown';
 
-export function TopNavbar() {
+interface TopNavbarProps {
+  onToggleSidebar?: () => void;
+}
+
+export function TopNavbar({ onToggleSidebar }: TopNavbarProps) {
   // This state will be replaced with data from your backend API
   const [notificationCounts, setNotificationCounts] = useState<NotificationCounts>({
     storeInvoices: 0,
@@ -150,6 +154,19 @@ export function TopNavbar() {
     return null;
   };
   
+  // Function to handle sidebar toggle from Sidebar component
+  const handleToggleSidebar = () => {
+    if (onToggleSidebar) {
+      onToggleSidebar();
+    } else {
+      // Directly trigger the sidebar toggle event if no callback is provided
+      const event = new CustomEvent('sidebar-toggle', { 
+        detail: { isCollapsed: null } // null means toggle current state
+      });
+      window.dispatchEvent(event);
+    }
+  };
+  
   return (
     <div className="fixed top-0 left-0 right-0 h-14 bg-[#4d7496] text-white z-50 flex items-center justify-between px-4 shadow-md">
       {/* Left section with logo and settings icons */}
@@ -159,6 +176,15 @@ export function TopNavbar() {
           <div className="h-8 w-8 rounded bg-white text-[#4d7496] flex items-center justify-center font-bold">CR</div>
           <span className="ml-2 font-medium">Quản lý Credit</span>
         </Link>
+        
+        {/* Menu toggle button */}
+        <button 
+          onClick={handleToggleSidebar}
+          className="p-2 hover:bg-[#3a5a75] transition-colors border-l border-r border-[rgba(0,0,0,0.2)] relative"
+          title="Đóng/mở menu điều hướng"
+        >
+          <Menu className="h-6 w-6" />
+        </button>
         
         {/* Left side icons group */}
         <div className="flex items-center space-x-1">

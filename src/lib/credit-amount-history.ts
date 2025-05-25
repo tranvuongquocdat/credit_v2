@@ -189,7 +189,7 @@ export async function getCreditAmountHistory(creditId: string) {
       .from('credit_amount_history')
       .select('*')
       .eq('credit_id', creditId)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: true });
 
     if (error) {
       throw error;

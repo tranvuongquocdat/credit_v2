@@ -18,9 +18,25 @@ interface PrincipalRepaymentFormProps {
 export function PrincipalRepaymentForm({ onSubmit, creditId }: PrincipalRepaymentFormProps) {
   const [repaymentDate, setRepaymentDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [amount, setAmount] = useState<number>(0);
+  const [formattedAmount, setFormattedAmount] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [minDateStr, setMinDateStr] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+
+  // Format number with thousand separators
+  const formatNumber = (value: string | number): string => {
+    // Convert to number and back to string to remove non-numeric characters
+    const numericValue = value.toString().replace(/[^0-9]/g, '');
+    // Format with thousand separators
+    return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+
+  // Handle amount change
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value.replace(/\./g, '');
+    setAmount(Number(rawValue));
+    setFormattedAmount(formatNumber(rawValue));
+  };
 
   useEffect(() => {
     async function fetchData() {
@@ -157,10 +173,12 @@ export function PrincipalRepaymentForm({ onSubmit, creditId }: PrincipalRepaymen
           </label>
           <input
             id="amount"
-            type="number"
+            type="text"
             className="border rounded px-2 py-1 w-64"
-            value={amount}
-            onChange={(e) => setAmount(Number(e.target.value))}
+            value={formattedAmount}
+            onChange={handleAmountChange}
+            placeholder="0"
+            inputMode="numeric"
           />
         </div>
         

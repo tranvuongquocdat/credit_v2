@@ -300,9 +300,6 @@ export default function CreditsPage() {
   const handleClosePaymentHistory = () => {
     setIsPaymentHistoryModalOpen(false);
     setPaymentHistoryCredit(null);
-    // Refresh financial data when payment history modal is closed (in case payments were updated)
-    refreshFinancial();
-    refetch();
   };
   
   return (

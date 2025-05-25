@@ -103,7 +103,7 @@ export function getInterestDisplayString(credit: Credit): string {
   // Different formatting based on the stored configuration
   if (interestUiType === 'daily') {
     if (interestNotation === 'k_per_million') {
-      return `${interest_value}k/triệu/ngày`;
+      return `${interest_value}k/triệu`;
     } else if (interestNotation === 'k_per_day') {
       return `${interest_value}k/ngày`;
     }

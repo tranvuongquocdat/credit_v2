@@ -110,7 +110,7 @@ export function InstallmentsTable({
             (sum, period) => sum + period.expectedAmount, 
             0
           );
-          installment.oldDebt = installment.totalPaid - totalExpected;
+          installment.oldDebt = totalExpected - installment.totalPaid ;
           
           // Tính còn phải đóng
           // Ưu tiên dùng installment_amount nếu có, nếu không tính dựa trên amount_given và interest_rate
@@ -533,11 +533,11 @@ export function InstallmentsTable({
                       };
                       
                       return (
-                        <div className="flex flex-col items-center">
-                          <span className="text-xs text-gray-500">
+                        <div className="flex flex-col items-center min-w-[100px]">
+                          <span className="text-sm text-gray-600">
                             {formatDate(startDate)} → {formatDate(endDate)}
                           </span>
-                          <span className="font-medium mt-1">
+                          <span className="font-medium mt-1 text-sm">
                             ({installment.duration} ngày)
                           </span>
                         </div>
@@ -552,8 +552,8 @@ export function InstallmentsTable({
                   {formatCurrency(installment.totalPaid || 0)}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  <span className={installment.oldDebt && installment.oldDebt > 0 ? 'text-green-600' : 'text-red-600'}>
-                    {formatCurrency(Math.abs(installment.oldDebt || 0))}
+                  <span className={installment.oldDebt && installment.oldDebt > 0 ? 'text-red-600' : 'text-green-600'}>
+                    {formatCurrency((installment.oldDebt || 0))}
                   </span>
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
@@ -669,14 +669,6 @@ export function InstallmentsTable({
                         <DollarSignIcon className="h-4 w-4 text-gray-500" />
                       </Button>
                     )}
-                    <Button 
-                      variant="ghost" 
-                      className="h-8 w-8 p-0" 
-                      onClick={() => onDelete(installment)}
-                      title="Xóa hợp đồng"
-                    >
-                      <TrashIcon className="h-4 w-4 text-gray-500" />
-                    </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" className="h-8 w-8 p-0">

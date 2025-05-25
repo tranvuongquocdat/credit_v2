@@ -574,17 +574,18 @@ export function PaymentHistoryModal({
                 <tbody>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Tiền vay</td>
-                    <td className="py-1 px-2 text-right border">{formatCurrency(credit?.loan_amount || 0)}</td>
+                    <td className="py-1 px-2 text-right border" colSpan={2}>{formatCurrency(credit?.loan_amount || 0)}</td>
                   </tr>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Lãi phí</td>
-                    <td className="py-1 px-2 text-right border">
+                    <td className="py-1 px-2 text-right border" colSpan={2}>
                       {credit ? getInterestDisplayString(credit) : '-'}
                     </td>
                   </tr>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Vay từ ngày</td>
-                    <td className="py-1 px-2 text-right border">{loanDateFormatted} → {endDateFormatted}</td>
+                    <td className="py-1 px-2 text-right border">{loanDateFormatted}</td>
+                    <td className="py-1 px-2 text-right border">{endDateFormatted}</td>
                   </tr>
                 </tbody>
               </table>
@@ -767,7 +768,7 @@ export function PaymentHistoryModal({
                             <td colSpan={3} className="px-4 py-2 text-sm font-medium text-right">Chênh lệch</td>
                             <td colSpan={2} className="px-4 py-2 text-sm font-medium text-right">
                               <span className={(historyTotals.totalDebit + (credit.loan_amount || 0)) - historyTotals.totalCredit >= 0 ? "text-red-600" : "text-green-600"}>
-                                {formatCurrency((historyTotals.totalDebit + (credit.loan_amount || 0)) - historyTotals.totalCredit)}
+                                {formatCurrency(historyTotals.totalCredit- (historyTotals.totalDebit + (credit.loan_amount || 0)))}
                               </span>
                             </td>
                             <td></td>

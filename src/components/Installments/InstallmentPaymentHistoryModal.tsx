@@ -1450,19 +1450,19 @@ export function InstallmentPaymentHistoryModal({
                     <td className="py-1 px-2 border font-bold">
                       Tiền đưa khách
                     </td>
-                    <td className="py-1 px-2 text-right border">
+                    <td className="py-1 px-2 text-right border" colSpan={2}>
                       {formatCurrency(installment?.amount_given || 0)}
                     </td>
                   </tr>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Trả góp</td>
-                    <td className="py-1 px-2 text-right border">
+                    <td className="py-1 px-2 text-right border" colSpan={2}>
                       {formatCurrency(installment?.installment_amount || 0)}
                     </td>
                   </tr>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Tỷ lệ</td>
-                    <td className="py-1 px-2 text-right border">
+                    <td className="py-1 px-2 text-right border" colSpan={2}>
                       {installment?.amount_given && installment?.installment_amount
                         ? `10 ăn ${(10 * installment?.amount_given / installment?.installment_amount).toFixed(0)}`
                         : "-"}
@@ -1473,7 +1473,9 @@ export function InstallmentPaymentHistoryModal({
                       Thời gian vay
                     </td>
                     <td className="py-1 px-2 text-right border">
-                      {formatDate(installment?.start_date)} →{" "}
+                      {formatDate(installment?.start_date)}
+                    </td>
+                    <td className="py-1 px-2 text-right border">
                       {installment?.start_date && installment?.duration
                         ? formatDate(
                             new Date(
@@ -1490,7 +1492,7 @@ export function InstallmentPaymentHistoryModal({
                   </tr>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Nợ cũ</td>
-                    <td className="py-1 px-2 text-right border text-red-600">
+                    <td className="py-1 px-2 text-right border text-red-600" colSpan={2}>
                       {formatCurrency(
                         Math.abs(remainingAmount < 0 ? remainingAmount : 0),
                       )}
@@ -1781,7 +1783,7 @@ export function InstallmentPaymentHistoryModal({
                     </tr>
                     <tr>
                       <td className="px-4 py-2 border font-bold">Nợ cũ</td>
-                      <td className="px-4 py-2 text-right border text-red-600">
+                      <td className="px-4 py-2 text-right border text-red-600" colSpan={2}>
                         {formatCurrency(
                           Math.abs(remainingAmount < 0 ? remainingAmount : 0),
                         )}
@@ -1997,7 +1999,7 @@ export function InstallmentPaymentHistoryModal({
                                 ? formatCurrency(history.debitAmount)
                                 : ""}
                             </td>
-                            <td className="px-4 py-3 text-sm text-right text-blue-600">
+                            <td className="px-4 py-3 text-sm text-right text-green-600">
                               {history.creditAmount > 0
                                 ? formatCurrency(history.creditAmount)
                                 : ""}
@@ -2022,7 +2024,7 @@ export function InstallmentPaymentHistoryModal({
                               ),
                             )}
                           </td>
-                          <td className="px-4 py-2 text-sm font-medium text-right text-blue-600">
+                          <td className="px-4 py-2 text-sm font-medium text-right text-green-600">
                             {formatCurrency(
                               amountHistory.reduce(
                                 (sum, h) => sum + h.creditAmount,
@@ -2050,7 +2052,7 @@ export function InstallmentPaymentHistoryModal({
                                     sum + h.creditAmount - h.debitAmount,
                                   0,
                                 ) >= 0
-                                  ? "text-blue-600"
+                                  ? "text-green-600"
                                   : "text-red-600"
                               }
                             >

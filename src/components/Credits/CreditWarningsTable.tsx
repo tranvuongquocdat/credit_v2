@@ -5,7 +5,7 @@ import Spinner from "@/components/ui/spinner";
 import { useEffect, useState } from "react";
 import { CreditPaymentPeriod } from "@/models/credit-payment";
 import { getCreditPaymentPeriods } from "@/lib/credit-payment";
-import { AlertTriangleIcon } from "lucide-react";
+import { AlertTriangleIcon, DollarSignIcon } from "lucide-react";
 import { useStore } from "@/contexts/StoreContext";
 import { useRouter } from "next/navigation";
 
@@ -23,6 +23,7 @@ interface CreditWarningsTableProps {
   isLoading: boolean;
   onPayment?: (credit: CreditWithCustomer, amount: number) => void;
   onCustomerClick?: (credit: CreditWithCustomer) => void; // Optional callback for customer click
+  onShowPaymentHistory?: (credit: CreditWithCustomer) => void;
 }
 
 export function CreditWarningsTable({
@@ -30,6 +31,7 @@ export function CreditWarningsTable({
   isLoading,
   onPayment,
   onCustomerClick,
+  onShowPaymentHistory,
 }: CreditWarningsTableProps) {
   // State for storing processed warnings
   const [warnings, setWarnings] = useState<CreditWarning[]>([]);
@@ -279,43 +281,23 @@ export function CreditWarningsTable({
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28">Số điện thoại</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-48">Địa chỉ</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Nợ cũ</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Số tiền</th>
+            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Tiền gốc</th>
+            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Tiền lãi phí</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-32">Lý do</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm">
               <div className="flex flex-col">
-                <span>Đóng tiền nhanh</span>
-                <span className="text-xs text-gray-400">(đơn vị ngàn VND)</span>
+                
               </div>
             </th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
           {warnings.map((warning, index) => {
-            // Generate quick payment buttons (max 10)
-            const maxButtons = Math.min(10, warning.buttonValues.length);
-            const quickPayButtons = [];
-            
             // Tính tổng số tiền cần thanh toán - lấy phần tử cuối cùng trong mảng buttonValues
             const totalAmountToDisplay = warning.buttonValues.length > 0 
               ? warning.buttonValues[warning.buttonValues.length - 1] 
               : 0;
             
-            for (let i = 0; i < maxButtons; i++) {
-              // Lấy giá trị từ mảng buttonValues đã được tính toán
-              const buttonAmount = Math.round(warning.buttonValues[i] / 1000); // Convert to thousands
-              
-              quickPayButtons.push(
-                <Button
-                  key={i}
-                  variant="outline" 
-                  size="sm"
-                  className="mx-1 bg-green-100 hover:bg-green-200 text-green-800 border-green-300"
-                  onClick={() => onPayment && onPayment(warning, warning.buttonValues[i])}
-                >
-                  {buttonAmount}
-                </Button>
-              );
-            }
 
             return (
               <tr key={warning.id} className="hover:bg-gray-50 transition-colors text-sm">
@@ -344,6 +326,9 @@ export function CreditWarningsTable({
                   }
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
+                  {formatCurrency(warning.loan_amount || 0)}
+                </td>
+                <td className="py-3 px-3 border-r border-gray-200 text-center">
                   {formatCurrency(totalAmountToDisplay)}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
@@ -353,7 +338,16 @@ export function CreditWarningsTable({
                 </td>
                 <td className="py-3 px-3 text-center">
                   <div className="flex flex-wrap justify-center gap-1">
-                    {quickPayButtons}
+                  {onShowPaymentHistory && (
+                      <Button 
+                        variant="ghost" 
+                        className="h-8 w-8 p-0" 
+                        onClick={() => onShowPaymentHistory(warning)}
+                        title="Lịch sử thanh toán"
+                      >
+                        <DollarSignIcon className="h-4 w-4 text-gray-500" />
+                      </Button>
+                    )}
                   </div>
                 </td>
               </tr>

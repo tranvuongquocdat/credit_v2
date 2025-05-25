@@ -162,6 +162,15 @@ export default function Sidebar() {
     return pathname.startsWith(subPath);
   };
 
+  const toggleCollapsed = () => {
+    const newCollapsedState = !isCollapsed;
+    setIsCollapsed(newCollapsedState);
+    
+    // Dispatch a custom event for Layout to listen to
+    const event = new CustomEvent('sidebar-toggle', { detail: { isCollapsed: newCollapsedState } });
+    window.dispatchEvent(event);
+  };
+
   return (
     <div 
       className={`fixed left-0 top-14 h-[calc(100vh-3.5rem)] bg-white shadow-lg transition-all duration-300 ${
@@ -173,7 +182,7 @@ export default function Sidebar() {
           <h2 className="text-sm font-medium text-gray-600">Menu điều hướng</h2>
         )}
         <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
+          onClick={toggleCollapsed}
           className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
         >
           {isCollapsed ? <FiMenu size={20} /> : <FiChevronLeft size={20} />}
