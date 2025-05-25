@@ -87,7 +87,7 @@ export const PaymentTab: React.FC<PaymentTabProps> = ({
             <tbody className="divide-y divide-gray-200">
               {calculateCombinedPaymentPeriods.map((period, index) => {
                 const actualAmount = period.actualAmount || period.expectedAmount;
-                const isPaid = period.id !== undefined;
+                const isPaid = isPeriodInDatabase(period);
                 const isEditing = selectedPeriodId === period.id;
                 const isDateEditing = selectedDatePeriodId === period.id;
 
@@ -190,6 +190,7 @@ export const PaymentTab: React.FC<PaymentTabProps> = ({
                         checked={isPaid}
                         disabled={processingCheckbox}
                         onCheckedChange={(checked) => {
+                          console.log("checked",period.id);
                           if (period && period.id) {
                             handleCheckboxChange(period, !!checked, index);
                           }

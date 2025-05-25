@@ -83,7 +83,6 @@ export function useInstallmentsSummary() {
       if (paymentsError) {
         throw paymentsError;
       }
-      debugger
       // Tính toán các giá trị theo yêu cầu
       let totalLoan = 0; // Tổng tiền giao khách
       let totalOldDebt = 0; // Tổng nợ cũ
