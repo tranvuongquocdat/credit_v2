@@ -48,9 +48,9 @@ export function CreditCreateModal({
   const [formattedLoanAmount, setFormattedLoanAmount] = useState<string>('');
   const [interestType, setInterestType] = useState<string>('daily');
   const [interestNotation, setInterestNotation] = useState<string>('k_per_million');  // For tracking the selected radio button option
-  const [interestValue, setInterestValue] = useState<string>('0');
-  const [loanPeriod, setLoanPeriod] = useState<string>('0');
-  const [interestPeriod, setInterestPeriod] = useState<string>('0');
+  const [interestValue, setInterestValue] = useState<string>('');
+  const [loanPeriod, setLoanPeriod] = useState<string>('');
+  const [interestPeriod, setInterestPeriod] = useState<string>('');
   const [loanDate, setLoanDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [notes, setNotes] = useState('');
   const [advancePayment, setAdvancePayment] = useState(false);
@@ -140,7 +140,7 @@ export function CreditCreateModal({
           const newPeriod = interestType.startsWith('weekly') 
             ? currentPeriod * 7  // weeks to days
             : currentPeriod * 30; // months to days
-          setLoanPeriod(newPeriod.toString());
+          setLoanPeriod(newPeriod > 0 ? newPeriod.toString() : '');
         }
         break;
         
@@ -159,7 +159,7 @@ export function CreditCreateModal({
             : Math.ceil(currentPeriod / 30); // days to months
           // Ensure minimum 1 month
           newPeriod = Math.max(1, newPeriod);
-          setLoanPeriod(newPeriod.toString());
+          setLoanPeriod(currentPeriod > 0 ? newPeriod.toString() : '');
         }
         break;
         
@@ -178,7 +178,7 @@ export function CreditCreateModal({
             : Math.ceil(currentPeriod / 7); // days to weeks
           // Ensure minimum 1 week
           newPeriod = Math.max(1, newPeriod);
-          setLoanPeriod(newPeriod.toString());
+          setLoanPeriod(currentPeriod > 0 ? newPeriod.toString() : '');
         }
         break;
         
@@ -338,7 +338,7 @@ export function CreditCreateModal({
       };
       
       // Validate interest value
-      if (!interestValue || interestValue === '0') {
+      if (!interestValue || interestValue === '0' || interestValue.trim() === '') {
         setIsLoading(false);
         toast({
           variant: 'destructive',
@@ -349,7 +349,7 @@ export function CreditCreateModal({
       }
       
       // Validate loan period
-      if (!loanPeriod || loanPeriod === '0') {
+      if (!loanPeriod || loanPeriod === '0' || loanPeriod.trim() === '') {
         setIsLoading(false);
         toast({
           variant: 'destructive',
@@ -360,7 +360,7 @@ export function CreditCreateModal({
       }
       
       // Validate interest period
-      if (!interestPeriod || interestPeriod === '0') {
+      if (!interestPeriod || interestPeriod === '0' || interestPeriod.trim() === '') {
         setIsLoading(false);
         toast({
           variant: 'destructive',
@@ -684,6 +684,7 @@ export function CreditCreateModal({
               value={loanPeriod}
               onChange={(e) => setLoanPeriod(e.target.value)}
               required
+              placeholder="0"
             />
           </div>
           
@@ -701,6 +702,7 @@ export function CreditCreateModal({
                 onChange={(e) => setInterestPeriod(e.target.value)}
                 required
                 className="w-32"
+                placeholder="0"
               />
               <div className="text-sm text-gray-600">
                 {(interestType === 'daily') && 

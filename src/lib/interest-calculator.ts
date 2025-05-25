@@ -68,6 +68,23 @@ export function calculateDailyRateForCredit(credit: Credit): number {
 }
 
 /**
+ * Calculate the daily rate for a pawn object using its stored configuration
+ */
+export function calculateDailyRateForPawn(pawn: any): number {
+  // For legacy records that might not have these fields
+  const interestUiType = pawn.interest_ui_type || 'daily';
+  const interestNotation = pawn.interest_notation || 
+    (pawn.interest_type === 'percentage' ? 'percent_per_month' : 'k_per_million');
+  
+  return normalizeToStandardRate({
+    interestType: interestUiType,
+    interestValue: pawn.interest_value,
+    interestNotation: interestNotation,
+    loanAmount: pawn.loan_amount
+  });
+}
+
+/**
  * Calculate interest amount for a specific period in days
  * @param credit - The credit object containing loan and interest information
  * @param days - Number of days to calculate interest for
@@ -76,6 +93,17 @@ export function calculateDailyRateForCredit(credit: Credit): number {
 export function calculateInterestAmount(credit: Credit, days: number): number {
   const dailyRate = calculateDailyRateForCredit(credit);
   return Math.round(credit.loan_amount * dailyRate * days);
+}
+
+/**
+ * Calculate interest amount for a pawn for a specific period in days
+ * @param pawn - The pawn object containing loan and interest information
+ * @param days - Number of days to calculate interest for
+ * @returns The calculated interest amount for the specified period
+ */
+export function calculatePawnInterestAmount(pawn: any, days: number): number {
+  const dailyRate = calculateDailyRateForPawn(pawn);
+  return Math.round(pawn.loan_amount * dailyRate * days);
 }
 
 /**
@@ -120,6 +148,37 @@ export function getInterestDisplayString(credit: Credit): string {
   
   // Fallback for legacy records
   return `${interest_value}${interest_type === InterestType.PERCENTAGE ? '%' : 'k'}`;
+}
+
+/**
+ * Format interest rate for display for pawns based on the stored configuration
+ */
+export function getPawnInterestDisplayString(pawn: any): string {
+  const { interest_value, interest_type } = pawn;
+  const interestUiType = pawn.interest_ui_type || 'daily';
+  const interestNotation = pawn.interest_notation || 
+    (interest_type === 'percentage' ? 'percent_per_month' : 'k_per_million');
+  
+  // Different formatting based on the stored configuration
+  if (interestUiType === 'daily') {
+    if (interestNotation === 'k_per_million') {
+      return `${interest_value}k/triệu`;
+    } else if (interestNotation === 'k_per_day') {
+      return `${interest_value}k/ngày`;
+    }
+  }
+  else if (interestUiType === 'monthly_30' || interestUiType === 'monthly_custom') {
+    return `${interest_value}%/tháng`;
+  }
+  else if (interestUiType === 'weekly_percent') {
+    return `${interest_value}%/tuần`;
+  }
+  else if (interestUiType === 'weekly_k') {
+    return `${interest_value}k/tuần`;
+  }
+  
+  // Fallback for legacy records
+  return `${interest_value}${interest_type === 'percentage' ? '%' : 'k'}`;
 }
 
 /**

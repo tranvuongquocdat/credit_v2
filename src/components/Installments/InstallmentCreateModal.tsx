@@ -51,8 +51,8 @@ export function InstallmentCreateModal({
   const [address, setAddress] = useState('');
   const [amountGiven, setAmountGiven] = useState<string>('');
   const [formattedAmountGiven, setFormattedAmountGiven] = useState<string>('');
-  const [duration, setDuration] = useState<string>('50');
-  const [paymentPeriod, setPaymentPeriod] = useState<string>('10');
+  const [duration, setDuration] = useState<string>('');
+  const [paymentPeriod, setPaymentPeriod] = useState<string>('');
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [notes, setNotes] = useState('');
   const [employeeId, setEmployeeId] = useState<string>('');
@@ -90,8 +90,8 @@ export function InstallmentCreateModal({
     setAddress('');
     setAmountGiven('');
     setFormattedAmountGiven('');
-    setDuration('50');
-    setPaymentPeriod('10');
+    setDuration('');
+    setPaymentPeriod('');
     setStartDate(format(new Date(), 'yyyy-MM-dd'));
     setNotes('');
     setEmployeeId('');
@@ -434,7 +434,7 @@ export function InstallmentCreateModal({
                   setContractCode(e.target.value);
                   setAutoGenerateCode(false);
                 }}
-                placeholder="Mã hợp đồng"
+                placeholder=""
               />
               <Button 
                 type="button" 
@@ -458,6 +458,7 @@ export function InstallmentCreateModal({
               id="idNumber"
               value={idNumber}
               onChange={(e) => setIdNumber(e.target.value)}
+              placeholder=""
             />
           </div>
           
@@ -467,6 +468,7 @@ export function InstallmentCreateModal({
               id="phone"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+              placeholder=""
             />
           </div>
           
@@ -477,6 +479,7 @@ export function InstallmentCreateModal({
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               rows={2}
+              placeholder=""
             />
           </div>
           
@@ -531,6 +534,7 @@ export function InstallmentCreateModal({
                   onChange={(e) => setDuration(e.target.value)}
                   required
                   className="w-24"
+                  placeholder="0"
                 />
                 <span>ngày</span>
               </div>
@@ -553,6 +557,7 @@ export function InstallmentCreateModal({
                   onChange={(e) => setPaymentPeriod(e.target.value)}
                   required
                   className="w-24"
+                  placeholder="0"
                 />
                 <span>ngày</span>
               </div>

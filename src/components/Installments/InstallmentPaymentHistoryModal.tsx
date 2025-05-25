@@ -347,9 +347,9 @@ export function InstallmentPaymentHistoryModal({
       
       // Tính ngày kết thúc hợp đồng 
       const startDate = new Date(installment.start_date);
-      const contractEndDate = new Date(startDate);
-      contractEndDate.setDate(startDate.getDate() + loanPeriod - 1);
-
+        const contractEndDate = new Date(startDate);
+        contractEndDate.setDate(startDate.getDate() + loanPeriod - 1);
+        
       // Helper function: Parse date string dd/MM/yyyy to Date
       const parseDate = (dateStr: string): Date => {
         const dateParts = dateStr.split('/');
@@ -368,31 +368,31 @@ export function InstallmentPaymentHistoryModal({
         expectedAmount: number,
         contractEndDate: Date
       ): InstallmentPaymentPeriod => {
-        // Tính ngày kết thúc kỳ
-        const periodEndDate = new Date(currentDate);
-        periodEndDate.setDate(currentDate.getDate() + periodDays - 1);
-        
-        // Nếu vượt quá ngày kết thúc hợp đồng, điều chỉnh lại
-        if (periodEndDate > contractEndDate) {
-          periodEndDate.setTime(contractEndDate.getTime());
-        }
-
+          // Tính ngày kết thúc kỳ
+          const periodEndDate = new Date(currentDate);
+          periodEndDate.setDate(currentDate.getDate() + periodDays - 1);
+          
+          // Nếu vượt quá ngày kết thúc hợp đồng, điều chỉnh lại
+          if (periodEndDate > contractEndDate) {
+            periodEndDate.setTime(contractEndDate.getTime());
+          }
+          
         return {
-          id: `calculated-${periodNumber}`,
+            id: `calculated-${periodNumber}`,
           installmentId: installment.id,
-          periodNumber,
-          dueDate: format(currentDate, 'dd/MM/yyyy'),
-          endDate: format(periodEndDate, 'dd/MM/yyyy'),
+            periodNumber,
+            dueDate: format(currentDate, 'dd/MM/yyyy'),
+            endDate: format(periodEndDate, 'dd/MM/yyyy'),
           paymentStartDate: undefined,
-          expectedAmount,
-          actualAmount: 0,
-          isOverdue: currentDate < new Date(),
+            expectedAmount,
+            actualAmount: 0,
+            isOverdue: currentDate < new Date(),
           daysOverdue: currentDate < new Date() 
-            ? calculateDaysBetween(currentDate, new Date()) 
-            : 0,
+                ? calculateDaysBetween(currentDate, new Date())
+                : 0,
         };
       };
-
+          
       // Helper function: Create periods from a start date
       const createPeriodsFromDate = (
         startFromDate: Date,
@@ -408,86 +408,86 @@ export function InstallmentPaymentHistoryModal({
         // Tính số tiền mỗi ngày hoặc mỗi kỳ
         const amountPerDay = remainingDays ? remainingAmount / remainingDays : 0;
         const amountPerPeriod = remainingDays ? 0 : Math.round(remainingAmount / periodsToCreate);
-        
-        const periods: InstallmentPaymentPeriod[] = [];
+          
+          const periods: InstallmentPaymentPeriod[] = [];
         let currentDate = new Date(startFromDate);
-        
+          
         for (let i = 0; i < periodsToCreate; i++) {
           const periodNumber = startPeriodNumber + i;
-          
-          // Tính số ngày của kỳ này
-          let periodDays = paymentPeriod;
+            
+            // Tính số ngày của kỳ này
+            let periodDays = paymentPeriod;
           if (i === periodsToCreate - 1) {
             const daysToContractEnd = calculateDaysBetween(currentDate, contractEndDate);
-            if (daysToContractEnd < paymentPeriod) {
-              periodDays = Math.max(1, daysToContractEnd);
+              if (daysToContractEnd < paymentPeriod) {
+                periodDays = Math.max(1, daysToContractEnd);
+              }
             }
-          }
-          
+            
           // Tính số tiền dự kiến
           let expectedAmount = remainingDays 
             ? Math.round(amountPerDay * periodDays)
             : amountPerPeriod;
           
-          // Kỳ cuối điều chỉnh để tổng số tiền chính xác
+              // Kỳ cuối điều chỉnh để tổng số tiền chính xác
           if (i === periodsToCreate - 1) {
-            const calculatedAmount = periods.reduce((sum, p) => sum + p.expectedAmount, 0);
+              const calculatedAmount = periods.reduce((sum, p) => sum + p.expectedAmount, 0);
             expectedAmount = remainingAmount - calculatedAmount;
-          }
-          
+            }
+            
           const period = createPeriod(periodNumber, currentDate, periodDays, expectedAmount, contractEndDate);
           periods.push(period);
-          
-          // Cập nhật ngày bắt đầu cho kỳ tiếp theo
+            
+            // Cập nhật ngày bắt đầu cho kỳ tiếp theo
           currentDate = new Date(parseDate(period.endDate || period.dueDate));
           currentDate.setDate(currentDate.getDate() + 1);
-        }
-        
-        return periods;
+          }
+          
+          return periods;
       };
 
       // Nếu không có kỳ nào từ database, tạo toàn bộ từ đầu
       if (paymentPeriods.length === 0) {
         return createPeriodsFromDate(startDate, 1, installmentAmount);
-      }
-
+        }
+        
       // Có kỳ từ database - sắp xếp và xử lý
       const sortedDBPeriods = [...paymentPeriods].sort((a, b) => a.periodNumber - b.periodNumber);
-      const lastPeriod = sortedDBPeriods[sortedDBPeriods.length - 1];
-      
-      // Xác định ngày kết thúc của kỳ cuối cùng
-      let lastPeriodEndDate: Date;
-      
-      if (lastPeriod.endDate) {
+        const lastPeriod = sortedDBPeriods[sortedDBPeriods.length - 1];
+        
+        // Xác định ngày kết thúc của kỳ cuối cùng
+        let lastPeriodEndDate: Date;
+        
+        if (lastPeriod.endDate) {
         lastPeriodEndDate = parseDate(lastPeriod.endDate);
-      } else if (lastPeriod.dueDate) {
+        } else if (lastPeriod.dueDate) {
         const lastPeriodStartDate = parseDate(lastPeriod.dueDate);
-        lastPeriodEndDate = new Date(lastPeriodStartDate);
-        lastPeriodEndDate.setDate(lastPeriodStartDate.getDate() + paymentPeriod - 1);
-      } else {
-        lastPeriodEndDate = new Date(startDate);
+          lastPeriodEndDate = new Date(lastPeriodStartDate);
+          lastPeriodEndDate.setDate(lastPeriodStartDate.getDate() + paymentPeriod - 1);
+        } else {
+          lastPeriodEndDate = new Date(startDate);
         lastPeriodEndDate.setDate(startDate.getDate() + lastPeriod.periodNumber * paymentPeriod - 1);
-      }
-      
-      // Tính ngày bắt đầu cho kỳ tiếp theo
-      const nextStartDate = new Date(lastPeriodEndDate);
-      nextStartDate.setDate(lastPeriodEndDate.getDate() + 1);
-      
+        }
+        
+        // Tính ngày bắt đầu cho kỳ tiếp theo
+        const nextStartDate = new Date(lastPeriodEndDate);
+        nextStartDate.setDate(lastPeriodEndDate.getDate() + 1);
+        
       // Nếu đã vượt quá ngày kết thúc hợp đồng, không cần tạo thêm kỳ
-      if (nextStartDate > contractEndDate) {
-        return sortedDBPeriods;
-      }
-      
+        if (nextStartDate > contractEndDate) {
+          return sortedDBPeriods;
+        }
+        
       // Tính số tiền còn lại và số ngày còn lại
       const totalPaidAmount = sortedDBPeriods.reduce((sum, p) => sum + (p.actualAmount || 0), 0);
       const remainingAmount = Math.max(0, installmentAmount - totalPaidAmount);
-      const remainingDays = calculateDaysBetween(nextStartDate, contractEndDate);
-      
+        const remainingDays = calculateDaysBetween(nextStartDate, contractEndDate);
+        
       if (remainingDays <= 0) {
-        return sortedDBPeriods;
-      }
-      
-      // Tạo các kỳ còn thiếu
+          return sortedDBPeriods;
+        }
+        
+        // Tạo các kỳ còn thiếu
       const newPeriods = createPeriodsFromDate(
         nextStartDate, 
         lastPeriod.periodNumber + 1, 

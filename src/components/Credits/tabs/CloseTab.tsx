@@ -66,7 +66,7 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
         for (const period of paymentPeriods) {
           if (period.id) {
             await deletePaymentPeriod(period.id);
-          }
+      }
         }
         return;
       }
@@ -170,7 +170,7 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
             } else {
               // Lãi suất theo ngày (mặc định)
               newAmount = Math.round(credit.loan_amount * (credit.interest_value / 100 / 30) * daysInNewPeriod * 30);
-            }
+      }
           } else {
             // Lãi suất cố định
             const loanAmountInMillions = credit.loan_amount / 1000;

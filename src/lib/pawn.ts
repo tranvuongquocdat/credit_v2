@@ -21,14 +21,10 @@ export async function getPawns(
     // Bắt đầu từ record thứ mấy
     const from = (page - 1) * limit;
     
-    // Tạo query cơ bản với join bảng customers để lấy thông tin khách hàng
+    // Tạo query cơ bản - temporarily without joins until database is set up
     let query = supabase
       .from('pawns')
-      .select(`
-        *,
-        customer:customers(name, phone, id_number),
-        collateral_asset:collaterals(id, name, code, default_amount, category, attr_01, attr_02, attr_03, attr_04, attr_05)
-      `, { count: 'exact' });
+      .select('*', { count: 'exact' });
     
     // Áp dụng các filter nếu có
     if (searchQuery) {
@@ -55,8 +51,13 @@ export async function getPawns(
     
     if (error) throw error;
     
+    // Temporarily return basic pawn data without customer/collateral joins
     return {
-      data: data as PawnWithCustomerAndCollateral[],
+      data: (data || []).map(pawn => ({
+        ...pawn,
+        customer: { name: 'Unknown Customer', phone: null, id_number: null },
+        collateral_asset: null
+      })) as PawnWithCustomerAndCollateral[],
       total: count || 0,
       page,
       limit,
@@ -81,18 +82,21 @@ export async function getPawnById(id: string) {
   try {
     const { data, error } = await supabase
       .from('pawns')
-      .select(`
-        *,
-        customer:customers(name, phone, id_number),
-        collateral_asset:collaterals(id, name, code, default_amount, category, attr_01, attr_02, attr_03, attr_04, attr_05)
-      `)
+      .select('*')
       .eq('id', id)
       .single();
     
     if (error) throw error;
     
+    // Temporarily return basic pawn data without customer/collateral joins
+    const pawnWithRelations = {
+      ...data,
+      customer: { name: 'Unknown Customer', phone: null, id_number: null },
+      collateral_asset: null
+    };
+    
     return { 
-      data: data as PawnWithCustomerAndCollateral, 
+      data: pawnWithRelations as PawnWithCustomerAndCollateral, 
       error: null 
     };
   } catch (error) {
@@ -111,39 +115,48 @@ export async function createPawn(params: CreatePawnParams) {
       ? params.loan_date.toISOString() 
       : params.loan_date;
     
+    // Prepare insert data - only include fields that exist in database
+    const insertData: any = {
+      store_id: params.store_id,
+      customer_id: params.customer_id,
+      contract_code: params.contract_code,
+      collateral_id: params.collateral_id,
+      collateral_detail: params.collateral_detail,
+      loan_amount: params.loan_amount,
+      interest_type: params.interest_type,
+      interest_value: params.interest_value,
+      loan_period: params.loan_period,
+      interest_period: params.interest_period,
+      loan_date: loanDate,
+      notes: params.notes,
+      status: params.status || PawnStatus.ON_TIME
+    };
+
+    // Only add these fields if they are provided (for backward compatibility)
+    if (params.interest_ui_type) {
+      insertData.interest_ui_type = params.interest_ui_type;
+    }
+    if (params.interest_notation) {
+      insertData.interest_notation = params.interest_notation;
+    }
+
     // Tạo pawn record
     const { data, error } = await supabase
       .from('pawns')
-      .insert({
-        store_id: params.store_id,
-        customer_id: params.customer_id,
-        contract_code: params.contract_code,
-        id_number: params.id_number,
-        phone: params.phone,
-        address: params.address,
-        collateral_id: params.collateral_id,
-        collateral_detail: params.collateral_detail,
-        loan_amount: params.loan_amount,
-        interest_type: params.interest_type,
-        interest_value: params.interest_value,
-        interest_ui_type: params.interest_ui_type,
-        interest_notation: params.interest_notation,
-        loan_period: params.loan_period,
-        interest_period: params.interest_period,
-        loan_date: loanDate,
-        notes: params.notes,
-        status: params.status || PawnStatus.ON_TIME
-      })
-      .select(`
-        *,
-        customer:customers(name, phone, id_number),
-        collateral_asset:collaterals(id, name, code, default_amount, category, attr_01, attr_02, attr_03, attr_04, attr_05)
-      `)
+      .insert(insertData)
+      .select('*')
       .single();
     
     if (error) throw error;
     
-    return { data: data as PawnWithCustomerAndCollateral, error: null };
+    // Temporarily return basic pawn data without customer/collateral joins
+    const pawnWithRelations = {
+      ...data,
+      customer: { name: 'Unknown Customer', phone: null, id_number: null },
+      collateral_asset: null
+    };
+    
+    return { data: pawnWithRelations as PawnWithCustomerAndCollateral, error: null };
   } catch (error) {
     console.error('Error creating pawn:', error);
     return { data: null, error };
@@ -160,41 +173,50 @@ export async function updatePawn(id: string, params: UpdatePawnParams) {
       ? params.loan_date.toISOString() 
       : params.loan_date;
     
+    // Prepare update data - only include fields that exist in database
+    const updateData: any = {
+      store_id: params.store_id,
+      customer_id: params.customer_id,
+      contract_code: params.contract_code,
+      collateral_id: params.collateral_id,
+      collateral_detail: params.collateral_detail,
+      loan_amount: params.loan_amount,
+      interest_type: params.interest_type,
+      interest_value: params.interest_value,
+      loan_period: params.loan_period,
+      interest_period: params.interest_period,
+      loan_date: loanDate,
+      notes: params.notes,
+      status: params.status,
+      updated_at: new Date().toISOString()
+    };
+
+    // Only add these fields if they are provided (for backward compatibility)
+    if (params.interest_ui_type !== undefined) {
+      updateData.interest_ui_type = params.interest_ui_type;
+    }
+    if (params.interest_notation !== undefined) {
+      updateData.interest_notation = params.interest_notation;
+    }
+
     // Cập nhật pawn record
     const { data, error } = await supabase
       .from('pawns')
-      .update({
-        store_id: params.store_id,
-        customer_id: params.customer_id,
-        contract_code: params.contract_code,
-        id_number: params.id_number,
-        phone: params.phone,
-        address: params.address,
-        collateral_id: params.collateral_id,
-        collateral_detail: params.collateral_detail,
-        loan_amount: params.loan_amount,
-        interest_type: params.interest_type,
-        interest_value: params.interest_value,
-        interest_ui_type: params.interest_ui_type,
-        interest_notation: params.interest_notation,
-        loan_period: params.loan_period,
-        interest_period: params.interest_period,
-        loan_date: loanDate,
-        notes: params.notes,
-        status: params.status,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', id)
-      .select(`
-        *,
-        customer:customers(name, phone, id_number),
-        collateral_asset:collaterals(id, name, code, default_amount, category, attr_01, attr_02, attr_03, attr_04, attr_05)
-      `)
+      .select('*')
       .single();
     
     if (error) throw error;
     
-    return { data: data as PawnWithCustomerAndCollateral, error: null };
+    // Temporarily return basic pawn data without customer/collateral joins
+    const pawnWithRelations = {
+      ...data,
+      customer: { name: 'Unknown Customer', phone: null, id_number: null },
+      collateral_asset: null
+    };
+    
+    return { data: pawnWithRelations as PawnWithCustomerAndCollateral, error: null };
   } catch (error) {
     console.error('Error updating pawn:', error);
     return { data: null, error };
@@ -232,19 +254,22 @@ export async function getPawnsByCustomerId(customerId: string) {
   try {
     const { data, error } = await supabase
       .from('pawns')
-      .select(`
-        *,
-        customer:customers(name, phone, id_number),
-        collateral_asset:collaterals(id, name, code, default_amount, category, attr_01, attr_02, attr_03, attr_04, attr_05)
-      `)
+      .select('*')
       .eq('customer_id', customerId)
       .eq('status', PawnStatus.ON_TIME)
       .order('created_at', { ascending: false });
     
     if (error) throw error;
     
+    // Temporarily return basic pawn data without customer/collateral joins
+    const pawnsWithRelations = (data || []).map(pawn => ({
+      ...pawn,
+      customer: { name: 'Unknown Customer', phone: null, id_number: null },
+      collateral_asset: null
+    }));
+    
     return { 
-      data: data as PawnWithCustomerAndCollateral[], 
+      data: pawnsWithRelations as PawnWithCustomerAndCollateral[], 
       error: null 
     };
   } catch (error) {

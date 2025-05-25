@@ -185,7 +185,6 @@ export function CollateralsPage({ storeId }: CollateralsPageProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Quản lý tài sản thế chấp</h1>
         <Button onClick={handleAdd} className="bg-blue-600 hover:bg-blue-700">
           <Plus className="h-4 w-4 mr-2" />
           Thêm mới

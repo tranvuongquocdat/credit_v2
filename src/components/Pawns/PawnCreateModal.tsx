@@ -52,9 +52,9 @@ export function PawnCreateModal({
   const [formattedLoanAmount, setFormattedLoanAmount] = useState<string>('');
   const [interestType, setInterestType] = useState<string>('daily');
   const [interestNotation, setInterestNotation] = useState<string>('k_per_million');
-  const [interestValue, setInterestValue] = useState<string>('0');
-  const [loanPeriod, setLoanPeriod] = useState<string>('0');
-  const [interestPeriod, setInterestPeriod] = useState<string>('0');
+  const [interestValue, setInterestValue] = useState<string>('');
+  const [loanPeriod, setLoanPeriod] = useState<string>('');
+  const [interestPeriod, setInterestPeriod] = useState<string>('');
   const [loanDate, setLoanDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [notes, setNotes] = useState('');
   const [advancePayment, setAdvancePayment] = useState(false);
@@ -583,6 +583,7 @@ export function PawnCreateModal({
                   onChange={(e) => setInterestValue(e.target.value)}
                   required
                   className="w-24"
+                  placeholder="0"
                 />
                 
                 {interestType === 'daily' && (
@@ -668,6 +669,7 @@ export function PawnCreateModal({
                 onChange={(e) => setLoanPeriod(e.target.value)}
                 className="w-24"
                 min="0"
+                placeholder="0"
               />
               <span>
                 {interestType === 'daily' && 'ngày'}
@@ -687,6 +689,7 @@ export function PawnCreateModal({
                 onChange={(e) => setInterestPeriod(e.target.value)}
                 className="w-24"
                 min="0"
+                placeholder="0"
               />
               <span>
                 {interestType === 'daily' && 'ngày đóng lãi 1 lần'}

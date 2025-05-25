@@ -127,12 +127,13 @@ export function useInstallmentsSummary() {
           const profit = installment.installment_payment_period?.reduce((sum: number, period: any) => {
             return sum + (period.actual_amount || 0);
           }, 0) || 0;
-          if (profit > 0) {
-            collectedProfit += profit;
+          if (profit - (installment.down_payment || 0) > 0) {
+            console.log("profit", profit);
+            collectedProfit += profit - (installment.down_payment || 0);
           }
           
           // Lãi phí dự kiến = kỳ đóng tiền trong tháng - tiền giao khách (nếu dương)
-          expectedProfit += installment.installment_amount || 0;
+          expectedProfit += (installment.installment_amount || 0) - (installment.down_payment || 0);
           console.log("expectedMonthlyProfit", expectedProfit);
         });
       }

@@ -48,7 +48,7 @@ interface SidebarItem {
 const sidebarItems: SidebarItem[] = [
   { 
     title: 'Cầm đồ', 
-    path: '/stores/pawns', 
+    path: '/pawns', 
     icon: <FiShoppingBag size={20} />,
     redColor: true,
   },
@@ -76,7 +76,7 @@ const sidebarItems: SidebarItem[] = [
       { title: 'Tổng quát chuỗi cửa hàng', path: '/stores', icon: <FiUsers size={18} />, redColor: true },
       { title: 'Thông tin chi tiết cửa hàng', path: '/stores', icon: <FiUserPlus size={18} />, redColor: true },
       { title: 'Danh sách cửa hàng', path: '/stores', icon: <FiUserCheck size={18} /> },
-      { title: 'Cấu hình hàng hóa', path: '/stores', icon: <FiUserCheck size={18} />, redColor: true },
+      { title: 'Cấu hình hàng hóa', path: '/stores/collaterals', icon: <FiUserCheck size={18} /> },
       { title: 'Nhập tiền quỹ đầu ngày', path: '/stores', icon: <FiUserCheck size={18} />, redColor: true },
     ]
   },

@@ -49,8 +49,8 @@ export function InstallmentEditModal({
   const [customerAmount, setCustomerAmount] = useState<string>('');
   const [formattedCustomerAmount, setFormattedCustomerAmount] = useState<string>('');
   const [interestRate, setInterestRate] = useState<string>('10');
-  const [duration, setDuration] = useState<string>('50');
-  const [paymentPeriod, setPaymentPeriod] = useState<string>('10');
+  const [duration, setDuration] = useState<string>('');
+  const [paymentPeriod, setPaymentPeriod] = useState<string>('');
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [notes, setNotes] = useState('');
   const [advancePayment, setAdvancePayment] = useState(false);
@@ -127,11 +127,10 @@ export function InstallmentEditModal({
           setContractCode(installmentData.contract_code || '');
           setAmountGiven(installmentData.installment_amount?.toString() || '');
           setFormattedAmountGiven(formatNumber(installmentData.installment_amount?.toString() || ''));
-          // Set customer amount to same as amountGiven initially, can be changed by user
           setCustomerAmount(installmentData.amount_given?.toString() || '');
           setFormattedCustomerAmount(formatNumber(installmentData.amount_given?.toString() || ''));
-          setDuration(installmentData.duration?.toString() || '7');
-          setPaymentPeriod(installmentData.payment_period?.toString() || '10');
+          setDuration(installmentData.duration?.toString() || '');
+          setPaymentPeriod(installmentData.payment_period?.toString() || '');
           setStartDate(installmentData.start_date ? format(new Date(installmentData.start_date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
           setSelectedCustomerId(installmentData.customer_id || '');
           setEmployeeId(installmentData.employee_id || '');
@@ -291,7 +290,7 @@ export function InstallmentEditModal({
               id="contractCode"
               value={contractCode}
               onChange={(e) => setContractCode(e.target.value)}
-              placeholder="Mã hợp đồng"
+              placeholder=""
               disabled={hasPayments}
             />
           </div>
@@ -303,6 +302,7 @@ export function InstallmentEditModal({
               id="idNumber"
               value={idNumber}
               onChange={(e) => setIdNumber(e.target.value)}
+              placeholder=""
               disabled={hasPayments}
             />
           </div>
@@ -314,6 +314,7 @@ export function InstallmentEditModal({
               id="phone"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+              placeholder=""
               disabled={hasPayments}
             />
           </div>
@@ -326,6 +327,7 @@ export function InstallmentEditModal({
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               rows={2}
+              placeholder=""
               disabled={hasPayments}
             />
           </div>
@@ -383,6 +385,7 @@ export function InstallmentEditModal({
                   onChange={(e) => setDuration(e.target.value)}
                   required
                   className="w-24"
+                  placeholder="0"
                   disabled={hasPayments}
                 />
                 <span>ngày</span>
@@ -406,6 +409,7 @@ export function InstallmentEditModal({
                   onChange={(e) => setPaymentPeriod(e.target.value)}
                   required
                   className="w-24"
+                  placeholder="0"
                 />
                 <span>ngày</span>
               </div>

@@ -51,9 +51,6 @@ export default function CollateralsPageRoute() {
         <div className="flex items-center justify-between border-b pb-2 mb-2">
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-bold">Quản lý tài sản thế chấp</h1>
-            <div className="text-sm text-gray-500">
-              Cửa hàng: {currentStore.name}
-            </div>
           </div>
         </div>
         
