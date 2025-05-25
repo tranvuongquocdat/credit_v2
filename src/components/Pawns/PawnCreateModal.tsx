@@ -15,27 +15,30 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { DatePicker } from '@/components/ui/date-picker';
-// Không cần import CustomDateInput
-// Using regular input radio buttons instead of RadioGroup component
-import { createCredit } from '@/lib/credit';
+import { createPawn } from '@/lib/pawn';
 import { getCustomers, createCustomer } from '@/lib/customer';
+import { getCollateralsByStore } from '@/lib/collateral';
 import { Customer } from '@/models/customer';
-import { CreateCreditParams, InterestType, CreditStatus } from '@/models/credit';
+import { Collateral } from '@/models/collateral';
+import { CreatePawnParams, InterestType, PawnStatus } from '@/models/pawn';
 import { getStoreFinancialData, updateStoreCashFundOnly } from '@/lib/store';
 import { AlertCircle } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
-interface CreditCreateModalProps {
+interface PawnCreateModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: (creditId: string) => void;
-}
+  onSuccess?: (pawnId: string) => void;
+} 
 
-export function CreditCreateModal({
+export function PawnCreateModal({
   isOpen,
   onClose,
   onSuccess
-}: CreditCreateModalProps) {
+}: PawnCreateModalProps) {
+  // Get current store from context
+  const { currentStore } = useStore();
+  
   // State for form values
   const [customerType, setCustomerType] = useState<'new' | 'existing'>('new');
   const [customerName, setCustomerName] = useState('');
@@ -43,11 +46,12 @@ export function CreditCreateModal({
   const [idNumber, setIdNumber] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
-  const [collateral, setCollateral] = useState('');
+  const [collateralId, setCollateralId] = useState('');
+  const [collateralDetail, setCollateralDetail] = useState('');
   const [loanAmount, setLoanAmount] = useState<string>('');
   const [formattedLoanAmount, setFormattedLoanAmount] = useState<string>('');
   const [interestType, setInterestType] = useState<string>('daily');
-  const [interestNotation, setInterestNotation] = useState<string>('k_per_million');  // For tracking the selected radio button option
+  const [interestNotation, setInterestNotation] = useState<string>('k_per_million');
   const [interestValue, setInterestValue] = useState<string>('0');
   const [loanPeriod, setLoanPeriod] = useState<string>('0');
   const [interestPeriod, setInterestPeriod] = useState<string>('0');
@@ -60,6 +64,11 @@ export function CreditCreateModal({
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
   
+  // State for collaterals dropdown
+  const [collaterals, setCollaterals] = useState<Collateral[]>([]);
+  const [selectedCollateral, setSelectedCollateral] = useState<Collateral | null>(null);
+  const [isLoadingCollaterals, setIsLoadingCollaterals] = useState(true);
+  
   // State for form submission
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,12 +76,12 @@ export function CreditCreateModal({
   // Quick buttons for loan amount
   const loanAmountPresets = [-5, +5, 10, 20, 30, 40, 50];
   
-  // Thêm state cho validate quỹ
+  // State for fund validation
   const [fundStatus, setFundStatus] = useState<any>(null);
   const [isFundLoading, setIsFundLoading] = useState(false);
   const [fundError, setFundError] = useState<string | null>(null);
   
-  // Additional state for contract code generation
+  // State for contract code generation
   const [autoGenerateCode, setAutoGenerateCode] = useState<boolean>(true);
   
   // Format number with thousand separators
@@ -88,6 +97,25 @@ export function CreditCreateModal({
     const rawValue = e.target.value.replace(/\./g, '');
     setLoanAmount(rawValue);
     setFormattedLoanAmount(formatNumber(rawValue));
+  };
+  
+  // Adjust loan amount with quick buttons
+  const adjustLoanAmount = (adjustment: number) => {
+    const currentAmount = parseInt(loanAmount || '0');
+    const newAmount = Math.max(0, currentAmount + adjustment);
+    setLoanAmount(newAmount.toString());
+    setFormattedLoanAmount(formatNumber(newAmount));
+  };
+  
+  // Handle interest type change
+  const handleInterestTypeChange = (type: string) => {
+    setInterestType(type);
+    // Reset interest notation based on type
+    if (type === 'daily' || type === 'weekly_k') {
+      setInterestNotation('k_per_million');
+    } else {
+      setInterestNotation('percent_per_month');
+    }
   };
   
   // Load customers for dropdown
@@ -110,6 +138,26 @@ export function CreditCreateModal({
     loadCustomers();
   }, [isOpen]);
   
+  // Load collaterals for dropdown
+  useEffect(() => {
+    if (!isOpen || !currentStore?.id) return;
+    
+    async function loadCollaterals() {
+      setIsLoadingCollaterals(true);
+      try {
+        const { data, error } = await getCollateralsByStore(currentStore.id);
+        if (error) throw error;
+        setCollaterals(data || []);
+      } catch (err) {
+        console.error('Error loading collaterals:', err);
+      } finally {
+        setIsLoadingCollaterals(false);
+      }
+    }
+    
+    loadCollaterals();
+  }, [isOpen, currentStore?.id]);
+  
   // Handle customer selection change
   const handleCustomerChange = (customerId: string) => {
     setSelectedCustomerId(customerId);
@@ -122,133 +170,60 @@ export function CreditCreateModal({
     }
   };
   
-  // Handle interest type change
-  const handleInterestTypeChange = (value: string) => {
-    setInterestType(value);
-    
-    // Set default notation and update interest period based on interest type
-    switch(value) {
-      case 'daily':
-        setInterestNotation('k_per_million');
-        // Default daily period to 10 days
-        setInterestPeriod('10');
-        
-        // Update loan period to days if coming from a different format
-        if (interestType.startsWith('weekly') || interestType.startsWith('monthly')) {
-          const currentPeriod = parseInt(loanPeriod || '0');
-          // Convert from weeks/months to days
-          const newPeriod = interestType.startsWith('weekly') 
-            ? currentPeriod * 7  // weeks to days
-            : currentPeriod * 30; // months to days
-          setLoanPeriod(newPeriod.toString());
-        }
-        break;
-        
-      case 'monthly_30':
-      case 'monthly_custom':
-        setInterestNotation('percent_per_month');
-        // Set to 30 days (fixed month period)
-        setInterestPeriod('1');
-        
-        // Update loan period to months if coming from a different format
-        if (!interestType.startsWith('monthly')) {
-          const currentPeriod = parseInt(loanPeriod || '0');
-          // Convert to months (rounded)
-          let newPeriod = interestType.startsWith('weekly')
-            ? Math.ceil(currentPeriod / 4) // weeks to months (rough approximation)
-            : Math.ceil(currentPeriod / 30); // days to months
-          // Ensure minimum 1 month
-          newPeriod = Math.max(1, newPeriod);
-          setLoanPeriod(newPeriod.toString());
-        }
-        break;
-        
-      case 'weekly_percent':
-      case 'weekly_k':
-        setInterestNotation(value === 'weekly_percent' ? 'percent_per_week' : 'k_per_week');
-        // Set to 7 days (1 week)
-        setInterestPeriod('1');
-        
-        // Update loan period to weeks if coming from a different format
-        if (!interestType.startsWith('weekly')) {
-          const currentPeriod = parseInt(loanPeriod || '0');
-          // Convert to weeks (rounded)
-          let newPeriod = interestType.startsWith('monthly')
-            ? currentPeriod * 4 // months to weeks (rough approximation)
-            : Math.ceil(currentPeriod / 7); // days to weeks
-          // Ensure minimum 1 week
-          newPeriod = Math.max(1, newPeriod);
-          setLoanPeriod(newPeriod.toString());
-        }
-        break;
-        
-      default:
-        setInterestNotation('k_per_million');
-        setInterestPeriod('10');
-    }
-  };
-  
-  // Quick loan amount adjustment
-  const adjustLoanAmount = (amount: number) => {
-    const newAmount = parseInt(loanAmount || '0') + amount;
-    const newAmountStr = newAmount > 0 ? newAmount.toString() : '0';
-    setLoanAmount(newAmountStr);
-    setFormattedLoanAmount(formatNumber(newAmountStr));
-  };
-  
-  // Get current store from context
-  const { currentStore } = useStore();
-  
-  // Load fund status for the current store
-  useEffect(() => {
-    if (!isOpen || !currentStore?.id) return;
-    
-    async function loadFundStatus() {
-      setIsFundLoading(true);
-      try {
-        const storeFinancialData = await getStoreFinancialData(currentStore?.id || '');
-        setFundStatus(storeFinancialData);
-      } catch (err) {
-        console.error('Error loading fund status:', err);
-        setFundError('Không thể tải thông tin quỹ tiền mặt. Vui lòng thử lại sau.');
-      } finally {
-        setIsFundLoading(false);
+  // Handle collateral selection change
+  const handleCollateralChange = (collateralId: string) => {
+    setCollateralId(collateralId);
+    const selected = collaterals.find(c => c.id === collateralId);
+    if (selected) {
+      setSelectedCollateral(selected);
+      
+      // Optionally pre-fill loan amount based on collateral default value
+      if (selected.default_amount) {
+        const defaultAmount = selected.default_amount.toString();
+        setLoanAmount(defaultAmount);
+        setFormattedLoanAmount(formatNumber(defaultAmount));
       }
+    } else {
+      setSelectedCollateral(null);
     }
-    
-    loadFundStatus();
-  }, [isOpen, currentStore?.id]);
+  };
   
-  // Auto-generate contract code when modal opens
-  useEffect(() => {
-    if (isOpen && autoGenerateCode) {
-      // Generate a numerical code: current timestamp + random 3 digits
-      const timestamp = Date.now().toString().slice(-6); // Last 6 digits of timestamp
-      const randomDigits = Math.floor(Math.random() * 900 + 100); // Random 3 digits (100-999)
-      const generatedCode = `${timestamp}${randomDigits}`;
-      setContractCode(generatedCode);
-    }
-  }, [isOpen, autoGenerateCode]);
-  
-  // Form submission handler
+  // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
     
     try {
-      // Ensure we have a store selected
       if (!currentStore?.id) {
-        throw new Error('Vui lòng chọn chi nhánh trước khi tạo hợp đồng');
+        throw new Error('Không thể xác định cửa hàng hiện tại');
       }
       
-      // Validate loan amount against available funds
-      const loanAmountValue = parseInt(loanAmount || '0');
-      if (!fundStatus || fundStatus.availableFund < loanAmountValue) {
-        throw new Error(`Quỹ tiền mặt không đủ. Hiện có ${fundStatus ? Math.floor(fundStatus.availableFund).toLocaleString() : 0} VND.`);
+      // Validate required fields
+      if (!loanAmount) {
+        throw new Error('Vui lòng nhập số tiền vay');
       }
       
-      // For new customers, create a customer record first
+      if (!collateralId) {
+        throw new Error('Vui lòng chọn tài sản thế chấp');
+      }
+      
+      // Basic validation
+      const loanAmountValue = parseInt(loanAmount);
+      if (isNaN(loanAmountValue) || loanAmountValue <= 0) {
+        throw new Error('Số tiền vay phải lớn hơn 0');
+      }
+      
+      // Check store fund if needed
+      if (currentStore.validate_fund) {
+        const { data: fundData } = await getStoreFinancialData(currentStore.id);
+        
+        if (fundData && fundData.cash_fund < loanAmountValue) {
+          setFundError(`Số tiền vay (${formatNumber(loanAmountValue)}đ) lớn hơn quỹ tiền mặt hiện có (${formatNumber(fundData.cash_fund)}đ)`);
+          throw new Error('Số tiền vay vượt quá quỹ tiền mặt hiện có');
+        }
+      }
+      
       let finalCustomerId = selectedCustomerId;
       
       if (customerType === 'new') {
@@ -320,10 +295,15 @@ export function CreditCreateModal({
         return periodNum; // already in days
       };
       
-      // Prepare credit data
-      const creditData: CreateCreditParams = {
+      // Prepare pawn data
+      const pawnData: CreatePawnParams = {
         customer_id: finalCustomerId,
-        collateral,
+        contract_code: contractCode,
+        id_number: idNumber,
+        phone,
+        address,
+        collateral_id: collateralId,
+        collateral_detail: collateralDetail,
         loan_amount: loanAmountValue,
         interest_type: backendInterestType,
         interest_value: actualInterestValue,
@@ -332,66 +312,45 @@ export function CreditCreateModal({
         loan_period: convertLoanPeriodToDays(loanPeriod, interestType),
         interest_period: convertInterestPeriodForStorage(interestPeriod, interestType),
         loan_date: new Date(loanDate),
-        status: CreditStatus.ON_TIME,
+        status: PawnStatus.ON_TIME,
         notes: notes,
         store_id: currentStore.id, // Use store ID from context
       };
       
-      // Validate interest value
-      if (!interestValue || interestValue === '0') {
-        setIsLoading(false);
-        toast({
-          variant: 'destructive',
-          title: 'Lỗi',
-          description: 'Vui lòng nhập lãi phí khác 0',
-        });
-        return;
+      // Create pawn
+      const { data, error: createError } = await createPawn(pawnData);
+      
+      if (createError) {
+        throw new Error(`Không thể tạo hợp đồng cầm đồ: ${createError instanceof Error ? createError.message : JSON.stringify(createError)}`);
       }
       
-      // Validate loan period
-      if (!loanPeriod || loanPeriod === '0') {
-        setIsLoading(false);
-        toast({
-          variant: 'destructive',
-          title: 'Lỗi',
-          description: 'Vui lòng nhập số ngày/tuần/tháng vay khác 0',
-        });
-        return;
+      if (!data) {
+        throw new Error('Không thể tạo hợp đồng cầm đồ');
       }
       
-      // Validate interest period
-      if (!interestPeriod || interestPeriod === '0') {
-        setIsLoading(false);
-        toast({
-          variant: 'destructive',
-          title: 'Lỗi',
-          description: 'Vui lòng nhập kỳ lãi khác 0',
-        });
-        return;
-      }
-      
-      // Call API to create credit
-      const { data, error } = await createCredit(creditData);
-      
-      if (error) throw error;
-      
-      // Update store fund after successful credit creation
-      try {
-        // Trừ quỹ tiền mặt sau khi tạo hợp đồng thành công
+      // Update store cash fund if needed
+      if (currentStore.validate_fund) {
         await updateStoreCashFundOnly(currentStore.id, -loanAmountValue);
-      } catch (fundError) {
-        console.error('Error updating store fund:', fundError);
-        // Vẫn cho phép tiếp tục mặc dù cập nhật quỹ bị lỗi
       }
       
-      // Success - close modal and notify parent
-      if (onSuccess && data?.id) {
+      // Show success message
+      toast({
+        title: 'Thành công',
+        description: 'Hợp đồng cầm đồ đã được tạo thành công',
+        variant: 'default',
+      });
+      
+      // Call onSuccess callback with new pawn ID
+      if (onSuccess) {
         onSuccess(data.id);
       }
+      
+      // Close modal
       onClose();
+      
     } catch (err) {
-      console.error('Error creating credit:', err);
-      setError(err instanceof Error ? err.message : 'Có lỗi xảy ra khi tạo hợp đồng. Vui lòng thử lại.');
+      console.error('Error creating pawn:', err);
+      setError(err instanceof Error ? err.message : 'Có lỗi xảy ra khi tạo hợp đồng cầm đồ');
     } finally {
       setIsLoading(false);
     }
@@ -401,7 +360,7 @@ export function CreditCreateModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-[800px] md:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-center">Hợp đồng vay tiền</DialogTitle>
+          <DialogTitle className="text-center">Hợp đồng cầm đồ</DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
@@ -465,35 +424,30 @@ export function CreditCreateModal({
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="contractCode" className="text-right">Mã HĐ</Label>
+            <Label htmlFor="contractCode" className="text-right">Mã hợp đồng</Label>
             <div className="flex items-center gap-2">
               <Input 
                 id="contractCode"
                 value={contractCode}
-                onChange={(e) => {
-                  setContractCode(e.target.value);
-                  setAutoGenerateCode(false);
-                }}
-                placeholder="Mã hợp đồng"
+                onChange={(e) => setContractCode(e.target.value)}
+                placeholder="Tự động sinh nếu để trống"
+                disabled={autoGenerateCode}
               />
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => {
-                  const timestamp = Date.now().toString().slice(-6);
-                  const randomDigits = Math.floor(Math.random() * 900 + 100);
-                  const generatedCode = `${timestamp}${randomDigits}`;
-                  setContractCode(generatedCode);
-                }}
-                className="px-2"
-              >
-                Tạo mã
-              </Button>
+              <div className="flex items-center gap-1">
+                <input 
+                  type="checkbox" 
+                  id="autoGenerateCode" 
+                  checked={autoGenerateCode}
+                  onChange={(e) => setAutoGenerateCode(e.target.checked)}
+                  className="mr-1"
+                />
+                <label htmlFor="autoGenerateCode" className="text-xs">Tự động</label>
+              </div>
             </div>
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="idNumber" className="text-right">Số CCCD/Hộ chiếu</Label>
+            <Label htmlFor="idNumber" className="text-right">Số CCCD/CMT</Label>
             <Input 
               id="idNumber"
               value={idNumber}
@@ -502,7 +456,7 @@ export function CreditCreateModal({
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="phone" className="text-right">SĐT</Label>
+            <Label htmlFor="phone" className="text-right">Số điện thoại</Label>
             <Input 
               id="phone"
               value={phone}
@@ -520,15 +474,52 @@ export function CreditCreateModal({
             />
           </div>
           
+          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
+            <Label htmlFor="collateralId" className="text-right">
+              Tài sản thế chấp <span className="text-red-500">*</span>
+            </Label>
+            <select 
+              className="border rounded-md p-2 w-full"
+              value={collateralId}
+              onChange={(e) => handleCollateralChange(e.target.value)}
+              required
+            >
+              <option value="">Chọn tài sản</option>
+              {collaterals.map(collateral => (
+                <option key={collateral.id} value={collateral.id}>
+                  {collateral.name} ({collateral.code})
+                </option>
+              ))}
+            </select>
+          </div>
+          
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-start">
-            <Label htmlFor="collateral" className="text-right mt-2">Tài sản thế chấp</Label>
+            <Label htmlFor="collateralDetail" className="text-right mt-2">Chi tiết tài sản</Label>
             <Textarea 
-              id="collateral"
-              value={collateral}
-              onChange={(e) => setCollateral(e.target.value)}
+              id="collateralDetail"
+              value={collateralDetail}
+              onChange={(e) => setCollateralDetail(e.target.value)}
               rows={3}
+              placeholder="Biển số, màu sắc, số khung, số máy, đặc điểm nhận dạng..."
             />
           </div>
+          
+          {selectedCollateral && (
+            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-start">
+              <div className="text-right text-sm text-gray-500">Thông tin tài sản:</div>
+              <div className="text-sm bg-gray-50 p-2 rounded">
+                <div><span className="font-medium">Loại:</span> {selectedCollateral.category}</div>
+                <div><span className="font-medium">Mã:</span> {selectedCollateral.code}</div>
+                <div><span className="font-medium">Giá trị mặc định:</span> {formatNumber(selectedCollateral.default_amount || 0)}đ</div>
+                {selectedCollateral.attr_01 && (
+                  <div><span className="font-medium">{selectedCollateral.attr_01}:</span> {selectedCollateral.attr_01}</div>
+                )}
+                {selectedCollateral.attr_02 && (
+                  <div><span className="font-medium">{selectedCollateral.attr_02}:</span> {selectedCollateral.attr_02}</div>
+                )}
+              </div>
+            </div>
+          )}
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
             <Label htmlFor="loanAmount" className="text-right">
@@ -581,147 +572,137 @@ export function CreditCreateModal({
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
             <Label htmlFor="interestValue" className="text-right">
-              Lãi phí <span className="text-red-500">*</span>
+              Lãi suất <span className="text-red-500">*</span>
             </Label>
-            <div className="flex items-center space-x-4">
-              <Input 
-                id="interestValue"
-                type="number"
-                value={interestValue}
-                onChange={(e) => setInterestValue(e.target.value)}
-                required
-                className="w-32"
-                placeholder="0"
-              />
-              <div className="flex flex-wrap gap-4 items-center">
+            <div>
+              <div className="flex gap-2 items-center">
+                <Input 
+                  id="interestValue"
+                  type="text"
+                  value={interestValue}
+                  onChange={(e) => setInterestValue(e.target.value)}
+                  required
+                  className="w-24"
+                />
+                
                 {interestType === 'daily' && (
-                  <>
+                  <div className="flex items-center gap-2">
                     <div className="flex items-center">
                       <input 
                         type="radio" 
-                        id="interestDaily1" 
-                        name="interestDaily" 
+                        id="k_per_million" 
+                        name="interestNotation" 
+                        value="k_per_million"
                         checked={interestNotation === 'k_per_million'}
                         onChange={() => setInterestNotation('k_per_million')}
-                        className="mr-2"
+                        className="mr-1"
                       />
-                      <label htmlFor="interestDaily1" className="text-sm">k/1 triệu</label>
+                      <label htmlFor="k_per_million">k/1 triệu</label>
                     </div>
                     <div className="flex items-center">
                       <input 
                         type="radio" 
-                        id="interestDaily2" 
-                        name="interestDaily" 
+                        id="k_per_day" 
+                        name="interestNotation" 
+                        value="k_per_day"
                         checked={interestNotation === 'k_per_day'}
                         onChange={() => setInterestNotation('k_per_day')}
-                        className="mr-2"
+                        className="mr-1"
                       />
-                      <label htmlFor="interestDaily2" className="text-sm">k/1 ngày</label>
+                      <label htmlFor="k_per_day">k/ngày</label>
                     </div>
-                  </>
-                )}
-                
-                {(interestType === 'monthly_30' || interestType === 'monthly_custom') && (
-                  <>
-                    <div className="flex items-center">
-                      <input 
-                        type="radio" 
-                        id="interestMonthly1" 
-                        name="interestMonthly" 
-                        checked={interestNotation === 'percent_per_month'}
-                        onChange={() => setInterestNotation('percent_per_month')}
-                        className="mr-2"
-                      />
-                      <label htmlFor="interestMonthly1" className="text-sm">%/1 tháng</label>
-                    </div>
-                  </>
-                )}
-                
-                {interestType === 'weekly_percent' && (
-                  <>
-                    <div className="flex items-center">
-                      <input 
-                        type="radio" 
-                        id="interestWeeklyPercent1" 
-                        name="interestWeeklyPercent" 
-                        checked={interestNotation === 'percent_per_week'}
-                        onChange={() => setInterestNotation('percent_per_week')}
-                        className="mr-2"
-                      />
-                      <label htmlFor="interestWeeklyPercent1" className="text-sm">% /1 tuần (VD : 2% / 1 tuần)</label>
-                    </div>
-                  </>
+                  </div>
                 )}
                 
                 {interestType === 'weekly_k' && (
-                  <>
+                  <div className="flex items-center gap-2">
                     <div className="flex items-center">
                       <input 
                         type="radio" 
-                        id="interestWeeklyK1" 
-                        name="interestWeeklyK" 
+                        id="k_per_million_weekly" 
+                        name="interestNotation" 
+                        value="k_per_million"
+                        checked={interestNotation === 'k_per_million'}
+                        onChange={() => setInterestNotation('k_per_million')}
+                        className="mr-1"
+                      />
+                      <label htmlFor="k_per_million_weekly">k/1 triệu</label>
+                    </div>
+                    <div className="flex items-center">
+                      <input 
+                        type="radio" 
+                        id="k_per_week" 
+                        name="interestNotation" 
+                        value="k_per_week"
                         checked={interestNotation === 'k_per_week'}
                         onChange={() => setInterestNotation('k_per_week')}
-                        className="mr-2"
+                        className="mr-1"
                       />
-                      <label htmlFor="interestWeeklyK1" className="text-sm">k/1 tuần (VD: 100k/1 tuần)</label>
+                      <label htmlFor="k_per_week">k/tuần</label>
                     </div>
-                  </>
+                  </div>
+                )}
+                
+                {(interestType === 'monthly_30' || interestType === 'monthly_custom') && (
+                  <div className="flex items-center gap-1">
+                    <span>% / tháng</span>
+                  </div>
+                )}
+                
+                {interestType === 'weekly_percent' && (
+                  <div className="flex items-center gap-1">
+                    <span>% / tuần</span>
+                  </div>
                 )}
               </div>
             </div>
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="loanPeriod" className="text-right">
-              {interestType.startsWith('weekly') ? 'Số tuần vay' : 
-               interestType.startsWith('monthly') ? 'Số tháng vay' : 
-               'Số ngày vay'} <span className="text-red-500">*</span>
-            </Label>
-            <Input 
-              id="loanPeriod"
-              type="number"
-              value={loanPeriod}
-              onChange={(e) => setLoanPeriod(e.target.value)}
-              required
-            />
+            <Label htmlFor="loanPeriod" className="text-right">Thời hạn vay</Label>
+            <div className="flex items-center gap-2">
+              <Input 
+                id="loanPeriod"
+                type="number"
+                value={loanPeriod}
+                onChange={(e) => setLoanPeriod(e.target.value)}
+                className="w-24"
+                min="0"
+              />
+              <span>
+                {interestType === 'daily' && 'ngày'}
+                {(interestType === 'monthly_30' || interestType === 'monthly_custom') && 'tháng'}
+                {(interestType === 'weekly_percent' || interestType === 'weekly_k') && 'tuần'}
+              </span>
+            </div>
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="interestPeriod" className="text-right">
-              {interestType.startsWith('weekly') ? 'Kỳ lãi (tuần)' : 
-               interestType.startsWith('monthly') ? 'Kỳ lãi (tháng)' : 
-               'Kỳ lãi (ngày)'} <span className="text-red-500">*</span>
-            </Label>
-            <div className="flex items-center space-x-2">
+            <Label htmlFor="interestPeriod" className="text-right">Kỳ lãi phí</Label>
+            <div className="flex items-center gap-2">
               <Input 
                 id="interestPeriod"
                 type="number"
                 value={interestPeriod}
                 onChange={(e) => setInterestPeriod(e.target.value)}
-                required
-                className="w-32"
+                className="w-24"
+                min="0"
               />
-              <div className="text-sm text-gray-600">
-                {(interestType === 'daily') && 
-                  '(VD: 10 ngày đóng lãi phí 1 lần thì điền số 10)'}
-                {(interestType === 'monthly_30' || interestType === 'monthly_custom') && 
-                  '(VD: 1 tháng đóng lãi phí 1 lần thì điền số 1)'}
-                {(interestType === 'weekly_percent' || interestType === 'weekly_k') && 
-                  '(VD: 1 tuần đóng lãi phí 1 lần thì điền số 1)'}
-              </div>
+              <span>
+                {interestType === 'daily' && 'ngày đóng lãi 1 lần'}
+                {interestType === 'monthly_30' && 'tháng đóng lãi 1 lần'}
+                {interestType === 'monthly_custom' && 'ngày đóng lãi 1 lần'}
+                {interestType === 'weekly_percent' && 'tuần đóng lãi 1 lần'}
+                {interestType === 'weekly_k' && 'tuần đóng lãi 1 lần'}
+              </span>
             </div>
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="loanDate" className="text-right">
-              Ngày vay <span className="text-red-500">*</span>
-            </Label>
+            <Label htmlFor="loanDate" className="text-right">Ngày vay</Label>
             <DatePicker
-              id="loanDate"
               value={loanDate}
-              onChange={setLoanDate}
-              required
+              onChange={(value) => setLoanDate(value)}
             />
           </div>
           
@@ -783,4 +764,4 @@ export function CreditCreateModal({
       </DialogContent>
     </Dialog>
   );
-}
+} 

@@ -329,10 +329,6 @@ export function CreditEditModal({
       // Prepare update data
       const updateData: UpdateCreditParams = {
         customer_id: selectedCustomerId,
-        contract_code: contractCode,
-        id_number: idNumber,
-        phone,
-        address,
         collateral,
         loan_amount: parseInt(loanAmount || '0'),
         interest_type: backendInterestType,

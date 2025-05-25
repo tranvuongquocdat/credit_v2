@@ -48,7 +48,7 @@ interface SidebarItem {
 const sidebarItems: SidebarItem[] = [
   { 
     title: 'Cầm đồ', 
-    path: '/pawns', 
+    path: '/stores/pawns', 
     icon: <FiShoppingBag size={20} />,
     redColor: true,
   },
