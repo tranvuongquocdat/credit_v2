@@ -17,6 +17,7 @@ import { PawnActionTabs, DEFAULT_PAWN_TABS, PawnTabId } from './PawnActionTabs';
 import { AdditionalLoanTab, BadPawnTab, RedeemTab, DocumentsTab, ExtensionTab, PaymentTab, PrincipalRepaymentTab, LiquidationTab } from './tabs';
 import { getPawnById } from '@/lib/pawn';
 import { getPrincipalChangesForPawn } from '@/lib/pawn-principal-changes';
+import { PawnAmountHistory, PawnTransactionType, getPawnAmountHistory } from '@/lib/pawn-amount-history';
 
 interface PawnHistoryModalProps {
   isOpen: boolean;
@@ -37,6 +38,8 @@ export function PawnHistoryModal({
   const [currentPawn, setCurrentPawn] = useState(pawn);
   const [principalChanges, setPrincipalChanges] = useState<PrincipalChange[]>([]);
   const [refreshRepayments, setRefreshRepayments] = useState(0);
+  const [pawnHistory, setPawnHistory] = useState<PawnAmountHistory[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const loadPaymentPeriods = useCallback(async () => {
     if (!pawn?.id) return;
@@ -111,6 +114,16 @@ export function PawnHistoryModal({
   // Format date
   const formatDate = (dateString: string): string => {
     return format(new Date(dateString), 'dd/MM/yyyy', { locale: vi });
+  };
+
+  // Format datetime helper for history display
+  const formatDateTime = (dateString: string | null | undefined): string => {
+    if (!dateString) return '-';
+    try {
+      return format(new Date(dateString), 'dd-MM-yyyy HH:mm:ss', { locale: vi });
+    } catch (error) {
+      return '-';
+    }
   };
 
   // Calculate days between dates
@@ -313,6 +326,71 @@ export function PawnHistoryModal({
     return formatDate(endDate.toISOString());
   }, [currentPawn?.loan_date, currentPawn?.loan_period, formatDate]);
 
+  // Load pawn amount history when tab changes to history or when pawn changes
+  useEffect(() => {
+    async function loadPawnHistory() {
+      if (!pawn?.id || activeTab !== 'history') return;
+      
+      setHistoryLoading(true);
+      try {
+        const { data, error } = await getPawnAmountHistory(pawn.id);
+        
+        if (error) {
+          throw error;
+        }
+        
+        setPawnHistory(data || []);
+      } catch (err) {
+        console.error('Error loading pawn history:', err);
+      } finally {
+        setHistoryLoading(false);
+      }
+    }
+    
+    loadPawnHistory();
+  }, [pawn?.id, activeTab, refreshRepayments]);
+
+  // Helper function to get transaction type display text
+  const getTransactionTypeDisplay = (type: PawnTransactionType | string): string => {
+    switch (type) {
+      case PawnTransactionType.NEW_LOAN:
+        return 'Tạo hợp đồng';
+      case PawnTransactionType.PRINCIPAL_REPAYMENT:
+        return 'Trả bớt gốc';
+      case PawnTransactionType.PAYMENT:
+        return 'Đóng lãi phí';
+      case PawnTransactionType.CONTRACT_CLOSE:
+        return 'Đóng hợp đồng';
+      case PawnTransactionType.CONTRACT_ROTATION:
+        return 'Xoay hợp đồng';
+      case 'payment_cancel':
+        return 'Hủy đóng lãi phí';
+      case 'contract_reopen':
+        return 'Mở lại hợp đồng';
+      default:
+        return 'Giao dịch khác';
+    }
+  };
+
+  // Helper function to calculate history totals
+  const calculateHistoryTotals = () => {
+    let totalDebit = 0;
+    let totalCredit = 0;
+
+    pawnHistory.forEach(history => {
+      totalDebit += history.debit_amount || 0;
+      totalCredit += history.credit_amount || 0;
+    });
+
+    return {
+      totalDebit,
+      totalCredit,
+      balance: totalDebit - totalCredit
+    };
+  };
+
+  const historyTotals = calculateHistoryTotals();
+
   const renderTabContent = () => {
     switch (activeTab) {
       case 'payment':
@@ -378,8 +456,95 @@ export function PawnHistoryModal({
       case 'history':
         return (
           <div className="p-4">
-            <h3 className="text-lg font-medium mb-4">Lịch sử giao dịch</h3>
-            <p className="text-gray-500">Chức năng đang được phát triển...</p>
+            {/* Lịch sử thao tác */}
+            <div>
+              <div className="flex items-center mb-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                </svg>
+                <h3 className="text-lg font-medium">Lịch sử thao tác</h3>
+              </div>
+              
+              {historyLoading ? (
+                <div className="flex justify-center items-center py-10">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700"></div>
+                </div>
+              ) : pawnHistory.length === 0 ? (
+                <div className="flex justify-center items-center py-10">
+                  <p className="text-gray-500">Chưa có lịch sử giao dịch</p>
+                </div>
+              ) : (
+                <>
+                  <div className="text-sm text-amber-600 italic mb-2">
+                    *Lưu ý: Ghi nợ (debit) là tiền ra, ghi có (credit) là tiền vào
+                  </div>
+                  <div className="border rounded-md overflow-hidden">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-100">
+                        <tr>
+                          <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700 w-16 text-center">STT</th>
+                          <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Ngày</th>
+                          <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Loại giao dịch</th>
+                          <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700 text-right">Số tiền ghi nợ</th>
+                          <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700 text-right">Số tiền ghi có</th>
+                          <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Nội dung</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {pawnHistory.map((history, index) => (
+                          <tr key={history.id}>
+                            <td className="px-4 py-3 text-sm text-gray-700 text-center">{index + 1}</td>
+                            <td className="px-4 py-3 text-sm text-gray-700">{formatDateTime(history.created_at)}</td>
+                            <td className="px-4 py-3 text-sm text-gray-700">{getTransactionTypeDisplay(history.transaction_type)}</td>
+                            <td className="px-4 py-3 text-sm text-gray-700 text-right text-red-600">
+                              {history.debit_amount && history.debit_amount > 0 ? formatCurrency(history.debit_amount) : ""}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-700 text-right text-green-600">
+                              {history.credit_amount && history.credit_amount > 0 ? formatCurrency(history.credit_amount) : ""}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-700">{history.notes || '-'}</td>
+                          </tr>
+                        ))}
+                        
+                        {/* Initial loan entry */}
+                        <tr>
+                          <td className="px-4 py-3 text-sm text-gray-700 text-center">{pawnHistory.length + 1}</td>
+                          <td className="px-4 py-3 text-sm text-gray-700">{formatDate(currentPawn?.loan_date || '')}</td>
+                          <td className="px-4 py-3 text-sm text-gray-700">Tạo hợp đồng</td>
+                          <td className="px-4 py-3 text-sm text-gray-700 text-right text-red-600">
+                            {formatCurrency(currentPawn?.loan_amount || 0)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-700 text-right">0</td>
+                          <td className="px-4 py-3 text-sm text-gray-700">Cho cầm</td>
+                        </tr>
+                        
+                        {/* Summary rows */}
+                        <tr className="bg-amber-50">
+                          <td colSpan={3} className="px-4 py-2 text-sm font-medium text-right">Tổng Tiền</td>
+                          <td className="px-4 py-2 text-sm font-medium text-right text-red-600">
+                            {formatCurrency(historyTotals.totalDebit + (currentPawn?.loan_amount || 0))}
+                          </td>
+                          <td className="px-4 py-2 text-sm font-medium text-right text-green-600">
+                            {formatCurrency(historyTotals.totalCredit)}
+                          </td>
+                          <td></td>
+                        </tr>
+                        <tr className="bg-amber-100">
+                          <td colSpan={3} className="px-4 py-2 text-sm font-medium text-right">Chênh lệch</td>
+                          <td colSpan={2} className="px-4 py-2 text-sm font-medium text-right">
+                            <span className={(historyTotals.totalDebit + (currentPawn?.loan_amount || 0)) - historyTotals.totalCredit >= 0 ? "text-red-600" : "text-green-600"}>
+                              {formatCurrency(historyTotals.totalCredit - (historyTotals.totalDebit + (currentPawn?.loan_amount || 0)))}
+                            </span>
+                          </td>
+                          <td></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         );
       case 'bad-credit':
