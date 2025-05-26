@@ -50,6 +50,7 @@ export function FinancialSummary({
   
   // Sử dụng dữ liệu từ props nếu có, nếu không thì dùng state nội bộ
   const fundStatus = externalFundStatus || internalFundStatus;
+  console.log("Fund Status", fundStatus);
   // Sử dụng callback từ props nếu có, nếu không thì dùng hàm fetch nội bộ
   const onRefresh = () => {
     if (externalOnRefresh) {
@@ -129,7 +130,7 @@ export function FinancialSummary({
             <span>Lãi phí đã thu</span>
           </div>
           <div className="text-base font-semibold text-gray-800">
-            {Math.floor((fundStatus.collectedInterest || fundStatus.profit * 0.4)).toLocaleString()}
+            {Math.floor((fundStatus.collectedInterest)).toLocaleString()}
           </div>
         </div>
       </div>

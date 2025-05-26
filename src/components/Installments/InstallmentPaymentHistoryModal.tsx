@@ -244,6 +244,8 @@ export function InstallmentPaymentHistoryModal({
     if (initialInstallment?.id) {
       loadPaymentPeriods(initialInstallment.id, modalSessionId.current);
     }
+    setRotationLoanAmount(initialInstallment?.installment_amount?.toString() || "0");
+    setRotationDownPayment(initialInstallment?.amount_given?.toString() || "0");
   }, [initialInstallment, isOpen, loadPaymentPeriods]);
 
   // Hàm reload thông tin hợp đồng
@@ -1258,7 +1260,7 @@ export function InstallmentPaymentHistoryModal({
                     <td className="py-1 px-2 border font-bold">Tỷ lệ</td>
                     <td className="py-1 px-2 text-right border" colSpan={2}>
                       {installment?.amount_given && installment?.installment_amount
-                        ? `10 ăn ${(10 * installment?.amount_given / installment?.installment_amount).toFixed(0)}`
+                        ? `10 ăn ${(10 * installment?.amount_given / installment?.installment_amount).toFixed(1)}`
                         : "-"}
                     </td>
                   </tr>

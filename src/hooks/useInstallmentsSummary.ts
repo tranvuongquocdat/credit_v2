@@ -45,8 +45,7 @@ export function useInstallmentsSummary() {
             actual_amount
           )
         `)
-        .neq('status', InstallmentStatus.DELETED)
-        .neq('status', InstallmentStatus.CLOSED);
+        .neq('status', InstallmentStatus.DELETED);
       
       // Filter by store if a store is selected
       if (currentStore?.id) {
@@ -101,10 +100,6 @@ export function useInstallmentsSummary() {
       }
       
       if (activeInstallments) {
-        // Tính tổng tiền cho vay (tiền giao khách)
-        totalLoan = activeInstallments.reduce((sum: number, installment: any) => {
-          return sum + (installment.down_payment || 0);
-        }, 0);
         // Tính tiền nợ cũ và lãi phí đã thu
         activeInstallments.forEach(installment => {
           // Tính tổng tiền đã đóng được cho hợp đồng này
@@ -131,13 +126,23 @@ export function useInstallmentsSummary() {
             console.log("profit", profit);
             collectedProfit += profit - (installment.down_payment || 0);
           }
+
+          // Tính tổng tiền cho vay (tiền giao khách)
+          const loan = installment.installment_payment_period?.reduce((sum: number, period: any) => {
+            return sum + (period.actual_amount || 0);
+          }, 0) || 0;
+          if ((installment.down_payment || 0) - loan > 0) {
+            totalLoan += (installment.down_payment || 0) - loan;
+          }
+
+          
           
           // Lãi phí dự kiến = kỳ đóng tiền trong tháng - tiền giao khách (nếu dương)
           expectedProfit += (installment.installment_amount || 0) - (installment.down_payment || 0);
           console.log("expectedMonthlyProfit", expectedProfit);
         });
       }
-      
+      console.log("Collected Profit", collectedProfit);
       const summaryData: StoreFinancialData = {
         // Use the cash_fund from the store financial data
         totalFund: storeFinancialData.availableFund || 0,
@@ -147,7 +152,7 @@ export function useInstallmentsSummary() {
         profit: expectedProfit,
         collectedInterest: collectedProfit
       };
-      
+      console.log("Summary Data", summaryData);
       setData(summaryData);
     } catch (err) {
       console.error('Error fetching installment summary:', err);
