@@ -200,48 +200,23 @@ export function PawnHistoryModal({
       const actualPeriod = actualByPeriod.get(estimatedPeriod.period_number);
       
       if (actualPeriod) {
-        // Use actual period but recalculate expected amount with principal changes
-        let expectedAmount = estimatedPeriod.expected_amount;
-        
-        if (principalChanges && principalChanges.length > 0) {
-          expectedAmount = calculateInterestWithPrincipalChanges(
-            currentPawn as any,
-            new Date(actualPeriod.start_date),
-            new Date(actualPeriod.end_date),
-            principalChanges
-          );
-        }
-        
-        result.push({
-          ...actualPeriod,
-          expected_amount: expectedAmount
-        });
+        // Use actual period data AS IS - no modifications to database records
+        // IMPORTANT: We preserve ALL data from database exactly as it is
+        result.push(actualPeriod);
         
         // Remove from map so we don't add it again
         actualByPeriod.delete(estimatedPeriod.period_number);
       } else {
-        // Use estimated period
+        // Use estimated period (no actual data exists yet)
+        // Only for these periods we apply principal changes calculation
         result.push(estimatedPeriod);
       }
     });
     
     // Add any remaining actual periods that don't have estimated counterparts
+    // These are also preserved AS IS from database
     actualByPeriod.forEach(actualPeriod => {
-      let expectedAmount = actualPeriod.expected_amount || 0;
-      
-      if (principalChanges && principalChanges.length > 0) {
-        expectedAmount = calculateInterestWithPrincipalChanges(
-          currentPawn as any,
-          new Date(actualPeriod.start_date),
-          new Date(actualPeriod.end_date),
-          principalChanges
-        );
-      }
-      
-      result.push({
-        ...actualPeriod,
-        expected_amount: expectedAmount
-      });
+      result.push(actualPeriod);
     });
     
     // Sort by period number

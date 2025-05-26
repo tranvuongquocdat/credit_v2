@@ -435,10 +435,15 @@ export function PaymentTab({
               // Display combined calculated and actual data from database
               combinedPaymentPeriods.map((period, index) => {
                 const expected = period.expected_amount || 0;
-                const actual = period.id.startsWith('calculated-') || period.id.startsWith('estimated-') || period.id.startsWith('temp-') ? period.expected_amount : period.actual_amount; // Use actual amount as is, don't fallback to expected
+                // For actual amount display:
+                // - If it's an estimated/calculated period (not in DB yet), show 0 or expected_amount as placeholder
+                // - If it's a real period from DB, show the actual_amount from database (never override this!)
+                const actual = (period.id && !period.id.startsWith('calculated-') && !period.id.startsWith('estimated-') && !period.id.startsWith('temp-')) 
+                  ? (period.actual_amount || 0) // Real period from DB - use actual_amount as is
+                  : period.expected_amount + (period.other_amount || 0); // Estimated period - show the sum of expected_amount and other_amount calculated from interest calculator
                 const other = period.other_amount || 0;
                 const total = expected + other; // Total interest = expected + other
-                const isPaid = period.id && !period.id.startsWith('calculated-') && !period.id.startsWith('estimated-') && !period.id.startsWith('temp-');
+                const isPaid = period.id && !period.id.startsWith('calculated-') && !period.id.startsWith('estimated-') && !period.id.startsWith('temp-') && (period.actual_amount >= period.expected_amount);
                 const isPartiallyPaid = period.actual_amount > 0 && period.actual_amount < period.expected_amount;
                 const isEditing = editingPeriodId === period.id || editingPeriodId === `temp-${period.period_number}`;
                 const periodId = period.id || `temp-${period.period_number}`;
