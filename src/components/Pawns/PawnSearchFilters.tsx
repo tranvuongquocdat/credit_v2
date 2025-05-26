@@ -181,8 +181,8 @@ export function PawnSearchFilters({
             </SelectContent>
           </Select>
         </div>
-      </div>
-      
+        </div>
+        
       <div className="flex flex-col sm:flex-row justify-between gap-2 mb-4">
         <div className="flex gap-2">
           <Button 
@@ -204,8 +204,8 @@ export function PawnSearchFilters({
             </svg>
             Xuất Excel
           </Button>
-        </div>
-        
+      </div>
+      
         <div className="flex gap-2">
           <Button 
             variant="outline" 

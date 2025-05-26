@@ -585,10 +585,8 @@ export type Database = {
           debit_amount: number | null
           employee_id: string | null
           id: string
-          new_loan_amount: number
           notes: string | null
           pawn_id: string
-          previous_loan_amount: number
           transaction_date: string
           transaction_type: Database["public"]["Enums"]["pawn_transaction_type"]
           updated_at: string | null
@@ -600,10 +598,8 @@ export type Database = {
           debit_amount?: number | null
           employee_id?: string | null
           id?: string
-          new_loan_amount: number
           notes?: string | null
           pawn_id: string
-          previous_loan_amount: number
           transaction_date: string
           transaction_type: Database["public"]["Enums"]["pawn_transaction_type"]
           updated_at?: string | null
@@ -615,10 +611,8 @@ export type Database = {
           debit_amount?: number | null
           employee_id?: string | null
           id?: string
-          new_loan_amount?: number
           notes?: string | null
           pawn_id?: string
-          previous_loan_amount?: number
           transaction_date?: string
           transaction_type?: Database["public"]["Enums"]["pawn_transaction_type"]
           updated_at?: string | null

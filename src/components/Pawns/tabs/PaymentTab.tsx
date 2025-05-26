@@ -371,10 +371,6 @@ export function PaymentTab({
                 });
               }
             }}
-            interestCalculator={(startDate, endDate) => {
-              // Function to calculate interest based on dates
-              return calculateInterestForPeriod(startDate, endDate);
-            }}
             // Truyền thêm các thông tin về kỳ hạn
             loanDate={pawn.loan_date}
             loanPeriod={pawn.loan_period}

@@ -21,18 +21,18 @@ export function PrincipalRepaymentTab({
 }: PrincipalRepaymentTabProps) {
   const [localRefreshTrigger, setLocalRefreshTrigger] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   const refreshData = () => {
     // Update both the parent counter and local counter
     setRefreshRepayments(prev => prev + 1);
     setLocalRefreshTrigger(prev => prev + 1);
-    
+
     // Call the onDataChange callback if provided
     if (onDataChange) {
       onDataChange();
     }
   };
-  
+
   return (
     <div>
       <PrincipalRepaymentForm 

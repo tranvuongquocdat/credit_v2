@@ -15,8 +15,6 @@ export interface PawnAmountHistory {
   transaction_type: PawnTransactionType;
   debit_amount?: number;
   credit_amount?: number;
-  previous_loan_amount: number;
-  new_loan_amount: number;
   transaction_date: string;
   notes?: string;
   employee_id?: string;
@@ -76,8 +74,6 @@ export async function recordPrincipalRepayment(
         transaction_type: PawnTransactionType.PRINCIPAL_REPAYMENT,
         credit_amount: repaymentAmount, // Positive for credit (incoming money)
         debit_amount: 0,
-        previous_loan_amount: previousLoanAmount,
-        new_loan_amount: newLoanAmount,
         transaction_date: transactionDate,
         notes: notes || 'Trả bớt gốc'
       })
@@ -148,8 +144,6 @@ export async function recordAdditionalLoan(
         transaction_type: PawnTransactionType.OTHER, // Use OTHER for additional loan
         debit_amount: additionalAmount, // Positive for debit (outgoing money)
         credit_amount: 0,
-        previous_loan_amount: previousLoanAmount,
-        new_loan_amount: newLoanAmount,
         transaction_date: transactionDate,
         notes: notes || 'Vay thêm'
       })
@@ -213,32 +207,6 @@ export async function deletePawnAmountHistory(historyId: string) {
 
     if (!historyData) {
       throw new Error('History record not found');
-    }
-
-    // Rollback the pawn loan amount to previous amount
-    const { error: updateError } = await supabase
-      .from('pawns')
-      .update({ loan_amount: historyData.previous_loan_amount })
-      .eq('id', historyData.pawn_id);
-
-    if (updateError) {
-      throw updateError;
-    }
-
-    // Delete the history record
-    const { error: deleteError } = await supabase
-      .from('pawn_amount_history')
-      .delete()
-      .eq('id', historyId);
-
-    if (deleteError) {
-      // If delete fails, try to rollback the pawn update
-      await supabase
-        .from('pawns')
-        .update({ loan_amount: historyData.new_loan_amount })
-        .eq('id', historyData.pawn_id);
-      
-      throw deleteError;
     }
 
     return { data: historyData, error: null };

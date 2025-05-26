@@ -129,59 +129,44 @@ export function PawnHistoryModal({
     
     const result: PawnPaymentPeriod[] = [];
     const loanDate = new Date(pawn.loan_date);
-    const interestPeriod = pawn.interest_period; // Number of days per interest period
     const loanPeriod = pawn.loan_period; // Total loan period in days
     
-    // Calculate total number of periods
-    const totalPeriods = Math.ceil(loanPeriod / interestPeriod);
+    // Calculate end date of the contract
+    const endDate = new Date(loanDate);
+    endDate.setDate(endDate.getDate() + loanPeriod - 1);
     
-    for (let i = 0; i < totalPeriods; i++) {
-      // Calculate start and end dates for this period
-      const startDate = new Date(loanDate);
-      startDate.setDate(startDate.getDate() + (i * interestPeriod));
-      
-      const endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + interestPeriod - 1);
-      
-      // Don't exceed the loan end date
-      const loanEndDate = new Date(loanDate);
-      loanEndDate.setDate(loanEndDate.getDate() + loanPeriod - 1);
-      
-      if (endDate > loanEndDate) {
-        endDate.setTime(loanEndDate.getTime());
-      }
-      
-      // Calculate expected interest for this period
-      let expectedAmount = 0;
-      
-      if (principalChanges && principalChanges.length > 0) {
-        // Use advanced calculation with principal changes
-        expectedAmount = calculateInterestWithPrincipalChanges(
-          pawn as any, // Type assertion for compatibility
-          startDate,
-          endDate,
-          principalChanges
-        );
-      } else {
-        // Use simple calculation
-        const days = calculateDaysBetween(startDate, endDate);
-        expectedAmount = calculateInterestForPeriod(pawn, days);
-      }
-      
-      result.push({
-        id: `estimated-${i}`, // Temporary ID for estimated periods
-        pawn_id: pawn.id,
-        period_number: i + 1,
-        start_date: startDate.toISOString(),
-        end_date: endDate.toISOString(),
-        expected_amount: expectedAmount,
-        actual_amount: 0,
-        payment_date: null,
-        notes: null,
-        other_amount: 0
-      });
+    // Only create ONE period from loan start to loan end
+    // Calculate expected interest for this period
+    let expectedAmount = 0;
+    
+    if (principalChanges && principalChanges.length > 0) {
+      // Use advanced calculation with principal changes
+      expectedAmount = calculateInterestWithPrincipalChanges(
+        pawn as any, // Type assertion for compatibility
+        loanDate,
+        endDate,
+        principalChanges
+      );
+    } else {
+      // Use simple calculation
+      // For estimated periods, always use loan_period to ensure consistency
+      const days = loanPeriod; // Use loan_period directly instead of calculating from dates
+      expectedAmount = calculateInterestForPeriod(pawn, days);
     }
-    console.log(result)
+    
+    result.push({
+      id: `estimated-1`, // Only one estimated period
+      pawn_id: pawn.id,
+      period_number: 1,
+      start_date: loanDate.toISOString(),
+      end_date: endDate.toISOString(),
+      expected_amount: expectedAmount,
+      actual_amount: 0,
+      payment_date: null,
+      notes: null,
+      other_amount: 0
+    });
+    
     return result;
   };
 
@@ -219,6 +204,62 @@ export function PawnHistoryModal({
       result.push(actualPeriod);
     });
     
+    // Generate next estimated period if the latest period is paid
+    if (actual.length > 0 && currentPawn) {
+      // Sort actual periods by period number to find the latest
+      const sortedActual = [...actual].sort((a, b) => b.period_number - a.period_number);
+      const latestPeriod = sortedActual[0];
+      
+      // Check if latest period is fully paid
+      if (latestPeriod.actual_amount >= latestPeriod.expected_amount) {
+        // Generate next period
+        const nextPeriodNumber = latestPeriod.period_number + 1;
+        
+        // Check if we already have this period in result
+        const hasNextPeriod = result.some(p => p.period_number === nextPeriodNumber);
+        
+        if (!hasNextPeriod) {
+          // Calculate start date (day after latest period end)
+          const nextStartDate = new Date(latestPeriod.end_date);
+          nextStartDate.setDate(nextStartDate.getDate() + 1);
+          
+          // Calculate end date (start date + loan_period - 1)
+          const nextEndDate = new Date(nextStartDate);
+          nextEndDate.setDate(nextEndDate.getDate() + currentPawn.loan_period - 1);
+          
+          // Calculate expected amount for next period
+          let expectedAmount = 0;
+          
+          if (principalChanges && principalChanges.length > 0) {
+            expectedAmount = calculateInterestWithPrincipalChanges(
+              currentPawn as any,
+              nextStartDate,
+              nextEndDate,
+              principalChanges
+            );
+          } else {
+            // For next estimated periods, also use loan_period for consistency
+            const days = currentPawn.loan_period; // Use loan_period directly
+            expectedAmount = calculateInterestForPeriod(currentPawn, days);
+          }
+          
+          // Add next estimated period
+          result.push({
+            id: `estimated-${nextPeriodNumber}`,
+            pawn_id: currentPawn.id,
+            period_number: nextPeriodNumber,
+            start_date: nextStartDate.toISOString(),
+            end_date: nextEndDate.toISOString(),
+            expected_amount: expectedAmount,
+            actual_amount: 0,
+            payment_date: null,
+            notes: null,
+            other_amount: 0
+          });
+        }
+      }
+    }
+    
     // Sort by period number
     return result.sort((a, b) => a.period_number - b.period_number);
   };
@@ -231,7 +272,7 @@ export function PawnHistoryModal({
     const merged = mergePaymentPeriods(estimated, paymentPeriods);
     
     return merged;
-  }, [currentPawn, paymentPeriods, principalChanges]);
+  }, [currentPawn, paymentPeriods]);
 
   // Calculate totals for display
   const calculateTotals = useMemo(() => {
@@ -243,12 +284,25 @@ export function PawnHistoryModal({
     const totalExpectedFromDB = paymentPeriods.reduce((sum, period) => sum + (period.expected_amount || 0), 0);
     const remainingAmount = totalPaid - totalExpectedFromDB;
     
+    // Calculate next payment due date
+    let nextPaymentDate = 'Chưa có';
+    
+    // Find the first unpaid period or the next estimated period
+    const unpaidPeriod = combinedPaymentPeriods.find(period => 
+      period.actual_amount < period.expected_amount
+    );
+    
+    if (unpaidPeriod) {
+      nextPaymentDate = formatDate(unpaidPeriod.end_date);
+    }
+    
     return {
       totalExpected,
       totalPaid,
-      remainingAmount
+      remainingAmount,
+      nextPaymentDate
     };
-  }, [combinedPaymentPeriods, paymentPeriods]);
+  }, [combinedPaymentPeriods, paymentPeriods, formatDate]);
 
   // Format date for display
   const loanDateFormatted = currentPawn?.loan_date ? formatDate(currentPawn.loan_date) : 'N/A';
@@ -388,6 +442,10 @@ export function PawnHistoryModal({
                     <td className={`py-1 px-2 text-right border ${calculateTotals.remainingAmount > 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {formatCurrency(Math.abs(calculateTotals.remainingAmount))}
                     </td>
+                  </tr>
+                  <tr>
+                    <td className="py-1 px-2 border font-bold">Ngày trả lãi gần nhất</td>
+                    <td className="py-1 px-2 text-right border">{calculateTotals.nextPaymentDate}</td>
                   </tr>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Trạng thái</td>

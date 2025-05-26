@@ -53,20 +53,20 @@ export function AdditionalLoanTab({ pawn, onDataChange }: AdditionalLoanTabProps
             refreshData();
             
             // Hiển thị thông báo thành công
-            toast({
-              title: "Thành công",
+      toast({
+        title: "Thành công",
               description: "Đã cập nhật khoản vay thêm thành công",
             });
           } catch (err) {
             console.error('Error adding additional loan:', err);
-            toast({
+      toast({
               variant: "destructive",
-              title: "Lỗi",
+        title: "Lỗi",
               description: "Không thể thêm khoản vay thêm. Vui lòng thử lại sau."
-            });
-          } finally {
+      });
+    } finally {
             setIsSubmitting(false);
-          }
+    }
         }}
       />
       

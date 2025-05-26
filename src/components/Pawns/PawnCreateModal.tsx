@@ -21,7 +21,7 @@ import { getCollateralsByStore } from '@/lib/collateral';
 import { Customer } from '@/models/customer';
 import { Collateral } from '@/models/collateral';
 import { CreatePawnParams, InterestType, PawnStatus } from '@/models/pawn';
-import { getStoreFinancialData, updateStoreCashFundOnly } from '@/lib/store';
+import { getStoreFinancialData } from '@/lib/store';
 import { AlertCircle } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
@@ -53,8 +53,7 @@ export function PawnCreateModal({
   const [interestType, setInterestType] = useState<string>('daily');
   const [interestNotation, setInterestNotation] = useState<string>('k_per_million');
   const [interestValue, setInterestValue] = useState<string>('');
-  const [loanPeriod, setLoanPeriod] = useState<string>('');
-  const [interestPeriod, setInterestPeriod] = useState<string>('');
+  const [interestPeriod, setInterestPeriod] = useState<string>('30');
   const [loanDate, setLoanDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [notes, setNotes] = useState('');
   const [advancePayment, setAdvancePayment] = useState(false);
@@ -145,7 +144,7 @@ export function PawnCreateModal({
     async function loadCollaterals() {
       setIsLoadingCollaterals(true);
       try {
-        const { data, error } = await getCollateralsByStore(currentStore.id);
+        const { data, error } = await getCollateralsByStore(currentStore!.id);
         if (error) throw error;
         setCollaterals(data || []);
       } catch (err) {
@@ -208,20 +207,35 @@ export function PawnCreateModal({
         throw new Error('Vui lòng chọn tài sản thế chấp');
       }
       
+      if (!interestValue) {
+        throw new Error('Vui lòng nhập lãi suất');
+      }
+      
+      if (!interestPeriod) {
+        throw new Error('Vui lòng nhập kỳ lãi phí');
+      }
+      
       // Basic validation
       const loanAmountValue = parseInt(loanAmount);
       if (isNaN(loanAmountValue) || loanAmountValue <= 0) {
         throw new Error('Số tiền vay phải lớn hơn 0');
       }
       
-      // Check store fund if needed
-      if (currentStore.validate_fund) {
-        const { data: fundData } = await getStoreFinancialData(currentStore.id);
-        
-        if (fundData && fundData.cash_fund < loanAmountValue) {
-          setFundError(`Số tiền vay (${formatNumber(loanAmountValue)}đ) lớn hơn quỹ tiền mặt hiện có (${formatNumber(fundData.cash_fund)}đ)`);
-          throw new Error('Số tiền vay vượt quá quỹ tiền mặt hiện có');
-        }
+      const interestPeriodValue = parseInt(interestPeriod);
+      if (isNaN(interestPeriodValue) || interestPeriodValue <= 0) {
+        throw new Error('Kỳ lãi phí phải lớn hơn 0');
+      }
+      
+      // Always check store fund - this is critical for cash flow management
+      const fundData = await getStoreFinancialData(currentStore!.id);
+      
+      if (!fundData) {
+        throw new Error('Không thể kiểm tra quỹ tiền mặt của cửa hàng');
+      }
+      
+      if (fundData.availableFund < loanAmountValue) {
+        setFundError(`Số tiền vay (${formatNumber(loanAmountValue)}đ) lớn hơn quỹ tiền mặt hiện có (${formatNumber(fundData.availableFund)}đ)`);
+        throw new Error('Số tiền vay vượt quá quỹ tiền mặt hiện có');
       }
       
       let finalCustomerId = selectedCustomerId;
@@ -309,7 +323,7 @@ export function PawnCreateModal({
         interest_value: actualInterestValue,
         interest_ui_type: interestType, // Store the UI interest type
         interest_notation: interestNotation, // Store the notation format
-        loan_period: convertLoanPeriodToDays(loanPeriod, interestType),
+        loan_period: convertLoanPeriodToDays(interestPeriod, interestType),
         interest_period: convertInterestPeriodForStorage(interestPeriod, interestType),
         loan_date: new Date(loanDate),
         status: PawnStatus.ON_TIME,
@@ -328,10 +342,8 @@ export function PawnCreateModal({
         throw new Error('Không thể tạo hợp đồng cầm đồ');
       }
       
-      // Update store cash fund if needed
-      if (currentStore.validate_fund) {
-        await updateStoreCashFundOnly(currentStore.id, -loanAmountValue);
-      }
+      // Note: Cash fund will be automatically updated by database trigger
+      // No need to manually call updateStoreCashFundOnly here
       
       // Show success message
       toast({
@@ -660,27 +672,9 @@ export function PawnCreateModal({
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="loanPeriod" className="text-right">Thời hạn vay</Label>
-            <div className="flex items-center gap-2">
-              <Input 
-                id="loanPeriod"
-                type="number"
-                value={loanPeriod}
-                onChange={(e) => setLoanPeriod(e.target.value)}
-                className="w-24"
-                min="0"
-                placeholder="0"
-              />
-              <span>
-                {interestType === 'daily' && 'ngày'}
-                {(interestType === 'monthly_30' || interestType === 'monthly_custom') && 'tháng'}
-                {(interestType === 'weekly_percent' || interestType === 'weekly_k') && 'tuần'}
-              </span>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="interestPeriod" className="text-right">Kỳ lãi phí</Label>
+            <Label htmlFor="interestPeriod" className="text-right">
+              Kỳ lãi phí <span className="text-red-500">*</span>
+            </Label>
             <div className="flex items-center gap-2">
               <Input 
                 id="interestPeriod"
@@ -688,15 +682,16 @@ export function PawnCreateModal({
                 value={interestPeriod}
                 onChange={(e) => setInterestPeriod(e.target.value)}
                 className="w-24"
-                min="0"
-                placeholder="0"
+                min="1"
+                placeholder="30"
+                required
               />
               <span>
-                {interestType === 'daily' && 'ngày đóng lãi 1 lần'}
-                {interestType === 'monthly_30' && 'tháng đóng lãi 1 lần'}
-                {interestType === 'monthly_custom' && 'ngày đóng lãi 1 lần'}
-                {interestType === 'weekly_percent' && 'tuần đóng lãi 1 lần'}
-                {interestType === 'weekly_k' && 'tuần đóng lãi 1 lần'}
+                {interestType === 'daily' && 'ngày (mỗi kỳ lãi)'}
+                {interestType === 'monthly_30' && 'tháng (mỗi kỳ lãi)'}
+                {interestType === 'monthly_custom' && 'ngày (mỗi kỳ lãi)'}
+                {interestType === 'weekly_percent' && 'tuần (mỗi kỳ lãi)'}
+                {interestType === 'weekly_k' && 'tuần (mỗi kỳ lãi)'}
               </span>
             </div>
           </div>

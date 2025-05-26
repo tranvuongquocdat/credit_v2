@@ -36,10 +36,8 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
     const startDate = new Date(pawn.loan_date);
     startDate.setHours(0, 0, 0, 0);
     
-    // get end date of pawn
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + pawn.loan_period - 1);
-
+    // Note: With new logic, each period extends the contract by loan_period days
+    // So we need to find the actual end date based on the last payment period
     const today = new Date();
     // Set to end of day to ensure today is included
     today.setHours(23, 59, 59, 999);
@@ -519,7 +517,7 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
     
     fetchPaymentPeriods();
   }, [pawn?.id, pawn?.loan_date, pawn?.loan_period, pawn?.loan_amount]);
-  
+
   return (
     <div className="p-4">
       <div className="p-4 border rounded-md">
@@ -566,12 +564,12 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
               </tr>
             </tbody>
           </table>
-        </div>
-        
+            </div>
+
         <div className="mt-6 flex justify-center">
           <Button onClick={() => setShowConfirm(true)} className="bg-green-600 hover:bg-green-700 text-white px-8">
             Chuộc đồ
-          </Button>
+            </Button>
         </div>
       </div>
       {/* Confirmation Dialog */}
