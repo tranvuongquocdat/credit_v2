@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { 
@@ -11,16 +11,12 @@ import {
 } from '@/components/ui/dialog';
 import { PawnWithCustomerAndCollateral } from '@/models/pawn';
 import { PawnPaymentPeriod } from '@/models/pawn-payment';
-import { getPawnPaymentPeriods, savePaymentWithOtherAmount } from '@/lib/pawn-payment';
+import { getPawnPaymentPeriods } from '@/lib/pawn-payment';
 import { getPawnInterestDisplayString, calculatePawnInterestAmount as calculateInterestForPeriod, calculateInterestWithPrincipalChanges, PrincipalChange } from '@/lib/interest-calculator';
-import { addPrincipalRepayment, updatePawnPrincipal } from '@/lib/pawn-principal-repayment';
-import { addAdditionalLoan, updatePawnWithAdditionalLoan } from '@/lib/pawn-additional-loan';
-import { addExtension, updatePawnEndDate } from '@/lib/pawn-extension';
 import { PawnActionTabs, DEFAULT_PAWN_TABS, PawnTabId } from './PawnActionTabs';
 import { AdditionalLoanTab, BadPawnTab, RedeemTab, DocumentsTab, ExtensionTab, PaymentTab, PrincipalRepaymentTab, LiquidationTab } from './tabs';
 import { getPawnById } from '@/lib/pawn';
 import { getPrincipalChangesForPawn } from '@/lib/pawn-principal-changes';
-import { PawnAmountHistory, PawnTransactionType, getPawnAmountHistory } from '@/lib/pawn-amount-history';
 
 interface PawnHistoryModalProps {
   isOpen: boolean;
@@ -40,16 +36,9 @@ export function PawnHistoryModal({
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [currentPawn, setCurrentPawn] = useState(pawn);
   const [principalChanges, setPrincipalChanges] = useState<PrincipalChange[]>([]);
+  const [refreshRepayments, setRefreshRepayments] = useState(0);
 
-  // Load payment periods and principal changes when modal opens
-  useEffect(() => {
-    if (isOpen && pawn?.id) {
-      loadPaymentPeriods();
-      loadPrincipalChanges();
-    }
-  }, [isOpen, pawn?.id]);
-
-  const loadPaymentPeriods = async () => {
+  const loadPaymentPeriods = useCallback(async () => {
     if (!pawn?.id) return;
     
     setLoading(true);
@@ -67,21 +56,33 @@ export function PawnHistoryModal({
     } finally {
       setLoading(false);
     }
-  };
+  }, [pawn?.id]);
 
-  const loadPrincipalChanges = async () => {
+  // Load principal changes
+  const loadPrincipalChanges = useCallback(async () => {
     if (!pawn?.id) return;
     
     try {
       const { data, error } = await getPrincipalChangesForPawn(pawn.id);
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading principal changes:', error);
+        return;
+      }
       
       setPrincipalChanges(data || []);
     } catch (err) {
-      console.error('Error loading principal changes:', err);
+      console.error('Error fetching principal changes:', err);
     }
-  };
+  }, [pawn?.id]);
+
+  // Load payment periods and principal changes when modal opens
+  useEffect(() => {
+    if (isOpen && pawn?.id) {
+      loadPaymentPeriods();
+      loadPrincipalChanges();
+    }
+  }, [isOpen, pawn?.id, loadPaymentPeriods, loadPrincipalChanges]);
 
   // Refresh data after any changes
   const handleDataChange = async () => {
@@ -114,25 +115,49 @@ export function PawnHistoryModal({
 
   // Calculate days between dates
   const calculateDaysBetween = (start: Date, end: Date): number => {
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    // Chuẩn hóa về đầu ngày để tránh sai lệch do giờ/phút/giây
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+    
+    // Tính ngày (bao gồm cả ngày đầu và cuối)
+    return Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
   };
 
-  // Combine payment periods with calculated interest
-  const combinedPaymentPeriods = useMemo(() => {
-    if (!currentPawn || !paymentPeriods.length) return [];
-
-    return paymentPeriods.map(period => {
-      const startDate = new Date(period.start_date);
-      const endDate = new Date(period.end_date);
+  // Generate estimated payment periods based on pawn contract
+  const generateEstimatedPaymentPeriods = (pawn: PawnWithCustomerAndCollateral | null): PawnPaymentPeriod[] => {
+    if (!pawn) return [];
+    
+    const result: PawnPaymentPeriod[] = [];
+    const loanDate = new Date(pawn.loan_date);
+    const interestPeriod = pawn.interest_period; // Number of days per interest period
+    const loanPeriod = pawn.loan_period; // Total loan period in days
+    
+    // Calculate total number of periods
+    const totalPeriods = Math.ceil(loanPeriod / interestPeriod);
+    
+    for (let i = 0; i < totalPeriods; i++) {
+      // Calculate start and end dates for this period
+      const startDate = new Date(loanDate);
+      startDate.setDate(startDate.getDate() + (i * interestPeriod));
+      
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + interestPeriod - 1);
+      
+      // Don't exceed the loan end date
+      const loanEndDate = new Date(loanDate);
+      loanEndDate.setDate(loanEndDate.getDate() + loanPeriod - 1);
+      
+      if (endDate > loanEndDate) {
+        endDate.setTime(loanEndDate.getTime());
+      }
       
       // Calculate expected interest for this period
-      let expectedInterest = 0;
+      let expectedAmount = 0;
       
       if (principalChanges && principalChanges.length > 0) {
-        // Use the advanced calculation with principal changes
-        expectedInterest = calculateInterestWithPrincipalChanges(
-          currentPawn as any, // Cast to Credit-like object for calculation
+        // Use advanced calculation with principal changes
+        expectedAmount = calculateInterestWithPrincipalChanges(
+          pawn as any, // Type assertion for compatibility
           startDate,
           endDate,
           principalChanges
@@ -140,15 +165,124 @@ export function PawnHistoryModal({
       } else {
         // Use simple calculation
         const days = calculateDaysBetween(startDate, endDate);
-        expectedInterest = calculateInterestForPeriod(currentPawn, days);
+        expectedAmount = calculateInterestForPeriod(pawn, days);
       }
+      
+      result.push({
+        id: `estimated-${i}`, // Temporary ID for estimated periods
+        pawn_id: pawn.id,
+        period_number: i + 1,
+        start_date: startDate.toISOString(),
+        end_date: endDate.toISOString(),
+        expected_amount: expectedAmount,
+        actual_amount: 0,
+        payment_date: null,
+        notes: null,
+        other_amount: 0
+      });
+    }
+    console.log(result)
+    return result;
+  };
 
-      return {
-        ...period,
-        expected_amount: expectedInterest
-      };
+  // Merge estimated periods with actual periods from database
+  const mergePaymentPeriods = (estimated: PawnPaymentPeriod[], actual: PawnPaymentPeriod[]): PawnPaymentPeriod[] => {
+    const result: PawnPaymentPeriod[] = [];
+    const actualByPeriod = new Map<number, PawnPaymentPeriod>();
+    
+    // Index actual periods by period number
+    actual.forEach(period => {
+      actualByPeriod.set(period.period_number, period);
     });
+    
+    // Start with estimated periods and replace with actual where available
+    estimated.forEach(estimatedPeriod => {
+      const actualPeriod = actualByPeriod.get(estimatedPeriod.period_number);
+      
+      if (actualPeriod) {
+        // Use actual period but recalculate expected amount with principal changes
+        let expectedAmount = estimatedPeriod.expected_amount;
+        
+        if (principalChanges && principalChanges.length > 0) {
+          expectedAmount = calculateInterestWithPrincipalChanges(
+            currentPawn as any,
+            new Date(actualPeriod.start_date),
+            new Date(actualPeriod.end_date),
+            principalChanges
+          );
+        }
+        
+        result.push({
+          ...actualPeriod,
+          expected_amount: expectedAmount
+        });
+        
+        // Remove from map so we don't add it again
+        actualByPeriod.delete(estimatedPeriod.period_number);
+      } else {
+        // Use estimated period
+        result.push(estimatedPeriod);
+      }
+    });
+    
+    // Add any remaining actual periods that don't have estimated counterparts
+    actualByPeriod.forEach(actualPeriod => {
+      let expectedAmount = actualPeriod.expected_amount || 0;
+      
+      if (principalChanges && principalChanges.length > 0) {
+        expectedAmount = calculateInterestWithPrincipalChanges(
+          currentPawn as any,
+          new Date(actualPeriod.start_date),
+          new Date(actualPeriod.end_date),
+          principalChanges
+        );
+      }
+      
+      result.push({
+        ...actualPeriod,
+        expected_amount: expectedAmount
+      });
+    });
+    
+    // Sort by period number
+    return result.sort((a, b) => a.period_number - b.period_number);
+  };
+
+  // Generate combined payment periods
+  const combinedPaymentPeriods = useMemo(() => {
+    if (!currentPawn) return [];
+    
+    const estimated = generateEstimatedPaymentPeriods(currentPawn);
+    const merged = mergePaymentPeriods(estimated, paymentPeriods);
+    
+    return merged;
   }, [currentPawn, paymentPeriods, principalChanges]);
+
+  // Calculate totals for display
+  const calculateTotals = useMemo(() => {
+    // For total expected, use combined periods (includes estimated)
+    const totalExpected = combinedPaymentPeriods.reduce((sum, period) => sum + (period.expected_amount || 0), 0);
+    
+    // For total paid and debt calculation, use only actual payment periods from DB
+    const totalPaid = paymentPeriods.reduce((sum, period) => sum + (period.actual_amount || 0), 0);
+    const totalExpectedFromDB = paymentPeriods.reduce((sum, period) => sum + (period.expected_amount || 0), 0);
+    const remainingAmount = totalPaid - totalExpectedFromDB;
+    
+    return {
+      totalExpected,
+      totalPaid,
+      remainingAmount
+    };
+  }, [combinedPaymentPeriods, paymentPeriods]);
+
+  // Format date for display
+  const loanDateFormatted = currentPawn?.loan_date ? formatDate(currentPawn.loan_date) : 'N/A';
+  const endDateFormatted = useMemo(() => {
+    if (!currentPawn?.loan_date || !currentPawn?.loan_period) return 'N/A';
+    const endDate = new Date(currentPawn.loan_date);
+    endDate.setDate(endDate.getDate() + currentPawn.loan_period - 1);
+    return formatDate(endDate.toISOString());
+  }, [currentPawn?.loan_date, currentPawn?.loan_period, formatDate]);
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -173,6 +307,8 @@ export function PawnHistoryModal({
         return (
           <PrincipalRepaymentTab
             pawn={currentPawn}
+            refreshRepayments={refreshRepayments}
+            setRefreshRepayments={setRefreshRepayments}
             onDataChange={handleDataChange}
           />
         );
@@ -230,25 +366,70 @@ export function PawnHistoryModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader className="flex-shrink-0">
-          <DialogTitle className="text-xl font-bold">
-            Quản lý hợp đồng cầm đồ - {currentPawn?.contract_code || 'N/A'}
-          </DialogTitle>
-          <div className="text-sm text-gray-600 space-y-1">
-            <div>Khách hàng: {currentPawn?.customer?.name || 'N/A'}</div>
-            <div>Số tiền cầm: {formatCurrency(currentPawn?.loan_amount || 0)}</div>
-            <div>Lãi suất: {getPawnInterestDisplayString(currentPawn)}</div>
-            <div>Ngày cầm: {currentPawn?.loan_date ? formatDate(currentPawn.loan_date) : 'N/A'}</div>
-          </div>
+      <DialogContent className="sm:max-w-[800px] md:max-w-[900px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Hợp đồng cầm đồ</DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="mt-2">
+          {/* Thông tin khách hàng */}
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="font-medium">{currentPawn?.customer?.name || 'Khách hàng'}</h3>
+            <h3 className="font-medium">Tổng lãi phí: {formatCurrency(calculateTotals.totalExpected)}</h3>
+          </div>
+          
+          {/* Tổng hợp chi tiết */}
+          <div className="grid grid-cols-2 gap-8 my-4">
+            <div>
+              <table className="w-full border-collapse">
+                <tbody>
+                  <tr>
+                    <td className="py-1 px-2 border font-bold">Tiền cầm</td>
+                    <td className="py-1 px-2 text-right border" colSpan={2}>{formatCurrency(currentPawn?.loan_amount || 0)}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1 px-2 border font-bold">Lãi phí</td>
+                    <td className="py-1 px-2 text-right border" colSpan={2}>
+                      {currentPawn ? getPawnInterestDisplayString(currentPawn) : '-'}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="py-1 px-2 border font-bold">Cầm từ ngày</td>
+                    <td className="py-1 px-2 text-right border">{loanDateFormatted}</td>
+                    <td className="py-1 px-2 text-right border">{endDateFormatted}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div>
+              <table className="w-full border-collapse">
+                <tbody>
+                  <tr>
+                    <td className="py-1 px-2 border font-bold">Đã thanh toán</td>
+                    <td className="py-1 px-2 text-right border">{formatCurrency(calculateTotals.totalPaid)}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1 px-2 border font-bold">{calculateTotals.remainingAmount > 0 ? 'Tiền thừa' : 'Nợ cũ'}</td>
+                    <td className={`py-1 px-2 text-right border ${calculateTotals.remainingAmount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(Math.abs(calculateTotals.remainingAmount))}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="py-1 px-2 border font-bold">Trạng thái</td>
+                    <td className="py-1 px-2 text-right border">Đang cầm</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Tabs */}
           <PawnActionTabs
             tabs={DEFAULT_PAWN_TABS}
             activeTab={activeTab}
             onChangeTab={setActiveTab}
-            className="flex-shrink-0"
+            variant="scrollable"
+            className="mb-2"
           />
           
           <div className="flex-1 overflow-y-auto">

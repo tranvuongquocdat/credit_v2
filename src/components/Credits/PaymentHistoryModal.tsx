@@ -477,7 +477,7 @@ export function PaymentHistoryModal({
   // Only consider periods that exist in database (not calculated ones)
   const databasePeriods = paymentPeriods.filter(p => p.id && !p.id.startsWith('calculated-'));
   const totalInterestAndOtherFees = databasePeriods.reduce((sum, period) => 
-    sum + (period.expected_amount || 0) + (period.other_amount || 0), 0);
+    sum + (period.expected_amount || 0), 0);
   const totalCustomerPayments = databasePeriods.reduce((sum, period) => 
     sum + (period.actual_amount || 0), 0);
   const remainingAmount = totalCustomerPayments - totalInterestAndOtherFees;

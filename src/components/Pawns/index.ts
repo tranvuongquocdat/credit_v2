@@ -1,6 +1,10 @@
 export { PawnCreateModal } from './PawnCreateModal';
 export { PawnEditModal } from './PawnEditModal';
-export { PawnDeleteDialog } from './PawnDeleteDialog';
-export { PawnsTable } from './PawnsTable';
+export { PawnHistoryModal } from './PawnHistoryModal';
+export { PawnTable } from './PawnTable';
 export { PawnsPagination } from './PawnsPagination';
-export { SearchFilters } from './SearchFilters'; 
+export { PawnSearchFilters } from './PawnSearchFilters';
+export { AdditionalLoanForm } from './AdditionalLoanForm';
+export { AdditionalLoanList } from './AdditionalLoanList';
+export { PrincipalRepaymentForm } from './PrincipalRepaymentForm';
+export { PrincipalRepaymentList } from './PrincipalRepaymentList'; 

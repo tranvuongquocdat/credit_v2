@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { calculatePawnInterestAmount, calculateDailyRateForPawn } from '@/lib/interest-calculator';
 import { formatCurrency } from '@/lib/utils';
 import { PawnPaymentPeriod } from '@/models/pawn-payment';
-import { getPawnPaymentPeriods, savePaymentWithOtherAmount, deletePaymentPeriod } from '@/lib/pawn-payment';
+import { getPawnPaymentPeriods, savePaymentWithOtherAmount, deletePawnPaymentPeriod } from '@/lib/pawn-payment';
 import { updatePawn } from '@/lib/pawn';
 import { useToast } from '@/components/ui/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';

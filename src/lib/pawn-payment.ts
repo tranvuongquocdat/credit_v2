@@ -133,7 +133,7 @@ export async function deletePawnPaymentPeriod(id: string, pawnId?: string) {
     
     if (error) throw error;
     
-    return { data: data as PawnPaymentPeriod, error: null };
+    return { data: data as PawnPaymentPeriod[], error: null };
   } catch (error) {
     console.error('Error deleting pawn payment period:', error);
     return { data: null, error };
@@ -262,8 +262,7 @@ export async function savePawnPayment(
  */
 export async function bulkSavePawnPayments(
   pawnId: string,
-  paymentPeriods: PawnPaymentPeriod[],
-  userId?: string
+  paymentPeriods: PawnPaymentPeriod[]
 ) {
   try {
     const updates = [];
@@ -295,7 +294,10 @@ export async function bulkSavePawnPayments(
     }
     
     // Thực hiện các thao tác
-    const results = { inserts: null, updates: null };
+    const results: { 
+      inserts: PawnPaymentPeriod[] | null; 
+      updates: typeof updates | null; 
+    } = { inserts: null, updates: null };
     
     if (inserts.length > 0) {
       const { data, error } = await supabase
@@ -304,7 +306,7 @@ export async function bulkSavePawnPayments(
         .select();
       
       if (error) throw error;
-      results.inserts = data;
+      results.inserts = data as PawnPaymentPeriod[];
     }
     
     if (updates.length > 0) {
@@ -328,6 +330,82 @@ export async function bulkSavePawnPayments(
     return { data: results, error: null };
   } catch (error) {
     console.error('Error bulk saving pawn payments:', error);
+    return { data: null, error };
+  }
+}
+
+/**
+ * Lưu thông tin thanh toán với số tiền khác cho một kỳ
+ */
+export async function savePaymentWithOtherAmount(
+  periodId: string,
+  actualAmount: number,
+  otherAmount?: number,
+  notes?: string
+) {
+  try {
+    const { data, error } = await supabase
+      .from('pawn_payment_periods')
+      .update({
+        actual_amount: actualAmount,
+        other_amount: otherAmount || null,
+        payment_date: new Date().toISOString(),
+        notes: notes || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', periodId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    return { data: data as PawnPaymentPeriod, error: null };
+  } catch (error) {
+    console.error('Error saving payment with other amount:', error);
+    return { data: null, error };
+  }
+}
+
+/**
+ * Tạo và lưu kỳ thanh toán tùy chỉnh với số tiền khác (Credit-style)
+ */
+export async function saveCustomPaymentWithOtherAmount(
+  pawnId: string,
+  periodData: {
+    period_number: number;
+    start_date: string;
+    end_date: string;
+    expected_amount: number;
+    other_amount: number;
+    actual_amount: number;
+  },
+  interestAmount: number,
+  otherAmount: number,
+  isCalculatedPeriod: boolean
+) {
+  try {
+    // Tạo kỳ thanh toán mới
+    const { data, error } = await supabase
+      .from('pawn_payment_periods')
+      .insert({
+        pawn_id: pawnId,
+        period_number: periodData.period_number,
+        start_date: periodData.start_date,
+        end_date: periodData.end_date,
+        expected_amount: periodData.expected_amount,
+        other_amount: periodData.other_amount,
+        actual_amount: periodData.actual_amount,
+        payment_date: new Date().toISOString(),
+        notes: `Kỳ tùy chỉnh - Lãi: ${interestAmount}, Khác: ${otherAmount}`
+      })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    return { data: data as PawnPaymentPeriod, error: null };
+  } catch (error) {
+    console.error('Error saving custom payment with other amount:', error);
     return { data: null, error };
   }
 } 

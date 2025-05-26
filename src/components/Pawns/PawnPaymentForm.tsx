@@ -1,22 +1,30 @@
 'use client';
 
-import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
+import { DatePicker } from '@/components/ui/date-picker';
+import { format, addDays, differenceInDays } from 'date-fns';
 import { PawnWithCustomerAndCollateral } from '@/models/pawn';
-import { PawnPaymentPeriod } from '@/models/pawn-payment';
-import { formatCurrency } from '@/lib/utils';
-import { useToast } from '@/components/ui/use-toast';
 
 interface PawnPaymentFormProps {
   isOpen: boolean;
   onClose: () => void;
   pawn: PawnWithCustomerAndCollateral;
-  selectedPeriods: PawnPaymentPeriod[];
-  onSuccess: () => void;
+  selectedPeriods: any[];
+  onSuccess: (data: {
+    startDate: string;
+    endDate: string;
+    days: number;
+    interestAmount: number;
+    otherAmount: number;
+    totalAmount: number;
+  }) => void;
+  interestCalculator?: (startDate: string, endDate: string) => number;
+  loanDate?: string;
+  loanPeriod?: number;
+  interestPeriod?: number;
+  lastPaymentEndDate?: string;
 }
 
 export function PawnPaymentForm({
@@ -24,225 +32,220 @@ export function PawnPaymentForm({
   onClose,
   pawn,
   selectedPeriods,
-  onSuccess
+  onSuccess,
+  interestCalculator,
+  loanDate,
+  loanPeriod = 30,
+  interestPeriod = 10,
+  lastPaymentEndDate
 }: PawnPaymentFormProps) {
-  const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [paymentData, setPaymentData] = useState({
-    payment_date: new Date().toISOString().split('T')[0],
-    actual_amount: 0,
-    other_amount: 0,
-    notes: ''
+  // Format number with thousand separators
+  const formatNumber = (value: string | number): string => {
+    const numericValue = value.toString().replace(/[^0-9]/g, '');
+    return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+
+  // Tính ngày bắt đầu dựa trên kỳ thanh toán cuối cùng
+  const [startDate, setStartDate] = useState<string>(() => {
+    if (lastPaymentEndDate) {
+      // Ngày bắt đầu = ngày kết thúc kỳ thanh toán cuối + 1
+      const nextDay = addDays(new Date(lastPaymentEndDate), 1);
+      return format(nextDay, 'yyyy-MM-dd');
+    } else if (loanDate || pawn.loan_date) {
+      // Nếu không có kỳ thanh toán nào, sử dụng ngày vay
+      return format(new Date(loanDate || pawn.loan_date), 'yyyy-MM-dd');
+    }
+    return format(new Date(), 'yyyy-MM-dd');
   });
 
-  // Calculate total expected amount
-  const totalExpectedAmount = selectedPeriods.reduce((total, period) => 
-    total + (period.expected_amount || 0), 0
-  );
+  // Mặc định số ngày = interestPeriod nếu có
+  const [days, setDays] = useState<string>((interestPeriod || pawn.interest_period || 10).toString());
+  
+  // Tính ngày kết thúc dựa trên ngày bắt đầu và số ngày
+  const [endDate, setEndDate] = useState<string>(() => {
+    const start = new Date(startDate);
+    const end = addDays(start, parseInt(days) - 1); // trừ 1 vì đã bao gồm ngày bắt đầu
+    return format(end, 'yyyy-MM-dd');
+  });
 
-  // Calculate total actual amount
-  const totalActualAmount = paymentData.actual_amount + paymentData.other_amount;
+  // State for monetary amounts with formatting
+  const [interestAmount, setInterestAmount] = useState('0');
+  const [formattedInterestAmount, setFormattedInterestAmount] = useState('0');
+  
+  const [otherAmount, setOtherAmount] = useState('0');
+  const [formattedOtherAmount, setFormattedOtherAmount] = useState('0');
 
-  const handleSubmit = async () => {
-    if (paymentData.actual_amount <= 0) {
-      toast({
-        title: "Lỗi",
-        description: "Số tiền thanh toán phải lớn hơn 0",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setLoading(true);
+  // Recalculate end date when days change
+  useEffect(() => {
+    const start = new Date(startDate);
+    const end = addDays(start, parseInt(days) - 1);
+    setEndDate(format(end, 'yyyy-MM-dd'));
+  }, [days, startDate]);
+  
+  // Recalculate interest when dates change
+  useEffect(() => {
     try {
-      // TODO: Implement payment logic
-      // This would involve:
-      // 1. Creating payment records for each selected period
-      // 2. Updating payment periods with payment information
-      // 3. Recording the transaction in amount history
-      
-      console.log('Payment data:', {
-        pawnId: pawn.id,
-        selectedPeriods: selectedPeriods.map(p => p.id),
-        paymentDate: paymentData.payment_date,
-        actualAmount: paymentData.actual_amount,
-        otherAmount: paymentData.other_amount,
-        notes: paymentData.notes
-      });
-
-      toast({
-        title: "Thành công",
-        description: `Đã ghi nhận thanh toán ${formatCurrency(totalActualAmount)}`
-      });
-
-      onSuccess();
-    } catch (error) {
-      console.error('Error processing payment:', error);
-      toast({
-        title: "Lỗi",
-        description: "Không thể xử lý thanh toán",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
+      if (interestCalculator && startDate && endDate) {
+        // Calculate interest using the provided calculator
+        const calculatedInterest = interestCalculator(startDate, endDate);
+        setInterestAmount(calculatedInterest.toString());
+        setFormattedInterestAmount(formatNumber(calculatedInterest));
     }
+    } catch (err) {
+      console.error('Error calculating interest:', err);
+    }
+  }, [startDate, endDate, interestCalculator]);
+  
+  // Handle days change
+  const handleDaysChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newDays = e.target.value;
+    setDays(newDays);
   };
-
-  const handleClose = () => {
-    setPaymentData({
-      payment_date: new Date().toISOString().split('T')[0],
-      actual_amount: 0,
-      other_amount: 0,
-      notes: ''
+  
+  // Handle interest amount change
+  const handleInterestAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value.replace(/\./g, '');
+    setInterestAmount(rawValue);
+    setFormattedInterestAmount(formatNumber(rawValue));
+  };
+  
+  // Handle other amount change
+  const handleOtherAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value.replace(/\./g, '');
+    setOtherAmount(rawValue);
+    setFormattedOtherAmount(formatNumber(rawValue));
+  };
+  
+  // Tính tổng tiền
+  const totalAmount = Number(interestAmount) + Number(otherAmount);
+  
+  // Tính ngày đóng tiếp theo dựa trên kỳ hạn
+  const nextPaymentDate = (() => {
+    const end = new Date(endDate);
+    
+    const currentInterestPeriod = interestPeriod || pawn.interest_period || 10;
+    const currentLoanPeriod = loanPeriod || pawn.loan_period || 30;
+    const currentLoanDate = loanDate || pawn.loan_date;
+    
+    if (currentInterestPeriod) {
+      // Nếu có interestPeriod, sử dụng nó để tính ngày đóng tiếp theo
+      const nextStartDate = new Date(end);
+      nextStartDate.setDate(end.getDate() + 1);
+      
+      const nextEndDate = new Date(nextStartDate);
+      nextEndDate.setDate(nextStartDate.getDate() + currentInterestPeriod - 1);
+      
+      // Nếu có loanPeriod, kiểm tra không vượt quá thời hạn vay
+      if (currentLoanDate && currentLoanPeriod) {
+        const loanStartDate = new Date(currentLoanDate);
+        const contractEndDate = new Date(loanStartDate);
+        contractEndDate.setDate(loanStartDate.getDate() + currentLoanPeriod - 1);
+        
+        if (nextEndDate > contractEndDate) {
+          // Nếu vượt quá ngày kết thúc hợp đồng, trả về "Hoàn thành"
+          return "Hoàn thành";
+        }
+      }
+      
+      return format(nextEndDate, 'dd-MM-yyyy');
+    } else {
+      // Nếu không có interestPeriod, dùng số ngày của kỳ hiện tại
+      return format(addDays(end, Number(days)), 'dd-MM-yyyy');
+    }
+  })();
+  
+  // Xử lý nộp form
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSuccess({
+      startDate,
+      endDate,
+      days: Number(days),
+      interestAmount: Number(interestAmount),
+      otherAmount: Number(otherAmount),
+      totalAmount
     });
-    onClose();
   };
+  
+  // Format ngày để hiển thị
+  const formattedEndDate = format(new Date(endDate), 'dd/MM/yyyy');
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Thanh toán lãi phí</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-6">
-          {/* Contract Info */}
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h4 className="font-medium text-gray-700 mb-2">Thông tin hợp đồng</h4>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="flex justify-between">
-                <span>Mã hợp đồng:</span>
-                <span className="font-medium">{pawn.contract_code || 'N/A'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Khách hàng:</span>
-                <span className="font-medium">{pawn.customer?.name || 'N/A'}</span>
-              </div>
-            </div>
+    <div className="border rounded-md p-4 bg-white">
+      <h3 className="font-medium mb-4">Đóng lãi phí tùy biến theo ngày</h3>
+      <form onSubmit={handleSubmit}>
+        <div className="grid grid-cols-[150px_1fr] gap-y-4 items-center">
+          <div className="text-right pr-2">Từ ngày :</div>
+          <div className="flex items-center gap-2">
+            <DatePicker 
+              value={startDate} 
+              onChange={() => {}} // không cho phép thay đổi
+              className="w-64"
+              disabled={true}
+            />
+            <span className="text-gray-500">(Tự động tính từ kỳ trước)</span>
           </div>
 
-          {/* Selected Periods */}
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <h4 className="font-medium text-blue-700 mb-2">Kỳ thanh toán được chọn</h4>
-            <div className="space-y-2">
-              {selectedPeriods.map((period) => (
-                <div key={period.id} className="flex justify-between text-sm">
-                  <span>Kỳ {period.period_number}</span>
-                  <span className="font-medium">{formatCurrency(period.expected_amount || 0)}</span>
-                </div>
-              ))}
-              <div className="border-t pt-2 flex justify-between font-bold">
-                <span>Tổng cộng:</span>
-                <span className="text-blue-600">{formatCurrency(totalExpectedAmount)}</span>
-              </div>
-            </div>
+          <div className="text-right pr-2">Số ngày :</div>
+          <div className="flex items-center gap-2">
+            <Input 
+              value={days} 
+              onChange={handleDaysChange}
+              className="w-64"
+              type="number"
+              min="1"
+            />
+            <span className="text-blue-600">Ngày</span>
           </div>
 
-          {/* Payment Form */}
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="payment_date">Ngày thanh toán</Label>
-              <Input
-                id="payment_date"
-                type="date"
-                value={paymentData.payment_date}
-                onChange={(e) => setPaymentData(prev => ({
-                  ...prev,
-                  payment_date: e.target.value
-                }))}
-                className="mt-1"
-              />
+          <div className="text-right pr-2">Đến ngày :</div>
+          <div className="text-blue-600">
+            {formattedEndDate}
+            <span className="ml-3 text-gray-500">
+              {nextPaymentDate === "Hoàn thành" 
+                ? "( Đây là kỳ cuối cùng )" 
+                : `( Ngày đóng lãi phí tiếp: ${nextPaymentDate} )`}
+            </span>
             </div>
 
-            <div>
-              <Label htmlFor="actual_amount">Số tiền lãi phí</Label>
+          <div className="text-right pr-2">Tiền lãi phí :</div>
+          <div className="flex items-center gap-3">
               <Input
-                id="actual_amount"
-                type="number"
-                value={paymentData.actual_amount}
-                onChange={(e) => setPaymentData(prev => ({
-                  ...prev,
-                  actual_amount: Number(e.target.value)
-                }))}
-                placeholder="Nhập số tiền lãi phí"
-                className="mt-1"
-              />
+              value={formattedInterestAmount} 
+              onChange={handleInterestAmountChange}
+              className="w-48"
+              inputMode="numeric"
+              type="text"
+              readOnly={!!interestCalculator}
+            />
+            <span className="text-gray-500 text-sm">VNĐ (Tiền lãi suất phải trả)</span>
             </div>
 
-            <div>
-              <Label htmlFor="other_amount">Số tiền khác (nếu có)</Label>
+          <div className="text-right pr-2">Tiền khác :</div>
+          <div className="flex items-center gap-3">
               <Input
-                id="other_amount"
-                type="number"
-                value={paymentData.other_amount}
-                onChange={(e) => setPaymentData(prev => ({
-                  ...prev,
-                  other_amount: Number(e.target.value)
-                }))}
-                placeholder="Phí phạt, phí dịch vụ..."
-                className="mt-1"
-              />
+              value={formattedOtherAmount} 
+              onChange={handleOtherAmountChange}
+              className="w-48"
+              inputMode="numeric"
+              type="text"
+            />
+            <span className="text-gray-500 text-sm">VNĐ (Chi phí khác nếu có)</span>
             </div>
 
-            <div>
-              <Label htmlFor="notes">Ghi chú</Label>
-              <Textarea
-                id="notes"
-                value={paymentData.notes}
-                onChange={(e) => setPaymentData(prev => ({
-                  ...prev,
-                  notes: e.target.value
-                }))}
-                placeholder="Ghi chú về thanh toán..."
-                className="mt-1"
-                rows={3}
-              />
-            </div>
+          <div className="text-right pr-2">Tổng tiền lãi phí :</div>
+          <div className="text-red-600 font-bold">
+            {new Intl.NumberFormat('vi-VN').format(totalAmount)} VNĐ
           </div>
 
-          {/* Payment Summary */}
-          {totalActualAmount > 0 && (
-            <div className="bg-green-50 p-4 rounded-lg">
-              <h4 className="font-medium text-green-700 mb-2">Tổng kết thanh toán</h4>
-              <div className="space-y-1 text-sm">
-                <div className="flex justify-between">
-                  <span>Số tiền lãi phí:</span>
-                  <span className="font-medium">{formatCurrency(paymentData.actual_amount)}</span>
-                </div>
-                {paymentData.other_amount > 0 && (
-                  <div className="flex justify-between">
-                    <span>Số tiền khác:</span>
-                    <span className="font-medium">{formatCurrency(paymentData.other_amount)}</span>
-                  </div>
-                )}
-                <div className="border-t pt-1 flex justify-between font-bold">
-                  <span>Tổng thanh toán:</span>
-                  <span className="text-green-600">{formatCurrency(totalActualAmount)}</span>
-                </div>
-                <div className="flex justify-between text-gray-600">
-                  <span>So với dự kiến:</span>
-                  <span className={totalActualAmount >= totalExpectedAmount ? 'text-green-600' : 'text-red-600'}>
-                    {totalActualAmount >= totalExpectedAmount ? '+' : ''}{formatCurrency(totalActualAmount - totalExpectedAmount)}
-                  </span>
-                </div>
-              </div>
+          <div></div>
+          <div className="mt-3">
+            <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+              Đóng lãi
+            </Button>
             </div>
-          )}
         </div>
-
-        <DialogFooter>
-          <Button onClick={handleClose} variant="outline">
-            Hủy bỏ
-          </Button>
-          <Button 
-            onClick={handleSubmit} 
-            disabled={loading || paymentData.actual_amount <= 0}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            {loading ? 'Đang xử lý...' : 'Xác nhận thanh toán'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </form>
+    </div>
   );
 } 

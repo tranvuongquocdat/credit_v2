@@ -10,7 +10,7 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { PawnStatus } from '@/models/pawn';
-import { PlusIcon, Download, Search, RotateCcw } from 'lucide-react';
+import { PlusIcon } from 'lucide-react';
 
 interface StatusMapType {
   [key: string]: { 
@@ -45,7 +45,7 @@ export function PawnSearchFilters({
   const [filters, setFilters] = useState<PawnFilters>({
     contract_code: '',
     customer_name: '',
-    status: '',
+    status: 'on_time',
     start_date: '',
     end_date: ''
   });
@@ -61,7 +61,7 @@ export function PawnSearchFilters({
   const handleStatusChange = (value: string) => {
     setFilters(prev => ({
       ...prev,
-      status: value === 'all' ? '' : value
+      status: value
     }));
   };
 
@@ -80,7 +80,7 @@ export function PawnSearchFilters({
     const emptyFilters: PawnFilters = {
       contract_code: '',
       customer_name: '',
-      status: '',
+      status: 'on_time',
       start_date: '',
       end_date: ''
     };
@@ -96,7 +96,7 @@ export function PawnSearchFilters({
 
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
         <div>
           <label htmlFor="contract_code" className="block text-sm font-medium text-gray-700 mb-1">
             Mã HĐ
@@ -140,12 +140,36 @@ export function PawnSearchFilters({
         </div>
         
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Trạng thái
+          <label htmlFor="start_date" className="block text-sm font-medium text-gray-700 mb-1">
+            Từ ngày
           </label>
-          <Select value={filters.status || 'all'} onValueChange={handleStatusChange}>
-            <SelectTrigger>
-              <SelectValue placeholder="Chọn trạng thái" />
+          <DatePicker
+            id="start_date"
+            value={filters.start_date}
+            onChange={(value) => handleDateChange('start_date', value)}
+            className="w-full"
+          />
+        </div>
+        
+        <div>
+          <label htmlFor="end_date" className="block text-sm font-medium text-gray-700 mb-1">
+            Đến ngày
+          </label>
+          <DatePicker
+            id="end_date"
+            value={filters.end_date}
+            onChange={(value) => handleDateChange('end_date', value)}
+            className="w-full"
+          />
+        </div>
+        
+        <div>
+          <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+            Trạng thái hợp đồng
+          </label>
+          <Select value={filters.status} onValueChange={handleStatusChange}>
+            <SelectTrigger id="status" className="w-full">
+              <SelectValue placeholder="Tất cả" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tất cả</SelectItem>
@@ -157,50 +181,46 @@ export function PawnSearchFilters({
             </SelectContent>
           </Select>
         </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Từ ngày
-          </label>
-          <DatePicker
-            value={filters.start_date}
-            onChange={(value) => handleDateChange('start_date', value)}
-            placeholder="Chọn ngày bắt đầu"
-          />
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Đến ngày
-          </label>
-          <DatePicker
-            value={filters.end_date}
-            onChange={(value) => handleDateChange('end_date', value)}
-            placeholder="Chọn ngày kết thúc"
-          />
-        </div>
-        
-        <div className="flex items-end gap-2">
-          <Button onClick={handleSearch} className="bg-blue-600 hover:bg-blue-700 flex-1">
-            <Search className="h-4 w-4 mr-1" />
-            Tìm kiếm
-          </Button>
-          <Button onClick={handleReset} variant="outline" className="flex-1">
-            <RotateCcw className="h-4 w-4 mr-1" />
-            Đặt lại
-          </Button>
-        </div>
       </div>
       
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex flex-col sm:flex-row justify-between gap-2 mb-4">
         <div className="flex gap-2">
-          <Button onClick={onCreateNew} className="bg-green-600 hover:bg-green-700">
-            <PlusIcon className="h-4 w-4 mr-1" />
-            Tạo mới
+          <Button 
+            onClick={onCreateNew}
+            size="sm"
+            className="text-white bg-green-600 hover:bg-green-700"
+          >
+            <PlusIcon className="mr-1 h-3.5 w-3.5" />
+            Thêm mới
           </Button>
-          <Button onClick={onExportExcel} variant="outline" className="border-green-600 text-green-600 hover:bg-green-50">
-            <Download className="h-4 w-4 mr-1" />
+          <Button 
+            variant="outline" 
+            size="sm"
+            className="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+            onClick={onExportExcel}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
             Xuất Excel
+          </Button>
+        </div>
+        
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            className="bg-gray-100"
+            onClick={handleReset}
+          >
+            Đặt lại bộ lọc
+          </Button>
+          <Button 
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={handleSearch}
+          >
+            Tìm kiếm
           </Button>
         </div>
       </div>
