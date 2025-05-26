@@ -72,6 +72,7 @@ export async function getInstallments(
       const loanPeriod = item.loan_period || 0;
       const paymentPeriod = item.payment_period || 30;
       const loanDate = item.loan_date || new Date().toISOString();
+      const debtAmount = item.debt_amount || 0;
       
       // Convert customer data to Customer type or undefined
       const customerData = item.customer ? {
@@ -90,7 +91,7 @@ export async function getInstallments(
         duration: loanPeriod,
         payment_period: paymentPeriod,
         amount_paid: 0, // This will need to be calculated from payment records
-        old_debt: 0, // This will need to be calculated or tracked separately
+        old_debt: debtAmount, // Lấy trực tiếp từ DB thay vì tính toán
         daily_amount: installmentAmount / loanPeriod,
         installment_amount: installmentAmount,
         remaining_amount: downPayment,
@@ -101,6 +102,7 @@ export async function getInstallments(
         created_at: item.created_at || undefined,
         updated_at: item.updated_at || undefined,
         notes: item.notes || '',
+        debt_amount: debtAmount,
         customer: customerData
       };
     }) as InstallmentWithCustomer[];
@@ -193,7 +195,7 @@ export async function getInstallmentById(id: string) {
       duration: loanPeriod,
       payment_period: paymentPeriod,
       amount_paid: 0, // This will need to be calculated from payment records
-      old_debt: 0, // This will need to be calculated or tracked separately
+      old_debt: data.debt_amount || 0, // Lấy trực tiếp từ DB
       daily_amount: installmentAmount / loanPeriod,
       remaining_amount: downPayment,
       status: data.status as InstallmentStatus,
@@ -205,6 +207,7 @@ export async function getInstallmentById(id: string) {
       installment_amount: installmentAmount,
       loan_period: loanPeriod,
       loan_date: loanDate,
+      debt_amount: data.debt_amount || 0,
       
       store_id: data.store_id || '',
       created_at: data.created_at || undefined,
@@ -259,6 +262,7 @@ export async function createInstallment(installment: CreateInstallmentParams) {
       loan_period: installment.loan_period,
       payment_period: installment.payment_period,
       loan_date: installment.loan_date,
+      debt_amount: installment.debt_amount || 0, // Default 0
       notes: installment.notes || '',
       status: (installment.status || InstallmentStatus.ON_TIME).toString() as any
     };
@@ -299,7 +303,7 @@ export async function createInstallment(installment: CreateInstallmentParams) {
       duration: loanPeriod,
       payment_period: paymentPeriod,
       amount_paid: 0,
-      old_debt: 0,
+      old_debt: data.debt_amount || 0,
       daily_amount: installmentAmount / loanPeriod,
       remaining_amount: downPayment,
       status: data.status as InstallmentStatus,
@@ -311,6 +315,7 @@ export async function createInstallment(installment: CreateInstallmentParams) {
       installment_amount: installmentAmount,
       loan_period: loanPeriod,
       loan_date: loanDate,
+      debt_amount: data.debt_amount || 0,
       
       notes: data.notes || '',
       created_at: data.created_at || undefined,

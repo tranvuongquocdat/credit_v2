@@ -14,6 +14,66 @@ const logError = (message: string, error: unknown) => {
   console.error(`[InstallmentPayment] ${message}:`, error);
 };
 
+// Function to update debt amount when payment is checked/unchecked
+export async function updateInstallmentDebtAmount(
+  installmentId: string,
+  expectedAmount: number,
+  actualAmount: number,
+  isChecked: boolean
+) {
+  try {
+    // Get current debt amount
+    const { data: installment, error: fetchError } = await supabase
+      .from('installments')
+      .select('debt_amount')
+      .eq('id', installmentId)
+      .single();
+
+    if (fetchError) {
+      throw fetchError;
+    }
+
+    const currentDebt = installment.debt_amount || 0;
+    
+    // Calculate new debt amount
+    let newDebtAmount: number;
+    
+    // If expectedAmount is 0, treat actualAmount as the total change amount
+    if (expectedAmount === 0) {
+      // Direct change mode for batch updates
+      newDebtAmount = currentDebt + (isChecked ? actualAmount : -actualAmount);
+    } else {
+      // Individual period mode
+      const difference = actualAmount - expectedAmount;
+      if (isChecked) {
+        // When checking: debt + (actual - expected)
+        newDebtAmount = currentDebt + difference;
+      } else {
+        // When unchecking: debt - (actual - expected)
+        newDebtAmount = currentDebt - difference;
+      }
+    }
+
+    // Update debt amount in database
+    const { error: updateError } = await supabase
+      .from('installments')
+      .update({ 
+        debt_amount: newDebtAmount,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', installmentId);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return { success: true, newDebtAmount };
+  } catch (error: any) {
+    console.error('Error updating debt amount:', error);
+    return { success: false, error };
+  }
+}
+
 /**
  * Get payment periods for an installment
  */

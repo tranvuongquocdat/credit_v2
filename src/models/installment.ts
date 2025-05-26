@@ -22,6 +22,7 @@ export interface InstallmentDB {
   loan_period: number;          // Thời gian vay (ngày)
   payment_period: number;       // Số ngày đóng tiền
   loan_date: string;            // Ngày vay
+  debt_amount: number;          // Tiền nợ
   notes?: string;               // Ghi chú
   status: string;               // Trạng thái
   store_id?: string;            // ID cửa hàng (from view)
@@ -43,7 +44,7 @@ export interface Installment {
   
   // Calculated fields for UI
   amount_paid: number;        // Tiền đã đóng (calculated from payments)
-  old_debt: number;           // Nợ cũ
+  old_debt: number;           // Nợ cũ (mapped from debt_amount)
   daily_amount: number;       // Tiền 1 ngày (installment_amount/payment_period)
   remaining_amount: number;   // Còn phải đóng (calculated)
   
@@ -61,6 +62,7 @@ export interface Installment {
   installment_amount?: number; // Direct reference to DB field
   loan_period?: number;       // Direct reference to DB field 
   loan_date?: string;         // Direct reference to DB field
+  debt_amount?: number;       // Direct reference to DB field
 }
 
 export interface InstallmentWithCustomer extends Installment {
@@ -77,6 +79,7 @@ export interface CreateInstallmentParams {
   loan_period: number;        // Thời gian vay
   payment_period: number;     // Số ngày đóng tiền
   loan_date: string;          // Ngày vay
+  debt_amount?: number;       // Tiền nợ (default 0)
   notes?: string;
   status?: InstallmentStatus;
 }

@@ -540,6 +540,347 @@ export function InstallmentPaymentHistoryModal({
     return calculateCombinedPaymentPeriods.findIndex(p => !isPeriodInDatabase(p));
   }, [calculateCombinedPaymentPeriods, isPeriodInDatabase]);
 
+  // Xử lý checkbox đánh dấu đã thanh toán - với phương pháp optimistic update
+  const handleCheckboxChange = async (
+    period: InstallmentPaymentPeriod,
+    checked: boolean,
+    index: number,
+  ) => {
+    console.log("handleCheckboxChange called with:", {
+      period,
+      checked,
+      index,
+      tempEditedDate,
+      tempEditedAmount,
+    });
+
+    if (!installment?.id) {
+      console.error("No installment id found");
+      return;
+    }
+
+    if (!period) {
+      console.error("Period is undefined");
+      return;
+    }
+
+    if (!period.id) {
+      console.error("Period id is undefined", period);
+      return;
+    }
+
+    // Set processing state
+    setProcessingCheckbox(true);
+    setProcessingPeriodId(period.id);
+
+    // Tạo một timeout để reset processing state nếu xử lý quá lâu
+    const timeoutId = setTimeout(() => {
+      console.log("Processing timeout reached - resetting state");
+      setProcessingCheckbox(false);
+      setProcessingPeriodId(null);
+      toast({
+        variant: "destructive",
+        title: "Xử lý quá lâu",
+        description: "Thao tác đang mất nhiều thời gian. Vui lòng thử lại sau.",
+      });
+    }, 15000); // 15 seconds timeout
+
+    try {
+      // Pre-load các modules cần thiết để tăng tốc độ xử lý
+      const importPromise = import("@/lib/installmentPayment");
+      
+      // Bắt đầu xử lý
+      const startTime = performance.now();
+      
+      if (checked) {
+        // Xử lý khi check - optimistic update
+        const allPeriods = calculateCombinedPaymentPeriods;
+
+        // Find periods that need to be marked as paid: from first unpaid period to current
+        const periodsToUpdate: InstallmentPaymentPeriod[] = [];
+
+        for (let i = 0; i <= index; i++) {
+          const p = allPeriods[i];
+          if (p && !isPeriodInDatabase(p)) {
+            // If this is the oldest unpaid period and we have temp values, apply them
+            if (i === findOldestUnpaidPeriodIndex && (tempEditedDate || tempEditedAmount !== null)) {
+              const updatedPeriod = {
+                ...p,
+                paymentStartDate: tempEditedDate 
+                  ? format(new Date(tempEditedDate), "dd/MM/yyyy") 
+                  : format(new Date(), "dd/MM/yyyy"),
+                actualAmount: tempEditedAmount !== null ? tempEditedAmount : p.expectedAmount,
+              };
+              
+              periodsToUpdate.push(updatedPeriod);
+            } else {
+              periodsToUpdate.push(p);
+            }
+          }
+        }
+
+        // If no periods to update, exit early
+        if (periodsToUpdate.length === 0) {
+          return;
+        }
+
+        // Show toast message if processing multiple periods
+        if (periodsToUpdate.length > 1) {
+          toast({
+            title: "Đang xử lý",
+            description: `Đang cập nhật ${periodsToUpdate.length} kỳ thanh toán...`,
+          });
+        }
+
+        try {
+          // Destructure necessary functions
+          const { bulkSaveInstallmentPayments } = await importPromise;
+          
+          // Tính tổng số tiền cần cộng vào quỹ
+          const totalAmount = periodsToUpdate.reduce((sum, p) => sum + (p.actualAmount || p.expectedAmount), 0);
+          
+          // QUAN TRỌNG: Tạo một bản sao tạm thời của UI state
+          // Đây là optimistic update - update UI trước khi API call hoàn thành
+          const tempPaymentPeriods = [...paymentPeriods];
+          
+          // Cập nhật UI ngay lập tức
+          const updatedPaymentPeriods = tempPaymentPeriods.map(p => {
+            // Tìm trong periodsToUpdate
+            const matchingPeriod = periodsToUpdate.find(up => up.id === p.id);
+            if (matchingPeriod) {
+              // Nếu là period trong danh sách cần update, trả về phiên bản đã cập nhật
+              return {
+                ...p,
+                actualAmount: matchingPeriod.actualAmount || matchingPeriod.expectedAmount,
+                paymentStartDate: matchingPeriod.paymentStartDate || format(new Date(), "dd/MM/yyyy")
+              };
+            }
+            return p;
+          });
+          
+          // Cập nhật UI state ngay lập tức (optimistic update)
+          setPaymentPeriods(updatedPaymentPeriods);
+          
+          // Thực hiện API calls ở background
+          Promise.all([
+            // Lưu dữ liệu payment
+            bulkSaveInstallmentPayments(
+              installment.id,
+              periodsToUpdate,
+              installment.employee_id,
+            ),
+            
+            // Ghi nhận lịch sử thanh toán (import dynamically)
+            (async () => {
+              const { recordBulkPayment } = await import('@/lib/installmentAmountHistory');
+              return recordBulkPayment(
+                installment.id,
+                installment.employee_id,
+                totalAmount,
+                periodsToUpdate.length
+              );
+            })()
+          ]).then(async ([saveResult]) => {
+            console.log("Background operations completed:", saveResult);
+            
+            // Refresh data silently in background sau khi API calls hoàn thành
+            if (installment?.id) {
+              const { data } = await getInstallmentPaymentPeriods(installment.id);
+              if (data) {
+                setPaymentPeriods(data);
+              }
+              
+              // Gọi callback để cập nhật summary
+              if (onPaymentUpdate) {
+                onPaymentUpdate();
+              }
+            }
+          }).catch(error => {
+            console.error("Error in background operations:", error);
+            
+            // Nếu background operations thất bại, hiển thị thông báo lỗi
+            toast({
+              variant: "destructive",
+              title: "Lỗi",
+              description: "Có lỗi xảy ra khi xử lý. Dữ liệu sẽ được cập nhật khi bạn tải lại trang.",
+            });
+          });
+          
+          // Show success message
+          toast({
+            title: "Thành công",
+            description: `Đã đánh dấu ${periodsToUpdate.length} kỳ đã thanh toán`
+          });
+          
+          // Reset temporary values
+          setTempEditedDate(null);
+          setTempEditedAmount(null);
+        } catch (error) {
+          console.error("Error in handleCheckPeriod:", error);
+          toast({
+            variant: "destructive",
+            title: "Lỗi",
+            description: "Có lỗi xảy ra khi xử lý. Vui lòng thử lại.",
+          });
+        }
+      } else {
+        // Xử lý khi uncheck - optimistic update
+        // Lấy tất cả các kỳ từ calculateCombinedPaymentPeriods
+        const allPeriods = calculateCombinedPaymentPeriods;
+
+        // Check if any later periods have been paid
+        const laterPeriods = allPeriods.slice(index + 1);
+        const anyLaterPeriodPaid = laterPeriods.some(
+          (p: InstallmentPaymentPeriod) => p && isPeriodInDatabase(p),
+        );
+
+        if (anyLaterPeriodPaid) {
+          toast({
+            variant: "destructive",
+            title: "Lỗi",
+            description:
+              "Không thể bỏ đánh dấu kỳ này vì có kỳ sau đã được thanh toán.",
+          });
+          return;
+        }
+
+        try {
+          // Destructure necessary functions
+          const { deleteInstallmentPaymentPeriod, updateInstallmentStatus } = await importPromise;
+          
+          // Optimistic update UI
+          if (!period.id.startsWith("calculated-")) {
+            // Tạo một bản sao tạm thời của UI state
+            const tempPaymentPeriods = [...paymentPeriods];
+            
+            // Cập nhật UI ngay lập tức - remove period hoặc reset actualAmount
+            const updatedPaymentPeriods = tempPaymentPeriods.map(p => {
+              if (p.id === period.id) {
+                return {
+                  ...p,
+                  actualAmount: 0,
+                  paymentStartDate: undefined
+                };
+              }
+              return p;
+            });
+            
+            // Cập nhật UI state ngay lập tức (optimistic update)
+            setPaymentPeriods(updatedPaymentPeriods);
+            
+            // Thực hiện API calls ở background
+            Promise.all([
+              // Delete payment period
+              deleteInstallmentPaymentPeriod(period.id, installment.id),
+              
+              // Ghi nhận lịch sử hủy thanh toán (import dynamically)
+              (async () => {
+                const { recordCancelPayment } = await import('@/lib/installmentAmountHistory');
+                if (period.actualAmount) {
+                  return recordCancelPayment(
+                    installment.id,
+                    installment.employee_id,
+                    period.actualAmount
+                  );
+                }
+                return null;
+              })()
+            ]).then(async ([deleteResult]) => {
+              console.log("Background uncheck operations completed:", deleteResult);
+              
+              // Check if contract status needs to be updated
+              if (installment.status === InstallmentStatus.FINISHED) {
+                // Check if all other periods are still completed
+                const currentPaymentPeriods = calculateCombinedPaymentPeriods.map(p => 
+                  p.id === period.id ? { ...p, actualAmount: 0 } : p
+                );
+                
+                const allPeriodsCompleted = currentPaymentPeriods.every(
+                  (p) => (p.id === period.id) ? false : (p.actualAmount && p.actualAmount >= p.expectedAmount)
+                );
+
+                // If not all periods are completed, update status to ON_TIME
+                if (!allPeriodsCompleted) {
+                  await updateInstallmentStatus(
+                    installment.id,
+                    InstallmentStatus.ON_TIME,
+                  );
+                  
+                  // Update installment state
+                  setInstallment({
+                    ...installment,
+                    status: InstallmentStatus.ON_TIME,
+                  });
+
+                  toast({
+                    title: "Trạng thái hợp đồng đã thay đổi",
+                    description:
+                      "Hợp đồng đã chuyển từ 'Hoàn thành' sang 'Đang vay' do có kỳ chưa thanh toán.",
+                  });
+                  
+                  // Call callback to update contract table if status changed
+                  if (onContractStatusChange) {
+                    onContractStatusChange();
+                  }
+                }
+              }
+              
+              // Refresh data silently in background sau khi API calls hoàn thành
+              if (installment?.id) {
+                const { data } = await getInstallmentPaymentPeriods(installment.id);
+                if (data) {
+                  setPaymentPeriods(data);
+                }
+                
+                // Gọi callback để cập nhật summary
+                if (onPaymentUpdate) {
+                  onPaymentUpdate();
+                }
+              }
+            }).catch(error => {
+              console.error("Error in background uncheck operations:", error);
+              
+              // Nếu background operations thất bại, hiển thị thông báo lỗi
+              toast({
+                variant: "destructive",
+                title: "Lỗi",
+                description: "Có lỗi xảy ra khi xử lý. Dữ liệu sẽ được cập nhật khi bạn tải lại trang.",
+              });
+            });
+          }
+          
+          // Show success message
+          toast({
+            title: "Thành công",
+            description: "Đã bỏ đánh dấu thanh toán cho kỳ này"
+          });
+        } catch (error) {
+          console.error("Error in handleUncheckPeriod:", error);
+          toast({
+            variant: "destructive",
+            title: "Lỗi",
+            description: "Có lỗi xảy ra khi xử lý. Vui lòng thử lại.",
+          });
+        }
+      }
+      
+      const endTime = performance.now();
+      console.log(`Checkbox processing completed in ${endTime - startTime}ms`);
+    } catch (error) {
+      console.error("Error in handleCheckboxChange:", error);
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: "Có lỗi xảy ra khi xử lý. Vui lòng thử lại.",
+      });
+    } finally {
+      // Luôn reset processing state khi hoàn thành
+      setProcessingCheckbox(false);
+      setProcessingPeriodId(null);
+      clearTimeout(timeoutId);
+    }
+  };
+
   // Hàm cưỡng chế tính toán lại danh sách kỳ thanh toán
   const forceRefreshCalculatedPeriods = useCallback(() => {
     console.log("Force refreshing calculated periods");
@@ -693,385 +1034,6 @@ export function InstallmentPaymentHistoryModal({
     }
   };
 
-  // Xử lý checkbox đánh dấu đã thanh toán
-  const handleCheckboxChange = async (
-    period: InstallmentPaymentPeriod,
-    checked: boolean,
-    index: number,
-  ) => {
-    console.log("handleCheckboxChange called with:", {
-      period,
-      checked,
-      index,
-      tempEditedDate,
-      tempEditedAmount,
-    });
-
-    if (!installment?.id) {
-      console.error("No installment id found");
-      return;
-    }
-
-    if (!period) {
-      console.error("Period is undefined");
-      return;
-    }
-
-    if (!period.id) {
-      console.error("Period id is undefined", period);
-      return;
-    }
-
-    // Set processing state
-    setProcessingCheckbox(true);
-    setProcessingPeriodId(period.id);
-
-    // Tạo một timeout để reset processing state nếu xử lý quá lâu
-    const timeoutId = setTimeout(() => {
-      console.log("Processing timeout reached - resetting state");
-      setProcessingCheckbox(false);
-      setProcessingPeriodId(null);
-      toast({
-        variant: "destructive",
-        title: "Xử lý quá lâu",
-        description: "Thao tác đang mất nhiều thời gian. Vui lòng thử lại sau.",
-      });
-    }, 15000); // 15 seconds timeout
-
-    try {
-      // Pre-load các modules cần thiết để tăng tốc độ xử lý
-      const importPromise = import("@/lib/installmentPayment");
-      
-      // Tạo một hàm riêng để xử lý logic trong background
-      const processCheckbox = async () => {
-        try {
-          const startTime = performance.now();
-          
-          if (checked) {
-            // Xử lý khi check 
-            await handleCheckPeriod(period, index, importPromise);
-          } else {
-            // Xử lý khi uncheck
-            await handleUncheckPeriod(period, index, importPromise);
-          }
-          
-          const endTime = performance.now();
-          console.log(`Checkbox processing completed in ${endTime - startTime}ms`);
-        } catch (error) {
-          console.error("Error in processCheckbox:", error);
-          toast({
-            variant: "destructive",
-            title: "Lỗi",
-            description: "Có lỗi xảy ra khi xử lý. Vui lòng thử lại.",
-          });
-        } finally {
-          // Luôn reset processing state khi hoàn thành
-          setProcessingCheckbox(false);
-          setProcessingPeriodId(null);
-          clearTimeout(timeoutId);
-        }
-      };
-      
-      // Thực thi xử lý trong background
-      processCheckbox();
-    } catch (error) {
-      console.error("Error in handleCheckboxChange:", error);
-      // Đảm bảo reset processing state nếu có lỗi
-      setProcessingCheckbox(false);
-      setProcessingPeriodId(null);
-      clearTimeout(timeoutId);
-      
-      toast({
-        variant: "destructive",
-        title: "Lỗi",
-        description: "Có lỗi xảy ra khi xử lý. Vui lòng thử lại.",
-      });
-    }
-  };
-  
-  // Hàm xử lý check payment period
-  const handleCheckPeriod = async (
-    period: InstallmentPaymentPeriod,
-    index: number,
-    importPromise: Promise<any>
-  ) => {
-    if (!installment?.id) {
-      console.error("No installment id found");
-      return;
-    }
-    
-    // Get all periods from calculateCombinedPaymentPeriods
-    const allPeriods = calculateCombinedPaymentPeriods;
-
-    // Find periods that need to be marked as paid: from first unpaid period to current
-    const periodsToUpdate: InstallmentPaymentPeriod[] = [];
-
-    for (let i = 0; i <= index; i++) {
-      const p = allPeriods[i];
-      if (p && !isPeriodInDatabase(p)) {
-        // If this is the oldest unpaid period and we have temp values, apply them
-        if (i === findOldestUnpaidPeriodIndex && (tempEditedDate || tempEditedAmount !== null)) {
-          const updatedPeriod = {
-            ...p,
-            paymentStartDate: tempEditedDate 
-              ? format(new Date(tempEditedDate), "dd/MM/yyyy") 
-              : format(new Date(), "dd/MM/yyyy"),
-            actualAmount: tempEditedAmount !== null ? tempEditedAmount : p.expectedAmount,
-          };
-          
-          periodsToUpdate.push(updatedPeriod);
-        } else {
-          periodsToUpdate.push(p);
-        }
-      }
-    }
-
-    // If no periods to update, exit early
-    if (periodsToUpdate.length === 0) {
-      return;
-    }
-
-    // Show toast message if processing multiple periods
-    if (periodsToUpdate.length > 1) {
-      toast({
-        title: "Đang xử lý",
-        description: `Đang cập nhật ${periodsToUpdate.length} kỳ thanh toán...`,
-      });
-    }
-
-    // Import necessary functions
-    const { bulkSaveInstallmentPayments } = await importPromise;
-    const { recordBulkPayment } = await import('@/lib/installmentAmountHistory');
-    
-    // Tính tổng số tiền cần cộng vào quỹ
-    const totalAmount = periodsToUpdate.reduce((sum, p) => sum + (p.actualAmount || p.expectedAmount), 0);
-    
-    // Save data to server
-    const result = await bulkSaveInstallmentPayments(
-      installment.id,
-      periodsToUpdate,
-      installment.employee_id,
-    );
-    
-    console.log("Bulk save result:", result);
-    
-    // Ghi vào lịch sử giao dịch
-    await recordBulkPayment(
-      installment.id,
-      installment.employee_id,
-      totalAmount,
-      periodsToUpdate.length
-    );
-    
-    // Refresh data from server để cập nhật UI
-    if (installment?.id) {
-      const { data } = await getInstallmentPaymentPeriods(installment.id);
-      if (data) {
-        console.log("Updating UI with fresh data after save");
-        setPaymentPeriods(data);
-      }
-      
-      // Cập nhật lịch sử giao dịch nếu đang ở tab history
-      if (activeTab === "history") {
-        loadTransactionHistory();
-      }
-    }
-    
-    // Call callback to update summary
-    if (onPaymentUpdate) {
-      onPaymentUpdate();
-    }
-    
-    // Show success message
-    toast({
-      title: "Thành công",
-      description: `Đã đánh dấu ${periodsToUpdate.length} kỳ đã thanh toán`
-    });
-    
-    // Reset temporary values
-    setTempEditedDate(null);
-    setTempEditedAmount(null);
-  };
-  
-  // Hàm xử lý uncheck payment period
-  const handleUncheckPeriod = async (
-    period: InstallmentPaymentPeriod,
-    index: number,
-    importPromise: Promise<any>
-  ) => {
-    if (!installment?.id) {
-      console.error("No installment id found");
-      return;
-    }
-    
-    // Lấy tất cả các kỳ từ calculateCombinedPaymentPeriods
-    const allPeriods = calculateCombinedPaymentPeriods;
-
-    // Check if any later periods have been paid
-    const laterPeriods = allPeriods.slice(index + 1);
-    const anyLaterPeriodPaid = laterPeriods.some(
-      (p: InstallmentPaymentPeriod) => p && isPeriodInDatabase(p),
-    );
-
-    if (anyLaterPeriodPaid) {
-      toast({
-        variant: "destructive",
-        title: "Lỗi",
-        description:
-          "Không thể bỏ đánh dấu kỳ này vì có kỳ sau đã được thanh toán.",
-      });
-      return;
-    }
-
-    // Import necessary functions
-    const { deleteInstallmentPaymentPeriod, updateInstallmentStatus } = await importPromise;
-    const { recordCancelPayment } = await import('@/lib/installmentAmountHistory');
-
-    // Only delete from DB if it's not a calculated period
-    if (!period.id.startsWith("calculated-")) {
-      // Use installmentId to optimize API call
-      const { data: deletedPeriod } = await deleteInstallmentPaymentPeriod(period.id, installment.id);
-      
-      // Check if contract status needs to be updated
-      if (installment.status === InstallmentStatus.FINISHED) {
-        // Check if all other periods are still completed
-        const currentPaymentPeriods = calculateCombinedPaymentPeriods.map(p => 
-          p.id === period.id ? { ...p, actualAmount: 0 } : p
-        );
-        
-        const allPeriodsCompleted = currentPaymentPeriods.every(
-          (p) => (p.id === period.id) ? false : (p.actualAmount && p.actualAmount >= p.expectedAmount)
-        );
-
-        // If not all periods are completed, update status to ON_TIME
-        if (!allPeriodsCompleted) {
-          await updateInstallmentStatus(
-            installment.id,
-            InstallmentStatus.ON_TIME,
-          );
-          
-          // Update installment state
-          setInstallment({
-            ...installment,
-            status: InstallmentStatus.ON_TIME,
-          });
-
-          toast({
-            title: "Trạng thái hợp đồng đã thay đổi",
-            description:
-              "Hợp đồng đã chuyển từ 'Hoàn thành' sang 'Đang vay' do có kỳ chưa thanh toán.",
-          });
-          
-          // Call callback to update contract table if status changed
-          if (onContractStatusChange) {
-            onContractStatusChange();
-          }
-        }
-      }
-    }
-    
-    // Always refresh data from server to ensure UI accuracy
-    if (installment?.id) {
-      const { data } = await getInstallmentPaymentPeriods(installment.id);
-      if (data) {
-        console.log("Updating UI with fresh data after uncheck");
-        setPaymentPeriods(data);
-      }
-      
-      // Cập nhật lịch sử giao dịch nếu đang ở tab history
-      if (activeTab === "history") {
-        loadTransactionHistory();
-      }
-    }
-    
-    // Call callback to update summary if provided
-    if (onPaymentUpdate) {
-      onPaymentUpdate();
-    }
-    
-    // Show success message
-    toast({
-      title: "Thành công",
-      description: "Đã bỏ đánh dấu thanh toán cho kỳ này"
-    });
-  };
-
-  // Handler for closing the installment - show confirmation first
-  const showCloseInstallmentConfirmation = () => {
-    setIsCloseContractConfirmOpen(true);
-  };
-
-  // Handler for closing the installment
-  const handleCloseInstallment = async () => {
-    if (!installment?.id) return;
-    
-    // Close the confirmation dialog
-    setIsCloseContractConfirmOpen(false);
-
-    try {
-      // Import necessary functions
-      const { saveInstallmentPayment, updateInstallmentStatus } = await import(
-        "@/lib/installmentPayment"
-      );
-
-      const { recordContractClosure } = await import(
-        "@/lib/installmentAmountHistory"
-      );
-
-      // Get all periods including calculated ones
-      const allPeriods = calculateCombinedPaymentPeriods;
-
-      // Find periods that need to be marked as paid
-      const periodsToUpdate = allPeriods.filter((p: InstallmentPaymentPeriod) => !isPeriodInDatabase(p));
-      if (periodsToUpdate.length > 0) {
-        await bulkSaveInstallmentPayments(
-          installment.id,
-          periodsToUpdate,
-          installment.employee_id
-        );
-      }
-
-      // Update installment status to closed
-      await updateInstallmentStatus(installment.id, InstallmentStatus.CLOSED);
-
-      // Record in transaction history
-      await recordContractClosure(installment.id, installment.employee_id);
-
-      // Refresh data
-      const { data, error } = await getInstallmentPaymentPeriods(
-        installment.id,
-      );
-      if (!error && data) {
-        setPaymentPeriods(data);
-      }
-
-      // Reload installment info to get updated status
-      await reloadInstallmentInfo();
-
-      // Trigger page table reload if callback provided
-      if (onContractStatusChange) {
-        onContractStatusChange();
-      }
-
-      // Gọi callback để cập nhật summary
-      if (onPaymentUpdate) {
-        onPaymentUpdate();
-      }
-
-      toast({
-        title: "Thành công",
-        description: "Hợp đồng đã được đóng thành công!",
-      });
-    } catch (error) {
-      console.error("Error closing installment:", error);
-      toast({
-        variant: "destructive",
-        title: "Lỗi",
-        description: "Có lỗi xảy ra khi đóng hợp đồng. Vui lòng thử lại.",
-      });
-    }
-  };
-
   // Helper to parse formatted number input
   const parseFormattedNumber = (formattedValue: string): number => {
     return parseInt(formattedValue.replace(/,/g, ""), 10) || 0;
@@ -1219,6 +1181,82 @@ export function InstallmentPaymentHistoryModal({
       });
     } catch (error) {
       return "-";
+    }
+  };
+
+  // Handler for closing the installment - show confirmation first
+  const showCloseInstallmentConfirmation = () => {
+    setIsCloseContractConfirmOpen(true);
+  };
+
+  // Handler for closing the installment
+  const handleCloseInstallment = async () => {
+    if (!installment?.id) return;
+    
+    // Close the confirmation dialog
+    setIsCloseContractConfirmOpen(false);
+
+    try {
+      // Import necessary functions
+      const { saveInstallmentPayment, updateInstallmentStatus } = await import(
+        "@/lib/installmentPayment"
+      );
+
+      const { recordContractClosure } = await import(
+        "@/lib/installmentAmountHistory"
+      );
+
+      // Get all periods including calculated ones
+      const allPeriods = calculateCombinedPaymentPeriods;
+
+      // Find periods that need to be marked as paid
+      const periodsToUpdate = allPeriods.filter((p: InstallmentPaymentPeriod) => !isPeriodInDatabase(p));
+      if (periodsToUpdate.length > 0) {
+        await bulkSaveInstallmentPayments(
+          installment.id,
+          periodsToUpdate,
+          installment.employee_id
+        );
+      }
+
+      // Update installment status to closed
+      await updateInstallmentStatus(installment.id, InstallmentStatus.CLOSED);
+
+      // Record in transaction history
+      await recordContractClosure(installment.id, installment.employee_id);
+
+      // Refresh data
+      const { data, error } = await getInstallmentPaymentPeriods(
+        installment.id,
+      );
+      if (!error && data) {
+        setPaymentPeriods(data);
+      }
+
+      // Reload installment info to get updated status
+      await reloadInstallmentInfo();
+
+      // Trigger page table reload if callback provided
+      if (onContractStatusChange) {
+        onContractStatusChange();
+      }
+
+      // Gọi callback để cập nhật summary
+      if (onPaymentUpdate) {
+        onPaymentUpdate();
+      }
+
+      toast({
+        title: "Thành công",
+        description: "Hợp đồng đã được đóng thành công!",
+      });
+    } catch (error) {
+      console.error("Error closing installment:", error);
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: "Có lỗi xảy ra khi đóng hợp đồng. Vui lòng thử lại.",
+      });
     }
   };
 

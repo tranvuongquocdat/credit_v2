@@ -105,12 +105,8 @@ export function InstallmentsTable({
             0
           );
           
-          // Tính tổng nợ cũ (chênh lệch giữa actual_amount và expected_amount)
-          const totalExpected = installment.payments.reduce(
-            (sum, period) => sum + period.expectedAmount, 
-            0
-          );
-          installment.oldDebt = totalExpected - installment.totalPaid ;
+          // Lấy nợ trực tiếp từ database (debt_amount)
+          installment.oldDebt = installment.debt_amount || 0;
           
           // Tính còn phải đóng
           // Ưu tiên dùng installment_amount nếu có, nếu không tính dựa trên amount_given và interest_rate
@@ -356,7 +352,7 @@ export function InstallmentsTable({
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-16">Tỷ lệ</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-20">Thời gian</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28">Tiền đã đóng</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Nợ cũ</th>
+            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Nợ</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Tiền 1 ngày</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28">Còn phải đóng</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28">Tình trạng</th>
