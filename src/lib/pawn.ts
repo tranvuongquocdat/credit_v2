@@ -21,10 +21,17 @@ export async function getPawns(
     // Bắt đầu từ record thứ mấy
     const from = (page - 1) * limit;
     
-    // Tạo query cơ bản - temporarily without joins until database is set up
+    // Tạo query cơ bản với join customers
     let query = supabase
       .from('pawns')
-      .select('*', { count: 'exact' });
+      .select(`
+        *,
+        customers (
+          name,
+          phone,
+          id_number
+        )
+      `, { count: 'exact' });
     
     // Áp dụng các filter nếu có
     if (searchQuery) {
@@ -51,11 +58,11 @@ export async function getPawns(
     
     if (error) throw error;
     
-    // Temporarily return basic pawn data without customer/collateral joins
+    // Map the data to include customer information
     return {
       data: (data || []).map(pawn => ({
         ...pawn,
-        customer: { name: 'Unknown Customer', phone: null, id_number: null },
+        customer: pawn.customers || { name: 'Unknown Customer', phone: null, id_number: null },
         collateral_asset: null
       })) as PawnWithCustomerAndCollateral[],
       total: count || 0,
@@ -82,16 +89,23 @@ export async function getPawnById(id: string) {
   try {
     const { data, error } = await supabase
       .from('pawns')
-      .select('*')
+      .select(`
+        *,
+        customers (
+          name,
+          phone,
+          id_number
+        )
+      `)
       .eq('id', id)
       .single();
     
     if (error) throw error;
     
-    // Temporarily return basic pawn data without customer/collateral joins
+    // Map the data to include customer information
     const pawnWithRelations = {
       ...data,
-      customer: { name: 'Unknown Customer', phone: null, id_number: null },
+      customer: data.customers || { name: 'Unknown Customer', phone: null, id_number: null },
       collateral_asset: null
     };
     

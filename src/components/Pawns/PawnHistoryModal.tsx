@@ -40,12 +40,10 @@ export function PawnHistoryModal({
   const [refreshRepayments, setRefreshRepayments] = useState(0);
   const [pawnHistory, setPawnHistory] = useState<PawnAmountHistory[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
   const loadPaymentPeriods = useCallback(async () => {
     if (!pawn?.id) return;
-    
-    setLoading(true);
-    setError(null);
     
     try {
       const { data, error } = await getPawnPaymentPeriods(pawn.id);
@@ -56,8 +54,6 @@ export function PawnHistoryModal({
     } catch (err) {
       console.error('Error loading payment periods:', err);
       setError('Không thể tải dữ liệu kỳ thanh toán');
-    } finally {
-      setLoading(false);
     }
   }, [pawn?.id]);
 
@@ -79,66 +75,102 @@ export function PawnHistoryModal({
     }
   }, [pawn?.id]);
 
-  // Load payment periods and principal changes when modal opens
+  // Load all initial data when modal opens
   useEffect(() => {
-    if (isOpen && pawn?.id) {
-      loadPaymentPeriods();
-      loadPrincipalChanges();
+    if (isOpen && pawn?.id && !initialLoadComplete) {
+      const loadInitialData = async () => {
+        setLoading(true);
+        setError(null);
+        
+        try {
+          // Load both data sources concurrently
+          await Promise.all([
+            loadPrincipalChanges(),
+            loadPaymentPeriods()
+          ]);
+          
+          setInitialLoadComplete(true);
+        } catch (err) {
+          console.error('Error loading initial data:', err);
+          setError('Không thể tải dữ liệu');
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      loadInitialData();
     }
-  }, [isOpen, pawn?.id, loadPaymentPeriods, loadPrincipalChanges]);
+    
+    // Reset when modal closes
+    if (!isOpen) {
+      setInitialLoadComplete(false);
+      setError(null);
+    }
+  }, [isOpen, pawn?.id, initialLoadComplete, loadPaymentPeriods, loadPrincipalChanges]);
 
   // Refresh data after any changes
   const handleDataChange = async () => {
-    await loadPaymentPeriods();
-    await loadPrincipalChanges();
+    if (!pawn?.id) return;
     
-    // Reload pawn data to get updated information
     try {
-      const { data: updatedPawn, error } = await getPawnById(pawn.id);
-      if (!error && updatedPawn) {
-        setCurrentPawn(updatedPawn);
+      // Load data concurrently without showing loading state
+      await Promise.all([
+        loadPrincipalChanges(),
+        loadPaymentPeriods()
+      ]);
+      
+      // Reload pawn data to get updated information
+      try {
+        const { data: updatedPawn, error } = await getPawnById(pawn.id);
+        if (!error && updatedPawn) {
+          setCurrentPawn(updatedPawn);
+        }
+      } catch (err) {
+        console.error('Error reloading pawn data:', err);
       }
     } catch (err) {
-      console.error('Error reloading pawn data:', err);
+      console.error('Error refreshing data:', err);
     }
   };
 
   // Format currency
-  const formatCurrency = (amount: number): string => {
+  const formatCurrency = useCallback((amount: number): string => {
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
       currency: 'VND'
     }).format(amount);
-  };
+  }, []);
 
   // Format date
-  const formatDate = (dateString: string): string => {
+  const formatDate = useCallback((dateString: string): string => {
     return format(new Date(dateString), 'dd/MM/yyyy', { locale: vi });
-  };
+  }, []);
 
   // Format datetime helper for history display
-  const formatDateTime = (dateString: string | null | undefined): string => {
+  const formatDateTime = useCallback((dateString: string | null | undefined): string => {
     if (!dateString) return '-';
     try {
       return format(new Date(dateString), 'dd-MM-yyyy HH:mm:ss', { locale: vi });
     } catch (error) {
       return '-';
     }
-  };
+  }, []);
 
   // Calculate days between dates
-  const calculateDaysBetween = (start: Date, end: Date): number => {
+  const calculateDaysBetween = useCallback((start: Date, end: Date): number => {
     // Chuẩn hóa về đầu ngày để tránh sai lệch do giờ/phút/giây
     start.setHours(0, 0, 0, 0);
     end.setHours(0, 0, 0, 0);
     
     // Tính ngày (bao gồm cả ngày đầu và cuối)
     return Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-  };
+  }, []);
 
   // Generate estimated payment periods based on pawn contract
-  const generateEstimatedPaymentPeriods = (pawn: PawnWithCustomerAndCollateral | null): PawnPaymentPeriod[] => {
+  const generateEstimatedPaymentPeriods = useCallback((pawn: PawnWithCustomerAndCollateral | null): PawnPaymentPeriod[] => {
     if (!pawn) return [];
+    
+    console.log('Generating estimated payment periods for pawn:', pawn.id, 'with principal changes:', principalChanges);
     
     const result: PawnPaymentPeriod[] = [];
     const loanDate = new Date(pawn.loan_date);
@@ -148,23 +180,48 @@ export function PawnHistoryModal({
     const endDate = new Date(loanDate);
     endDate.setDate(endDate.getDate() + loanPeriod - 1);
     
+    console.log('Loan period calculation:', {
+      loanDate: loanDate.toISOString(),
+      endDate: endDate.toISOString(),
+      loanPeriod,
+      interestValue: pawn.interest_value,
+      interestType: pawn.interest_type,
+      loanAmount: pawn.loan_amount
+    });
+    
     // Only create ONE period from loan start to loan end
     // Calculate expected interest for this period
     let expectedAmount = 0;
-    
+      
     if (principalChanges && principalChanges.length > 0) {
       // Use advanced calculation with principal changes
-      expectedAmount = calculateInterestWithPrincipalChanges(
-        pawn as any, // Type assertion for compatibility
-        loanDate,
-        endDate,
-        principalChanges
-      );
+      try {
+        expectedAmount = calculateInterestWithPrincipalChanges(
+          pawn as any, // Type assertion for compatibility
+          loanDate,
+          endDate,
+          principalChanges
+        );
+        console.log('Interest calculated with principal changes:', expectedAmount);
+      } catch (error) {
+        console.error('Error calculating interest with principal changes:', error);
+        // Fallback to simple calculation
+        expectedAmount = calculateInterestForPeriod(pawn, loanPeriod);
+        console.log('Fallback interest calculation:', expectedAmount);
+      }
     } else {
       // Use simple calculation
       // For estimated periods, always use loan_period to ensure consistency
       const days = loanPeriod; // Use loan_period directly instead of calculating from dates
       expectedAmount = calculateInterestForPeriod(pawn, days);
+      console.log('Simple interest calculation:', expectedAmount, 'for', days, 'days');
+    }
+    
+    // Ensure expectedAmount is not 0 or negative
+    if (expectedAmount <= 0) {
+      console.warn('Expected amount is 0 or negative, recalculating with simple method');
+      expectedAmount = calculateInterestForPeriod(pawn, loanPeriod);
+      console.log('Recalculated expected amount:', expectedAmount);
     }
     
     result.push({
@@ -180,11 +237,13 @@ export function PawnHistoryModal({
       other_amount: 0
     });
     
+    console.log('Generated estimated payment period:', result[0]);
+    
     return result;
-  };
+  }, [principalChanges]);
 
   // Merge estimated periods with actual periods from database
-  const mergePaymentPeriods = (estimated: PawnPaymentPeriod[], actual: PawnPaymentPeriod[]): PawnPaymentPeriod[] => {
+  const mergePaymentPeriods = useCallback((estimated: PawnPaymentPeriod[], actual: PawnPaymentPeriod[]): PawnPaymentPeriod[] => {
     const result: PawnPaymentPeriod[] = [];
     const actualByPeriod = new Map<number, PawnPaymentPeriod>();
     
@@ -244,16 +303,28 @@ export function PawnHistoryModal({
           let expectedAmount = 0;
           
           if (principalChanges && principalChanges.length > 0) {
-            expectedAmount = calculateInterestWithPrincipalChanges(
-              currentPawn as any,
-              nextStartDate,
-              nextEndDate,
-              principalChanges
-            );
+            try {
+              expectedAmount = calculateInterestWithPrincipalChanges(
+                currentPawn as any,
+                nextStartDate,
+                nextEndDate,
+                principalChanges
+              );
+            } catch (error) {
+              console.error('Error calculating interest for next period with principal changes:', error);
+              // Fallback to simple calculation
+              expectedAmount = calculateInterestForPeriod(currentPawn, currentPawn.loan_period);
+            }
           } else {
             // For next estimated periods, also use loan_period for consistency
             const days = currentPawn.loan_period; // Use loan_period directly
             expectedAmount = calculateInterestForPeriod(currentPawn, days);
+          }
+          
+          // Ensure expectedAmount is not 0 or negative
+          if (expectedAmount <= 0) {
+            console.warn('Next period expected amount is 0 or negative, recalculating with simple method');
+            expectedAmount = calculateInterestForPeriod(currentPawn, currentPawn.loan_period);
           }
           
           // Add next estimated period
@@ -275,7 +346,7 @@ export function PawnHistoryModal({
     
     // Sort by period number
     return result.sort((a, b) => a.period_number - b.period_number);
-  };
+  }, [currentPawn, principalChanges]);
 
   // Generate combined payment periods
   const combinedPaymentPeriods = useMemo(() => {
@@ -285,7 +356,7 @@ export function PawnHistoryModal({
     const merged = mergePaymentPeriods(estimated, paymentPeriods);
     
     return merged;
-  }, [currentPawn, paymentPeriods]);
+  }, [currentPawn, paymentPeriods, principalChanges, generateEstimatedPaymentPeriods, mergePaymentPeriods]);
 
   // Calculate totals for display
   const calculateTotals = useMemo(() => {
@@ -308,7 +379,7 @@ export function PawnHistoryModal({
     if (unpaidPeriod) {
       nextPaymentDate = formatDate(unpaidPeriod.end_date);
     }
-    
+
     return {
       totalExpected,
       totalPaid,
@@ -329,7 +400,7 @@ export function PawnHistoryModal({
   // Load pawn amount history when tab changes to history or when pawn changes
   useEffect(() => {
     async function loadPawnHistory() {
-      if (!pawn?.id || activeTab !== 'history') return;
+      if (!pawn?.id || activeTab !== 'history' || !initialLoadComplete) return;
       
       setHistoryLoading(true);
       try {
@@ -348,7 +419,7 @@ export function PawnHistoryModal({
     }
     
     loadPawnHistory();
-  }, [pawn?.id, activeTab, refreshRepayments]);
+  }, [pawn?.id, activeTab, refreshRepayments, initialLoadComplete]);
 
   // Helper function to get transaction type display text
   const getTransactionTypeDisplay = (type: PawnTransactionType | string): string => {
@@ -373,7 +444,7 @@ export function PawnHistoryModal({
   };
 
   // Helper function to calculate history totals
-  const calculateHistoryTotals = () => {
+  const historyTotals = useMemo(() => {
     let totalDebit = 0;
     let totalCredit = 0;
 
@@ -387,9 +458,7 @@ export function PawnHistoryModal({
       totalCredit,
       balance: totalDebit - totalCredit
     };
-  };
-
-  const historyTotals = calculateHistoryTotals();
+  }, [pawnHistory]);
 
   const renderTabContent = () => {
     switch (activeTab) {

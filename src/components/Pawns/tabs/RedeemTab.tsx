@@ -130,7 +130,7 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
           const dateB = new Date(b.end_date);
           return dateA.getTime() - dateB.getTime();
         });
-        
+
         const lastPeriod = sortedPeriods[sortedPeriods.length - 1];
         
         if (lastPeriod) {
@@ -203,7 +203,7 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
 
       // After all period operations are complete, update pawn status
       const { error: updateError } = await updatePawn(pawnId, { status: PawnStatus.CLOSED });
-      
+
       if (updateError) {
         console.error('Error updating pawn status:', updateError);
         toast({
@@ -522,7 +522,7 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
     <div className="p-4">
       <div className="p-4 border rounded-md">
         <h3 className="text-lg font-medium mb-4">Chuộc đồ</h3>
-
+        
         <div className="mb-4 border rounded-md overflow-hidden">
           <table className="w-full border-collapse">
             <tbody>

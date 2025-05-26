@@ -7,7 +7,7 @@ import { PawnPaymentForm } from '../PawnPaymentForm';
 import { PawnWithCustomerAndCollateral } from '@/models/pawn';
 import { PawnPaymentPeriod } from '@/models/pawn-payment';
 import { toast } from '@/components/ui/use-toast';
-import { PrincipalChange, calculateInterestWithPrincipalChanges } from '@/lib/interest-calculator';
+import { PrincipalChange, calculateInterestWithPrincipalChanges, calculatePawnInterestAmount } from '@/lib/interest-calculator';
 import { getPrincipalChangesForPawn } from '@/lib/pawn-principal-changes';
 
 type PaymentTabProps = {
@@ -101,15 +101,46 @@ export function PaymentTab({
         interest_ui_type: pawn.interest_ui_type || 'monthly_30'
       };
       
-      return calculateInterestWithPrincipalChanges(
-        creditLikeObject as any, // Type assertion needed due to status type mismatch
-        start,
-        end,
-        localPrincipalChanges
-      );
+      // Debug logging
+      console.log('Calculating interest for period:', { startDate, endDate, pawn: creditLikeObject, principalChanges: localPrincipalChanges });
+      
+      let result = 0;
+      
+      if (localPrincipalChanges && localPrincipalChanges.length > 0) {
+        result = calculateInterestWithPrincipalChanges(
+          creditLikeObject as any, // Type assertion needed due to status type mismatch
+          start,
+          end,
+          localPrincipalChanges
+        );
+      } else {
+        // Fallback to simple calculation
+        const days = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        result = calculatePawnInterestAmount(pawn, days);
+      }
+      
+      console.log('Interest calculation result:', result);
+      
+      // Ensure result is not 0 or negative
+      if (result <= 0) {
+        console.warn('Interest calculation returned 0 or negative, using fallback calculation');
+        const days = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        result = calculatePawnInterestAmount(pawn, days);
+      }
+      
+      return result;
     } catch (err) {
       console.error('Error calculating interest with principal changes:', err);
-      return 0;
+      // Fallback to simple calculation
+      try {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const days = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        return calculatePawnInterestAmount(pawn, days);
+      } catch (fallbackErr) {
+        console.error('Fallback interest calculation also failed:', fallbackErr);
+        return 0;
+      }
     }
   };
 

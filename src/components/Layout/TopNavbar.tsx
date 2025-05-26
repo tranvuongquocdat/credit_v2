@@ -7,6 +7,7 @@ import { useState, useEffect, memo, useCallback } from "react";
 import { useStore } from "@/contexts/StoreContext";
 import { useRouter } from "next/navigation";
 import { countOverdueInstallments } from "@/lib/installmentPayment";
+import { countPawnWarnings } from "@/lib/pawn-warnings";
 
 // This interface will represent the notification data structure
 interface NotificationCounts {
@@ -116,10 +117,17 @@ export function TopNavbar({ onToggleSidebar }: TopNavbarProps) {
       const fetchNotificationsForStore = async () => {
         try {
           // Get real count of overdue installments
-          const { count: overdueInstallments, error } = await countOverdueInstallments(currentStore.id);
+          const { count: overdueInstallments, error: installmentError } = await countOverdueInstallments(currentStore.id);
           
-          if (error) {
-            console.error('Error fetching overdue installments count:', error);
+          if (installmentError) {
+            console.error('Error fetching overdue installments count:', installmentError);
+          }
+          
+          // Get real count of pawn warnings
+          const { count: pawnWarningsCount, error: pawnError } = await countPawnWarnings(currentStore.id);
+          
+          if (pawnError) {
+            console.error('Error fetching pawn warnings count:', pawnError);
           }
           
           // Simulate different notification counts based on store ID to demonstrate it works
@@ -127,9 +135,9 @@ export function TopNavbar({ onToggleSidebar }: TopNavbarProps) {
           const mockData = {
             storeInvoices: 2 + storeIdNum,
             appointments: 3 + storeIdNum,
-            pawnInvoices: 4 + storeIdNum,
+            pawnInvoices: pawnError ? (4 + storeIdNum) : pawnWarningsCount, // Use real count if available
             loanInvoices: 6 + storeIdNum,
-            installmentInvoices: error ? (9 + storeIdNum) : overdueInstallments // Use real count if available
+            installmentInvoices: installmentError ? (9 + storeIdNum) : overdueInstallments // Use real count if available
           };
           
           setNotificationCounts(mockData);
@@ -217,6 +225,7 @@ export function TopNavbar({ onToggleSidebar }: TopNavbarProps) {
         <button 
           className="p-2 hover:bg-[#3a5a75] transition-colors border-l border-r border-[rgba(0,0,0,0.2)] relative" 
           title={`Cầm đồ có ${notificationCounts.pawnInvoices} hóa đơn cần xử lý`}
+          onClick={() => router.push('/pawn-warnings')}
         >
           <Bike className="h-6 w-6" />
           {renderNotificationBadge(notificationCounts.pawnInvoices)}

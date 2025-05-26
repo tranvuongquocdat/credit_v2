@@ -187,6 +187,17 @@ export function PawnCreateModal({
     }
   };
   
+  // Auto-generate contract code when modal opens
+  useEffect(() => {
+    if (isOpen && autoGenerateCode) {
+      // Generate a numerical code: current timestamp + random 3 digits
+      const timestamp = Date.now().toString().slice(-6); // Last 6 digits of timestamp
+      const randomDigits = Math.floor(Math.random() * 900 + 100); // Random 3 digits (100-999)
+      const generatedCode = `${timestamp}${randomDigits}`;
+      setContractCode(generatedCode);
+    }
+  }, [isOpen, autoGenerateCode]);
+  
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -436,25 +447,30 @@ export function PawnCreateModal({
           </div>
           
           <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="contractCode" className="text-right">Mã hợp đồng</Label>
+            <Label htmlFor="contractCode" className="text-right">Mã HĐ</Label>
             <div className="flex items-center gap-2">
               <Input 
                 id="contractCode"
                 value={contractCode}
-                onChange={(e) => setContractCode(e.target.value)}
-                placeholder="Tự động sinh nếu để trống"
-                disabled={autoGenerateCode}
+                onChange={(e) => {
+                  setContractCode(e.target.value);
+                  setAutoGenerateCode(false);
+                }}
+                placeholder="Mã hợp đồng"
               />
-              <div className="flex items-center gap-1">
-                <input 
-                  type="checkbox" 
-                  id="autoGenerateCode" 
-                  checked={autoGenerateCode}
-                  onChange={(e) => setAutoGenerateCode(e.target.checked)}
-                  className="mr-1"
-                />
-                <label htmlFor="autoGenerateCode" className="text-xs">Tự động</label>
-              </div>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => {
+                  const timestamp = Date.now().toString().slice(-6);
+                  const randomDigits = Math.floor(Math.random() * 900 + 100);
+                  const generatedCode = `${timestamp}${randomDigits}`;
+                  setContractCode(generatedCode);
+                }}
+                className="px-2"
+              >
+                Tạo mã
+              </Button>
             </div>
           </div>
           
