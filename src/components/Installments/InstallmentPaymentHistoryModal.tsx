@@ -276,32 +276,32 @@ export function InstallmentPaymentHistoryModal({
 
   // Load transaction history when the modal opens
   useEffect(() => {
-    if (isOpen && activeTab === "history") {
+    if (isOpen && installment?.id) {
       loadTransactionHistory();
     }
-  }, [isOpen, installment?.id, activeTab]);
+  }, [isOpen, installment?.id]);
 
   // Function to load transaction history (moved outside useEffect to be reusable)
   const loadTransactionHistory = async () => {
-      if (!installment?.id) return;
+    if (!installment?.id) return;
 
-      setLoadingHistory(true);
+    setLoadingHistory(true);
 
-      try {
-        const { data, error } = await getInstallmentAmountHistory(
-          installment.id,
-        );
+    try {
+      const { data, error } = await getInstallmentAmountHistory(
+        installment.id,
+      );
 
-        if (error) {
-          throw error;
-        }
-
-        setAmountHistory(data || []);
-      } catch (err) {
-        console.error("Error loading transaction history:", err);
-      } finally {
-        setLoadingHistory(false);
+      if (error) {
+        throw error;
       }
+
+      setAmountHistory(data || []);
+    } catch (err) {
+      console.error("Error loading transaction history:", err);
+    } finally {
+      setLoadingHistory(false);
+    }
   };
 
   // Format date helper
@@ -485,13 +485,12 @@ export function InstallmentPaymentHistoryModal({
         }
         
       // Tính số tiền còn lại và số ngày còn lại
-      const totalPaidAmount = sortedDBPeriods.reduce((sum, p) => sum + (p.actualAmount || 0), 0);
       const remainingAmount = Math.max(0, installmentAmount);
       const remainingDays = calculateDaysBetween(nextStartDate, contractEndDate);
         
       if (remainingDays <= 0) {
-          return sortedDBPeriods;
-        }
+        return sortedDBPeriods;
+      }
         
         // Tạo các kỳ còn thiếu
       const newPeriods = createPeriodsFromDate(
@@ -513,6 +512,21 @@ export function InstallmentPaymentHistoryModal({
     0,
   );
 
+  // Calculate total paid amount from transaction history
+  const calculateTotalPaidFromHistory = (): number => {
+    if (!amountHistory || amountHistory.length === 0) return 0;
+
+    return amountHistory.reduce((total: number, history: InstallmentAmountHistory) => {
+      // Chỉ tính các giao dịch payment và cancel_payment
+      if (history.transactionType === 'payment' || history.transactionType === 'cancel_payment') {
+        // Với payment: creditAmount là số tiền đóng, debitAmount là 0
+        // Với cancel_payment: debitAmount là số tiền hủy, creditAmount là 0
+        return total + (history.creditAmount || 0) - (history.debitAmount || 0);
+      }
+      return total;
+    }, 0);
+  };
+
   // Calculate remaining amount
   const databasePeriods = paymentPeriods.filter(
     (p) => !p.id.startsWith("calculated-"),
@@ -526,6 +540,20 @@ export function InstallmentPaymentHistoryModal({
     0,
   );
   const remainingAmount = totalCustomerPayments - totalFees;
+
+  // Calculate remaining periods
+  const calculateRemainingPeriods = () => {
+    if (!installment?.duration || !installment?.payment_period) return 0;
+    
+    // Tính tổng số kỳ của hợp đồng
+    const totalPeriods = Math.ceil(installment.duration / installment.payment_period);
+    
+    // Tính số kỳ đã thanh toán
+    const paidPeriods = paymentPeriods.filter(p => p.actualAmount && p.actualAmount > 0).length;
+    
+    // Trả về số kỳ còn lại
+    return Math.max(0, totalPeriods - paidPeriods);
+  };
 
   // Helper function to format number with dots
   const formatNumberWithDot = (num: number): string => {
@@ -1286,6 +1314,12 @@ export function InstallmentPaymentHistoryModal({
                     </td>
                   </tr>
                   <tr>
+                    <td className="py-1 px-2 border font-bold">Số kỳ còn lại</td>
+                    <td className="py-1 px-2 text-right border text-red-600" colSpan={2}>
+                      {calculateRemainingPeriods()} kỳ
+                    </td>
+                  </tr>
+                  <tr>
                     <td className="py-1 px-2 border font-bold">{installment?.debt_amount && installment?.debt_amount > 0 ? "Tiền thừa" : "Nợ cũ"}</td>
                     <td className="py-1 px-2 text-right border text-red-600" colSpan={2}>
                       {formatCurrency(
@@ -1318,7 +1352,7 @@ export function InstallmentPaymentHistoryModal({
                   <tr>
                     <td className="py-1 px-2 border font-bold">Đã đóng được</td>
                     <td className="py-1 px-2 text-right border">
-                      {formatCurrency(totalPaid)}
+                      {formatCurrency(calculateTotalPaidFromHistory())}
                     </td>
                   </tr>
                   <tr>
@@ -1327,7 +1361,7 @@ export function InstallmentPaymentHistoryModal({
                     </td>
                     <td className="py-1 px-2 text-right border text-red-600">
                       {formatCurrency(
-                        Math.max(0, (installment?.installment_amount || 0) - totalPaid),
+                        (installment?.installment_amount || 0) - calculateTotalPaidFromHistory()
                       )}
                     </td>
                   </tr>
@@ -1405,14 +1439,14 @@ export function InstallmentPaymentHistoryModal({
                     <tr>
                       <td className="px-4 py-2 border">Đã đóng được</td>
                       <td className="px-4 py-2 text-right border text-green-600">
-                        {formatCurrency(totalPaid)}
+                        {formatCurrency(calculateTotalPaidFromHistory())}
                       </td>
                     </tr>
                     <tr>
                       <td className="px-4 py-2 border">Còn phải đóng</td>
                       <td className="px-4 py-2 text-right border text-red-600">
                         {formatCurrency(
-                          Math.max(0, (installment?.installment_amount || 0) - totalPaid),
+                          Math.max(0, calculateRemainingPeriods() * (installment?.installment_amount || 0) / Math.ceil((installment?.duration || 0) / (installment?.payment_period || 1))),
                         )}
                       </td>
                     </tr>
@@ -1434,10 +1468,8 @@ export function InstallmentPaymentHistoryModal({
                           Math.max(
                             0,
                             (installment?.installment_amount || 0) -
-                              totalPaid +
-                              (remainingAmount < 0
-                                ? Math.abs(remainingAmount)
-                                : 0),
+                              calculateTotalPaidFromHistory()
+                              ,
                           ),
                         )}
                       </td>
@@ -1788,7 +1820,7 @@ export function InstallmentPaymentHistoryModal({
                     </div>
                     <div className="text-red-600 font-medium">
                       {formatCurrency(
-                        Math.max(0, (installment?.installment_amount || 0) - totalPaid),
+                        Math.max(0, (installment?.installment_amount || 0) - calculateTotalPaidFromHistory()),
                       )}
                     </div>
                   </div>
@@ -1852,7 +1884,7 @@ export function InstallmentPaymentHistoryModal({
                       )}{" "}
                       -{" "}
                       {formatCurrency(
-                        Math.max(0, (installment?.installment_amount || 0) - totalPaid),
+                        Math.max(0, (installment?.installment_amount || 0) - calculateTotalPaidFromHistory()),
                       )}{" "}
                       = {formatCurrency(calculateCustomerReceiveAmount())}
                     </div>

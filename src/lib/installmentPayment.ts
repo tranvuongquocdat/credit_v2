@@ -274,26 +274,6 @@ export async function deleteInstallmentPaymentPeriod(id: string, installmentId?:
     
     if (error) throw error;
     
-    // Record payment cancellation history if needed, but don't wait for it
-    if (periodData && periodData.actual_amount && periodData.actual_amount > 0) {
-      try {
-        const { recordCancelPayment } = await import('./installmentAmountHistory');
-        
-        // Use installment data we already fetched if available
-        const employeeId = installmentResult.data?.employee_id || 'system';
-        const installmentIdToUse = installmentId || periodData.installment_id;
-        
-        // Record cancellation asynchronously (don't await)
-        recordCancelPayment(
-          installmentIdToUse,
-          employeeId,
-          periodData.actual_amount
-        ).catch(e => console.error('Error recording cancel payment:', e));
-      } catch (historyError) {
-        console.error('Error importing recordCancelPayment:', historyError);
-      }
-    }
-    
     return {
       success: true,
       error: null,
