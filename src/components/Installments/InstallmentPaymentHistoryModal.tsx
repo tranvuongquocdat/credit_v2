@@ -10,8 +10,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { X, ChevronDown } from "lucide-react";
 import {
   InstallmentWithCustomer,
   InstallmentStatus,
@@ -19,7 +17,7 @@ import {
 import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
 import { bulkSaveInstallmentPayments, getInstallmentPaymentPeriods, resetInstallmentDebtAmount, updateInstallmentDebtAmount } from "@/lib/installmentPayment";
 import { getInstallmentById } from "@/lib/installment";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatDate, formatNumberWithCommas, parseFormattedNumber } from "@/lib/utils";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
@@ -41,7 +39,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { PaymentTab } from "./tabs/PaymentTab";
-
+import { calculateDaysBetween,  } from "@/lib/utils";
 // Define the tabs for this modal
 export type TabId =
   | "payment"
@@ -305,29 +303,9 @@ export function InstallmentPaymentHistoryModal({
     }
   };
 
-  // Format date helper
-  const formatDate = (dateString: string | null | undefined): string => {
-    if (!dateString) return "-";
-    try {
-      return format(new Date(dateString), "dd/MM/yyyy", { locale: vi });
-    } catch (error) {
-      return "-";
-    }
-  };
+  
 
-  // Hàm tính chính xác số ngày giữa hai ngày (inclusive)
-  const calculateDaysBetween = (startDate: Date, endDate: Date): number => {
-    // Chuẩn hóa về đầu ngày để tránh sai lệch do giờ/phút/giây
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(endDate);
-    end.setHours(0, 0, 0, 0);
-
-    // Tính ngày (bao gồm cả ngày đầu và cuối)
-    return (
-      Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
-    );
-  };
+  
 
   // Tính toán danh sách kỳ dự kiến kết hợp với kỳ đã có trong database
   // Memoize kết quả để tránh tính toán lại nhiều lần, cải thiện hiệu năng
@@ -507,24 +485,15 @@ export function InstallmentPaymentHistoryModal({
       paymentPeriods,
     ]);
 
-  // Calculate total paid amount from payment periods
-  const totalPaid = paymentPeriods.reduce(
-    (sum, period) => sum + (period.actualAmount || 0),
-    0,
-  );
 
   // Calculate total paid amount from transaction history
   const calculateTotalPaidFromHistory = (): number => {
     if (!amountHistory || amountHistory.length === 0) return 0;
 
     return amountHistory.reduce((total: number, history: InstallmentAmountHistory) => {
-      // Tính cả các giao dịch payment, cancel_payment và debt_payment
       if (history.transactionType === 'payment' || 
           history.transactionType === 'cancel_payment' ||
           history.transactionType === 'debt_payment') {
-        // Với payment: creditAmount là số tiền đóng, debitAmount là 0
-        // Với cancel_payment: debitAmount là số tiền hủy, creditAmount là 0
-        // Với debt_payment: creditAmount là số tiền đóng nợ, debitAmount là 0
         return total + (history.creditAmount || 0) - (history.debitAmount || 0);
       }
       return total;
@@ -712,9 +681,21 @@ export function InstallmentPaymentHistoryModal({
 
           // Refresh data sau khi API calls hoàn thành
           if (installment?.id) {
-            const { data } = await getInstallmentPaymentPeriods(installment.id);
-            if (data) {
-              setPaymentPeriods(data);
+            const { data: paymentData } = await getInstallmentPaymentPeriods(installment.id);
+            if (paymentData) {
+              setPaymentPeriods(paymentData);
+            }
+            
+            // Refresh amount history
+            const { data: historyData } = await getInstallmentAmountHistory(installment.id);
+            if (historyData) {
+              setAmountHistory(historyData);
+            }
+            
+            // Refresh installment info
+            const { data: installmentData } = await getInstallmentById(installment.id);
+            if (installmentData) {
+              setInstallment(installmentData);
             }
             
             // Gọi callback để cập nhật summary
@@ -831,9 +812,21 @@ export function InstallmentPaymentHistoryModal({
           
           // Refresh data sau khi API calls hoàn thành
           if (installment?.id) {
-            const { data } = await getInstallmentPaymentPeriods(installment.id);
-            if (data) {
-              setPaymentPeriods(data);
+            const { data: paymentData } = await getInstallmentPaymentPeriods(installment.id);
+            if (paymentData) {
+              setPaymentPeriods(paymentData);
+            }
+            
+            // Refresh amount history
+            const { data: historyData } = await getInstallmentAmountHistory(installment.id);
+            if (historyData) {
+              setAmountHistory(historyData);
+            }
+            
+            // Refresh installment info
+            const { data: installmentData } = await getInstallmentById(installment.id);
+            if (installmentData) {
+              setInstallment(installmentData);
             }
             
             // Gọi callback để cập nhật summary
@@ -931,119 +924,17 @@ export function InstallmentPaymentHistoryModal({
     setIsEditingDate(false);
   };
 
-  // Add function to start end date editing
-  const handleStartEndDateEditing = (period: InstallmentPaymentPeriod) => {
-    // Don't edit paid periods
-    if (isPeriodInDatabase(period)) return;
 
-    setSelectedEndDatePeriodId(period.id);
-    setIsEditingEndDate(true);
-
-    // Set default end date from period if available, otherwise calculate it
-    const dateValue = period.endDate
-      ? period.endDate.split("/").reverse().join("-")
-      : (() => {
-          // Calculate an end date based on start date and payment period
-          const startDate = new Date(period.dueDate.split("/").reverse().join("-"));
-          const endDate = new Date(startDate);
-          const periodDays = installment.payment_period || 30;
-          endDate.setDate(endDate.getDate() + (periodDays - 1)); // -1 because start day is included
-          return format(endDate, "yyyy-MM-dd");
-        })();
-
-    setSelectedEndDate(dateValue);
-  };
-
-  // Save selected end date
-  const handleSaveEndDate = async (
-    period: InstallmentPaymentPeriod,
-    dateValue: string,
-  ) => {
-    if (!installment?.id || !dateValue) return;
-
-    try {
-      const { saveInstallmentPayment } = await import(
-        "@/lib/installmentPayment"
-      );
-
-      // Format date to ISO string (YYYY-MM-DD)
-      const formattedDate = dateValue;
-      const isCalculatedPeriod = period.id.startsWith("calculated-");
-
-      // Call API to save the date
-      await saveInstallmentPayment(
-        installment.id,
-        {
-          ...period,
-          endDate: formattedDate,
-        },
-        period.actualAmount || 0,
-        isCalculatedPeriod,
-      );
-
-      // Update UI
-      const updatedPeriods = paymentPeriods.map((p) => {
-        if (p.id === period.id) {
-          return {
-            ...p,
-            endDate: format(new Date(formattedDate), "dd/MM/yyyy"),
-          };
-        }
-        return p;
-      });
-
-      setPaymentPeriods(updatedPeriods);
-      setSelectedEndDatePeriodId(null);
-      setIsEditingEndDate(false);
-
-      // Show success message
-      toast({
-        title: "Thành công",
-        description: "Đã cập nhật ngày kết thúc kỳ",
-      });
-
-      // Refresh data from server
-      if (installment?.id) {
-        const { data, error } = await getInstallmentPaymentPeriods(
-          installment.id,
-        );
-        if (!error && data) {
-          setPaymentPeriods(data);
-        }
-      }
-
-      // Gọi callback để cập nhật summary
-      if (onPaymentUpdate) {
-        onPaymentUpdate();
-      }
-    } catch (error) {
-      console.error("Error saving end date:", error);
-      toast({
-        variant: "destructive",
-        title: "Lỗi",
-        description:
-          "Có lỗi xảy ra khi cập nhật ngày kết thúc kỳ. Vui lòng thử lại.",
-      });
-    }
-  };
-
-  // Helper to parse formatted number input
-  const parseFormattedNumber = (formattedValue: string): number => {
-    return parseInt(formattedValue.replace(/,/g, ""), 10) || 0;
-  };
-
-  // Helper to format number with commas
-  const formatNumberWithCommas = (value: number): string => {
-    return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  };
+  
 
   // Calculate customer receive amount
   const calculateCustomerReceiveAmount = (): number => {
     const downPayment = parseFormattedNumber(rotationDownPayment);
-    const remainingDebt = Math.max(0, (installment?.installment_amount || 0) - totalPaid);
+    const amountToPay = Math.max(0, calculateRemainingPeriods() * (installment?.installment_amount || 0) / Math.ceil((installment?.duration || 0) / (installment?.payment_period || 1)));
+    const remainingDebt = 0 - (installment.debt_amount || 0);
 
     // Customer receives: downPayment - remainingDebt
-    return downPayment - remainingDebt;
+    return downPayment - amountToPay - remainingDebt;
   };
 
   // Handle rotation loan amount change
@@ -1081,29 +972,48 @@ export function InstallmentPaymentHistoryModal({
     setIsRotating(true); // Set loading state
 
     try {
-      // First close the current contract by marking all periods as paid and updating status
-      const { saveInstallmentPayment, updateInstallmentStatus } = await import(
+      // Import necessary functions
+      const { saveInstallmentPayment, updateInstallmentStatus, bulkSaveInstallmentPayments } = await import(
         "@/lib/installmentPayment"
       );
       const { createInstallment } = await import("@/lib/installment");
+      const { recordContractRotation, recordBulkPayment, recordDebtPayment, recordContractClosure } = await import(
+        "@/lib/installmentAmountHistory"
+      );
 
-      // Mark all remaining periods as paid
+      // Get all periods including calculated ones
       const allPeriods = calculateCombinedPaymentPeriods;
+
+      // Find periods that need to be marked as paid
       const periodsToUpdate = allPeriods.filter((p: InstallmentPaymentPeriod) => !isPeriodInDatabase(p));
-
-      for (const periodToUpdate of periodsToUpdate) {
-        const isCalculatedPeriod = periodToUpdate.id.startsWith("calculated-");
-
-        await saveInstallmentPayment(
+      if (periodsToUpdate.length > 0) {
+        await bulkSaveInstallmentPayments(
           installment.id,
-          periodToUpdate,
-          periodToUpdate.expectedAmount,
-          isCalculatedPeriod,
+          periodsToUpdate,
+          installment.employee_id
+        );
+        // Ghi nhận lịch sử thanh toán
+        await recordBulkPayment(
+          installment.id,
+          installment.employee_id,
+          calculateRemainingPeriods() * (installment?.installment_amount || 0) / Math.ceil((installment?.duration || 0) / (installment?.payment_period || 1)),
+          periodsToUpdate.length
         );
       }
 
-      // Close the current contract
+      // Ghi lại lịch sử thanh toán nợ (nếu có)
+      if (installment?.debt_amount) {
+        await recordDebtPayment(installment.id, installment.employee_id, installment.debt_amount);
+      }
+
+      // Reset debt amount to 0
+      await resetInstallmentDebtAmount(installment.id);
+
+      // Update installment status to closed
       await updateInstallmentStatus(installment.id, InstallmentStatus.CLOSED);
+
+      // Record in transaction history
+      await recordContractClosure(installment.id, installment.employee_id);
 
       // Create a new contract
       const newContract = {
@@ -1125,16 +1035,13 @@ export function InstallmentPaymentHistoryModal({
         throw error;
       }
 
-      // Record in transaction history
+      // Record rotation in transaction history
       if (data) {
-        const { recordContractRotation } = await import(
-          "@/lib/installmentAmountHistory"
-        );
         await recordContractRotation(
           installment.id,
           data.id,
           installment.employee_id,
-          Math.max(0, (installment?.installment_amount || 0) - totalPaid),
+          Math.max(0, (installment?.installment_amount || 0) - calculateTotalPaidFromHistory()),
         );
       }
 
@@ -1805,7 +1712,7 @@ export function InstallmentPaymentHistoryModal({
                       <input
                         type="text"
                         className="border rounded p-2 w-full"
-                        value={rotationLoanAmount}
+                        value={formatNumberWithDot(parseFormattedNumber(rotationLoanAmount))}
                         onChange={handleRotationLoanAmountChange}
                       />
                     </div>
@@ -1824,7 +1731,7 @@ export function InstallmentPaymentHistoryModal({
                       <input
                         type="text"
                         className="border rounded p-2 w-full"
-                        value={rotationDownPayment}
+                        value={formatNumberWithDot(parseFormattedNumber(rotationDownPayment))}
                         onChange={handleRotationDownPaymentChange}
                       />
                     </div>
@@ -1905,8 +1812,9 @@ export function InstallmentPaymentHistoryModal({
                       )}{" "}
                       -{" "}
                       {formatCurrency(
-                        Math.max(0, (installment?.installment_amount || 0) - calculateTotalPaidFromHistory()),
-                      )}{" "}
+                          Math.max(0, calculateRemainingPeriods() * (installment?.installment_amount || 0) / Math.ceil((installment?.duration || 0) / (installment?.payment_period || 1))),
+                        )}{" "}
+                      - {formatCurrency(0 - (installment.debt_amount || 0))}
                       = {formatCurrency(calculateCustomerReceiveAmount())}
                     </div>
                   </div>

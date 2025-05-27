@@ -21,6 +21,7 @@ import { AdditionalLoanTab, BadCreditTab, CloseTab, DocumentsTab, ExtensionTab, 
 import { getCreditById } from '@/lib/credit';
 import { getPrincipalChangesForCredit } from '@/lib/credit-principal-changes';
 import { CreditAmountHistory, CreditTransactionType, getCreditAmountHistory } from '@/lib/credit-amount-history';
+import { calculateDaysBetween, formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
 
 
 interface PaymentHistoryModalProps {
@@ -170,47 +171,6 @@ export function PaymentHistoryModal({
       loadPaymentPeriods();
     }
   }, [isOpen, credit?.id]);
-  
-  // Format currency helper
-  const formatCurrency = (amount: number): string => {
-    return new Intl.NumberFormat('vi-VN', { 
-      style: 'currency', 
-      currency: 'VND',
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
-  
-  // Format date helper
-  const formatDate = (dateString: string | null | undefined): string => {
-    if (!dateString) return '-';
-    try {
-      return format(new Date(dateString), 'dd/MM/yyyy', { locale: vi });
-    } catch (error) {
-      return '-';
-    }
-  };
-  
-  // Format datetime helper for history display
-  const formatDateTime = (dateString: string | null | undefined): string => {
-    if (!dateString) return '-';
-    try {
-      return format(new Date(dateString), 'dd-MM-yyyy HH:mm:ss', { locale: vi });
-    } catch (error) {
-      return '-';
-    }
-  };
-  
-  // Hàm tính chính xác số ngày giữa hai ngày (inclusive)
-  const calculateDaysBetween = (startDate: Date, endDate: Date): number => {
-    // Chuẩn hóa về đầu ngày để tránh sai lệch do giờ/phút/giây
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(endDate);
-    end.setHours(0, 0, 0, 0);
-    
-    // Tính ngày (bao gồm cả ngày đầu và cuối)
-    return Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-  };
   
   // Fetch principal changes when credit changes
   useEffect(() => {

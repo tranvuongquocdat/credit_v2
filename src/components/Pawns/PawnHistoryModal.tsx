@@ -18,6 +18,7 @@ import { AdditionalLoanTab, BadPawnTab, RedeemTab, DocumentsTab, ExtensionTab, P
 import { getPawnById } from '@/lib/pawn';
 import { getPrincipalChangesForPawn } from '@/lib/pawn-principal-changes';
 import { PawnAmountHistory, PawnTransactionType, getPawnAmountHistory } from '@/lib/pawn-amount-history';
+import { formatCurrency, calculateDaysBetween, formatDate, formatDateTime } from '@/lib/utils';
 
 interface PawnHistoryModalProps {
   isOpen: boolean;
@@ -132,39 +133,6 @@ export function PawnHistoryModal({
       console.error('Error refreshing data:', err);
     }
   };
-
-  // Format currency
-  const formatCurrency = useCallback((amount: number): string => {
-    return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND'
-    }).format(amount);
-  }, []);
-
-  // Format date
-  const formatDate = useCallback((dateString: string): string => {
-    return format(new Date(dateString), 'dd/MM/yyyy', { locale: vi });
-  }, []);
-
-  // Format datetime helper for history display
-  const formatDateTime = useCallback((dateString: string | null | undefined): string => {
-    if (!dateString) return '-';
-    try {
-      return format(new Date(dateString), 'dd-MM-yyyy HH:mm:ss', { locale: vi });
-    } catch (error) {
-      return '-';
-    }
-  }, []);
-
-  // Calculate days between dates
-  const calculateDaysBetween = useCallback((start: Date, end: Date): number => {
-    // Chuẩn hóa về đầu ngày để tránh sai lệch do giờ/phút/giây
-    start.setHours(0, 0, 0, 0);
-    end.setHours(0, 0, 0, 0);
-    
-    // Tính ngày (bao gồm cả ngày đầu và cuối)
-    return Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-  }, []);
 
   // Generate estimated payment periods based on pawn contract
   const generateEstimatedPaymentPeriods = useCallback((pawn: PawnWithCustomerAndCollateral | null): PawnPaymentPeriod[] => {

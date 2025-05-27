@@ -9,6 +9,8 @@ import { PawnPaymentPeriod } from '@/models/pawn-payment';
 import { toast } from '@/components/ui/use-toast';
 import { PrincipalChange, calculateInterestWithPrincipalChanges, calculatePawnInterestAmount } from '@/lib/interest-calculator';
 import { getPrincipalChangesForPawn } from '@/lib/pawn-principal-changes';
+import { parseFormattedNumber } from '@/lib/utils';
+import { formatNumberInput } from '@/lib/utils';
 
 type PaymentTabProps = {
   pawn: PawnWithCustomerAndCollateral | null;
@@ -25,15 +27,7 @@ type PaymentTabProps = {
   principalChanges?: PrincipalChange[];
 };
 
-// Helper function to format number with thousand separators for input
-const formatNumberInput = (num: number): string => {
-  return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-};
 
-// Helper function to parse formatted number back to number
-const parseFormattedNumber = (str: string): number => {
-  return parseInt(str.replace(/\./g, "")) || 0;
-};
 
 export function PaymentTab({
   pawn,
