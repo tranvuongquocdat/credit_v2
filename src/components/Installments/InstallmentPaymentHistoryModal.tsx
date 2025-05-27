@@ -170,11 +170,6 @@ export function InstallmentPaymentHistoryModal({
   // Confirmation dialog state
   const [isCloseContractConfirmOpen, setIsCloseContractConfirmOpen] = useState(false);
 
-  // Add a new state to track end date editing
-  const [isEditingEndDate, setIsEditingEndDate] = useState(false);
-  const [selectedEndDatePeriodId, setSelectedEndDatePeriodId] = useState<string | null>(null);
-  const [selectedEndDate, setSelectedEndDate] = useState<string>("");
-
   // State for temporary edited values
   const [tempEditedDate, setTempEditedDate] = useState<string | null>(null);
   const [tempEditedAmount, setTempEditedAmount] = useState<number | null>(null);
@@ -400,9 +395,8 @@ export function InstallmentPaymentHistoryModal({
           // Tổng số tiền phải trả mỗi ngày (gốc + lãi)
           return dailyPrincipal + dailyInterest;
         })() : 0;
-        const amountPerPeriod = remainingDays ? 0 : Math.round(remainingAmount / periodsToCreate);
-          
-          const periods: InstallmentPaymentPeriod[] = [];
+        const amountPerPeriod = remainingDays ? 0 : (installment.installment_amount || 0) / loanPeriod * paymentPeriod;
+        const periods: InstallmentPaymentPeriod[] = [];
         let currentDate = new Date(startFromDate);
           
         for (let i = 0; i < periodsToCreate; i++) {
@@ -418,7 +412,7 @@ export function InstallmentPaymentHistoryModal({
           }
             
           // Tính số tiền dự kiến
-          let expectedAmount = remainingDays ? Math.round(amountPerDay * periodDays) : amountPerPeriod;
+          let expectedAmount = remainingDays ? Math.round(amountPerDay * periodDays) : (amountPerPeriod / paymentPeriod) * periodDays;
             
           const period = createPeriod(periodNumber, currentDate, periodDays, expectedAmount, contractEndDate);
           periods.push(period);
@@ -866,13 +860,6 @@ export function InstallmentPaymentHistoryModal({
       clearTimeout(timeoutId);
     }
   };
-
-  // Hàm cưỡng chế tính toán lại danh sách kỳ thanh toán
-  const forceRefreshCalculatedPeriods = useCallback(() => {
-    console.log("Force refreshing calculated periods");
-    // Hack: Tạo một bản sao mới của state để trigger useMemo recalculate
-    setPaymentPeriods(prevPeriods => [...prevPeriods]);
-  }, []);
 
   // Bắt đầu chỉnh sửa khoản thanh toán
   const handleStartEditing = (period: InstallmentPaymentPeriod, periodIndex: number) => {
