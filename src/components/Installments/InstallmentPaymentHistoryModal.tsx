@@ -17,7 +17,7 @@ import {
   InstallmentStatus,
 } from "@/models/installment";
 import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
-import { bulkSaveInstallmentPayments, getInstallmentPaymentPeriods } from "@/lib/installmentPayment";
+import { bulkSaveInstallmentPayments, getInstallmentPaymentPeriods, resetInstallmentDebtAmount, updateInstallmentDebtAmount } from "@/lib/installmentPayment";
 import { getInstallmentById } from "@/lib/installment";
 import { formatCurrency } from "@/lib/utils";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -28,6 +28,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import {
   InstallmentAmountHistory,
   getInstallmentAmountHistory,
+  recordDebtPayment,
 } from "@/lib/installmentAmountHistory";
 import {
   AlertDialog,
@@ -517,10 +518,13 @@ export function InstallmentPaymentHistoryModal({
     if (!amountHistory || amountHistory.length === 0) return 0;
 
     return amountHistory.reduce((total: number, history: InstallmentAmountHistory) => {
-      // Chỉ tính các giao dịch payment và cancel_payment
-      if (history.transactionType === 'payment' || history.transactionType === 'cancel_payment') {
+      // Tính cả các giao dịch payment, cancel_payment và debt_payment
+      if (history.transactionType === 'payment' || 
+          history.transactionType === 'cancel_payment' ||
+          history.transactionType === 'debt_payment') {
         // Với payment: creditAmount là số tiền đóng, debitAmount là 0
         // Với cancel_payment: debitAmount là số tiền hủy, creditAmount là 0
+        // Với debt_payment: creditAmount là số tiền đóng nợ, debitAmount là 0
         return total + (history.creditAmount || 0) - (history.debitAmount || 0);
       }
       return total;
@@ -1206,7 +1210,24 @@ export function InstallmentPaymentHistoryModal({
           periodsToUpdate,
           installment.employee_id
         );
+        // Ghi nhận lịch sử thanh toán
+        const { recordBulkPayment } = await import('@/lib/installmentAmountHistory');
+        await recordBulkPayment(
+          installment.id,
+          installment.employee_id,
+          calculateRemainingPeriods() * (installment?.installment_amount || 0) / Math.ceil((installment?.duration || 0) / (installment?.payment_period || 1)),
+          periodsToUpdate.length
+        );
       }
+      
+
+      // Ghi lại lịch sử thanh toán nợ ( nếu có )
+      if (installment?.debt_amount) {
+        await recordDebtPayment(installment.id, installment.employee_id, installment.debt_amount);
+      }
+
+      // Reset debt amount to 0
+      await resetInstallmentDebtAmount(installment.id);
 
       // Update installment status to closed
       await updateInstallmentStatus(installment.id, InstallmentStatus.CLOSED);
@@ -1454,7 +1475,7 @@ export function InstallmentPaymentHistoryModal({
                       <td className="px-4 py-2 border font-bold">Nợ cũ</td>
                       <td className="px-4 py-2 text-right border text-red-600" colSpan={2}>
                         {formatCurrency(
-                          Math.abs(remainingAmount < 0 ? remainingAmount : 0),
+                          (installment?.debt_amount || 0),
                         )}
                       </td>
                     </tr>

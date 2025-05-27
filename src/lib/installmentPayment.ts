@@ -888,4 +888,29 @@ export async function countOverdueInstallments(storeId?: string) {
       error
     };
   }
+}
+
+/**
+ * Reset debt amount to 0 when closing a contract
+ */
+export async function resetInstallmentDebtAmount(installmentId: string) {
+  try {
+    // Update debt amount to 0 in database
+    const { error: updateError } = await supabase
+      .from('installments')
+      .update({ 
+        debt_amount: 0,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', installmentId);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error resetting debt amount:', error);
+    return { success: false, error };
+  }
 } 

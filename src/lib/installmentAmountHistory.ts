@@ -8,7 +8,8 @@ export enum TransactionType {
   CANCEL_PAYMENT = 'cancel_payment',
   CLOSE_CONTRACT = 'close_contract',
   REOPEN_CONTRACT = 'reopen_contract',
-  ROTATE_CONTRACT = 'rotate_contract'
+  ROTATE_CONTRACT = 'rotate_contract',
+  DEBT_PAYMENT = 'debt_payment'
 }
 
 // DB model - map trực tiếp với database
@@ -104,6 +105,26 @@ export async function createInstallmentAmountHistory(params: {
       error
     };
   }
+}
+
+/**
+ * Ghi lại lịch sử khi thanh toán nợ
+ */
+export async function recordDebtPayment(installmentId: string, employeeId: string, amount: number) {
+  if (amount < 0) return createInstallmentAmountHistory({
+    installmentId,
+    employeeId,
+    creditAmount: Math.abs(amount),
+    description: 'Thanh toán nợ',
+    transactionType: TransactionType.DEBT_PAYMENT
+  });
+  return createInstallmentAmountHistory({
+    installmentId,
+    employeeId,
+    debitAmount: amount,
+    description: 'Thanh toán nợ',
+    transactionType: TransactionType.PAYMENT
+  });
 }
 
 /**
