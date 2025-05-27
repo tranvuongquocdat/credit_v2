@@ -105,9 +105,6 @@ export function InstallmentsTable({
             0
           );
           
-          // Lấy nợ trực tiếp từ database (debt_amount)
-          installment.oldDebt = installment.debt_amount || 0;
-          
           // Tính còn phải đóng
           // Ưu tiên dùng installment_amount nếu có, nếu không tính dựa trên amount_given và interest_rate
           const installmentAmount = installment.installment_amount || 
@@ -550,8 +547,8 @@ export function InstallmentsTable({
                   {formatCurrency(installment.totalPaid || 0)}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  <span className={installment.oldDebt && installment.oldDebt > 0 ? 'text-red-600' : 'text-green-600'}>
-                    {formatCurrency((installment.oldDebt || 0))}
+                  <span className={installment.debt_amount && installment.debt_amount > 0 ? 'text-red-600' : 'text-green-600'}>
+                    {formatCurrency((0 - (installment.debt_amount || 0)))}
                   </span>
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">

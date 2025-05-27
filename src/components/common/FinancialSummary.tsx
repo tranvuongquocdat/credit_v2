@@ -130,7 +130,7 @@ export function FinancialSummary({
             <span>Lãi phí đã thu</span>
           </div>
           <div className="text-base font-semibold text-gray-800">
-            {Math.floor((fundStatus.collectedInterest)).toLocaleString()}
+            {Math.floor((fundStatus.collectedInterest || 0)).toLocaleString()}
           </div>
         </div>
       </div>

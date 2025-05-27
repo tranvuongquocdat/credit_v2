@@ -408,7 +408,19 @@ export function InstallmentPaymentHistoryModal({
         if (periodsToCreate <= 0) return [];
 
         // Tính số tiền mỗi ngày hoặc mỗi kỳ
-        const amountPerDay = remainingDays ? remainingAmount / remainingDays : 0;
+        const amountPerDay = remainingDays ? (() => {
+          if (!installment?.amount_given || !installment?.installment_amount || !installment?.duration) {
+            return 0;
+          }
+          // Tính lãi suất từ down_payment và installment_amount
+          const interestRate = ((installment.installment_amount - installment.amount_given) / installment.amount_given) * 100;
+          // Tính số tiền lãi mỗi ngày
+          const dailyInterest = (installment.amount_given * interestRate / 100) / installment.duration;
+          // Số tiền gốc mỗi ngày
+          const dailyPrincipal = installment.amount_given / installment.duration;
+          // Tổng số tiền phải trả mỗi ngày (gốc + lãi)
+          return dailyPrincipal + dailyInterest;
+        })() : 0;
         const amountPerPeriod = remainingDays ? 0 : Math.round(remainingAmount / periodsToCreate);
           
           const periods: InstallmentPaymentPeriod[] = [];
@@ -421,21 +433,13 @@ export function InstallmentPaymentHistoryModal({
             let periodDays = paymentPeriod;
           if (i === periodsToCreate - 1) {
             const daysToContractEnd = calculateDaysBetween(currentDate, contractEndDate);
-              if (daysToContractEnd < paymentPeriod) {
-                periodDays = Math.max(1, daysToContractEnd);
-              }
+            if (daysToContractEnd < paymentPeriod) {
+              periodDays = Math.max(1, daysToContractEnd);
             }
+          }
             
           // Tính số tiền dự kiến
-          let expectedAmount = remainingDays 
-            ? Math.round(amountPerDay * periodDays)
-            : amountPerPeriod;
-          
-              // Kỳ cuối điều chỉnh để tổng số tiền chính xác
-          if (i === periodsToCreate - 1) {
-              const calculatedAmount = periods.reduce((sum, p) => sum + p.expectedAmount, 0);
-            expectedAmount = remainingAmount - calculatedAmount;
-            }
+          let expectedAmount = remainingDays ? Math.round(amountPerDay * periodDays) : amountPerPeriod;
             
           const period = createPeriod(periodNumber, currentDate, periodDays, expectedAmount, contractEndDate);
           periods.push(period);
@@ -482,8 +486,8 @@ export function InstallmentPaymentHistoryModal({
         
       // Tính số tiền còn lại và số ngày còn lại
       const totalPaidAmount = sortedDBPeriods.reduce((sum, p) => sum + (p.actualAmount || 0), 0);
-      const remainingAmount = Math.max(0, installmentAmount - totalPaidAmount);
-        const remainingDays = calculateDaysBetween(nextStartDate, contractEndDate);
+      const remainingAmount = Math.max(0, installmentAmount);
+      const remainingDays = calculateDaysBetween(nextStartDate, contractEndDate);
         
       if (remainingDays <= 0) {
           return sortedDBPeriods;
@@ -632,80 +636,61 @@ export function InstallmentPaymentHistoryModal({
           });
         }
 
+        // Destructure necessary functions
+        const { bulkSaveInstallmentPayments, updateInstallmentDebtAmount } = await importPromise;
+        
+        // Tính tổng số tiền cần cộng vào quỹ
+        const totalAmount = periodsToUpdate.reduce((sum, p) => sum + (p.actualAmount || p.expectedAmount), 0);
+        
+        // Cập nhật số nợ
+        let totalDebtDifference = 0;
+        for (const period of periodsToUpdate) {
+          const actualAmount = period.actualAmount || period.expectedAmount;
+          // Tính tổng chênh lệch
+          totalDebtDifference += (actualAmount - period.expectedAmount);
+        }
+        
+        // Chỉ cập nhật số nợ khi có sự chênh lệch
+        if (totalDebtDifference !== 0) {
+          await updateInstallmentDebtAmount(
+            installment.id,
+            0, // expectedAmount = 0 vì chúng ta đang dùng chế độ direct change
+            totalDebtDifference,
+            true // isChecked = true
+          );
+        }
+
+        // Thực hiện API calls
         try {
-          // Destructure necessary functions
-          const { bulkSaveInstallmentPayments } = await importPromise;
+          // Lưu dữ liệu payment
+          await bulkSaveInstallmentPayments(
+            installment.id,
+            periodsToUpdate,
+            installment.employee_id,
+          );
           
-          // Tính tổng số tiền cần cộng vào quỹ
-          const totalAmount = periodsToUpdate.reduce((sum, p) => sum + (p.actualAmount || p.expectedAmount), 0);
-          
-          // QUAN TRỌNG: Tạo một bản sao tạm thời của UI state
-          // Đây là optimistic update - update UI trước khi API call hoàn thành
-          const tempPaymentPeriods = [...paymentPeriods];
-          
-          // Cập nhật UI ngay lập tức
-          const updatedPaymentPeriods = tempPaymentPeriods.map(p => {
-            // Tìm trong periodsToUpdate
-            const matchingPeriod = periodsToUpdate.find(up => up.id === p.id);
-            if (matchingPeriod) {
-              // Nếu là period trong danh sách cần update, trả về phiên bản đã cập nhật
-              return {
-                ...p,
-                actualAmount: matchingPeriod.actualAmount || matchingPeriod.expectedAmount,
-                paymentStartDate: matchingPeriod.paymentStartDate || format(new Date(), "dd/MM/yyyy")
-              };
+          // Ghi nhận lịch sử thanh toán
+          const { recordBulkPayment } = await import('@/lib/installmentAmountHistory');
+          await recordBulkPayment(
+            installment.id,
+            installment.employee_id,
+            totalAmount,
+            periodsToUpdate.length
+          );
+
+          // Refresh data sau khi API calls hoàn thành
+          if (installment?.id) {
+            const { data } = await getInstallmentPaymentPeriods(installment.id);
+            if (data) {
+              setPaymentPeriods(data);
             }
-            return p;
-          });
-          
-          // Cập nhật UI state ngay lập tức (optimistic update)
-          setPaymentPeriods(updatedPaymentPeriods);
-          
-          // Thực hiện API calls ở background
-          Promise.all([
-            // Lưu dữ liệu payment
-            bulkSaveInstallmentPayments(
-              installment.id,
-              periodsToUpdate,
-              installment.employee_id,
-            ),
             
-            // Ghi nhận lịch sử thanh toán (import dynamically)
-            (async () => {
-              const { recordBulkPayment } = await import('@/lib/installmentAmountHistory');
-              return recordBulkPayment(
-                installment.id,
-                installment.employee_id,
-                totalAmount,
-                periodsToUpdate.length
-              );
-            })()
-          ]).then(async ([saveResult]) => {
-            console.log("Background operations completed:", saveResult);
-            
-            // Refresh data silently in background sau khi API calls hoàn thành
-            if (installment?.id) {
-              const { data } = await getInstallmentPaymentPeriods(installment.id);
-              if (data) {
-                setPaymentPeriods(data);
-              }
-              
-              // Gọi callback để cập nhật summary
-              if (onPaymentUpdate) {
-                onPaymentUpdate();
-              }
+            // Gọi callback để cập nhật summary
+            if (onPaymentUpdate) {
+              onPaymentUpdate();
             }
-          }).catch(error => {
-            console.error("Error in background operations:", error);
-            
-            // Nếu background operations thất bại, hiển thị thông báo lỗi
-            toast({
-              variant: "destructive",
-              title: "Lỗi",
-              description: "Có lỗi xảy ra khi xử lý. Dữ liệu sẽ được cập nhật khi bạn tải lại trang.",
-            });
-          });
-          
+          }
+
           // Show success message
           toast({
             title: "Thành công",
@@ -746,109 +731,85 @@ export function InstallmentPaymentHistoryModal({
 
         try {
           // Destructure necessary functions
-          const { deleteInstallmentPaymentPeriod, updateInstallmentStatus } = await importPromise;
+          const { deleteInstallmentPaymentPeriod, updateInstallmentStatus, updateInstallmentDebtAmount } = await importPromise;
           
-          // Optimistic update UI
-          if (!period.id.startsWith("calculated-")) {
-            // Tạo một bản sao tạm thời của UI state
-            const tempPaymentPeriods = [...paymentPeriods];
-            
-            // Cập nhật UI ngay lập tức - remove period hoặc reset actualAmount
-            const updatedPaymentPeriods = tempPaymentPeriods.map(p => {
-              if (p.id === period.id) {
-                return {
-                  ...p,
-                  actualAmount: 0,
-                  paymentStartDate: undefined
-                };
-              }
-              return p;
-            });
-            
-            // Cập nhật UI state ngay lập tức (optimistic update)
-            setPaymentPeriods(updatedPaymentPeriods);
-            
-            // Thực hiện API calls ở background
-            Promise.all([
-              // Delete payment period
-              deleteInstallmentPaymentPeriod(period.id, installment.id),
-              
-              // Ghi nhận lịch sử hủy thanh toán (import dynamically)
-              (async () => {
-                const { recordCancelPayment } = await import('@/lib/installmentAmountHistory');
-                if (period.actualAmount) {
-                  return recordCancelPayment(
-                    installment.id,
-                    installment.employee_id,
-                    period.actualAmount
-                  );
-                }
-                return null;
-              })()
-            ]).then(async ([deleteResult]) => {
-              console.log("Background uncheck operations completed:", deleteResult);
-              
-              // Check if contract status needs to be updated
-              if (installment.status === InstallmentStatus.FINISHED) {
-                // Check if all other periods are still completed
-                const currentPaymentPeriods = calculateCombinedPaymentPeriods.map(p => 
-                  p.id === period.id ? { ...p, actualAmount: 0 } : p
-                );
-                
-                const allPeriodsCompleted = currentPaymentPeriods.every(
-                  (p) => (p.id === period.id) ? false : (p.actualAmount && p.actualAmount >= p.expectedAmount)
-                );
+          // Delete payment period
+          await deleteInstallmentPaymentPeriod(period.id, installment.id);
+          
+          // Ghi nhận lịch sử hủy thanh toán
+          if (period.actualAmount) {
+            const { recordCancelPayment } = await import('@/lib/installmentAmountHistory');
+            await recordCancelPayment(
+              installment.id,
+              installment.employee_id,
+              period.actualAmount
+            );
+          }
 
-                // If not all periods are completed, update status to ON_TIME
-                if (!allPeriodsCompleted) {
-                  await updateInstallmentStatus(
-                    installment.id,
-                    InstallmentStatus.ON_TIME,
-                  );
-                  
-                  // Update installment state
-                  setInstallment({
-                    ...installment,
-                    status: InstallmentStatus.ON_TIME,
-                  });
+          // Cập nhật số nợ
+          const actualAmount = period.actualAmount || 0;
+          const debtDifference = actualAmount - period.expectedAmount;
+          
+          // Chỉ cập nhật số nợ khi có sự chênh lệch
+          if (debtDifference !== 0) {
+            await updateInstallmentDebtAmount(
+              installment.id,
+              0, // expectedAmount = 0 vì chúng ta đang dùng chế độ direct change
+              debtDifference,
+              false // isChecked = false
+            );
+          }
 
-                  toast({
-                    title: "Trạng thái hợp đồng đã thay đổi",
-                    description:
-                      "Hợp đồng đã chuyển từ 'Hoàn thành' sang 'Đang vay' do có kỳ chưa thanh toán.",
-                  });
-                  
-                  // Call callback to update contract table if status changed
-                  if (onContractStatusChange) {
-                    onContractStatusChange();
-                  }
-                }
-              }
+          // Check if contract status needs to be updated
+          if (installment.status === InstallmentStatus.FINISHED) {
+            // Check if all other periods are still completed
+            const currentPaymentPeriods = calculateCombinedPaymentPeriods.map(p => 
+              p.id === period.id ? { ...p, actualAmount: 0 } : p
+            );
+            
+            const allPeriodsCompleted = currentPaymentPeriods.every(
+              (p) => (p.id === period.id) ? false : (p.actualAmount && p.actualAmount >= p.expectedAmount)
+            );
+
+            // If not all periods are completed, update status to ON_TIME
+            if (!allPeriodsCompleted) {
+              await updateInstallmentStatus(
+                installment.id,
+                InstallmentStatus.ON_TIME,
+              );
               
-              // Refresh data silently in background sau khi API calls hoàn thành
-              if (installment?.id) {
-                const { data } = await getInstallmentPaymentPeriods(installment.id);
-                if (data) {
-                  setPaymentPeriods(data);
-                }
-                
-                // Gọi callback để cập nhật summary
-                if (onPaymentUpdate) {
-                  onPaymentUpdate();
-                }
-              }
-            }).catch(error => {
-              console.error("Error in background uncheck operations:", error);
-              
-              // Nếu background operations thất bại, hiển thị thông báo lỗi
-              toast({
-                variant: "destructive",
-                title: "Lỗi",
-                description: "Có lỗi xảy ra khi xử lý. Dữ liệu sẽ được cập nhật khi bạn tải lại trang.",
+              // Update installment state
+              setInstallment({
+                ...installment,
+                status: InstallmentStatus.ON_TIME,
               });
-            });
+
+              toast({
+                title: "Trạng thái hợp đồng đã thay đổi",
+                description:
+                  "Hợp đồng đã chuyển từ 'Hoàn thành' sang 'Đang vay' do có kỳ chưa thanh toán.",
+              });
+              
+              // Call callback to update contract table if status changed
+              if (onContractStatusChange) {
+                onContractStatusChange();
+              }
+            }
           }
           
+          // Refresh data sau khi API calls hoàn thành
+          if (installment?.id) {
+            const { data } = await getInstallmentPaymentPeriods(installment.id);
+            if (data) {
+              setPaymentPeriods(data);
+            }
+            
+            // Gọi callback để cập nhật summary
+            if (onPaymentUpdate) {
+              onPaymentUpdate();
+            }
+          }
+
           // Show success message
           toast({
             title: "Thành công",
@@ -1325,10 +1286,10 @@ export function InstallmentPaymentHistoryModal({
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-1 px-2 border font-bold">Nợ cũ</td>
+                    <td className="py-1 px-2 border font-bold">{installment?.debt_amount && installment?.debt_amount > 0 ? "Tiền thừa" : "Nợ cũ"}</td>
                     <td className="py-1 px-2 text-right border text-red-600" colSpan={2}>
                       {formatCurrency(
-                        Math.abs(remainingAmount < 0 ? remainingAmount : 0),
+                        Math.abs(installment?.debt_amount || 0),
                       )}
                     </td>
                   </tr>

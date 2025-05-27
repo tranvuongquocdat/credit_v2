@@ -10,15 +10,20 @@ export function useInstallmentsSummary() {
   const [error, setError] = useState<Error | null>(null);
   
   // Get current store from context
-  const { currentStore } = useStore();
+  const { currentStore, loading: storeLoading } = useStore();
 
   const fetchData = async () => {
+    // Don't fetch if store is still loading or no store is selected
+    if (storeLoading || !currentStore?.id) {
+      return;
+    }
+
     setLoading(true);
     setError(null);
     
     try {
       // First, get the store financial data for cash_fund
-      const storeFinancialData = await getStoreFinancialData(currentStore?.id || '1');
+      const storeFinancialData = await getStoreFinancialData(currentStore.id);
       
       // Lấy tháng và năm hiện tại
       const now = new Date();
@@ -37,6 +42,7 @@ export function useInstallmentsSummary() {
           installment_amount,
           status,
           store_id,
+          debt_amount,
           installment_payment_period (
             id,
             period_number,
@@ -45,12 +51,8 @@ export function useInstallmentsSummary() {
             actual_amount
           )
         `)
-        .neq('status', InstallmentStatus.DELETED);
-      
-      // Filter by store if a store is selected
-      if (currentStore?.id) {
-        query = query.eq('store_id', currentStore.id);
-      }
+        .neq('status', InstallmentStatus.DELETED)
+        .eq('store_id', currentStore.id);
       
       const { data: activeInstallments, error: installmentsError } = await query;
       
@@ -82,6 +84,7 @@ export function useInstallmentsSummary() {
       if (paymentsError) {
         throw paymentsError;
       }
+
       // Tính toán các giá trị theo yêu cầu
       let totalLoan = 0; // Tổng tiền giao khách
       let totalOldDebt = 0; // Tổng nợ cũ
@@ -112,11 +115,8 @@ export function useInstallmentsSummary() {
             return sum + (period.expected_amount || 0);
           }, 0) || 0;
           
-          // Tính nợ cũ: nếu đã đóng ít hơn dự kiến
-          const oldDebt = expectedAmount - paidAmount;
-          if (oldDebt < 0) {
-            totalOldDebt += Math.abs(oldDebt);
-          }
+          
+          totalOldDebt += 0 - (installment.debt_amount || 0);
           
           // Tính lãi phí đã thu: cộng tất cả actual_amount của các kỳ đóng tiền của installment
           const profit = installment.installment_payment_period?.reduce((sum: number, period: any) => {
@@ -152,7 +152,7 @@ export function useInstallmentsSummary() {
         profit: expectedProfit,
         collectedInterest: collectedProfit
       };
-      console.log("Summary Data", summaryData);
+
       setData(summaryData);
     } catch (err) {
       console.error('Error fetching installment summary:', err);
@@ -165,7 +165,7 @@ export function useInstallmentsSummary() {
   // Fetch data when component mounts or when store changes
   useEffect(() => {
     fetchData();
-  }, [currentStore?.id]);
+  }, [currentStore?.id, storeLoading]);
 
-  return { data, loading, error, refresh: fetchData };
+  return { data, loading: loading || storeLoading, error, refresh: fetchData };
 } 
