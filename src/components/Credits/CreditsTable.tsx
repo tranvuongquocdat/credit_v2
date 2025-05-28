@@ -24,6 +24,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getCreditPaymentPeriods } from '@/lib/credit-payment';
 import { CreditPaymentPeriod } from '@/models/credit-payment';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { supabase } from '@/lib/supabase';
 
 interface StatusMapType {
   [key: string]: { 
@@ -103,26 +104,35 @@ export function CreditsTable({
   // Hàm tái sử dụng để tính toán lãi phí đã đóng và nợ cũ
   const calculateCreditPayment = useCallback(async (creditId: string): Promise<CreditPaymentInfo> => {
     try {
-      // Truy vấn các kỳ thanh toán từ cơ sở dữ liệu
+      // Truy vấn thông tin credit để lấy debt_amount
+      const { data: creditData, error: creditError } = await supabase
+        .from('credits')
+        .select('debt_amount')
+        .eq('id', creditId)
+        .single();
+      
+      if (creditError) {
+        console.error(`Error fetching credit data for ${creditId}:`, creditError);
+        return { paidInterest: 0, oldDebt: 0, loading: false };
+      }
+      
+      // Truy vấn các kỳ thanh toán từ cơ sở dữ liệu (chỉ để tính lãi phí đã đóng)
       const { data } = await getCreditPaymentPeriods(creditId);
       
       // Nếu không có dữ liệu, trả về giá trị mặc định
       if (!data || data.length === 0) {
-        return { paidInterest: 0, oldDebt: 0, loading: false };
+        return { 
+          paidInterest: 0, 
+          oldDebt: creditData?.debt_amount || 0, 
+          loading: false 
+        };
       }
       
       // Tính tổng lãi phí đã đóng
       const paidInterest = data.reduce((sum, period) => sum + (period.actual_amount || 0), 0);
       
-      // Tính nợ cũ (chênh lệch giữa số tiền dự kiến và thực tế)
-      let oldDebt = 0;
-      data.forEach(period => {
-        const expected = period.expected_amount || 0;
-        const actual = period.actual_amount || 0;
-        if (expected > actual) {
-          oldDebt += expected - actual;
-        }
-      });
+      // Sử dụng trực tiếp debt_amount từ bảng credits
+      const oldDebt = creditData?.debt_amount || 0;
       
       return { paidInterest, oldDebt, loading: false };
     } catch (error) {

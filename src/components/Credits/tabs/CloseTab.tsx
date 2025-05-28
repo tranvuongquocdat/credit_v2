@@ -66,7 +66,7 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
         for (const period of paymentPeriods) {
           if (period.id) {
             await deletePaymentPeriod(period.id);
-      }
+          }
         }
         return;
       }

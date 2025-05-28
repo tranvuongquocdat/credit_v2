@@ -190,14 +190,13 @@ export async function getCreditAmountHistory(creditId: string) {
       .select('*')
       .eq('credit_id', creditId)
       .order('created_at', { ascending: true });
-
     if (error) {
       throw error;
     }
     
     // Transform data from DB model to UI model
     const history = data ? data.map(item => transformHistory(item)) : [];
-
+    console.log(history);
     return { data: history, error: null };
   } catch (error) {
     console.error('Error getting credit amount history:', error);

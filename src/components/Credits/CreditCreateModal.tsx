@@ -375,15 +375,6 @@ export function CreditCreateModal({
       
       if (error) throw error;
       
-      // Update store fund after successful credit creation
-      try {
-        // Trừ quỹ tiền mặt sau khi tạo hợp đồng thành công
-        await updateStoreCashFundOnly(currentStore.id, -loanAmountValue);
-      } catch (fundError) {
-        console.error('Error updating store fund:', fundError);
-        // Vẫn cho phép tiếp tục mặc dù cập nhật quỹ bị lỗi
-      }
-      
       // Success - close modal and notify parent
       if (onSuccess && data?.id) {
         onSuccess(data.id);

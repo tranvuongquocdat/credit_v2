@@ -299,7 +299,6 @@ export function PaymentHistoryModal({
     
     // Sắp xếp các kỳ thực tế theo số thứ tự
     const sortedActual = [...actual].sort((a, b) => a.period_number - b.period_number);
-    debugger
     // Tìm kỳ đã xác nhận sau cùng
     const lastConfirmedPeriod = sortedActual[sortedActual.length - 1];
     
@@ -433,14 +432,8 @@ export function PaymentHistoryModal({
     [combinedPaymentPeriods]
   );
   
-  // Calculate old debt as the difference between customer payments and (interest fees + other fees) in database
-  // Only consider periods that exist in database (not calculated ones)
-  const databasePeriods = paymentPeriods.filter(p => p.id && !p.id.startsWith('calculated-'));
-  const totalInterestAndOtherFees = databasePeriods.reduce((sum, period) => 
-    sum + (period.expected_amount || 0), 0);
-  const totalCustomerPayments = databasePeriods.reduce((sum, period) => 
-    sum + (period.actual_amount || 0), 0);
-  const remainingAmount = totalCustomerPayments - totalInterestAndOtherFees;
+  // Sử dụng debt_amount trực tiếp từ credit thay vì tính toán
+  const remainingAmount = credit?.debt_amount !== undefined ? -(credit.debt_amount) : 0;
   
   // Generate date range for display
   const loanDateFormatted = formatDate(credit?.loan_date);
@@ -700,23 +693,11 @@ export function PaymentHistoryModal({
                             </tr>
                           ))}
                           
-                          {/* Initial loan entry */}
-                          <tr>
-                            <td className="px-4 py-3 text-sm text-gray-700 text-center">{creditHistory.length + 1}</td>
-                            <td className="px-4 py-3 text-sm text-gray-700">{formatDate(credit.loan_date)}</td>
-                            <td className="px-4 py-3 text-sm text-gray-700">Tạo hợp đồng</td>
-                            <td className="px-4 py-3 text-sm text-gray-700 text-right text-red-600">
-                              {formatCurrency(credit?.loan_amount || 0)}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-700 text-right">0</td>
-                            <td className="px-4 py-3 text-sm text-gray-700">Cho vay</td>
-                          </tr>
-                          
                           {/* Summary rows */}
                           <tr className="bg-amber-50">
                             <td colSpan={3} className="px-4 py-2 text-sm font-medium text-right">Tổng Tiền</td>
                             <td className="px-4 py-2 text-sm font-medium text-right text-red-600">
-                              {formatCurrency(historyTotals.totalDebit + (credit.loan_amount || 0))}
+                              {formatCurrency(historyTotals.totalDebit)}
                             </td>
                             <td className="px-4 py-2 text-sm font-medium text-right text-green-600">
                               {formatCurrency(historyTotals.totalCredit)}
@@ -726,8 +707,8 @@ export function PaymentHistoryModal({
                           <tr className="bg-amber-100">
                             <td colSpan={3} className="px-4 py-2 text-sm font-medium text-right">Chênh lệch</td>
                             <td colSpan={2} className="px-4 py-2 text-sm font-medium text-right">
-                              <span className={(historyTotals.totalDebit + (credit.loan_amount || 0)) - historyTotals.totalCredit >= 0 ? "text-red-600" : "text-green-600"}>
-                                {formatCurrency(historyTotals.totalCredit- (historyTotals.totalDebit + (credit.loan_amount || 0)))}
+                              <span className={historyTotals.totalDebit - historyTotals.totalCredit >= 0 ? "text-red-600" : "text-green-600"}>
+                                {formatCurrency(historyTotals.totalDebit - historyTotals.totalCredit)}
                               </span>
                             </td>
                             <td></td>

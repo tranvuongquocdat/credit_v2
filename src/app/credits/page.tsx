@@ -90,28 +90,16 @@ function useCreditsSummary() {
       
       // 3. Lấy tổng tiền nợ cũ
       const { data: oldDebtData, error: oldDebtError } = await supabase
-        .from('credit_payment_periods')
-        .select(`
-          expected_amount,
-          actual_amount,
-          credits!inner(status)
-        `)
-        .neq('credits.status', CreditStatus.CLOSED)
-        .neq('credits.status', CreditStatus.DELETED);
+        .from('credits')
+        .select('debt_amount')
+        .in('status', [CreditStatus.ON_TIME, CreditStatus.OVERDUE, CreditStatus.LATE_INTEREST, CreditStatus.BAD_DEBT]);
       
       if (oldDebtError) {
         console.error('Lỗi khi lấy dữ liệu nợ cũ:', oldDebtError);
       }
       
-      // Tính tổng tiền nợ cũ
-      let oldDebt = 0;
-      oldDebtData?.forEach(period => {
-        const expected = period.expected_amount || 0;
-        const actual = period.actual_amount || 0;
-        if (expected > actual) {
-          oldDebt += (expected - actual);
-        }
-      });
+      // Tính tổng tiền nợ cũ sử dụng trường debt_amount
+      const oldDebt = oldDebtData?.reduce((sum, credit) => sum + (credit.debt_amount || 0), 0) || 0;
       
       // 4. Lấy tổng lãi phí đã thu (tổng actual_amount của các kỳ thanh toán)
       const { data: collectedInterestData, error: collectedInterestError } = await supabase

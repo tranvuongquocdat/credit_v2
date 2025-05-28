@@ -108,6 +108,16 @@ export async function deletePaymentPeriod(periodId: string) {
       return { error: fetchError };
     }
     
+    // Update debt amount if there was an actual payment
+    if (periodData && periodData.actual_amount && periodData.actual_amount > 0) {
+      await updateCreditDebtAmount(
+        periodData.credit_id, 
+        periodData.expected_amount || 0, 
+        periodData.actual_amount, 
+        false // Unchecking (removing payment)
+      );
+    }
+    
     // Xóa kỳ thanh toán
     const { error } = await supabase
       .from('credit_payment_periods')
@@ -210,7 +220,7 @@ export async function recreatePaymentPeriods(creditId: string, periods: CreatePa
   const { data, error } = await supabase
     .rpc('recreate_payment_periods', {
       credit_id_param: creditId,
-      periods_param: periodsAsJson as any // Type assertion to bypass TypeScript error
+      periods_param: JSON.parse(JSON.stringify(periodsAsJson)) // Convert to proper Json type
     });
   
   if (error) {
@@ -272,6 +282,7 @@ export async function savePaymentWithOtherAmount(
     const now = new Date().toISOString();
     
     let response;
+    const expectedAmount = periodData.expected_amount || 0;
     
     if (isCalculatedPeriod) {
       // Trường hợp kỳ tính toán động chưa được lưu
@@ -291,59 +302,165 @@ export async function savePaymentWithOtherAmount(
           actual_amount: actualAmount,
           other_amount: otherAmount,
           payment_date: now,
-          status: 'paid',
           notes: periodData.notes || null
         })
         .select()
         .single();
+        
+      // Update debt amount for new payment
+      if (response.data) {
+        await updateCreditDebtAmount(creditId, expectedAmount, actualAmount, true);
+      }
     } else {
       // Cập nhật kỳ đã tồn tại
-      const paymentDate = now;
-      
       if (!periodData.id) {
-        return { data: null, error: new Error('Period ID is required for update') };
+        return { data: null, error: new Error('Missing period ID for update') };
       }
       
+      // Get current actual amount before update
+      const { data: currentPeriod } = await supabase
+        .from('credit_payment_periods')
+        .select('actual_amount')
+        .eq('id', periodData.id)
+        .single();
+      
+      const previousActualAmount = currentPeriod?.actual_amount || 0;
+
       response = await supabase
         .from('credit_payment_periods')
         .update({
           actual_amount: actualAmount,
           other_amount: otherAmount,
-          payment_date: paymentDate
+          payment_date: now,
+          notes: periodData.notes || null
         })
         .eq('id', periodData.id)
         .select()
         .single();
+        
+      // Update debt amount for payment change
+      if (response.data) {
+        // First undo the previous payment
+        if (previousActualAmount > 0) {
+          await updateCreditDebtAmount(creditId, expectedAmount, previousActualAmount, false);
+        }
+        // Then apply the new payment
+        if (actualAmount > 0) {
+          await updateCreditDebtAmount(creditId, expectedAmount, actualAmount, true);
+        }
+      }
     }
-    
+
     if (response.error) {
-      console.error('DB Error in savePaymentWithOtherAmount:', response.error);
+      console.error('Database error:', response.error);
       return { data: null, error: response.error };
     }
-    
-    // Chuyển đổi dữ liệu trả về để sử dụng trong code
-    if (response?.data) {
-      // Ghi nhận vào lịch sử
+
+    // Ghi nhận việc đóng lãi vào lịch sử nếu có số tiền thực tế
+    if (response.data && actualAmount > 0) {
       try {
         const { recordInterestPayment } = await import('./credit-amount-history');
+        
+        const totalAmount = actualAmount + otherAmount;
         
         // Ghi nhận không đồng bộ (không chờ đợi)
         recordInterestPayment(
           creditId,
-          actualAmount,
-          now,
-          `Đóng lãi kỳ ${response.data.period_number}`
+          totalAmount,
+          `Đóng lãi kỳ ${periodData.period_number}`
         ).catch(e => console.error('Error recording interest payment:', e));
       } catch (historyError) {
         console.error('Error importing recordInterestPayment:', historyError);
       }
-      
-      return { data: response.data, error: null };
     }
+
+    return { data: response.data, error: null };
+  } catch (error) {
+    console.error('Error saving payment:', error);
+    return { data: null, error };
+  }
+}
+
+// Function to update debt amount when payment is checked/unchecked
+export async function updateCreditDebtAmount(
+  creditId: string,
+  expectedAmount: number,
+  actualAmount: number,
+  isChecked: boolean
+) {
+  try {
+    // Get current debt amount
+    const { data: credit, error: fetchError } = await supabase
+      .from('credits')
+      .select('debt_amount')
+      .eq('id', creditId)
+      .single();
+
+    if (fetchError) {
+      throw fetchError;
+    }
+
+    const currentDebt = credit.debt_amount || 0;
     
-    return { data: null, error: new Error('No data returned from database') };
-  } catch (e) {
-    console.error('Unexpected error in savePaymentWithOtherAmount:', e);
-    return { data: null, error: e as Error };
+    // Calculate new debt amount
+    let newDebtAmount: number;
+    
+    // If expectedAmount is 0, treat actualAmount as the total change amount
+    if (expectedAmount === 0) {
+      // Direct change mode for batch updates
+      newDebtAmount = currentDebt + (isChecked ? actualAmount : -actualAmount);
+    } else {
+      // Individual period mode
+      const difference = actualAmount - expectedAmount;
+      if (isChecked) {
+        // When checking: debt + (actual - expected)
+        newDebtAmount = currentDebt + difference;
+      } else {
+        // When unchecking: debt - (actual - expected)
+        newDebtAmount = currentDebt - difference;
+      }
+    }
+
+    // Update debt amount in database
+    const { error: updateError } = await supabase
+      .from('credits')
+      .update({ 
+        debt_amount: newDebtAmount,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', creditId);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return { success: true, newDebtAmount };
+  } catch (error: unknown) {
+    console.error('Error updating credit debt amount:', error);
+    return { success: false, error: error as Error };
+  }
+}
+
+/**
+ * Reset debt amount of a credit to 0
+ */
+export async function resetCreditDebtAmount(creditId: string) {
+  try {
+    const { error } = await supabase
+      .from('credits')
+      .update({ 
+        debt_amount: 0,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', creditId);
+
+    if (error) {
+      throw error;
+    }
+
+    return { success: true };
+  } catch (error: unknown) {
+    console.error('Error resetting credit debt amount:', error);
+    return { success: false, error: error as Error };
   }
 }

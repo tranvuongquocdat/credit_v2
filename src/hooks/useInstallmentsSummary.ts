@@ -93,7 +93,9 @@ export function useInstallmentsSummary() {
           totalLoan += loanAmount;
           
           // Lãi phí dự kiến = installment_amount - down_payment
-          expectedProfit += (installment.installment_amount || 0) - (installment.down_payment || 0);
+          if(installment.status === InstallmentStatus.ON_TIME){
+            expectedProfit += (installment.installment_amount || 0) - (installment.down_payment || 0);
+          }
         }
       }
       console.log("Collected Profit", collectedProfit);

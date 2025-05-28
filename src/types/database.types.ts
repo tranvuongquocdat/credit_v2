@@ -238,6 +238,7 @@ export type Database = {
           contract_code: string | null
           created_at: string | null
           customer_id: string
+          debt_amount: number | null
           id: string
           interest_notation: string | null
           interest_period: number
@@ -257,6 +258,7 @@ export type Database = {
           contract_code?: string | null
           created_at?: string | null
           customer_id: string
+          debt_amount?: number | null
           id?: string
           interest_notation?: string | null
           interest_period: number
@@ -276,6 +278,7 @@ export type Database = {
           contract_code?: string | null
           created_at?: string | null
           customer_id?: string
+          debt_amount?: number | null
           id?: string
           interest_notation?: string | null
           interest_period?: number
@@ -373,13 +376,6 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "employee_permissions_granted_by_fkey"
-            columns: ["granted_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -865,21 +861,38 @@ export type Database = {
       }
       permissions: {
         Row: {
+          created_at: string | null
           description: string | null
           id: string
+          module: string | null
           name: string
+          parent_id: string | null
         }
         Insert: {
+          created_at?: string | null
           description?: string | null
-          id?: string
+          id: string
+          module?: string | null
           name: string
+          parent_id?: string | null
         }
         Update: {
+          created_at?: string | null
           description?: string | null
           id?: string
+          module?: string | null
           name?: string
+          parent_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "permissions_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "permissions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
