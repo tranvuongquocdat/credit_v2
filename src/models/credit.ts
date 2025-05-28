@@ -29,7 +29,7 @@ export interface Credit {
   loan_period: number;       // Số ngày vay
   interest_period: number;   // Kỳ lãi phí (VD: 10 ngày đóng lãi 1 lần)
   loan_date: string;         // Ngày vay
-  debt_amount?: number;      // Tiền nợ được tính toán khi check/uncheck kỳ đóng lãi
+  debt_amount: number;      // Tiền nợ được tính toán khi check/uncheck kỳ đóng lãi
   notes?: string | null;
   status?: CreditStatus | null;
   created_at?: string | null;

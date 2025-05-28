@@ -9,6 +9,7 @@ export interface CreditPaymentPeriod {
   payment_date: string | null; // Ngày đóng lãi
   notes: string | null; // Ghi chú
   other_amount?: number | null; // Tiền khác
+  is_temporary?: boolean; // Đánh dấu kỳ tạm thời
   created_at?: string | null;
   updated_at?: string | null;
 }

@@ -50,7 +50,6 @@ export function FinancialSummary({
   
   // Sử dụng dữ liệu từ props nếu có, nếu không thì dùng state nội bộ
   const fundStatus = externalFundStatus || internalFundStatus;
-  console.log("Fund Status", fundStatus);
   // Sử dụng callback từ props nếu có, nếu không thì dùng hàm fetch nội bộ
   const onRefresh = () => {
     if (externalOnRefresh) {

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PaymentForm } from '../PaymentForm';
-import { CreditWithCustomer } from '@/models/credit';
+import { CreditWithCustomer, CreditStatus } from '@/models/credit';
 import { CreditPaymentPeriod } from '@/models/credit-payment';
 import { toast } from '@/components/ui/use-toast';
 import { PrincipalChange, calculateInterestWithPrincipalChanges } from '@/lib/interest-calculator';
@@ -173,7 +173,8 @@ export function PaymentTab({
           actual_amount: 0,
           payment_date: null,
           notes: 'Kỳ tạm thời từ lịch sử mở/đóng hợp đồng',
-          other_amount: 0
+          other_amount: 0,
+          is_temporary: true
         };
 
         newPeriods.push(tempPeriod);
@@ -217,7 +218,8 @@ export function PaymentTab({
           actual_amount: 0,
           payment_date: null,
           notes: null,
-          other_amount: 0
+          other_amount: 0,
+          is_temporary: false
         };
 
         newPeriods.push(estimatedPeriod);
@@ -582,12 +584,13 @@ export function PaymentTab({
               const expected = period.expected_amount || 0;
               const actual = period.actual_amount || (period.expected_amount || 0) + (period.other_amount || 0);
               const other = period.other_amount || 0;
-              const total = expected + other; // Tổng lãi phí = expected + other
+              const total = expected + other;
               const isPaid = period.actual_amount >= period.expected_amount;
               const isPartiallyPaid = period.actual_amount > 0 && period.actual_amount < period.expected_amount;
               const isEditing = editingPeriodId === period.id || editingPeriodId === `temp-${period.period_number}`;
               const periodId = period.id || `temp-${period.period_number}`;
               const isLoading = loadingPeriods[periodId];
+              const isDisabled = credit?.status === CreditStatus.CLOSED;
               
               return (
                 <tr key={periodId} className="hover:bg-gray-50">
@@ -632,8 +635,8 @@ export function PaymentTab({
                       </div>
                     ) : (
                       <span 
-                        className={`${!isPaid ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
-                        onClick={!isPaid ? () => startEditing(period) : undefined}
+                        className={`${!isPaid && !isDisabled ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
+                        onClick={!isPaid && !isDisabled ? () => startEditing(period) : undefined}
                       >
                         {formatCurrency(actual).replace('₫', '')}
                       </span>
@@ -646,8 +649,9 @@ export function PaymentTab({
                       </div>
                     ) : (
                       <Checkbox 
-                        checked={isPaid || isPartiallyPaid} 
+                        checked={isPaid || isPartiallyPaid || period.is_temporary} 
                         onCheckedChange={(checked) => handleCheckboxChange(period, !!checked, index)}
+                        disabled={isDisabled}
                       />
                     )}
                   </td>

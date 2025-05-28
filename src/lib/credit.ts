@@ -51,9 +51,7 @@ export async function getCredits(
     const { data, error, count } = await query
       .order('created_at', { ascending: false })
       .range(from, from + limit - 1);
-    
     if (error) throw error;
-    
     return {
       data: data as CreditWithCustomer[],
       total: count || 0,
@@ -169,6 +167,7 @@ export async function updateCredit(id: string, params: UpdateCreditParams) {
     if (params.interest_notation !== undefined) updateData.interest_notation = params.interest_notation;
     if (params.loan_period !== undefined) updateData.loan_period = params.loan_period;
     if (params.interest_period !== undefined) updateData.interest_period = params.interest_period;
+    if (params.debt_amount !== undefined) updateData.debt_amount = params.debt_amount;
     if (params.loan_date !== undefined) {
       updateData.loan_date = params.loan_date instanceof Date 
         ? params.loan_date.toISOString() 

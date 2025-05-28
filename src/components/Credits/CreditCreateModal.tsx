@@ -324,6 +324,7 @@ export function CreditCreateModal({
       const creditData: CreateCreditParams = {
         customer_id: finalCustomerId,
         collateral,
+        contract_code: contractCode,
         loan_amount: loanAmountValue,
         interest_type: backendInterestType,
         interest_value: actualInterestValue,

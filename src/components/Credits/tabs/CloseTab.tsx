@@ -19,7 +19,6 @@ interface CloseTabProps {
 export function CloseTab({ credit, onClose }: CloseTabProps) {
   const { toast } = useToast();
   const [remainingAmount, setRemainingAmount] = useState(0);
-  const [oldDebt, setOldDebt] = useState(0);
   const [showConfirm, setShowConfirm] = useState(false);
   
   const loanAmount = credit?.loan_amount || 0;
@@ -28,232 +27,11 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
     console.log('Closing credit:', creditId);
     
     try {
-      // TODO: Tạm thời comment lại logic tính toán kỳ lãi khi đóng hợp đồng
-      /*
-      // get start date of credit
-      const startDate = new Date(credit.loan_date);
-      startDate.setHours(0, 0, 0, 0);
-      
-      // get end date of credit
-      const endDate = new Date(startDate);
-      endDate.setDate(startDate.getDate() + credit.loan_period - 1);
-
-      const today = new Date();
-      // Set to end of day to ensure today is included
-      today.setHours(23, 59, 59, 999);
-
-      // Get all payment periods
-      const { data: paymentPeriods, error } = await getCreditPaymentPeriods(creditId);
-      if (error) {
-        console.error('Error fetching payment periods:', error);
-        return;
-      }
-
-      if (!paymentPeriods) {
-        console.error('No payment periods found');
-        return;
-      }
-
-      // Case 1: Future contract (start, end > today)
-      if (startDate > today) {
-        console.log('Future contract - deleting all periods');
-        // Delete all periods
-        for (const period of paymentPeriods) {
-          if (period.id) {
-            await deletePaymentPeriod(period.id);
-          }
-        }
-        return;
-      }
-
-      // Case 2: Find period containing today
-      const periodContainingToday = paymentPeriods.find(period => {
-        const periodStart = new Date(period.start_date);
-        const periodEnd = new Date(period.end_date);
-        periodStart.setHours(0, 0, 0, 0);
-        periodEnd.setHours(0, 0, 0, 0);
-        return today >= periodStart && today <= periodEnd;
-      });
-
-      if (periodContainingToday) {
-        console.log('Found period containing today:', periodContainingToday);
-        
-        // Calculate new period amount based on ratio
-        const originalDays = Math.floor(
-          (new Date(periodContainingToday.end_date).getTime() - new Date(periodContainingToday.start_date).getTime()) 
-          / (1000 * 60 * 60 * 24)
-        ) + 1; // +1 to include both start and end dates
-        
-        const newDays = Math.floor(
-          (today.getTime() - new Date(periodContainingToday.start_date).getTime()) 
-          / (1000 * 60 * 60 * 24)
-        ) + 1; // +1 to include both start and end dates
-        
-        const ratio = newDays / originalDays;
-        const newAmount = Math.round(periodContainingToday.expected_amount * ratio);
-
-        // Delete all periods from this one onwards
-        const periodsToDelete = paymentPeriods.filter(p => 
-          new Date(p.start_date) >= new Date(periodContainingToday.start_date)
-        );
-        
-        for (const period of periodsToDelete) {
-          if (period.id) {
-            await deletePaymentPeriod(period.id);
-          }
-        }
-
-        // Create new period with today as end date
-        const newPeriod = {
-          credit_id: creditId,
-          period_number: periodContainingToday.period_number,
-          start_date: periodContainingToday.start_date,
-          end_date: today.toLocaleDateString('en-CA'),
-          expected_amount: newAmount,
-          actual_amount: newAmount,
-          payment_date: null,
-          notes: 'Kỳ lãi cuối cùng khi tất toán hợp đồng'
-        };
-
-        await savePaymentWithOtherAmount(
-          creditId,
-          newPeriod,
-          newAmount,
-          0,
-          true
-        );
-      } else {
-        console.log('No period containing today found');
-        
-        // Find the last period
-        const sortedPeriods = [...paymentPeriods].sort((a, b) => {
-          const dateA = new Date(a.end_date);
-          const dateB = new Date(b.end_date);
-          return dateA.getTime() - dateB.getTime();
-        });
-        
-        const lastPeriod = sortedPeriods[sortedPeriods.length - 1];
-        
-        if (lastPeriod) {
-          console.log('Found last period:', lastPeriod);
-          
-          // Calculate start date of new period (day after last period end)
-          const newPeriodStartDate = new Date(lastPeriod.end_date);
-          newPeriodStartDate.setDate(newPeriodStartDate.getDate() + 1);
-          newPeriodStartDate.setHours(0, 0, 0, 0);
-          
-          // Calculate days between new period start and today (including today)
-          const daysInNewPeriod = Math.floor(
-            (today.getTime() - newPeriodStartDate.getTime()) 
-            / (1000 * 60 * 60 * 24)
-          ) + 1; // +1 to include both start and end dates
-          
-          // Calculate daily interest rate
-          const dailyRate = calculateDailyRateForCredit(credit);
-          
-          // Calculate expected amount for new period based on interest type
-          let newAmount = 0;
-          if (credit.interest_type === InterestType.PERCENTAGE) {
-            if (credit.interest_ui_type?.startsWith('weekly')) {
-              // Lãi suất theo tuần (ví dụ 1%/tuần)
-              const weeksCount = Math.ceil(daysInNewPeriod / 7);
-              newAmount = Math.round(credit.loan_amount * (credit.interest_value / 100) * weeksCount);
-            } else if (credit.interest_ui_type?.startsWith('monthly')) {
-              // Lãi suất theo tháng (ví dụ 3%/tháng)
-              const monthsCount = Math.ceil(daysInNewPeriod / 30);
-              newAmount = Math.round(credit.loan_amount * (credit.interest_value / 100) * monthsCount);
-            } else {
-              // Lãi suất theo ngày (mặc định)
-              newAmount = Math.round(credit.loan_amount * (credit.interest_value / 100 / 30) * daysInNewPeriod * 30);
-      }
-          } else {
-            // Lãi suất cố định
-            const loanAmountInMillions = credit.loan_amount / 1000;
-            newAmount = Math.round(credit.interest_value * loanAmountInMillions * daysInNewPeriod);
-          }
-          
-          // Create new period with today as end date
-          const newPeriod = {
-            credit_id: creditId,
-            period_number: lastPeriod.period_number + 1,
-            start_date: newPeriodStartDate.toLocaleDateString('en-CA'),
-            end_date: today.toLocaleDateString('en-CA'),
-            expected_amount: newAmount,
-            actual_amount: newAmount,
-            payment_date: null,
-            notes: 'Kỳ lãi cuối cùng khi tất toán hợp đồng'
-          };
-          
-          await savePaymentWithOtherAmount(
-            creditId,
-            newPeriod,
-            newAmount,
-            0,
-            true
-          );
-        } else {
-          console.log('No periods found at all');
-          
-          // If no periods exist, create a period from loan start date to today
-          const loanStartDate = new Date(credit.loan_date);
-          loanStartDate.setHours(0, 0, 0, 0);
-          
-          const daysFromStart = Math.floor(
-            (today.getTime() - loanStartDate.getTime()) 
-            / (1000 * 60 * 60 * 24)
-          ) + 1; // +1 to include both start and end dates
-          
-          // Calculate daily interest rate
-          const dailyRate = calculateDailyRateForCredit(credit);
-          
-          // Calculate expected amount for new period based on interest type
-          let newAmount = 0;
-          if (credit.interest_type === InterestType.PERCENTAGE) {
-            if (credit.interest_ui_type?.startsWith('weekly')) {
-              // Lãi suất theo tuần
-              const weeksCount = Math.ceil(daysFromStart / 7);
-              newAmount = Math.round(credit.loan_amount * (credit.interest_value / 100) * weeksCount);
-            } else if (credit.interest_ui_type?.startsWith('monthly')) {
-              // Lãi suất theo tháng
-              const monthsCount = Math.ceil(daysFromStart / 30);
-              newAmount = Math.round(credit.loan_amount * (credit.interest_value / 100) * monthsCount);
-            } else {
-              // Lãi suất theo ngày
-              newAmount = Math.round(credit.loan_amount * (credit.interest_value / 100 / 30) * daysFromStart * 30);
-            }
-          } else {
-            // Lãi suất cố định
-            const loanAmountInMillions = credit.loan_amount / 1000;
-            newAmount = Math.round(credit.interest_value * loanAmountInMillions * daysFromStart);
-          }
-          
-          const newPeriod = {
-            credit_id: creditId,
-            period_number: 1,
-            start_date: loanStartDate.toLocaleDateString('en-CA'),
-            end_date: today.toLocaleDateString('en-CA'),
-            expected_amount: newAmount,
-            actual_amount: newAmount,
-            payment_date: null,
-            notes: 'Kỳ lãi cuối cùng khi tất toán hợp đồng'
-          };
-          
-          await savePaymentWithOtherAmount(
-            creditId,
-            newPeriod,
-            newAmount,
-            0,
-            true
-          );
-        }
-      }
-      */
-
       // Thêm lịch sử đóng hợp đồng
       try {
         const { recordContractClosure } = await import('@/lib/credit-amount-history');
         
-        // Tách thành hai phần riêng biệt
+        // Tách thành ba phần riêng biệt
         // 1. Phần đóng hợp đồng (tiền vay gốc + lãi phí)
         const contractCloseAmount = loanAmount + remainingAmount;
         
@@ -266,9 +44,9 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
         );
         
         // 2. Phần thanh toán nợ cũ (nếu có) - chỉ ghi lịch sử
-        if (oldDebt !== 0) {
+        if (credit.debt_amount !== 0) {
           // Chỉ ghi lịch sử mà không cập nhật loan_amount
-          const description = oldDebt > 0 
+          const description = credit.debt_amount > 0 
             ? 'Thanh toán nợ cũ khi đóng hợp đồng' 
             : 'Hoàn trả tiền thừa khi đóng hợp đồng';
             
@@ -276,9 +54,9 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
             .from('credit_amount_history')
             .insert({
               credit_id: creditId,
-              transaction_type: oldDebt > 0 ? 'payment' : 'payment_cancel',
-              credit_amount: oldDebt > 0 ? Math.abs(oldDebt) : 0, 
-              debit_amount: oldDebt < 0 ? Math.abs(oldDebt) : 0,
+              transaction_type: credit.debt_amount > 0 ? 'payment' : 'payment_cancel',
+              credit_amount: credit.debt_amount > 0 ? Math.abs(credit.debt_amount) : 0, 
+              debit_amount: credit.debt_amount < 0 ? Math.abs(credit.debt_amount) : 0,
               description: description
             });
         }
@@ -287,8 +65,8 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
         // Tiếp tục xử lý ngay cả khi ghi lịch sử lỗi
       }
 
-      // Update credit status to closed
-      const { error: updateError } = await updateCredit(creditId, { status: 'closed' as CreditStatus });
+      // Update credit status to closed and debt_amount to 0
+      const { error: updateError } = await updateCredit(creditId, { status: 'closed' as CreditStatus, debt_amount: 0 });
       
       if (updateError) {
         console.error('Error updating credit status:', updateError);
@@ -373,20 +151,6 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
           );
           
           console.log('Paid periods:', paidPeriods.length);
-          
-          // Calculate the difference for each paid period
-          paidPeriods.forEach(period => {
-            const actual = period.actual_amount || 0;
-            const expected = period.expected_amount || 0;
-            const difference = expected - actual;
-            
-            console.log(`Period ${period.period_number}: Expected ${expected}, Actual ${actual}, Difference ${difference}`);
-            
-            calculatedOldDebt += difference;
-          });
-          
-          console.log('Calculated old debt:', calculatedOldDebt);
-          setOldDebt(calculatedOldDebt);
         }
         
         // Calculate A: Total actual amount paid across all periods
@@ -527,11 +291,20 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
             
             // If no period contains today, but we're in present type
             if (!foundTodayPeriod) {
-              console.log('No period contains today, calculating from start date');
+              console.log('No period contains today, calculating from next period start date');
+              // calculate next period start date
+              const lastPeriod = sortedPeriods[sortedPeriods.length - 1];
+              const lastPeriodEndDate = new Date(lastPeriod.end_date);
+              lastPeriodEndDate.setHours(0, 0, 0, 0);
+              const nextPeriodStartDate = new Date(lastPeriodEndDate);
+              nextPeriodStartDate.setDate(lastPeriodEndDate.getDate() + 1);
+              nextPeriodStartDate.setHours(0, 0, 0, 0);
+              console.log('Next period start date:', formatDateForLog(nextPeriodStartDate));
               
-              // Calculate interest from start date to today
+              
+              // Calculate interest from next period start date to today
               const daysFromStart = Math.floor(
-                (today.getTime() - loanStartDate.getTime()) / (1000 * 60 * 60 * 24)
+                (today.getTime() - nextPeriodStartDate.getTime()) / (1000 * 60 * 60 * 24)
               ) + 1; // +1 to include today
               
               console.log('Days from loan start to today:', daysFromStart);
@@ -571,6 +344,7 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
           console.log('Past contract - Remaining Amount (A - B):', remaining);
         } else {
           // For present and future contracts: B - A
+          console.log('Present/Future contract - Total Paid:', totalPaid);
           remaining =  amountB - totalPaid;
           console.log('Present/Future contract - Remaining Amount (B - A):', remaining);
         }
@@ -607,9 +381,9 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
                   Nợ cũ
                 </td>
                 <td className="px-4 py-2 text-right font-medium border">
-                  {oldDebt >= 0 
-                    ? formatCurrency(oldDebt)
-                    : <span className="text-red-600">-{formatCurrency(Math.abs(oldDebt))}</span>
+                  {credit.debt_amount >= 0 
+                    ? formatCurrency(credit.debt_amount)
+                    : <span className="text-red-600">-{formatCurrency(Math.abs(credit.debt_amount))}</span>
                   }
                 </td>
               </tr>
@@ -627,7 +401,7 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
                   Còn lại phải đóng để đóng hợp đồng
                 </td>
                 <td className="px-4 py-3 text-right border font-bold text-red-700 text-lg">
-                  {formatCurrency(loanAmount + oldDebt + remainingAmount)}
+                  {formatCurrency(loanAmount + credit.debt_amount + remainingAmount)}
                 </td>
               </tr>
             </tbody>
