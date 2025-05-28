@@ -23,8 +23,10 @@ import { getInterestDisplayString, calculateDailyRateForCredit } from '@/lib/int
 import { useState, useEffect, useCallback } from 'react';
 import { getCreditPaymentPeriods } from '@/lib/credit-payment';
 import { CreditPaymentPeriod } from '@/models/credit-payment';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
+import { recordContractReopening } from '@/lib/credit-amount-history';
+import { updateCredit } from '@/lib/credit';
+import { useToast } from '@/components/ui/use-toast';
 
 interface StatusMapType {
   [key: string]: { 
@@ -41,6 +43,7 @@ interface CreditsTableProps {
   onDelete: (credit: CreditWithCustomer) => void;
   onUpdateStatus: (credit: CreditWithCustomer) => void;
   onShowPaymentHistory?: (credit: CreditWithCustomer) => void;
+  onRefresh?: () => void;
 }
 
 // Kết quả truy vấn từ hàm calculateCreditPayment
@@ -70,7 +73,8 @@ export function CreditsTable({
   onEdit, 
   onDelete, 
   onUpdateStatus,
-  onShowPaymentHistory 
+  onShowPaymentHistory,
+  onRefresh
 }: CreditsTableProps) {
   // State để lưu trữ thông tin thanh toán cho mỗi credit
   const [paymentInfo, setPaymentInfo] = useState<Record<string, CreditPaymentInfo>>({});
@@ -81,9 +85,8 @@ export function CreditsTable({
   // State để lưu trữ thông tin lãi phí đến hôm nay
   const [interestTodayInfo, setInterestTodayInfo] = useState<Record<string, InterestTodayInfo>>({});
   
-  // State for reopen confirmation
-  const [reopenDialogOpen, setReopenDialogOpen] = useState(false);
-  const [reopenCredit, setReopenCredit] = useState<CreditWithCustomer | null>(null);
+  // Toast hook
+  const { toast } = useToast();
   
   // Format tiền tệ
   const formatCurrency = (amount: number): string => {
@@ -535,11 +538,34 @@ export function CreditsTable({
                           <Button 
                             variant="ghost" 
                             className="h-8 w-8 p-0 text-green-700" 
-                            onClick={() => { setReopenCredit(credit); setReopenDialogOpen(true); }}
+                            onClick={async () => { 
+                              try {
+                                await updateCredit(credit.id, { status: 'on_time' as CreditStatus }); 
+                                await recordContractReopening(credit.id, new Date().toISOString(), 'Mở lại hợp đồng từ trạng thái đóng');
+                                
+                                // Show success toast
+                                toast({
+                                  title: "Thành công",
+                                  description: "Đã mở lại hợp đồng thành công",
+                                  variant: "default",
+                                });
+                                
+                                // Refresh the page
+                                if (onRefresh) onRefresh();
+                              } catch (error) {
+                                console.error('Error reopening contract:', error);
+                                
+                                // Show error toast
+                                toast({
+                                  title: "Lỗi",
+                                  description: "Có lỗi xảy ra khi mở lại hợp đồng",
+                                  variant: "destructive",
+                                });
+                              }
+                            }}
                             title="Mở lại hợp đồng"
                           >
                             <UnlockIcon className="h-4 w-4 text-amber-500" />
-
                           </Button>
                         </>
                       ) : (
@@ -585,22 +611,6 @@ export function CreditsTable({
           )}
         </TableBody>
       </Table>
-      {/* Dialog xác nhận mở lại hợp đồng */}
-      <Dialog open={reopenDialogOpen} onOpenChange={setReopenDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Xác nhận mở lại hợp đồng</DialogTitle>
-          </DialogHeader>
-          <div>Bạn có chắc chắn muốn mở lại hợp đồng này không? Sau khi mở lại, hợp đồng sẽ trở về trạng thái đang vay.</div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setReopenDialogOpen(false)}>Huỷ</Button>
-            <Button className="bg-green-600 text-white" onClick={() => {
-              setReopenDialogOpen(false);
-              if (reopenCredit) onUpdateStatus({ ...reopenCredit, status: CreditStatus.ON_TIME });
-            }}>Xác nhận</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

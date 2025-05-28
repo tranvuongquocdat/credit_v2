@@ -325,8 +325,41 @@ export default function CreditsPage() {
   
   // Handle opening status dialog
   const handleOpenStatusDialog = (credit: CreditWithCustomer) => {
-    setSelectedCredit(credit);
-    setIsStatusDialogOpen(true);
+    // Nếu hợp đồng đang ở trạng thái đóng (closed), xử lý mở lại hợp đồng
+    if (credit.status === CreditStatus.CLOSED) {
+      // Hiển thị dialog xác nhận
+      if (confirm('Bạn có muốn mở lại hợp đồng này không? Trạng thái sẽ chuyển về "Đúng hẹn"')) {
+        reopenContract(credit);
+      }
+    } else {
+      // Trường hợp bình thường: mở dialog chọn trạng thái
+      setSelectedCredit(credit);
+      setIsStatusDialogOpen(true);
+    }
+  };
+  
+  // Hàm mở lại hợp đồng
+  const reopenContract = async (credit: CreditWithCustomer) => {
+    try {
+      // Ghi lại lịch sử mở lại hợp đồng với số tiền đóng hợp đồng gần nhất
+      const { recordContractReopening } = await import('@/lib/credit-amount-history');
+      const result = await recordContractReopening(
+        credit.id,
+        new Date().toISOString(),
+        'Mở lại hợp đồng từ trạng thái đóng'
+      );
+      
+      console.log('Reopened contract with amount:', result.lastClosureAmount);
+      
+      // Cập nhật trạng thái hợp đồng về đúng hẹn
+      updateCreditStatus(credit.id, CreditStatus.ON_TIME);
+      
+      // Refresh dữ liệu tài chính
+      refreshFinancial();
+    } catch (error) {
+      console.error('Error reopening contract:', error);
+      alert('Có lỗi xảy ra khi mở lại hợp đồng');
+    }
   };
   
   // Handle closing status dialog
@@ -339,6 +372,7 @@ export default function CreditsPage() {
   const handleUpdateStatus = (status: CreditStatus) => {
     if (!selectedCredit) return;
     
+    // Cập nhật trạng thái
     updateCreditStatus(selectedCredit.id, status);
     handleCloseStatusDialog();
   };
@@ -371,6 +405,12 @@ export default function CreditsPage() {
   const handleClosePaymentHistory = () => {
     setIsPaymentHistoryModalOpen(false);
     setPaymentHistoryCredit(null);
+  };
+  
+  // Handle refresh after contract operations
+  const handleRefresh = () => {
+    refetch(); // Refresh credits list
+    refreshFinancial(); // Refresh financial data
   };
   
   return (
@@ -408,6 +448,7 @@ export default function CreditsPage() {
           onDelete={handleOpenDeleteDialog}
           onUpdateStatus={handleOpenStatusDialog}
           onShowPaymentHistory={handleOpenPaymentHistory}
+          onRefresh={handleRefresh}
         />
         
         {/* Phân trang */}
@@ -419,28 +460,6 @@ export default function CreditsPage() {
           onPageChange={handlePageChange}
         />
         
-        {/* Status Dialog */}
-        <Dialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Cập nhật trạng thái hợp đồng</DialogTitle>
-              <DialogDescription>
-                Chọn trạng thái mới cho hợp đồng {selectedCredit?.contract_code}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid grid-cols-2 gap-2 py-4">
-              {Object.entries(statusMap).map(([status, { label, color }]) => (
-                <Button 
-                  key={status} 
-                  className={cn("justify-start", color)}
-                  onClick={() => handleUpdateStatus(status as CreditStatus)}
-                >
-                  {label}
-                </Button>
-              ))}
-            </div>
-          </DialogContent>
-        </Dialog>
         
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

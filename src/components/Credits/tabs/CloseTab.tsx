@@ -3,14 +3,13 @@
 import { useEffect, useState } from 'react';
 import { CreditStatus, CreditWithCustomer } from '@/models/credit';
 import { Button } from '@/components/ui/button';
-import { calculateInterestAmount, calculateDailyRateForCredit } from '@/lib/interest-calculator';
+import { calculateDailyRateForCredit, calculateInterestAmount } from '@/lib/interest-calculator';
 import { formatCurrency } from '@/lib/utils';
-import { CreditPaymentPeriod } from '@/models/credit-payment';
-import { getCreditPaymentPeriods, savePaymentWithOtherAmount, deletePaymentPeriod } from '@/lib/credit-payment';
+import { getCreditPaymentPeriods } from '@/lib/credit-payment';
 import { updateCredit } from '@/lib/credit';
 import { useToast } from '@/components/ui/use-toast';
-import { InterestType } from '@/models/credit';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { supabase } from '@/lib/supabase';
 
 interface CloseTabProps {
   credit: CreditWithCustomer;
@@ -19,34 +18,30 @@ interface CloseTabProps {
 
 export function CloseTab({ credit, onClose }: CloseTabProps) {
   const { toast } = useToast();
-  const [paymentPeriods, setPaymentPeriods] = useState<CreditPaymentPeriod[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [totalActualAmount, setTotalActualAmount] = useState(0);
-  const [todayPaidAmount, setTodayPaidAmount] = useState(0);
   const [remainingAmount, setRemainingAmount] = useState(0);
   const [oldDebt, setOldDebt] = useState(0);
-  const [contractType, setContractType] = useState<'past' | 'present' | 'future'>('present');
   const [showConfirm, setShowConfirm] = useState(false);
   
   const loanAmount = credit?.loan_amount || 0;
-  const interestAmount = calculateInterestAmount(credit, 30) || 0;
-  const totalAmount = loanAmount + interestAmount;
+  
   const handleCloseCredit = async (creditId: string) => {
     console.log('Closing credit:', creditId);
     
-    // get start date of credit
-    const startDate = new Date(credit.loan_date);
-    startDate.setHours(0, 0, 0, 0);
-    
-    // get end date of credit
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + credit.loan_period - 1);
-
-    const today = new Date();
-    // Set to end of day to ensure today is included
-    today.setHours(23, 59, 59, 999);
-
     try {
+      // TODO: Tạm thời comment lại logic tính toán kỳ lãi khi đóng hợp đồng
+      /*
+      // get start date of credit
+      const startDate = new Date(credit.loan_date);
+      startDate.setHours(0, 0, 0, 0);
+      
+      // get end date of credit
+      const endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + credit.loan_period - 1);
+
+      const today = new Date();
+      // Set to end of day to ensure today is included
+      today.setHours(23, 59, 59, 999);
+
       // Get all payment periods
       const { data: paymentPeriods, error } = await getCreditPaymentPeriods(creditId);
       if (error) {
@@ -252,8 +247,47 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
           );
         }
       }
+      */
 
-      // After all period operations are complete, update credit status
+      // Thêm lịch sử đóng hợp đồng
+      try {
+        const { recordContractClosure } = await import('@/lib/credit-amount-history');
+        
+        // Tách thành hai phần riêng biệt
+        // 1. Phần đóng hợp đồng (tiền vay gốc + lãi phí)
+        const contractCloseAmount = loanAmount + remainingAmount;
+        
+        // Ghi nhận việc đóng hợp đồng vào lịch sử
+        await recordContractClosure(
+          creditId,
+          contractCloseAmount,
+          new Date().toISOString(),
+          'Đóng hợp đồng tất toán'
+        );
+        
+        // 2. Phần thanh toán nợ cũ (nếu có) - chỉ ghi lịch sử
+        if (oldDebt !== 0) {
+          // Chỉ ghi lịch sử mà không cập nhật loan_amount
+          const description = oldDebt > 0 
+            ? 'Thanh toán nợ cũ khi đóng hợp đồng' 
+            : 'Hoàn trả tiền thừa khi đóng hợp đồng';
+            
+          await supabase
+            .from('credit_amount_history')
+            .insert({
+              credit_id: creditId,
+              transaction_type: oldDebt > 0 ? 'payment' : 'payment_cancel',
+              credit_amount: oldDebt > 0 ? Math.abs(oldDebt) : 0, 
+              debit_amount: oldDebt < 0 ? Math.abs(oldDebt) : 0,
+              description: description
+            });
+        }
+      } catch (historyError) {
+        console.error('Error recording contract closure:', historyError);
+        // Tiếp tục xử lý ngay cả khi ghi lịch sử lỗi
+      }
+
+      // Update credit status to closed
       const { error: updateError } = await updateCredit(creditId, { status: 'closed' as CreditStatus });
       
       if (updateError) {
@@ -264,14 +298,6 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
           variant: "destructive"
         });
         return;
-      }
-
-      // Reload payment periods data
-      const { data: reloadedPeriods, error: reloadError } = await getCreditPaymentPeriods(creditId);
-      if (reloadError) {
-        console.error('Error reloading payment periods:', reloadError);
-      } else {
-        setPaymentPeriods(reloadedPeriods || []);
       }
 
       // Show success toast
@@ -300,7 +326,6 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
       if (!credit?.id) return;
       
       try {
-        setLoading(true);
         const { data } = await getCreditPaymentPeriods(credit.id);
         const today = new Date();
         // Reset the time component to midnight
@@ -328,15 +353,6 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
         console.log('Loan end date:', formatDateForLog(loanEndDate));
         console.log('Today:', formatDateForLog(today));
         
-        // Helper function to compare only dates (ignoring time)
-        const isSameOrBefore = (dateA: Date, dateB: Date): boolean => {
-          return dateA.getTime() <= dateB.getTime();
-        };
-        
-        const isSameOrAfter = (dateA: Date, dateB: Date): boolean => {
-          return dateA.getTime() >= dateB.getTime();
-        };
-        
         // Determine contract type
         let type: 'past' | 'present' | 'future' = 'present';
         
@@ -347,9 +363,6 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
         } else {
           type = 'present'; // Contract includes today
         }
-        
-        setContractType(type);
-        console.log('Contract type:', type);
         
         // Calculate old debt as the difference between actual and expected amounts for each paid period
         let calculatedOldDebt = 0;
@@ -378,8 +391,6 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
         
         // Calculate A: Total actual amount paid across all periods
         const totalPaid = data ? data.reduce((sum, period) => sum + (period.actual_amount || 0), 0) : 0;
-        setTotalActualAmount(totalPaid);
-        console.log('Total paid (A):', totalPaid);
         
         // Calculate B based on contract type
         let amountB = 0;
@@ -552,9 +563,6 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
           }
         }
         
-        setTodayPaidAmount(amountB);
-        console.log('Final Amount B:', amountB);
-        
         // Calculate remaining amount based on contract type
         let remaining = 0;
         if (type === 'past') {
@@ -570,13 +578,8 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
         setRemainingAmount(remaining);
         console.log('Final Remaining Amount:', remaining);
         
-        if (data) {
-          setPaymentPeriods(data as CreditPaymentPeriod[]);
-        }
       } catch (error) {
         console.error('Error fetching payment periods:', error);
-      } finally {
-        setLoading(false);
       }
     }
     

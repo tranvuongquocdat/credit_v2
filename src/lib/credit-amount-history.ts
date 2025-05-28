@@ -23,7 +23,7 @@ export interface CreditAmountHistory {
 }
 
 // Function to transform database record to UI model
-function transformHistory(record: any): CreditAmountHistory {
+function transformHistory(record: Record<string, any>): CreditAmountHistory {
   return {
     id: record.id,
     credit_id: record.credit_id,
@@ -34,6 +34,16 @@ function transformHistory(record: any): CreditAmountHistory {
     employee_id: record.employee_id,
     created_at: record.created_at
   };
+}
+
+// Interface for inserting new history records
+interface CreditAmountHistoryInsert {
+  credit_id: string;
+  transaction_type: string;
+  debit_amount: number;
+  credit_amount: number;
+  description: string | null;
+  employee_id?: string | null;
 }
 
 /**
@@ -223,7 +233,7 @@ export async function recordInterestPayment(
         debit_amount: 0,
         description: description || 'Đóng lãi phí'
         // transaction_date field is no longer used, created_at is set automatically
-      } as any)
+      } as CreditAmountHistoryInsert)
       .select()
       .single();
 
@@ -300,6 +310,7 @@ export async function recordContractClosure(
 
 /**
  * Record contract reopening
+ * Get the latest contract closure amount and add it to debit amount
  */
 export async function recordContractReopening(
   creditId: string,
@@ -307,13 +318,33 @@ export async function recordContractReopening(
   description?: string
 ) {
   try {
+    // Lấy lịch sử đóng hợp đồng gần nhất
+    const { data: closureHistory, error: closureError } = await supabase
+      .from('credit_amount_history')
+      .select('credit_amount')
+      .eq('credit_id', creditId)
+      .eq('transaction_type', 'contract_close')
+      .order('created_at', { ascending: false })
+      .limit(1);
+    
+    if (closureError) {
+      console.warn('Error fetching closure history:', closureError);
+      // Continue despite error, using 0 as default
+    }
+    
+    // Số tiền đóng hợp đồng gần nhất (mặc định là 0 nếu không tìm thấy)
+    const lastClosureAmount = (closureHistory && closureHistory.length > 0) 
+      ? closureHistory[0].credit_amount 
+      : 0;
+
+    // Ghi lại lịch sử mở khóa hợp đồng với số tiền đóng hợp đồng gần nhất vào debit_amount
     const { data, error } = await supabase
       .from('credit_amount_history')
       .insert({
         credit_id: creditId,
         transaction_type: 'contract_reopen',
         credit_amount: 0,
-        debit_amount: 0,
+        debit_amount: lastClosureAmount, // Lấy số tiền đóng hợp đồng gần nhất
         description: description || 'Mở lại hợp đồng'
         // transaction_date field is no longer used, created_at is set automatically
       } as any)
@@ -322,9 +353,9 @@ export async function recordContractReopening(
 
     if (error) throw error;
 
-    return { data, error: null };
+    return { data, error: null, lastClosureAmount };
   } catch (error) {
     console.error('Error recording contract reopening:', error);
-    return { data: null, error };
+    return { data: null, error, lastClosureAmount: 0 };
   }
 } 
