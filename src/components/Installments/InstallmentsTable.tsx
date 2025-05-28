@@ -25,6 +25,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useStore } from "@/contexts/StoreContext";
+import { 
+  calculateDailyAmount,
+  calculateRatio,
+  calculateRemainingToPay
+} from "@/lib/installmentCalculations";
 
 // Định nghĩa cấu trúc dữ liệu mở rộng bao gồm thông tin kỳ thanh toán
 interface InstallmentWithPayments extends InstallmentWithCustomer {
@@ -105,15 +110,8 @@ export function InstallmentsTable({
             0
           );
           
-          // Tính còn phải đóng
-          // Ưu tiên dùng installment_amount nếu có, nếu không tính dựa trên amount_given và interest_rate
-          const installmentAmount = installment.installment_amount || 
-            (installment.amount_given);
-          
-          // Adjust remaining calculation based on oldDebt
-          // If oldDebt is negative (customer owes more), add it to remaining amount
-          // If oldDebt is positive (customer has overpaid), subtract it from remaining
-          installment.remainingToPay = installmentAmount - (installment.totalPaid || 0);
+          // Tính còn phải đóng sử dụng utility function
+          installment.remainingToPay = calculateRemainingToPay(installment, installment.totalPaid || 0);
           if (installment.oldDebt && installment.oldDebt < 0) {
             // If there's negative oldDebt (customer owes more), add the absolute value
             installment.remainingToPay += Math.abs(installment.oldDebt);
@@ -489,29 +487,7 @@ export function InstallmentsTable({
                   {formatCurrency(installment.amount_given)}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  {(() => {
-                    try {
-                      // Get the values
-                      const installmentAmount = 
-                        installment.installment_amount ? 
-                        installment.installment_amount : 
-                        (installment.daily_amount * installment.payment_period);
-                      
-                      const downAmount = installment.amount_given;
-                      
-                      // Calculate ratio: if installment is 10, what is the down payment value
-                      const ratio = 10 / installmentAmount * downAmount;
-                      
-                      // Format to remove decimal if it's a whole number
-                      const formatValue = (value: number) => 
-                        Math.abs(value % 1) < 0.05 ? Math.round(value).toString() : value.toFixed(1);
-                      
-                      return `10 ăn ${formatValue(ratio)}`;
-                    } catch (error) {
-                      // Fallback to showing percentage
-                      return `-`;
-                    }
-                  })()}
+                  {calculateRatio(installment)}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
                   {(() => {
@@ -552,19 +528,7 @@ export function InstallmentsTable({
                   </span>
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  {formatCurrency(
-                    // Calculate daily amount as installment_amount / duration
-                    (() => {
-                      // Get installment_amount, either directly or calculate it
-                      const installmentAmount = installment.installment_amount || 
-                        (installment.daily_amount * installment.payment_period);
-                      
-                      // Calculate daily amount based on duration (loan_period)
-                      return installment.duration > 0 ? 
-                        installmentAmount / installment.duration : 
-                        installment.daily_amount;
-                    })()
-                  )}
+                  {formatCurrency(calculateDailyAmount(installment))}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
                   {formatCurrency(installment.remainingToPay || 0)}

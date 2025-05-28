@@ -40,6 +40,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { PaymentTab } from "./tabs/PaymentTab";
 import { calculateDaysBetween,  } from "@/lib/utils";
+import { 
+  calculateTotalPaidFromHistory as calcTotalPaidFromHistory,
+  calculateRemainingToPay,
+  calculateRemainingPeriods as calcRemainingPeriods,
+  calculateRatio
+} from "@/lib/installmentCalculations";
 // Define the tabs for this modal
 export type TabId =
   | "payment"
@@ -482,16 +488,7 @@ export function InstallmentPaymentHistoryModal({
 
   // Calculate total paid amount from transaction history
   const calculateTotalPaidFromHistory = (): number => {
-    if (!amountHistory || amountHistory.length === 0) return 0;
-
-    return amountHistory.reduce((total: number, history: InstallmentAmountHistory) => {
-      if (history.transactionType === 'payment' || 
-          history.transactionType === 'cancel_payment' ||
-          history.transactionType === 'debt_payment') {
-        return total + (history.creditAmount || 0) - (history.debitAmount || 0);
-      }
-      return total;
-    }, 0);
+    return calcTotalPaidFromHistory(amountHistory);
   };
 
   // Calculate remaining amount
@@ -510,16 +507,7 @@ export function InstallmentPaymentHistoryModal({
 
   // Calculate remaining periods
   const calculateRemainingPeriods = () => {
-    if (!installment?.duration || !installment?.payment_period) return 0;
-    
-    // Tính tổng số kỳ của hợp đồng
-    const totalPeriods = Math.ceil(installment.duration / installment.payment_period);
-    
-    // Tính số kỳ đã thanh toán
-    const paidPeriods = paymentPeriods.filter(p => p.actualAmount && p.actualAmount > 0).length;
-    
-    // Trả về số kỳ còn lại
-    return Math.max(0, totalPeriods - paidPeriods);
+    return calcRemainingPeriods(installment, paymentPeriods);
   };
 
   // Helper function to format number with dots
@@ -1028,7 +1016,7 @@ export function InstallmentPaymentHistoryModal({
           installment.id,
           data.id,
           installment.employee_id,
-          Math.max(0, (installment?.installment_amount || 0) - calculateTotalPaidFromHistory()),
+          Math.max(0, calculateRemainingToPay(installment, calculateTotalPaidFromHistory())),
         );
       }
 
@@ -1201,9 +1189,7 @@ export function InstallmentPaymentHistoryModal({
                   <tr>
                     <td className="py-1 px-2 border font-bold">Tỷ lệ</td>
                     <td className="py-1 px-2 text-right border" colSpan={2}>
-                      {installment?.amount_given && installment?.installment_amount
-                        ? `10 ăn ${(10 * installment?.amount_given / installment?.installment_amount).toFixed(1)}`
-                        : "-"}
+                      {calculateRatio(installment)}
                     </td>
                   </tr>
                   <tr>
@@ -1276,7 +1262,7 @@ export function InstallmentPaymentHistoryModal({
                     </td>
                     <td className="py-1 px-2 text-right border text-red-600">
                       {formatCurrency(
-                        (installment?.installment_amount || 0) - calculateTotalPaidFromHistory()
+                        calculateRemainingToPay(installment, calculateTotalPaidFromHistory())
                       )}
                     </td>
                   </tr>
@@ -1382,9 +1368,7 @@ export function InstallmentPaymentHistoryModal({
                         {formatCurrency(
                           Math.max(
                             0,
-                            (installment?.installment_amount || 0) -
-                              calculateTotalPaidFromHistory()
-                              ,
+                            calculateRemainingToPay(installment, calculateTotalPaidFromHistory())
                           ),
                         )}
                       </td>
@@ -1729,13 +1713,13 @@ export function InstallmentPaymentHistoryModal({
                     </div>
                   </div>
 
-                  <div className="flex items-center bg-gray-50 p-2 rounded border">
+                                      <div className="flex items-center bg-gray-50 p-2 rounded border">
                     <div className="w-36 text-right mr-3 font-medium">
                       Số nợ còn lại:
                     </div>
                     <div className="text-red-600 font-medium">
                       {formatCurrency(
-                        Math.max(0, (installment?.installment_amount || 0) - calculateTotalPaidFromHistory()),
+                        Math.max(0, calculateRemainingToPay(installment, calculateTotalPaidFromHistory())),
                       )}
                     </div>
                   </div>
@@ -1798,8 +1782,8 @@ export function InstallmentPaymentHistoryModal({
                         parseFormattedNumber(rotationDownPayment),
                       )}{" "}
                       -{" "}
-                      {formatCurrency(
-                          Math.max(0, calculateRemainingPeriods() * (installment?.installment_amount || 0) / Math.ceil((installment?.duration || 0) / (installment?.payment_period || 1))),
+                                            {formatCurrency(
+                        Math.max(0, calculateRemainingToPay(installment, calculateTotalPaidFromHistory())),
                         )}{" "}
                       - {formatCurrency(0 - (installment.debt_amount || 0))}
                       = {formatCurrency(calculateCustomerReceiveAmount())}

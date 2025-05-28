@@ -8,6 +8,7 @@ import { getInstallmentPaymentPeriods } from "@/lib/installmentPayment";
 import { AlertTriangleIcon } from "lucide-react";
 import { useStore } from "@/contexts/StoreContext";
 import { useRouter } from "next/navigation";
+import { calculateRemainingToPay } from "@/lib/installmentCalculations";
 
 // Extended interface with warning-specific fields
 interface InstallmentWarning extends InstallmentWithCustomer {
@@ -169,7 +170,7 @@ export function InstallmentWarningsTable({
             
             // Get  payment period (default to 10 if not set)
             const paymentPeriod = installment.payment_period || 10;
-            const remainingToPay = installment.installment_amount ? installment.installment_amount - sum : 0;
+            const remainingToPay = calculateRemainingToPay(installment, sum);
             // Tính tổng số kỳ chậm thanh toán
             const latePeriods = Math.floor(daysDifference / paymentPeriod);
             // Check phần dư
