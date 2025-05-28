@@ -348,6 +348,49 @@ export type Database = {
           },
         ]
       }
+      employee_permissions: {
+        Row: {
+          employee_id: string
+          granted_at: string | null
+          granted_by: string | null
+          permission_id: string
+        }
+        Insert: {
+          employee_id: string
+          granted_at?: string | null
+          granted_by?: string | null
+          permission_id: string
+        }
+        Update: {
+          employee_id?: string
+          granted_at?: string | null
+          granted_by?: string | null
+          permission_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_permissions_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_permissions_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_permissions_permission_id_fkey"
+            columns: ["permission_id"]
+            isOneToOne: false
+            referencedRelation: "permissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employees: {
         Row: {
           created_at: string | null
@@ -819,6 +862,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      permissions: {
+        Row: {
+          description: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          description?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          description?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {

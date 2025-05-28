@@ -105,7 +105,7 @@ const sidebarItems: SidebarItem[] = [
     icon: <FiUsers size={20} />,
     submenu: [
       { title: 'Danh sách nhân viên', path: '/employees', icon: <FiUsers size={18} /> },
-      { title: 'Phân quyền nhân viên', path: '/employees', icon: <FiUserPlus size={18} />, redColor: true },
+      { title: 'Phân quyền nhân viên', path: '/employee-permissions', icon: <FiUserPlus size={18} /> },
     ]
   },
   { 
