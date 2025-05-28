@@ -8,7 +8,7 @@ import { EmployeeEditModal } from '@/components/Employees/EmployeeEditModal';
 import { EmployeeStatusDialog } from '@/components/Employees/EmployeeStatusDialog';
 import { getEmployees, createEmployee, updateEmployee, deactivateEmployee, activateEmployee } from '@/lib/employee';
 import { getStores } from '@/lib/store';
-import { Employee, EmployeeFormData, EmployeeStatus, EmployeeWithAuth } from '@/models/employee';
+import { Employee, EmployeeFormData, EmployeeStatus, EmployeeWithProfile } from '@/models/employee';
 import { Store } from '@/models/store';
 import { Plus, Edit, UserX, UserCheck, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 export default function EmployeesPage() {
   // Trạng thái
-  const [employees, setEmployees] = useState<EmployeeWithAuth[]>([]);
+  const [employees, setEmployees] = useState<EmployeeWithProfile[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
@@ -34,7 +34,7 @@ export default function EmployeesPage() {
   // Modal
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeWithAuth | null>(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeWithProfile | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Fetch danh sách nhân viên
@@ -175,13 +175,13 @@ export default function EmployeesPage() {
   };
 
   // Mở modal chỉnh sửa
-  const openEditModal = (employee: EmployeeWithAuth) => {
+  const openEditModal = (employee: EmployeeWithProfile) => {
     setSelectedEmployee(employee);
     setIsFormModalOpen(true);
   };
 
   // Mở modal thay đổi trạng thái
-  const openStatusModal = (employee: EmployeeWithAuth) => {
+  const openStatusModal = (employee: EmployeeWithProfile) => {
     setSelectedEmployee(employee);
     setIsStatusModalOpen(true);
   };
@@ -306,8 +306,8 @@ export default function EmployeesPage() {
                         </div>
                       </TableCell>
                       <TableCell className="py-3 px-3 border-b border-r border-gray-200">
-                        <div>{employee.auth.username}</div>
-                        <div className="text-sm text-muted-foreground">{employee.auth.email}</div>
+                        <div>{employee.profiles.username}</div>
+                        <div className="text-sm text-muted-foreground">{employee.profiles.email}</div>
                       </TableCell>
                       <TableCell className="py-3 px-3 border-b border-r border-gray-200">
                         {employee.store?.name || '-'}

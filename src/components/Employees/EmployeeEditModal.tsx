@@ -4,41 +4,24 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Loader2, UserCog, AlertCircle } from 'lucide-react';
 import { Store } from '@/models/store';
-import { Employee, EmployeeFormData, EmployeeStatus, EmployeeWithAuth } from '@/models/employee';
+import { Employee, EmployeeFormData, EmployeeStatus, EmployeeWithProfile } from '@/models/employee';
 import { updateEmployee } from '@/lib/employee';
 import {
   Dialog,
   DialogContent,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+
 import { EmployeeForm } from '@/components/Employee';
 
 interface EmployeeEditModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  employee: EmployeeWithAuth | null;
+  employee: EmployeeWithProfile | null;
   stores: Store[];
 }
 

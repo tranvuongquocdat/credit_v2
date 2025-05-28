@@ -1,11 +1,11 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { Employee, EmployeeFormData, EmployeeStatus } from '@/models/employee';
+import { Employee, EmployeeFormData, EmployeeStatus, EmployeeWithProfile } from '@/models/employee';
 import { Store } from '@/models/store';
 import { getStores } from '@/lib/store';
 
 interface EmployeeFormProps {
-  employee?: Employee;
+  employee?: EmployeeWithProfile;
   onSubmit: (data: EmployeeFormData) => Promise<void>;
   isSubmitting: boolean;
   isEditing?: boolean;
@@ -19,7 +19,7 @@ export default function EmployeeForm({ employee, onSubmit, isSubmitting, isEditi
     email: '',
     status: EmployeeStatus.WORKING,
     username: '',
-    password: ''
+    password: '',
   });
 
   const [errors, setErrors] = useState<Partial<Record<keyof EmployeeFormData, string>>>({});
@@ -33,10 +33,11 @@ export default function EmployeeForm({ employee, onSubmit, isSubmitting, isEditi
         full_name: employee.full_name,
         store_id: employee.store_id,
         phone: employee.phone || '',
-        email: employee.email || '',
+        email: employee.profiles?.email || '',
         status: employee.status,
-        username: employee.username || '',
-        password: '' // Không hiển thị mật khẩu khi chỉnh sửa
+        username: employee.profiles?.username || '',
+        password: '' // Không hiển thị mật khẩu khi chỉnh sửa,
+        
       });
     }
   }, [employee]);

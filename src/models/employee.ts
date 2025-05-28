@@ -15,14 +15,10 @@ export interface Employee {
   created_at: string;
   updated_at: string | null;
   store?: Store | null; // Thông tin cửa hàng (khi join)
-  auth?: {
-    email: string;
-    username: string;
-  } | null; // Thông tin từ auth.users
 }
 
-export interface EmployeeWithAuth extends Employee {
-  auth: {
+export interface EmployeeWithProfile extends Employee {
+  profiles: {
     email: string;
     username: string;
   };

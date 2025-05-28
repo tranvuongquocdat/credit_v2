@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Employee, EmployeeWithAuth, EmployeeStatus, CreateEmployeeParams, UpdateEmployeeParams } from '@/models/employee';
+import { Employee, EmployeeWithProfile, EmployeeStatus, CreateEmployeeParams, UpdateEmployeeParams } from '@/models/employee';
 
 /**
  * Lấy danh sách nhân viên có phân trang và tìm kiếm
@@ -18,7 +18,7 @@ export async function getEmployees(
     // Tạo query cơ bản
     let query = supabase
       .from('employees')
-      .select('*, users(email,username), stores(id,name)', { count: 'exact' });
+      .select('*, profiles(email,username), stores(id,name)', { count: 'exact' });
 
     // Thêm các điều kiện tìm kiếm nếu có
     if (searchQuery) {
@@ -41,10 +41,10 @@ export async function getEmployees(
     if (error) {
       throw error;
     }
-
+    console.log(data);
     // Transform data to include auth user info
-    const employees: EmployeeWithAuth[] = (data as any[])?.map((employee) => {
-      const userData = Array.isArray(employee.users) ? employee.users[0] : employee.users;
+    const employees: EmployeeWithProfile[] = (data as any[])?.map((employee) => {
+      const userData = Array.isArray(employee.profiles) ? employee.profiles[0] : employee.profiles;
       return {
         uid: employee.id,
         full_name: employee.full_name,
@@ -53,7 +53,7 @@ export async function getEmployees(
         status: employee.status as EmployeeStatus,
         created_at: employee.created_at,
         updated_at: employee.updated_at,
-        auth: {
+        profiles: {
           email: userData?.email || '',
           username: userData?.username || ''
         },
@@ -63,7 +63,6 @@ export async function getEmployees(
 
     // Tính tổng số trang
     const totalPages = count ? Math.ceil(count / limit) : 0;
-
     return { 
       data: employees, 
       error: null, 
@@ -88,7 +87,7 @@ export async function getEmployeeById(id: string) {
   try {
     const { data, error } = await supabase
       .from('employees')
-      .select('*, users(email,username), stores(id,name)')
+      .select('*, profiles(email,username), stores(id,name)')
       .eq('id', id)
       .single();
 
@@ -101,8 +100,8 @@ export async function getEmployeeById(id: string) {
     }
 
     if (data) {
-      const userData = Array.isArray(data.users) ? data.users[0] : data.users;
-      const employee: EmployeeWithAuth = {
+      const userData = Array.isArray(data.profiles) ? data.profiles[0] : data.profiles;
+      const employee: EmployeeWithProfile = {
         uid: data.id,
         full_name: data.full_name,
         store_id: data.store_id,
@@ -110,7 +109,7 @@ export async function getEmployeeById(id: string) {
         status: data.status as EmployeeStatus,
         created_at: data.created_at || '',
         updated_at: data.updated_at || '',
-        auth: {
+        profiles: {
           email: userData?.email || '',
           username: userData?.username || ''
         },
@@ -129,29 +128,33 @@ export async function getEmployeeById(id: string) {
  */
 export async function createEmployee(params: CreateEmployeeParams) {
   try {
-    // 1. Tạo auth user với username và password
-    const { data: authData, error: authError } = await supabase.functions.invoke(
-      'create-auth-user', 
-      { 
-        body: {
-          username: params.username,
-          email: params.email || `${params.username}@temporary.com`,
-          password: params.password,
-          full_name: params.full_name
-        }
-      }
-    );
+    const email = `${params.username}@creditapp.local`;
 
-    if (authError || !authData?.userId) {
+    // 1. Tạo auth user với username và password
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: email,
+      password: params.password,
+    });
+
+    if (authError || !authData?.user?.id) {
       throw authError || new Error('Failed to create user');
     }
-
+    // Nếu đăng ký thành công, lưu username vào bảng profiles
+    if (authData && authData.user) {
+      const { error: profileError } = await supabase.from('profiles').insert([
+        { id: authData.user.id, username: params.username, role: "member" }
+      ]);
+      if (profileError) {
+        // Nếu có lỗi khi lưu profile, có thể cần xóa user đã tạo
+        console.error('Error saving username:', profileError);
+      }
+    }
     // 2. Tạo employee record liên kết với auth user
     const { data, error } = await supabase
       .from('employees')
       .insert({
         id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15), // Tạo ID duy nhất
-        user_id: authData.userId, // Liên kết với auth user ID
+        user_id: authData.user.id, // Liên kết với auth user ID
         full_name: params.full_name,
         email: params.email, // Thêm email field mới
         store_id: params.store_id,
@@ -163,9 +166,7 @@ export async function createEmployee(params: CreateEmployeeParams) {
 
     if (error) {
       // Nếu có lỗi khi tạo employee, cần xóa auth user đã tạo
-      await supabase.functions.invoke('delete-user', {
-        body: { userId: authData.userId }
-      });
+      await supabase.auth.admin.deleteUser(authData.user.id);
       throw error;
     }
 
@@ -262,36 +263,16 @@ export async function updateEmployee(id: string, params: UpdateEmployeeParams) {
  */
 export async function deactivateEmployee(id: string) {
   try {
-    // 1. Cập nhật trạng thái nhân viên sang inactive
-    const { data, error } = await supabase
-      .from('employees')
-      .update({ status: EmployeeStatus.INACTIVE })
-      .eq('id', id)
-      .select()
-      .single();
+    const { data: transactionData, error: transactionError } = await supabase
+      .rpc('deactivate_employee_transaction', { 
+        employee_id: id 
+      });
 
-    if (error) {
-      throw error;
+    if (transactionError) {
+      throw transactionError;
     }
 
-    // 2. Vô hiệu hóa tài khoản xác thực
-    const { error: disableError } = await supabase.functions.invoke(
-      'disable-user', 
-      { 
-        body: { userId: id }
-      }
-    );
-
-    if (disableError) {
-      // Nếu có lỗi khi vô hiệu hóa auth user, hoàn tác thay đổi trạng thái employee
-      await supabase
-        .from('employees')
-        .update({ status: EmployeeStatus.WORKING })
-        .eq('id', id);
-      throw disableError;
-    }
-
-    return { data, error: null };
+    return { data: transactionData, error: null };
   } catch (error) {
     console.error('Error deactivating employee:', error);
     return { data: null, error };
@@ -303,36 +284,16 @@ export async function deactivateEmployee(id: string) {
  */
 export async function activateEmployee(id: string) {
   try {
-    // 1. Cập nhật trạng thái nhân viên sang working
-    const { data, error } = await supabase
-      .from('employees')
-      .update({ status: EmployeeStatus.WORKING })
-      .eq('id', id)
-      .select()
-      .single();
+    const { data: transactionData, error: transactionError } = await supabase
+      .rpc('activate_employee_transaction', { 
+        employee_id: id 
+      });
 
-    if (error) {
-      throw error;
+    if (transactionError) {
+      throw transactionError;
     }
 
-    // 2. Kích hoạt lại tài khoản xác thực
-    const { error: enableError } = await supabase.functions.invoke(
-      'enable-user', 
-      { 
-        body: { userId: id }
-      }
-    );
-
-    if (enableError) {
-      // Nếu có lỗi khi kích hoạt auth user, hoàn tác thay đổi trạng thái employee
-      await supabase
-        .from('employees')
-        .update({ status: EmployeeStatus.INACTIVE })
-        .eq('id', id);
-      throw enableError;
-    }
-
-    return { data, error: null };
+    return { data: transactionData, error: null };
   } catch (error) {
     console.error('Error activating employee:', error);
     return { data: null, error };
