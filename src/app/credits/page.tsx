@@ -224,6 +224,8 @@ export default function CreditsPage() {
   const handleClosePaymentHistory = () => {
     setIsPaymentHistoryModalOpen(false);
     setPaymentHistoryCredit(null);
+    // Refresh data when payment history modal is closed
+    handleRefresh();
   };
   
   // Handle refresh after contract operations

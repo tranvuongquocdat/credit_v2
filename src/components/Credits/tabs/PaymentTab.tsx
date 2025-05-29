@@ -55,6 +55,7 @@ export function PaymentTab({
   const [localPrincipalChanges, setLocalPrincipalChanges] = useState<PrincipalChange[]>(principalChanges);
   // Add loading state for checkbox operations
   const [loadingPeriods, setLoadingPeriods] = useState<Record<string, boolean>>({});
+  const [isProcessingCheckbox, setIsProcessingCheckbox] = useState(false); // Global loading state
   
   // State for recalculated periods based on new logic
   const [recalculatedPeriods, setRecalculatedPeriods] = useState<CreditPaymentPeriod[]>([]);
@@ -244,7 +245,18 @@ export function PaymentTab({
   
   // Start editing a payment
   const startEditing = (period: CreditPaymentPeriod) => {
-    if (period.actual_amount > 0) return; // Don't edit periods that already have payment in DB
+    // Don't edit periods that are already in DB or when processing checkbox
+    if ((period.id && !period.id.startsWith('calculated-') && !period.id.startsWith('temp-')) || isProcessingCheckbox) return;
+    
+    // Only allow editing the earliest unpaid period
+    const earliestUnpaidIndex = periodsToDisplay.findIndex(p => 
+      !p.id || p.id.startsWith('calculated-') || p.id.startsWith('temp-')
+    );
+    const currentIndex = periodsToDisplay.findIndex(p => 
+      (p.id === period.id) || (p.period_number === period.period_number)
+    );
+    
+    if (currentIndex !== earliestUnpaidIndex) return;
     
     setEditingPeriodId(period.id || `temp-${period.period_number}`);
     setPaymentAmount(period.actual_amount || period.expected_amount || 0);
@@ -269,6 +281,7 @@ export function PaymentTab({
       // Import dynamically to prevent import cycle
       const { savePaymentWithOtherAmount } = await import('@/lib/credit-payment');
       
+      // Save the payment (debt_amount is automatically updated inside this function)
       await savePaymentWithOtherAmount(
         credit.id,
         period,
@@ -296,7 +309,10 @@ export function PaymentTab({
   
   // Handler for checkbox change
   const handleCheckboxChange = async (period: CreditPaymentPeriod, checked: boolean, index: number) => {
-    if (!credit?.id) return;
+    if (!credit?.id || isProcessingCheckbox) return; // Prevent concurrent operations
+    
+    // Set global loading state
+    setIsProcessingCheckbox(true);
     
     // Set loading state for this period
     const periodId = period.id || `temp-${period.period_number}`;
@@ -314,7 +330,7 @@ export function PaymentTab({
         for (let i = 0; i <= index; i++) {
           const p = periodsToDisplay[i];
           // Only include periods that don't have any payment in DB yet
-          if (p.actual_amount === 0) {
+          if (p.id.startsWith('calculated-') || p.id.startsWith('temp-')) {
             periodsToCheck.push(p);
           }
         }
@@ -362,11 +378,27 @@ export function PaymentTab({
         // If unchecking, find all checked periods from this one to the newest
         const periodsToUncheck = [];
         
+        // Check if any later periods have been paid (validation)
+        const laterPeriods = periodsToDisplay.slice(index + 1);
+        const anyLaterPeriodPaid = laterPeriods.some(
+          (p: CreditPaymentPeriod) => p && p.id && !p.id.startsWith('calculated-') && !p.id.startsWith('temp-')
+        );
+
+        if (anyLaterPeriodPaid) {
+          toast({
+            variant: "destructive",
+            title: "Lỗi",
+            description: "Không thể bỏ đánh dấu kỳ này vì có kỳ sau đã được thanh toán.",
+          });
+          setLoadingPeriods(prev => ({ ...prev, [periodId]: false }));
+          return;
+        }
+        
         // Go through all periods from the current one to the end
         for (let i = periodsToDisplay.length - 1; i >= index; i--) {
           const p = periodsToDisplay[i];
-          // Only include periods that are fully paid
-          if (p.actual_amount >= p.expected_amount) {
+          // Include all periods that are in DB
+          if (p.id && !p.id.startsWith('calculated-') && !p.id.startsWith('temp-')) {
             periodsToUncheck.push(p);
           }
         }
@@ -403,6 +435,7 @@ export function PaymentTab({
       });
     } finally {
       setLoadingPeriods(prev => ({ ...prev, [periodId]: false }));
+      setIsProcessingCheckbox(false);
     }
   };
 
@@ -413,6 +446,14 @@ export function PaymentTab({
         <div className="flex items-center justify-center p-4 mb-4 bg-blue-50 border border-blue-200 rounded">
           <div className="h-4 w-4 rounded-full border-2 border-t-transparent border-blue-600 animate-spin mr-2"></div>
           <span className="text-blue-700">Đang tính toán lại các kỳ thanh toán...</span>
+        </div>
+      )}
+      
+      {/* Loading indicator when processing checkbox */}
+      {isProcessingCheckbox && (
+        <div className="flex items-center justify-center p-4 mb-4 bg-orange-50 border border-orange-200 rounded">
+          <div className="h-4 w-4 rounded-full border-2 border-t-transparent border-orange-600 animate-spin mr-2"></div>
+          <span className="text-orange-700">Đang xử lý thanh toán...</span>
         </div>
       )}
       
@@ -549,13 +590,17 @@ export function PaymentTab({
               const actual = period.actual_amount || (period.expected_amount || 0) + (period.other_amount || 0);
               const other = period.other_amount || 0;
               const total = expected + other;
-              const isPaid = period.actual_amount >= period.expected_amount;
-              const isPartiallyPaid = period.actual_amount > 0 && period.actual_amount < period.expected_amount;
-              const hasPayment = period.actual_amount > 0; // Đã có thanh toán trong DB
+              const isInDB = period.id && !period.id.startsWith('calculated-') && !period.id.startsWith('temp-'); // Kỳ có trong DB
               const isEditing = editingPeriodId === period.id || editingPeriodId === `temp-${period.period_number}`;
               const periodId = period.id || `temp-${period.period_number}`;
               const isLoading = loadingPeriods[periodId];
               const isDisabled = credit?.status === CreditStatus.CLOSED;
+              
+              // Find the earliest unpaid period (first period not in DB)
+              const earliestUnpaidIndex = periodsToDisplay.findIndex(p => 
+                !p.id || p.id.startsWith('calculated-') || p.id.startsWith('temp-')
+              );
+              const isEarliestUnpaid = index === earliestUnpaidIndex;
               
               return (
                 <tr key={periodId} className="hover:bg-gray-50">
@@ -600,8 +645,8 @@ export function PaymentTab({
                       </div>
                     ) : (
                       <span 
-                        className={`${!hasPayment && !isDisabled ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
-                        onClick={!hasPayment && !isDisabled ? () => startEditing(period) : undefined}
+                        className={`${!isInDB && !isDisabled && !isProcessingCheckbox && isEarliestUnpaid ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
+                        onClick={!isInDB && !isDisabled && !isProcessingCheckbox && isEarliestUnpaid ? () => startEditing(period) : undefined}
                       >
                         {formatCurrency(actual).replace('₫', '')}
                       </span>
@@ -614,9 +659,9 @@ export function PaymentTab({
                       </div>
                     ) : (
                       <Checkbox 
-                        checked={isPaid || isPartiallyPaid || period.is_temporary} 
+                        checked={!!isInDB} 
                         onCheckedChange={(checked) => handleCheckboxChange(period, !!checked, index)}
-                        disabled={isDisabled}
+                        disabled={isDisabled || isProcessingCheckbox}
                       />
                     )}
                   </td>

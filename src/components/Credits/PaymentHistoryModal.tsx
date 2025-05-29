@@ -330,8 +330,8 @@ export function PaymentHistoryModal({
                     <td className="py-1 px-2 text-right border">{formatCurrency(totalPaid)}</td>
                   </tr>
                   <tr>
-                    <td className="py-1 px-2 border font-bold">{remainingAmount > 0 ? 'Tiền thừa' : 'Nợ cũ'}</td>
-                    <td className={`py-1 px-2 text-right border ${remainingAmount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <td className="py-1 px-2 border font-bold">{remainingAmount < 0 ? 'Tiền thừa' : 'Nợ cũ'}</td>
+                    <td className={`py-1 px-2 text-right border ${remainingAmount < 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {formatCurrency(Math.abs(remainingAmount))}
                     </td>
                   </tr>
@@ -381,6 +381,9 @@ export function PaymentHistoryModal({
                     setPaymentPeriods(data || []);
                   });
                 }
+                
+                // Reload credit info to get updated debt_amount
+                reloadCreditInfo();
               }}
             />
           )}
