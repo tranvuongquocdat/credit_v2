@@ -312,21 +312,7 @@ export function InstallmentCreateModal({
       };
       
       // Call API to create installment
-      const { data: newInstallment, error } = await createInstallment(installmentData);
-      
-      if (error) throw error;
-      
-      // Cập nhật số dư quỹ tiền của cửa hàng - trừ đi số tiền đã giao cho khách
-      const { success, error: updateError } = await updateStoreCashFundOnly(
-        selectedEmployee.store_id,
-        -downPayment // Trừ số tiền giao khách (down_payment)
-      );
-      
-      if (!success || updateError) {
-        console.error('Error updating store cash fund:', updateError);
-        throw new Error('Không thể cập nhật quỹ tiền mặt của cửa hàng');
-      }
-      
+      await createInstallment(installmentData);
       // Success - close modal and notify parent
       const successMessage = customerType === 'new' 
         ? "Đã tạo khách hàng mới và hợp đồng trả góp" 

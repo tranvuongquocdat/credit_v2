@@ -5,10 +5,10 @@ export enum TransactionType {
   CREATE_CONTRACT = 'create_contract',
   UPDATE_CONTRACT = 'update_contract',
   PAYMENT = 'payment',
-  CANCEL_PAYMENT = 'cancel_payment',
-  CLOSE_CONTRACT = 'close_contract',
-  REOPEN_CONTRACT = 'reopen_contract',
-  ROTATE_CONTRACT = 'rotate_contract',
+  CANCEL_PAYMENT = 'payment_cancel',
+  CLOSE_CONTRACT = 'contract_close',
+  REOPEN_CONTRACT = 'contract_reopen',
+  ROTATE_CONTRACT = 'contract_rotate',
   DEBT_PAYMENT = 'debt_payment'
 }
 

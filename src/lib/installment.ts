@@ -322,14 +322,6 @@ export async function createInstallment(installment: CreateInstallmentParams) {
       updated_at: data.updated_at || undefined
     };
     
-    // Record history
-    try {
-      await recordContractCreation(data.id, data.employee_id, downPayment);
-    } catch (historyError) {
-      console.error('Error recording contract creation history:', historyError);
-      // Continue anyway
-    }
-    
     return { 
       data: result, 
       error: null 

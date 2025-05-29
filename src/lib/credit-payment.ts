@@ -128,22 +128,6 @@ export async function deletePaymentPeriod(periodId: string) {
       return { error };
     }
     
-    // Ghi nhận việc hủy đóng lãi vào lịch sử
-    if (periodData && periodData.actual_amount && periodData.actual_amount > 0) {
-      try {
-        const { recordCancelInterestPayment } = await import('./credit-amount-history');
-        
-        // Ghi nhận không đồng bộ (không chờ đợi)
-        recordCancelInterestPayment(
-          periodData.credit_id,
-          periodData.actual_amount,
-          `Hủy đóng lãi kỳ ${periodData.period_number}`
-        ).catch(e => console.error('Error recording cancel interest payment:', e));
-      } catch (historyError) {
-        console.error('Error importing recordCancelInterestPayment:', historyError);
-      }
-    }
-    
     return { error: null };
   } catch (error) {
     console.error('Error deleting payment period:', error);
