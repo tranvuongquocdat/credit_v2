@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PawnPaymentForm } from '../PawnPaymentForm';
-import { PawnWithCustomerAndCollateral } from '@/models/pawn';
+import { PawnWithCustomerAndCollateral, PawnStatus } from '@/models/pawn';
 import { PawnPaymentPeriod } from '@/models/pawn-payment';
 import { toast } from '@/components/ui/use-toast';
 import { PrincipalChange, calculateInterestWithPrincipalChanges, calculatePawnInterestAmount } from '@/lib/interest-calculator';
@@ -352,6 +352,7 @@ export function PaymentTab({
             onClose={() => setShowPaymentForm(false)}
             pawn={pawn}
             selectedPeriods={[]}
+            disabled={pawn.status === PawnStatus.CLOSED}
             onSuccess={async (data) => {
               try {
                 console.log('Payment data submitted:', data);
@@ -469,6 +470,7 @@ export function PaymentTab({
                 const isEditing = editingPeriodId === period.id || editingPeriodId === `temp-${period.period_number}`;
                 const periodId = period.id || `temp-${period.period_number}`;
                 const isLoading = loadingPeriods[periodId];
+                const isDisabled = pawn.status === PawnStatus.CLOSED;
 
             return (
                   <tr key={periodId} className="hover:bg-gray-50">
@@ -513,8 +515,8 @@ export function PaymentTab({
                         </div>
                       ) : (
                         <span 
-                          className={`${!isPaid ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
-                          onClick={!isPaid ? () => startEditing(period) : undefined}
+                          className={`${!isPaid && !isDisabled ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
+                          onClick={!isPaid && !isDisabled ? () => startEditing(period) : undefined}
                         >
                           {formatCurrency(actual).replace('₫', '')}
                         </span>
@@ -529,6 +531,7 @@ export function PaymentTab({
                         <Checkbox 
                           checked={isPaid || isPartiallyPaid} 
                           onCheckedChange={(checked) => handleCheckboxChange(period, !!checked, index)}
+                          disabled={isDisabled}
                         />
                       )}
                     </td>

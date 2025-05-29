@@ -13,9 +13,10 @@ interface PrincipalRepaymentFormProps {
     notes?: string;
   }) => void;
   creditId: string;
+  disabled?: boolean;
 }
 
-export function PrincipalRepaymentForm({ onSubmit, creditId }: PrincipalRepaymentFormProps) {
+export function PrincipalRepaymentForm({ onSubmit, creditId, disabled = false }: PrincipalRepaymentFormProps) {
   const [repaymentDate, setRepaymentDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [amount, setAmount] = useState<number>(0);
   const [formattedAmount, setFormattedAmount] = useState<string>('');
@@ -160,7 +161,7 @@ export function PrincipalRepaymentForm({ onSubmit, creditId }: PrincipalRepaymen
               value={repaymentDate}
               onChange={handleDateChange}
               className="w-full"
-              disabled={isLoading}
+              disabled={isLoading || disabled}
             />
           </div>
         </div>
@@ -179,6 +180,7 @@ export function PrincipalRepaymentForm({ onSubmit, creditId }: PrincipalRepaymen
             onChange={handleAmountChange}
             placeholder="0"
             inputMode="numeric"
+            disabled={disabled}
           />
         </div>
         
@@ -190,6 +192,7 @@ export function PrincipalRepaymentForm({ onSubmit, creditId }: PrincipalRepaymen
             className="border rounded px-2 py-1 w-64 h-20"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
+            disabled={disabled}
           />
         </div>
       </div>
@@ -199,7 +202,7 @@ export function PrincipalRepaymentForm({ onSubmit, creditId }: PrincipalRepaymen
         <Button 
           type="submit" 
           className="bg-blue-600 hover:bg-blue-700 text-white"
-          disabled={isLoading}
+          disabled={isLoading || disabled}
         >
           Đồng ý
         </Button>

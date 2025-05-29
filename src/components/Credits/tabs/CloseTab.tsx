@@ -22,6 +22,7 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   
   const loanAmount = credit?.loan_amount || 0;
+  const isClosed = credit?.status === CreditStatus.CLOSED;
   
   const handleCloseCredit = async (creditId: string) => {
     console.log('Closing credit:', creditId);
@@ -102,6 +103,12 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
   useEffect(() => {
     async function fetchPaymentPeriods() {
       if (!credit?.id) return;
+      
+      // If credit is already closed, set remainingAmount to 0
+      if (credit.status === CreditStatus.CLOSED) {
+        setRemainingAmount(0);
+        return;
+      }
       
       try {
         const { data } = await getCreditPaymentPeriods(credit.id);
@@ -358,7 +365,7 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
     }
     
     fetchPaymentPeriods();
-  }, [credit?.id, credit?.loan_date, credit?.loan_period, credit?.loan_amount]);
+  }, [credit?.id, credit?.loan_date, credit?.loan_period, credit?.loan_amount, credit?.status]);
   
   return (
     <div className="p-4">
@@ -409,8 +416,12 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
         </div>
         
         <div className="mt-6 flex justify-center">
-          <Button onClick={() => setShowConfirm(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-8">
-            Đóng HĐ
+          <Button 
+            onClick={() => setShowConfirm(true)} 
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8"
+            disabled={isClosed}
+          >
+            {isClosed ? "Hợp đồng đã đóng" : "Đóng HĐ"}
           </Button>
         </div>
       </div>

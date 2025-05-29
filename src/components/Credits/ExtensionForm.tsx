@@ -8,9 +8,10 @@ interface ExtensionFormProps {
     days: number;
     notes?: string;
   }) => void;
+  disabled?: boolean;
 }
 
-export function ExtensionForm({ customerName, onSubmit }: ExtensionFormProps) {
+export function ExtensionForm({ customerName, onSubmit, disabled = false }: ExtensionFormProps) {
   const [days, setDays] = useState<number>(10); // Mặc định gia hạn 10 ngày
   const [notes, setNotes] = useState<string>('');
 
@@ -58,6 +59,7 @@ export function ExtensionForm({ customerName, onSubmit }: ExtensionFormProps) {
             className="border rounded px-2 py-1 w-64"
             value={days}
             onChange={(e) => setDays(Number(e.target.value))}
+            disabled={disabled}
           />
           <span className="ml-2">Ngày</span>
         </div>
@@ -70,13 +72,18 @@ export function ExtensionForm({ customerName, onSubmit }: ExtensionFormProps) {
             className="border rounded px-2 py-1 w-64 h-20"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
+            disabled={disabled}
           />
         </div>
       </div>
       
       {/* Nút đồng ý */}
       <div className="flex justify-end mt-4">
-        <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white">
+        <Button 
+          type="submit" 
+          className="bg-blue-600 hover:bg-blue-700 text-white"
+          disabled={disabled}
+        >
           Đồng ý
         </Button>
       </div>

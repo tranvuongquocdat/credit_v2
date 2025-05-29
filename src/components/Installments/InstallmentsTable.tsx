@@ -645,9 +645,16 @@ export function InstallmentsTable({
                           </DropdownMenuItem>
                         )}
                         {installment.status === InstallmentStatus.CLOSED ? (
-                          <DropdownMenuItem onClick={() => confirmUnlockInstallment(installment)}>
-                            Mở khoá hợp đồng
-                          </DropdownMenuItem>
+                          <>
+                            <DropdownMenuItem onClick={() => confirmUnlockInstallment(installment)}>
+                              Mở khoá hợp đồng
+                            </DropdownMenuItem>
+                            {onShowPaymentActions && (
+                              <DropdownMenuItem onClick={() => onShowPaymentActions(installment)}>
+                                Thao tác thanh toán
+                              </DropdownMenuItem>
+                            )}
+                          </>
                         ) : onShowPaymentActions && (
                           <DropdownMenuItem onClick={() => onShowPaymentActions(installment)}>
                             Thao tác thanh toán

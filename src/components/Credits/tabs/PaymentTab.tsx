@@ -473,6 +473,7 @@ export function PaymentTab({
         <div className="border p-4 rounded mb-4">
           <PaymentForm 
             onClose={() => setShowPaymentForm(false)}
+            disabled={credit.status === CreditStatus.CLOSED}
             onSubmit={async (data) => {
               try {
               console.log('Payment data submitted:', data);

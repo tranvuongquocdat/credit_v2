@@ -25,6 +25,7 @@ interface PawnPaymentFormProps {
   loanPeriod?: number;
   interestPeriod?: number;
   lastPaymentEndDate?: string;
+  disabled?: boolean;
 }
 
 export function PawnPaymentForm({
@@ -37,7 +38,8 @@ export function PawnPaymentForm({
   loanDate,
   loanPeriod = 30,
   interestPeriod = 10,
-  lastPaymentEndDate
+  lastPaymentEndDate,
+  disabled = false
 }: PawnPaymentFormProps) {
   // Format number with thousand separators
   const formatNumber = (value: string | number): string => {
@@ -194,6 +196,7 @@ export function PawnPaymentForm({
               className="w-64"
               type="number"
               min="1"
+              disabled={disabled}
             />
             <span className="text-blue-600">Ngày</span>
           </div>
@@ -217,6 +220,7 @@ export function PawnPaymentForm({
               inputMode="numeric"
               type="text"
               readOnly={!!interestCalculator}
+              disabled={disabled}
             />
             <span className="text-gray-500 text-sm">VNĐ (Tiền lãi suất phải trả)</span>
             </div>
@@ -229,6 +233,7 @@ export function PawnPaymentForm({
               className="w-48"
               inputMode="numeric"
               type="text"
+              disabled={disabled}
             />
             <span className="text-gray-500 text-sm">VNĐ (Chi phí khác nếu có)</span>
             </div>
@@ -240,7 +245,7 @@ export function PawnPaymentForm({
 
           <div></div>
           <div className="mt-3">
-            <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+            <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={disabled}>
               Đóng lãi
             </Button>
             </div>

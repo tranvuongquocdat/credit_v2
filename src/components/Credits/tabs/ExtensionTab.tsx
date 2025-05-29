@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CreditWithCustomer } from '@/models/credit';
+import { CreditWithCustomer, CreditStatus } from '@/models/credit';
 import { ExtensionForm } from '../ExtensionForm';
 import { ExtensionList } from '../ExtensionList';
 import { addExtension, updateCreditEndDate } from '@/lib/extension';
@@ -26,13 +26,17 @@ export function ExtensionTab({ credit, onDataChange }: ExtensionTabProps) {
     }
   };
 
+  // Check if credit is closed
+  const isClosed = credit?.status === CreditStatus.CLOSED;
+
   return (
     <div>
       <ExtensionForm
         customerName={credit?.customer?.name}
+        disabled={isClosed}
         onSubmit={async (data) => {
           try {
-            if (!credit?.id || isSubmitting) return;
+            if (!credit?.id || isSubmitting || isClosed) return;
             
             setIsSubmitting(true);
             
@@ -41,7 +45,7 @@ export function ExtensionTab({ credit, onDataChange }: ExtensionTabProps) {
             await addExtension({
               credit_id: credit.id,
               days: data.days,
-              extension_date: format(today, 'yyyy-MM-dd'),
+              from_date: format(today, 'yyyy-MM-dd'),
               notes: data.notes
             });
             

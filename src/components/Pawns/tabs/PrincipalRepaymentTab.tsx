@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { PawnWithCustomerAndCollateral } from '@/models/pawn';
+import { PawnWithCustomerAndCollateral, PawnStatus } from '@/models/pawn';
 import { PrincipalRepaymentForm } from '../PrincipalRepaymentForm';
 import { PrincipalRepaymentList } from '../PrincipalRepaymentList';
 import { toast } from '@/components/ui/use-toast';
@@ -37,6 +37,7 @@ export function PrincipalRepaymentTab({
     <div>
       <PrincipalRepaymentForm 
         pawnId={pawn?.id || ''}
+        disabled={pawn.status === PawnStatus.CLOSED}
         onSubmit={async (data) => {
           try {
             if (!pawn?.id || isSubmitting) return;

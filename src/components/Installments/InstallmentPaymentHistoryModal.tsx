@@ -1381,6 +1381,7 @@ export function InstallmentPaymentHistoryModal({
                 <Button
                   className="bg-blue-600 hover:bg-blue-700 text-white px-8"
                   onClick={showCloseInstallmentConfirmation}
+                  disabled={installment?.status === InstallmentStatus.CLOSED}
                 >
                   Đóng HĐ
                 </Button>
@@ -1666,6 +1667,7 @@ export function InstallmentPaymentHistoryModal({
                         value={rotationLoanDate}
                         onChange={(date) => setRotationLoanDate(date)}
                         className="w-full"
+                        disabled={installment.status === InstallmentStatus.CLOSED}
                       />
                     </div>
                     <div className="ml-3 text-sm text-gray-500">
@@ -1685,6 +1687,7 @@ export function InstallmentPaymentHistoryModal({
                         className="border rounded p-2 w-full"
                         value={formatNumberWithDot(parseFormattedNumber(rotationLoanAmount))}
                         onChange={handleRotationLoanAmountChange}
+                        disabled={installment.status === InstallmentStatus.CLOSED}
                       />
                     </div>
                     <div className="ml-3 text-sm text-gray-500">
@@ -1704,23 +1707,13 @@ export function InstallmentPaymentHistoryModal({
                         className="border rounded p-2 w-full"
                         value={formatNumberWithDot(parseFormattedNumber(rotationDownPayment))}
                         onChange={handleRotationDownPaymentChange}
+                        disabled={installment.status === InstallmentStatus.CLOSED}
                       />
                     </div>
                     <div className="ml-3 text-sm text-gray-500">
                       - Tiền đưa khách cho hợp đồng mới
                       <br />- Tiền này sẽ trừ đi số nợ còn lại của hợp đồng hiện
                       tại
-                    </div>
-                  </div>
-
-                                      <div className="flex items-center bg-gray-50 p-2 rounded border">
-                    <div className="w-36 text-right mr-3 font-medium">
-                      Số nợ còn lại:
-                    </div>
-                    <div className="text-red-600 font-medium">
-                      {formatCurrency(
-                        Math.max(0, calculateRemainingToPay(installment, calculateTotalPaidFromHistory())),
-                      )}
                     </div>
                   </div>
 
@@ -1736,11 +1729,11 @@ export function InstallmentPaymentHistoryModal({
                         className="border rounded p-2 w-full"
                         value={rotationDuration}
                         onChange={(e) => setRotationDuration(e.target.value)}
+                        disabled={installment.status === InstallmentStatus.CLOSED}
                       />
                     </div>
                     <div className="ml-3 text-sm text-gray-500">
-                      Ngày =&gt; ({" "}
-                      {parseFormattedNumber(rotationLoanAmount) /
+                      Ngày =&gt; ( {parseFormattedNumber(rotationLoanAmount) /
                         parseInt(rotationDuration, 10) || 0
                         ? formatCurrency(
                             parseFormattedNumber(rotationLoanAmount) /
@@ -1763,9 +1756,8 @@ export function InstallmentPaymentHistoryModal({
                         type="text"
                         className="border rounded p-2 w-full"
                         value={rotationPaymentPeriod}
-                        onChange={(e) =>
-                          setRotationPaymentPeriod(e.target.value)
-                        }
+                        onChange={(e) => setRotationPaymentPeriod(e.target.value)}
+                        disabled={installment.status === InstallmentStatus.CLOSED}
                       />
                     </div>
                     <div className="ml-3 text-sm text-gray-500">
@@ -1780,11 +1772,10 @@ export function InstallmentPaymentHistoryModal({
                     <div className="flex-1 max-w-xs">
                       {formatCurrency(
                         parseFormattedNumber(rotationDownPayment),
-                      )}{" "}
-                      -{" "}
-                                            {formatCurrency(
+                      )} {" "}
+                      - {formatCurrency(
                         Math.max(0, calculateRemainingToPay(installment, calculateTotalPaidFromHistory())),
-                        )}{" "}
+                        )} {" "}
                       - {formatCurrency(0 - (installment.debt_amount || 0))}
                       = {formatCurrency(calculateCustomerReceiveAmount())}
                     </div>
@@ -1795,7 +1786,7 @@ export function InstallmentPaymentHistoryModal({
                   <Button
                     className="bg-blue-600 hover:bg-blue-700 text-white px-8"
                     onClick={handleRotateContract}
-                    disabled={isRotating}
+                    disabled={isRotating || installment.status === InstallmentStatus.CLOSED}
                   >
                     {isRotating ? (
                       <>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CreditWithCustomer } from '@/models/credit';
+import { CreditWithCustomer, CreditStatus } from '@/models/credit';
 import { AdditionalLoanForm } from '../AdditionalLoanForm';
 import { AdditionalLoanList } from '../AdditionalLoanList';
 import { toast } from '@/components/ui/use-toast';
@@ -24,13 +24,17 @@ export function AdditionalLoanTab({ credit, onDataChange }: AdditionalLoanTabPro
     }
   };
 
+  // Check if credit is closed
+  const isClosed = credit?.status === CreditStatus.CLOSED;
+
   return (
     <div>
       <AdditionalLoanForm 
         creditId={credit?.id || ''}
+        disabled={isClosed}
         onSubmit={async (data) => {
           try {
-            if (!credit?.id || isSubmitting) return;
+            if (!credit?.id || isSubmitting || isClosed) return;
             
             setIsSubmitting(true);
             

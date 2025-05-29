@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CreditWithCustomer } from '@/models/credit';
+import { CreditWithCustomer, CreditStatus } from '@/models/credit';
 import { PrincipalRepaymentForm } from '../PrincipalRepaymentForm';
 import { PrincipalRepaymentList } from '../PrincipalRepaymentList';
 import { toast } from '@/components/ui/use-toast';
@@ -22,6 +22,9 @@ export function PrincipalRepaymentTab({
   const [localRefreshTrigger, setLocalRefreshTrigger] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
+  // Check if credit is closed
+  const isClosed = credit?.status === CreditStatus.CLOSED;
+  
   const refreshData = () => {
     // Update both the parent counter and local counter
     setRefreshRepayments(prev => prev + 1);
@@ -37,9 +40,10 @@ export function PrincipalRepaymentTab({
     <div>
       <PrincipalRepaymentForm 
         creditId={credit?.id || ''}
+        disabled={isClosed}
         onSubmit={async (data) => {
           try {
-            if (!credit?.id || isSubmitting) return;
+            if (!credit?.id || isSubmitting || isClosed) return;
             
             setIsSubmitting(true);
             

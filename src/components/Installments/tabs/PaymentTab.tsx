@@ -1,7 +1,7 @@
 import { DatePicker } from "@/components/ui/date-picker";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency } from "@/lib/utils";
-import { InstallmentWithCustomer } from "@/models/installment";
+import { InstallmentWithCustomer, InstallmentStatus } from "@/models/installment";
 import { format } from "date-fns";
 import React from "react";
 import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
@@ -125,12 +125,13 @@ export const PaymentTab: React.FC<PaymentTabProps> = ({
                             handleSaveDate(period, date);
                           }}
                           className="w-32 text-center mx-auto"
+                          disabled={installment.status === InstallmentStatus.CLOSED}
                         />
                       ) : (
                         <span
-                          className={`${index === findOldestUnpaidPeriodIndex && !isPaid ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
+                          className={`${index === findOldestUnpaidPeriodIndex && !isPaid && installment.status !== InstallmentStatus.CLOSED ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
                           onClick={
-                            index === findOldestUnpaidPeriodIndex && !isPaid
+                            index === findOldestUnpaidPeriodIndex && !isPaid && installment.status !== InstallmentStatus.CLOSED
                               ? () => handleStartDateEditing(period, index)
                               : undefined
                           }
@@ -162,19 +163,21 @@ export const PaymentTab: React.FC<PaymentTabProps> = ({
                                 setSelectedPeriodId(null);
                               }
                             }}
+                            disabled={installment.status === InstallmentStatus.CLOSED}
                           />
                           <button
                             className="text-xs bg-blue-500 text-white px-1 rounded"
                             onClick={() => handleSavePayment(period)}
+                            disabled={installment.status === InstallmentStatus.CLOSED}
                           >
                             OK
                           </button>
                         </div>
                       ) : (
                         <span
-                          className={`${index === findOldestUnpaidPeriodIndex && !isPaid ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
+                          className={`${index === findOldestUnpaidPeriodIndex && !isPaid && installment.status !== InstallmentStatus.CLOSED ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
                           onClick={
-                            index === findOldestUnpaidPeriodIndex && !isPaid
+                            index === findOldestUnpaidPeriodIndex && !isPaid && installment.status !== InstallmentStatus.CLOSED
                               ? () => handleStartEditing(period, index)
                               : undefined
                           }
@@ -188,7 +191,7 @@ export const PaymentTab: React.FC<PaymentTabProps> = ({
                     <td className="px-2 py-2 text-center border">
                       <Checkbox
                         checked={isPaid}
-                        disabled={processingCheckbox}
+                        disabled={processingCheckbox || installment.status === InstallmentStatus.CLOSED}
                         onCheckedChange={(checked) => {
                           console.log("checked",period.id);
                           if (period && period.id) {
