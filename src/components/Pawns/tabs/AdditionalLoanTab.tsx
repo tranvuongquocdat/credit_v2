@@ -24,21 +24,24 @@ export function AdditionalLoanTab({ pawn, onDataChange }: AdditionalLoanTabProps
     }
   };
 
+  // Check if pawn is closed
+  const isClosed = pawn?.status === PawnStatus.CLOSED;
+
   return (
     <div>
       <AdditionalLoanForm 
         pawnId={pawn?.id || ''}
-        disabled={pawn.status === PawnStatus.CLOSED}
+        disabled={isClosed}
         onSubmit={async (data) => {
           try {
-            if (!pawn?.id || isSubmitting) return;
+            if (!pawn?.id || isSubmitting || isClosed) return;
             
             setIsSubmitting(true);
             
             // Import dynamically to prevent duplicate imports
             const { recordAdditionalLoan } = await import('@/lib/pawn-amount-history');
             
-            // Sử dụng API mới để ghi lại khoản vay thêm vào pawn_amount_history
+            // Sử dụng API mới để ghi lại khoản vay thêm vào pawn_history
             const { data: historyData, error } = await recordAdditionalLoan(
               pawn.id,
               data.amount,
@@ -54,20 +57,20 @@ export function AdditionalLoanTab({ pawn, onDataChange }: AdditionalLoanTabProps
             refreshData();
             
             // Hiển thị thông báo thành công
-      toast({
-        title: "Thành công",
+            toast({
+              title: "Thành công",
               description: "Đã cập nhật khoản vay thêm thành công",
             });
           } catch (err) {
             console.error('Error adding additional loan:', err);
-      toast({
+            toast({
               variant: "destructive",
-        title: "Lỗi",
+              title: "Lỗi",
               description: "Không thể thêm khoản vay thêm. Vui lòng thử lại sau."
-      });
-    } finally {
+            });
+          } finally {
             setIsSubmitting(false);
-    }
+          }
         }}
       />
       

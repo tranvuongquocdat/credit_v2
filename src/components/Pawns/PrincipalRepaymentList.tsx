@@ -14,10 +14,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from '@/components/ui/use-toast';
 import { 
-  getPawnAmountHistory, 
-  deletePawnAmountHistory,
-  PawnAmountHistory,
-  PawnTransactionType
+  getPawnAmountHistoryRecords, 
+  deletePawnAmountHistory
 } from '@/lib/pawn-amount-history';
 
 interface PrincipalRepaymentListProps {
@@ -25,15 +23,23 @@ interface PrincipalRepaymentListProps {
   onDeleted?: () => void;
 }
 
+interface PawnAmountHistoryRecord {
+  id: string;
+  pawn_id: string;
+  amount: number;
+  note: string | null;
+  created_at: string;
+}
+
 export function PrincipalRepaymentList({ 
   pawnId,
   onDeleted
 }: PrincipalRepaymentListProps) {
-  const [repayments, setRepayments] = useState<PawnAmountHistory[]>([]);
+  const [repayments, setRepayments] = useState<PawnAmountHistoryRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [repaymentToDelete, setRepaymentToDelete] = useState<PawnAmountHistory | null>(null);
+  const [repaymentToDelete, setRepaymentToDelete] = useState<PawnAmountHistoryRecord | null>(null);
 
   // Format tiền Việt Nam
   const formatCurrency = (amount: number): string => {
@@ -58,15 +64,15 @@ export function PrincipalRepaymentList({
     const fetchRepayments = async () => {
       try {
         setLoading(true);
-        const { data, error } = await getPawnAmountHistory(pawnId);
+        const { data, error } = await getPawnAmountHistoryRecords(pawnId);
         
         if (error) {
           throw error;
         }
         
-        // Lọc chỉ lấy các giao dịch trả bớt gốc
+        // Lọc chỉ lấy các giao dịch trả bớt gốc (amount < 0)
         const principalRepayments = data?.filter(
-          item => item.transaction_type === PawnTransactionType.PRINCIPAL_REPAYMENT
+          item => item.amount < 0
         ) || [];
         
         setRepayments(principalRepayments);
@@ -118,7 +124,7 @@ export function PrincipalRepaymentList({
   };
   
   // Hiển thị dialog xác nhận xóa
-  const confirmDelete = (repayment: PawnAmountHistory) => {
+  const confirmDelete = (repayment: PawnAmountHistoryRecord) => {
     setRepaymentToDelete(repayment);
     setDeleteDialogOpen(true);
   };
@@ -170,13 +176,13 @@ export function PrincipalRepaymentList({
                 <tr key={repayment.id} className="hover:bg-gray-50">
                   <td className="px-2 py-2 text-center border">{index + 1}</td>
                   <td className="px-2 py-2 text-center border">
-                    {formatDate(repayment.transaction_date)}
+                    {formatDate(repayment.created_at)}
                   </td>
                   <td className="px-2 py-2 text-left border">
-                    {repayment.notes || 'Trả bớt gốc'}
+                    {repayment.note || 'Trả bớt gốc'}
                   </td>
                   <td className="px-2 py-2 text-right border font-medium">
-                    {formatCurrency(repayment.credit_amount || 0)}
+                    {formatCurrency(Math.abs(repayment.amount))}
                   </td>
                   <td className="px-2 py-2 text-center border">
                     <Button 
@@ -201,12 +207,11 @@ export function PrincipalRepaymentList({
           <AlertDialogHeader>
             <AlertDialogTitle>Xác nhận xóa</AlertDialogTitle>
             <AlertDialogDescription>
-              Bạn có chắc chắn muốn xóa khoản trả bớt gốc này không?
-              Thao tác này sẽ hoàn tác số tiền gốc về trạng thái trước đó và không thể hoàn tác.
+              Bạn có chắc chắn muốn xóa khoản trả bớt gốc này không? Hành động này không thể hoàn tác.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Hủy bỏ</AlertDialogCancel>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
               Xóa
             </AlertDialogAction>

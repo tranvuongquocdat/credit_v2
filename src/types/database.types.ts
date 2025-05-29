@@ -85,48 +85,32 @@ export type Database = {
       }
       credit_amount_history: {
         Row: {
+          amount: number
           created_at: string
-          credit_amount: number | null
           credit_id: string
-          debit_amount: number | null
-          description: string | null
-          employee_id: string | null
           id: string
-          transaction_type: Database["public"]["Enums"]["credit_transaction_type"]
+          note: string | null
         }
         Insert: {
+          amount?: number
           created_at?: string
-          credit_amount?: number | null
           credit_id: string
-          debit_amount?: number | null
-          description?: string | null
-          employee_id?: string | null
           id?: string
-          transaction_type: Database["public"]["Enums"]["credit_transaction_type"]
+          note?: string | null
         }
         Update: {
+          amount?: number
           created_at?: string
-          credit_amount?: number | null
           credit_id?: string
-          debit_amount?: number | null
-          description?: string | null
-          employee_id?: string | null
           id?: string
-          transaction_type?: Database["public"]["Enums"]["credit_transaction_type"]
+          note?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "credit_amount_history_credit_id_fkey"
+            foreignKeyName: "credit_amount_history_credit_id_fkey1"
             columns: ["credit_id"]
             isOneToOne: false
             referencedRelation: "credits"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "credit_amount_history_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
             referencedColumns: ["id"]
           },
         ]
@@ -175,6 +159,54 @@ export type Database = {
             columns: ["credit_id"]
             isOneToOne: false
             referencedRelation: "credits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credit_history: {
+        Row: {
+          created_at: string
+          credit_amount: number | null
+          credit_id: string
+          debit_amount: number | null
+          description: string | null
+          employee_id: string | null
+          id: string
+          transaction_type: Database["public"]["Enums"]["credit_transaction_type"]
+        }
+        Insert: {
+          created_at?: string
+          credit_amount?: number | null
+          credit_id: string
+          debit_amount?: number | null
+          description?: string | null
+          employee_id?: string | null
+          id?: string
+          transaction_type: Database["public"]["Enums"]["credit_transaction_type"]
+        }
+        Update: {
+          created_at?: string
+          credit_amount?: number | null
+          credit_id?: string
+          debit_amount?: number | null
+          description?: string | null
+          employee_id?: string | null
+          id?: string
+          transaction_type?: Database["public"]["Enums"]["credit_transaction_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_amount_history_credit_id_fkey"
+            columns: ["credit_id"]
+            isOneToOne: false
+            referencedRelation: "credits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_amount_history_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
             referencedColumns: ["id"]
           },
         ]
@@ -438,7 +470,7 @@ export type Database = {
           },
         ]
       }
-      installment_amount_history: {
+      installment_history: {
         Row: {
           created_at: string | null
           credit_amount: number | null
@@ -621,6 +653,38 @@ export type Database = {
       }
       pawn_amount_history: {
         Row: {
+          amount: number
+          created_at: string
+          id: string
+          note: string | null
+          pawn_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          pawn_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          pawn_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pawn_amount_history_pawn_id_fkey1"
+            columns: ["pawn_id"]
+            isOneToOne: false
+            referencedRelation: "pawns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pawn_history: {
+        Row: {
           created_at: string | null
           created_by: string | null
           credit_amount: number | null
@@ -781,6 +845,7 @@ export type Database = {
           contract_code: string | null
           created_at: string | null
           customer_id: string
+          debt_amount: number
           id: string
           interest_notation: string | null
           interest_period: number
@@ -801,6 +866,7 @@ export type Database = {
           contract_code?: string | null
           created_at?: string | null
           customer_id: string
+          debt_amount?: number
           id?: string
           interest_notation?: string | null
           interest_period: number
@@ -821,6 +887,7 @@ export type Database = {
           contract_code?: string | null
           created_at?: string | null
           customer_id?: string
+          debt_amount?: number
           id?: string
           interest_notation?: string | null
           interest_period?: number
@@ -1050,11 +1117,7 @@ export type Database = {
         Args: { loan_date: string; loan_period: number }
         Returns: string
       }
-      deactivate_employee_transaction: {
-        Args: { employee_id: string }
-        Returns: Json
-      }
-      record_additional_loan: {
+      credit_additional_loan: {
         Args: {
           p_credit_id: string
           p_additional_amount: number
@@ -1063,7 +1126,7 @@ export type Database = {
         }
         Returns: string
       }
-      record_principal_repayment: {
+      credit_principal_repayment: {
         Args: {
           p_credit_id: string
           p_repayment_amount: number
@@ -1071,6 +1134,10 @@ export type Database = {
           p_notes: string
         }
         Returns: string
+      }
+      deactivate_employee_transaction: {
+        Args: { employee_id: string }
+        Returns: Json
       }
       recreate_payment_periods: {
         Args: { credit_id_param: string; periods_param: Json }
@@ -1093,6 +1160,8 @@ export type Database = {
         | "payment_cancel"
         | "contract_close"
         | "contract_reopen"
+        | "cancel_additional_loan"
+        | "cancel_principal_repayment"
       installment_payment_status:
         | "pending"
         | "paid"
@@ -1117,11 +1186,14 @@ export type Database = {
         | "deleted"
       pawn_transaction_type:
         | "payment"
-        | "new_loan"
+        | "initial_loan"
         | "principal_repayment"
         | "contract_close"
-        | "contract_rotation"
-        | "other"
+        | "additional_loan"
+        | "payment_cancel"
+        | "contract_reopen"
+        | "cancel_additional_loan"
+        | "cancel_principal_repayment"
       payment_period_status: "pending" | "paid" | "overdue" | "partially_paid"
     }
     CompositeTypes: {
@@ -1254,6 +1326,8 @@ export const Constants = {
         "payment_cancel",
         "contract_close",
         "contract_reopen",
+        "cancel_additional_loan",
+        "cancel_principal_repayment",
       ],
       installment_payment_status: [
         "pending",
@@ -1282,11 +1356,14 @@ export const Constants = {
       ],
       pawn_transaction_type: [
         "payment",
-        "new_loan",
+        "initial_loan",
         "principal_repayment",
         "contract_close",
-        "contract_rotation",
-        "other",
+        "additional_loan",
+        "payment_cancel",
+        "contract_reopen",
+        "cancel_additional_loan",
+        "cancel_principal_repayment",
       ],
       payment_period_status: ["pending", "paid", "overdue", "partially_paid"],
     },

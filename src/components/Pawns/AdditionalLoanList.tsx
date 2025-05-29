@@ -14,10 +14,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from '@/components/ui/use-toast';
 import { 
-  getPawnAmountHistory, 
-  deletePawnAmountHistory,
-  PawnAmountHistory,
-  PawnTransactionType
+  getPawnAmountHistoryRecords, 
+  deletePawnAmountHistory
 } from '@/lib/pawn-amount-history';
 
 interface AdditionalLoanListProps {
@@ -25,15 +23,23 @@ interface AdditionalLoanListProps {
   onDeleted?: () => void;
 }
 
+interface PawnAmountHistoryRecord {
+  id: string;
+  pawn_id: string;
+  amount: number;
+  note: string | null;
+  created_at: string;
+}
+
 export function AdditionalLoanList({ 
   pawnId,
   onDeleted
 }: AdditionalLoanListProps) {
-  const [loans, setLoans] = useState<PawnAmountHistory[]>([]);
+  const [loans, setLoans] = useState<PawnAmountHistoryRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [loanToDelete, setLoanToDelete] = useState<PawnAmountHistory | null>(null);
+  const [loanToDelete, setLoanToDelete] = useState<PawnAmountHistoryRecord | null>(null);
 
   // Format tiền Việt Nam
   const formatCurrency = (amount: number): string => {
@@ -58,16 +64,15 @@ export function AdditionalLoanList({
     const fetchLoans = async () => {
       try {
         setLoading(true);
-        const { data, error } = await getPawnAmountHistory(pawnId);
+        const { data, error } = await getPawnAmountHistoryRecords(pawnId);
         
         if (error) {
           throw error;
         }
         
-        // Lọc chỉ lấy các giao dịch vay thêm (OTHER với notes chứa "vay thêm")
+        // Lọc chỉ lấy các giao dịch vay thêm (amount > 0)
         const additionalLoans = data?.filter(
-          item => item.transaction_type === PawnTransactionType.OTHER && 
-                  (item.notes?.toLowerCase().includes('vay thêm') || (item.debit_amount && item.debit_amount > 0))
+          item => item.amount > 0
         ) || [];
         
         setLoans(additionalLoans);
@@ -119,7 +124,7 @@ export function AdditionalLoanList({
   };
   
   // Hiển thị dialog xác nhận xóa
-  const confirmDelete = (loan: PawnAmountHistory) => {
+  const confirmDelete = (loan: PawnAmountHistoryRecord) => {
     setLoanToDelete(loan);
     setDeleteDialogOpen(true);
   };
@@ -132,7 +137,7 @@ export function AdditionalLoanList({
           <path d="M21 12H3"/>
           <path d="M21 19H3"/>
         </svg>
-        <span className="font-medium ml-2">Danh sách tiền gốc</span>
+        <span className="font-medium ml-2">Danh sách vay thêm</span>
       </div>
       
       <div className="overflow-auto mt-2">
@@ -171,13 +176,13 @@ export function AdditionalLoanList({
                 <tr key={loan.id} className="hover:bg-gray-50">
                   <td className="px-2 py-2 text-center border">{index + 1}</td>
                   <td className="px-2 py-2 text-center border">
-                    {formatDate(loan.transaction_date)}
+                    {formatDate(loan.created_at)}
                   </td>
                   <td className="px-2 py-2 text-left border">
-                    {loan.notes || 'Vay thêm gốc'}
+                    {loan.note || 'Vay thêm'}
                   </td>
                   <td className="px-2 py-2 text-right border font-medium">
-                    {formatCurrency(loan.debit_amount || 0)}
+                    {formatCurrency(loan.amount)}
                   </td>
                   <td className="px-2 py-2 text-center border">
                     <Button 
@@ -202,12 +207,11 @@ export function AdditionalLoanList({
           <AlertDialogHeader>
             <AlertDialogTitle>Xác nhận xóa</AlertDialogTitle>
             <AlertDialogDescription>
-              Bạn có chắc chắn muốn xóa khoản vay thêm này không?
-              Thao tác này sẽ hoàn tác số tiền gốc về trạng thái trước đó và không thể hoàn tác.
+              Bạn có chắc chắn muốn xóa khoản vay thêm này không? Hành động này không thể hoàn tác.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Hủy bỏ</AlertDialogCancel>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
               Xóa
             </AlertDialogAction>

@@ -5,13 +5,23 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PawnWithCustomerAndCollateral, PawnStatus } from '@/models/pawn';
 import { formatCurrency } from '@/lib/utils';
-import { Edit, Eye, MoreHorizontal, Calendar, DollarSign } from 'lucide-react';
+import { Edit, Eye, MoreHorizontal, Calendar, DollarSign, Trash2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface StatusMapType {
   [key: string]: { 
@@ -26,9 +36,21 @@ interface PawnTableProps {
   statusMap: StatusMapType;
   onEdit: (pawnId: string) => void;
   onViewDetail?: (pawn: PawnWithCustomerAndCollateral) => void;
+  onDelete?: (pawnId: string) => void;
+  onExtend?: (pawnId: string) => void;
+  onRedeem?: (pawnId: string) => void;
 }
 
-export function PawnTable({ pawns, loading, statusMap, onEdit, onViewDetail }: PawnTableProps) {
+export function PawnTable({ 
+  pawns, 
+  loading, 
+  statusMap, 
+  onEdit, 
+  onViewDetail,
+  onDelete,
+  onExtend,
+  onRedeem 
+}: PawnTableProps) {
   const [sortField, setSortField] = useState<string>('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
@@ -46,13 +68,27 @@ export function PawnTable({ pawns, loading, statusMap, onEdit, onViewDetail }: P
   };
 
   const handleExtend = (pawnId: string) => {
-    // Handle extend pawn
-    console.log('Extend pawn:', pawnId);
+    if (onExtend) {
+      onExtend(pawnId);
+    } else {
+      console.log('Extend pawn:', pawnId);
+    }
   };
 
   const handleRedeem = (pawnId: string) => {
-    // Handle redeem pawn
-    console.log('Redeem pawn:', pawnId);
+    if (onRedeem) {
+      onRedeem(pawnId);
+    } else {
+      console.log('Redeem pawn:', pawnId);
+    }
+  };
+
+  const handleDelete = (pawnId: string) => {
+    if (onDelete) {
+      onDelete(pawnId);
+    } else {
+      console.log('Delete pawn:', pawnId);
+    }
   };
 
   const getStatusBadge = (status: PawnStatus) => {
@@ -103,177 +139,190 @@ export function PawnTable({ pawns, loading, statusMap, onEdit, onViewDetail }: P
   }
 
   return (
-    <div className="border rounded-lg overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <button
-                  onClick={() => handleSort('contract_code')}
-                  className="flex items-center space-x-1 hover:text-gray-700"
+    <div className="rounded-md border overflow-hidden mb-4">
+      <Table className="border-collapse">
+        <TableHeader className="bg-gray-50">
+          <TableRow>
+            <TableHead className="py-2 px-3 text-center font-medium w-12 border-b border-r border-gray-200">#</TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">
+              <button
+                onClick={() => handleSort('contract_code')}
+                className="flex items-center justify-center space-x-1 hover:text-gray-700 w-full"
+              >
+                <span>Mã HĐ</span>
+                {sortField === 'contract_code' && (
+                  <span className="text-blue-500">
+                    {sortDirection === 'asc' ? '↑' : '↓'}
+                  </span>
+                )}
+              </button>
+            </TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">
+              <button
+                onClick={() => handleSort('customer_name')}
+                className="flex items-center justify-center space-x-1 hover:text-gray-700 w-full"
+              >
+                <span>Khách hàng</span>
+                {sortField === 'customer_name' && (
+                  <span className="text-blue-500">
+                    {sortDirection === 'asc' ? '↑' : '↓'}
+                  </span>
+                )}
+              </button>
+            </TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Tài sản</TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">
+              <button
+                onClick={() => handleSort('loan_amount')}
+                className="flex items-center justify-center space-x-1 hover:text-gray-700 w-full"
+              >
+                <span>Số tiền vay</span>
+                {sortField === 'loan_amount' && (
+                  <span className="text-blue-500">
+                    {sortDirection === 'asc' ? '↑' : '↓'}
+                  </span>
+                )}
+              </button>
+            </TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium w-28 border-b border-r border-gray-200">
+              <button
+                onClick={() => handleSort('loan_date')}
+                className="flex items-center justify-center space-x-1 hover:text-gray-700 w-full"
+              >
+                <span>Ngày vay</span>
+                {sortField === 'loan_date' && (
+                  <span className="text-blue-500">
+                    {sortDirection === 'asc' ? '↑' : '↓'}
+                  </span>
+                )}
+              </button>
+            </TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium w-28 border-b border-r border-gray-200">
+              <button
+                onClick={() => handleSort('loan_period')}
+                className="flex items-center justify-center space-x-1 hover:text-gray-700 w-full"
+              >
+                <span>Ngày đáo hạn</span>
+                {sortField === 'loan_period' && (
+                  <span className="text-blue-500">
+                    {sortDirection === 'asc' ? '↑' : '↓'}
+                  </span>
+                )}
+              </button>
+            </TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium w-28 border-b border-r border-gray-200">Còn lại</TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium w-28 border-b border-r border-gray-200">Trạng thái</TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium w-24 border-b border-gray-200">Thao tác</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody className="bg-white divide-y divide-gray-200">
+          {pawns.map((pawn, index) => {
+            const daysRemaining = calculateDaysRemaining(pawn.loan_date, pawn.loan_period);
+            const maturityDate = calculateMaturityDate(pawn.loan_date, pawn.loan_period);
+            const isOverdue = daysRemaining < 0;
+            const isNearMaturity = daysRemaining <= 7 && daysRemaining >= 0;
+            
+            return (
+              <TableRow key={pawn.id} className="hover:bg-gray-50 transition-colors">
+                <TableCell className="py-3 px-3 text-gray-500 text-center border-b border-r border-gray-200">{index + 1}</TableCell>
+                <TableCell 
+                  className="py-3 px-3 font-medium text-blue-600 cursor-pointer text-center border-b border-r border-gray-200" 
+                  onClick={() => onEdit(pawn.id)}
                 >
-                  <span>Mã HĐ</span>
-                  {sortField === 'contract_code' && (
-                    <span className="text-blue-500">
-                      {sortDirection === 'asc' ? '↑' : '↓'}
-                    </span>
-                  )}
-                </button>
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <button
-                  onClick={() => handleSort('customer_name')}
-                  className="flex items-center space-x-1 hover:text-gray-700"
-                >
-                  <span>Khách hàng</span>
-                  {sortField === 'customer_name' && (
-                    <span className="text-blue-500">
-                      {sortDirection === 'asc' ? '↑' : '↓'}
-                    </span>
-                  )}
-                </button>
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Tài sản
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <button
-                  onClick={() => handleSort('loan_amount')}
-                  className="flex items-center space-x-1 hover:text-gray-700"
-                >
-                  <span>Số tiền vay</span>
-                  {sortField === 'loan_amount' && (
-                    <span className="text-blue-500">
-                      {sortDirection === 'asc' ? '↑' : '↓'}
-                    </span>
-                  )}
-                </button>
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <button
-                  onClick={() => handleSort('loan_date')}
-                  className="flex items-center space-x-1 hover:text-gray-700"
-                >
-                  <span>Ngày vay</span>
-                  {sortField === 'loan_date' && (
-                    <span className="text-blue-500">
-                      {sortDirection === 'asc' ? '↑' : '↓'}
-                    </span>
-                  )}
-                </button>
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <button
-                  onClick={() => handleSort('loan_period')}
-                  className="flex items-center space-x-1 hover:text-gray-700"
-                >
-                  <span>Ngày đáo hạn</span>
-                  {sortField === 'loan_period' && (
-                    <span className="text-blue-500">
-                      {sortDirection === 'asc' ? '↑' : '↓'}
-                    </span>
-                  )}
-                </button>
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Còn lại
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Trạng thái
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Thao tác
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {pawns.map((pawn) => {
-              const daysRemaining = calculateDaysRemaining(pawn.loan_date, pawn.loan_period);
-              const maturityDate = calculateMaturityDate(pawn.loan_date, pawn.loan_period);
-              const isOverdue = daysRemaining < 0;
-              const isNearMaturity = daysRemaining <= 7 && daysRemaining >= 0;
-              
-              return (
-                <tr key={pawn.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {pawn.contract_code}
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{pawn.customer?.name}</div>
-                    <div className="text-sm text-gray-500">{pawn.customer?.phone}</div>
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="text-sm text-gray-900 max-w-xs truncate">
-                      {pawn.collateral_asset?.name || pawn.collateral_detail || 'N/A'}
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {formatCurrency(pawn.loan_amount)}
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
-                      {format(new Date(pawn.loan_date), 'dd/MM/yyyy', { locale: vi })}
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
-                      {format(maturityDate, 'dd/MM/yyyy', { locale: vi })}
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <div className={`text-sm font-medium ${
-                      isOverdue ? 'text-red-600' : 
-                      isNearMaturity ? 'text-yellow-600' : 
-                      'text-green-600'
-                    }`}>
-                      {isOverdue ? `Quá ${Math.abs(daysRemaining)} ngày` : `${daysRemaining} ngày`}
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
+                  {pawn.contract_code}
+                </TableCell>
+                <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
+                  <div className="flex flex-col items-center">
+                    <span>{pawn.customer?.name}</span>
+                    <span className="text-xs text-gray-400 mt-1">{pawn.customer?.phone}</span>
+                  </div>
+                </TableCell>
+                <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
+                  <div className="max-w-xs truncate">
+                    {pawn.collateral_asset?.name || pawn.collateral_detail || 'N/A'}
+                  </div>
+                </TableCell>
+                <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
+                  {formatCurrency(pawn.loan_amount)}
+                </TableCell>
+                <TableCell className="py-3 px-3 text-gray-600 text-center border-b border-r border-gray-200">
+                  {format(new Date(pawn.loan_date), 'dd/MM/yyyy', { locale: vi })}
+                </TableCell>
+                <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
+                  {format(maturityDate, 'dd/MM/yyyy', { locale: vi })}
+                </TableCell>
+                <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
+                  <div className={`text-sm font-medium ${
+                    isOverdue ? 'text-red-600' : 
+                    isNearMaturity ? 'text-yellow-600' : 
+                    'text-green-600'
+                  }`}>
+                    {isOverdue ? `Quá ${Math.abs(daysRemaining)} ngày` : `${daysRemaining} ngày`}
+                  </div>
+                </TableCell>
+                <TableCell className="py-3 px-3 border-b border-r border-gray-200">
+                  <div className="flex justify-center">
                     {pawn.status && getStatusBadge(pawn.status)}
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  </div>
+                </TableCell>
+                <TableCell className="py-3 px-3 border-b border-gray-200">
+                  <div className="flex justify-center space-x-1">
+                    <Button 
+                      variant="ghost" 
+                      className="h-8 w-8 p-0" 
+                      onClick={() => handleViewDetail(pawn)}
+                      title="Lịch sử thanh toán"
+                    >
+                      <DollarSign className="h-4 w-4 text-gray-500" />
+                    </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <MoreHorizontal className="h-4 w-4" />
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <span className="sr-only">Mở menu</span>
+                          <MoreHorizontal className="h-4 w-4 text-gray-500" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleViewDetail(pawn)}>
+                      <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuItem onClick={() => handleViewDetail(pawn)} className="cursor-pointer">
                           <Eye className="mr-2 h-4 w-4" />
-                          Xem chi tiết
+                          <span>Xem chi tiết</span>
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onEdit(pawn.id)}>
+                        <DropdownMenuItem onClick={() => onEdit(pawn.id)} className="cursor-pointer">
                           <Edit className="mr-2 h-4 w-4" />
-                          Chỉnh sửa
+                          <span>Chỉnh sửa</span>
                         </DropdownMenuItem>
+                        
                         {pawn.status === PawnStatus.ON_TIME && (
                           <>
-                            <DropdownMenuItem onClick={() => handleExtend(pawn.id)}>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => handleExtend(pawn.id)} className="cursor-pointer">
                               <Calendar className="mr-2 h-4 w-4" />
-                              Gia hạn
+                              <span>Gia hạn</span>
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleRedeem(pawn.id)}>
+                            <DropdownMenuItem onClick={() => handleRedeem(pawn.id)} className="cursor-pointer">
                               <DollarSign className="mr-2 h-4 w-4" />
-                              Chuộc đồ
+                              <span>Chuộc đồ</span>
                             </DropdownMenuItem>
                           </>
                         )}
+                        
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem 
+                          onClick={() => handleDelete(pawn.id)} 
+                          className="cursor-pointer text-red-600 focus:text-red-600"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          <span>Xóa</span>
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                  </div>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
     </div>
   );
 } 

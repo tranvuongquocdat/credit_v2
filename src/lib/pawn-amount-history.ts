@@ -1,15 +1,28 @@
 import { supabase } from '@/lib/supabase';
 
 export enum PawnTransactionType {
-  PAYMENT = 'payment',
-  NEW_LOAN = 'new_loan',
-  PRINCIPAL_REPAYMENT = 'principal_repayment',
-  CONTRACT_CLOSE = 'contract_close',
-  CONTRACT_ROTATION = 'contract_rotation',
-  OTHER = 'other'
+  PAYMENT = 'payment', // đóng lãi phí
+  INITIAL_LOAN = 'initial_loan', // mới tạo hợp đồng
+  PRINCIPAL_REPAYMENT = 'principal_repayment', // trả bớt gốc
+  CONTRACT_CLOSE = 'contract_close', // đóng hợp đồng
+  ADDITIONAL_LOAN = 'additional_loan', // vay thêm
+  PAYMENT_CANCEL = 'payment_cancel', // hủy đóng lãi phí
+  CONTRACT_REOPEN = 'contract_reopen', // mở lại hợp đồng
+  CANCEL_ADDITIONAL_LOAN = 'cancel_additional_loan', // hủy vay thêm
+  CANCEL_PRINCIPAL_REPAYMENT = 'cancel_principal_repayment', // hủy trả bớt gốc
 }
 
+// Interface for pawn_amount_history table
 export interface PawnAmountHistory {
+  id: string;
+  pawn_id: string;
+  amount: number;
+  note: string | null;
+  created_at: string;
+}
+
+// Interface for pawn_history table (for backward compatibility)
+export interface PawnHistoryRecord {
   id: string;
   pawn_id: string;
   transaction_type: PawnTransactionType;
@@ -66,16 +79,14 @@ export async function recordPrincipalRepayment(
       throw updateError;
     }
 
-    // 2. Insert the history record
+    // 2. Insert the history record with new schema format (trigger will handle pawn_history)
     const { data, error } = await supabase
       .from('pawn_amount_history')
       .insert({
         pawn_id: pawnId,
-        transaction_type: PawnTransactionType.PRINCIPAL_REPAYMENT,
-        credit_amount: repaymentAmount, // Positive for credit (incoming money)
-        debit_amount: 0,
-        transaction_date: transactionDate,
-        notes: notes || 'Trả bớt gốc'
+        amount: -repaymentAmount, // Negative for principal repayment
+        note: notes,
+        created_at: new Date(transactionDate).toISOString(),
       })
       .select()
       .single();
@@ -136,16 +147,14 @@ export async function recordAdditionalLoan(
       throw updateError;
     }
 
-    // 2. Insert the history record
+    // 2. Insert the history record with new schema format (trigger will handle pawn_history)
     const { data, error } = await supabase
       .from('pawn_amount_history')
       .insert({
         pawn_id: pawnId,
-        transaction_type: PawnTransactionType.OTHER, // Use OTHER for additional loan
-        debit_amount: additionalAmount, // Positive for debit (outgoing money)
-        credit_amount: 0,
-        transaction_date: transactionDate,
-        notes: notes || 'Vay thêm'
+        amount: additionalAmount, // Positive for additional loan
+        note: notes || "Vay thêm",
+        created_at: new Date(transactionDate).toISOString(),
       })
       .select()
       .single();
@@ -168,12 +177,12 @@ export async function recordAdditionalLoan(
 }
 
 /**
- * Get pawn amount history records for a specific pawn
+ * Get pawn history records from pawn_history table (for backward compatibility)
  */
 export async function getPawnAmountHistory(pawnId: string) {
   try {
     const { data, error } = await supabase
-      .from('pawn_amount_history')
+      .from('pawn_history')
       .select('*')
       .eq('pawn_id', pawnId)
       .order('created_at', { ascending: true });
@@ -182,9 +191,31 @@ export async function getPawnAmountHistory(pawnId: string) {
       throw error;
     }
     
-    return { data: data as PawnAmountHistory[], error: null };
+    return { data: data as PawnHistoryRecord[], error: null };
   } catch (error) {
     console.error('Error fetching pawn amount history:', error);
+    return { data: null, error };
+  }
+}
+
+/**
+ * Get pawn amount history records from pawn_amount_history table
+ */
+export async function getPawnAmountHistoryRecords(pawnId: string) {
+  try {
+    const { data, error } = await supabase
+      .from('pawn_amount_history')
+      .select('*')
+      .eq('pawn_id', pawnId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+    
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error fetching pawn amount history records:', error);
     return { data: null, error };
   }
 }
@@ -194,22 +225,19 @@ export async function getPawnAmountHistory(pawnId: string) {
  */
 export async function deletePawnAmountHistory(historyId: string) {
   try {
-    // First get the history record to know what to rollback
-    const { data: historyData, error: fetchError } = await supabase
+    // Delete from pawn_amount_history (trigger will handle pawn_history)
+    const { data, error } = await supabase
       .from('pawn_amount_history')
-      .select('*')
+      .delete()
       .eq('id', historyId)
+      .select()
       .single();
 
-    if (fetchError) {
-      throw fetchError;
+    if (error) {
+      throw error;
     }
 
-    if (!historyData) {
-      throw new Error('History record not found');
-    }
-
-    return { data: historyData, error: null };
+    return { data, error: null };
   } catch (error) {
     console.error('Error deleting pawn amount history:', error);
     return { data: null, error };

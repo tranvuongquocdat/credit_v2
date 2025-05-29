@@ -39,7 +39,7 @@ function transformHistory(record: Record<string, any>): CreditAmountHistory {
 // Interface for inserting new history records
 interface CreditAmountHistoryInsert {
   credit_id: string;
-  transaction_type: string;
+  transaction_type: CreditTransactionType;
   debit_amount: number;
   credit_amount: number;
   description: string | null;
@@ -94,11 +94,9 @@ export async function recordPrincipalRepayment(
       .from('credit_amount_history')
       .insert({
         credit_id: creditId,
-        transaction_type: 'principal_repayment',
-        credit_amount: repaymentAmount, // Positive for credit (incoming money)
-        debit_amount: 0,
-        description: notes || 'Trả bớt gốc'
-        // transaction_date field is no longer used, created_at is set automatically
+        amount: -repaymentAmount, // Negative for principal repayment
+        note: notes,
+        created_at: new Date(transactionDate).toISOString(),
       })
       .select()
       .single();
@@ -164,11 +162,9 @@ export async function recordAdditionalLoan(
       .from('credit_amount_history')
       .insert({
         credit_id: creditId,
-        transaction_type: 'additional_loan',
-        debit_amount: additionalAmount, // Positive for debit (outgoing money)
-        credit_amount: 0,
-        description: notes || 'Vay thêm'
-        // transaction_date field is no longer used, created_at is set automatically
+        amount: additionalAmount,
+        note: notes || "Vay thêm",
+        created_at: new Date(transactionDate).toISOString(),
       })
       .select()
       .single();
@@ -196,7 +192,7 @@ export async function recordAdditionalLoan(
 export async function getCreditAmountHistory(creditId: string) {
   try {
     const { data, error } = await supabase
-      .from('credit_amount_history')
+      .from('credit_history')
       .select('*')
       .eq('credit_id', creditId)
       .order('created_at', { ascending: true });
@@ -225,10 +221,10 @@ export async function recordInterestPayment(
 ) {
   try {
     const { data, error } = await supabase
-      .from('credit_amount_history')
+      .from('credit_history')
       .insert({
         credit_id: creditId,
-        transaction_type: 'payment',
+        transaction_type: 'payment' as CreditTransactionType,
         credit_amount: amount, // Positive for credit (incoming money)
         debit_amount: 0,
         description: description || 'Đóng lãi phí'
@@ -256,7 +252,7 @@ export async function recordCancelInterestPayment(
 ) {
   try {
     const { data, error } = await supabase
-      .from('credit_amount_history')
+      .from('credit_history')
       .insert({
         credit_id: creditId,
         transaction_type: 'payment_cancel',
@@ -287,7 +283,7 @@ export async function recordContractClosure(
 ) {
   try {
     const { data, error } = await supabase
-      .from('credit_amount_history')
+      .from('credit_history')
       .insert({
         credit_id: creditId,
         transaction_type: 'contract_close',
@@ -320,7 +316,7 @@ export async function recordContractReopening(
   try {
     // Lấy lịch sử đóng hợp đồng gần nhất
     const { data: closureHistory, error: closureError } = await supabase
-      .from('credit_amount_history')
+      .from('credit_history')
       .select('credit_amount')
       .eq('credit_id', creditId)
       .eq('transaction_type', 'contract_close')
@@ -339,7 +335,7 @@ export async function recordContractReopening(
 
     // Ghi lại lịch sử mở khóa hợp đồng với số tiền đóng hợp đồng gần nhất vào debit_amount
     const { data, error } = await supabase
-      .from('credit_amount_history')
+      .from('credit_history')
       .insert({
         credit_id: creditId,
         transaction_type: 'contract_reopen',

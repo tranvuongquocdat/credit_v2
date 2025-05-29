@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS pawn_payment_periods (
 );
 
 -- Pawn amount history table (đã thay đổi amount thành debit_amount/credit_amount, thêm employee_id)
-CREATE TABLE IF NOT EXISTS pawn_amount_history (
+CREATE TABLE IF NOT EXISTS pawn_history (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   pawn_id UUID NOT NULL REFERENCES pawns(id),
   transaction_type pawn_transaction_type NOT NULL,
@@ -91,14 +91,14 @@ CREATE INDEX IF NOT EXISTS idx_pawns_collateral_id ON pawns(collateral_id);
 CREATE INDEX IF NOT EXISTS idx_pawns_status ON pawns(status);
 CREATE INDEX IF NOT EXISTS idx_pawns_contract_code ON pawns(contract_code);
 CREATE INDEX IF NOT EXISTS idx_pawn_payment_periods_pawn_id ON pawn_payment_periods(pawn_id);
-CREATE INDEX IF NOT EXISTS idx_pawn_amount_history_pawn_id ON pawn_amount_history(pawn_id);
-CREATE INDEX IF NOT EXISTS idx_pawn_amount_history_employee_id ON pawn_amount_history(employee_id);
+CREATE INDEX IF NOT EXISTS idx_pawn_history_pawn_id ON pawn_history(pawn_id);
+CREATE INDEX IF NOT EXISTS idx_pawn_history_employee_id ON pawn_history(employee_id);
 CREATE INDEX IF NOT EXISTS idx_pawn_principal_repayments_pawn_id ON pawn_principal_repayments(pawn_id);
 
 -- Enable RLS (Row Level Security)
 ALTER TABLE pawns ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pawn_payment_periods ENABLE ROW LEVEL SECURITY;
-ALTER TABLE pawn_amount_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pawn_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pawn_principal_repayments ENABLE ROW LEVEL SECURITY;
 
 -- Create RLS policies for pawns table
@@ -151,8 +151,8 @@ CREATE POLICY "Users can update pawn payment periods from their stores" ON pawn_
     )
   );
 
--- Create RLS policies for pawn_amount_history table
-CREATE POLICY "Users can view pawn amount history from their stores" ON pawn_amount_history
+-- Create RLS policies for pawn_history table
+CREATE POLICY "Users can view pawn amount history from their stores" ON pawn_history
   FOR SELECT USING (
     pawn_id IN (
       SELECT id FROM pawns WHERE store_id IN (
@@ -161,7 +161,7 @@ CREATE POLICY "Users can view pawn amount history from their stores" ON pawn_amo
     )
   );
 
-CREATE POLICY "Users can insert pawn amount history to their stores" ON pawn_amount_history
+CREATE POLICY "Users can insert pawn amount history to their stores" ON pawn_history
   FOR INSERT WITH CHECK (
     pawn_id IN (
       SELECT id FROM pawns WHERE store_id IN (
@@ -204,7 +204,7 @@ CREATE TRIGGER update_pawns_updated_at BEFORE UPDATE ON pawns
 CREATE TRIGGER update_pawn_payment_periods_updated_at BEFORE UPDATE ON pawn_payment_periods
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_pawn_amount_history_updated_at BEFORE UPDATE ON pawn_amount_history
+CREATE TRIGGER update_pawn_history_updated_at BEFORE UPDATE ON pawn_history
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_pawn_principal_repayments_updated_at BEFORE UPDATE ON pawn_principal_repayments

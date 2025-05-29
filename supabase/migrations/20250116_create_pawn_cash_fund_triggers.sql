@@ -10,8 +10,8 @@ BEGIN
       updated_at = NOW()
   WHERE id = NEW.store_id;
   
-  -- Log the transaction in pawn_amount_history (debit = money out)
-  INSERT INTO pawn_amount_history (
+  -- Log the transaction in pawn_history (debit = money out)
+  INSERT INTO pawn_history (
     pawn_id,
     transaction_type,
     debit_amount,
@@ -51,10 +51,10 @@ BEGIN
         updated_at = NOW()
     WHERE id = NEW.store_id;
     
-    -- Log the transaction in pawn_amount_history
+    -- Log the transaction in pawn_history
     IF amount_difference > 0 THEN
       -- Additional loan (money going out)
-      INSERT INTO pawn_amount_history (
+      INSERT INTO pawn_history (
         pawn_id,
         transaction_type,
         debit_amount,
@@ -75,7 +75,7 @@ BEGIN
       );
     ELSE
       -- Principal repayment (money coming back)
-      INSERT INTO pawn_amount_history (
+      INSERT INTO pawn_history (
         pawn_id,
         transaction_type,
         debit_amount,
@@ -113,8 +113,8 @@ BEGIN
         updated_at = NOW()
     WHERE id = NEW.store_id;
     
-    -- Log the transaction in pawn_amount_history (credit = money coming back)
-    INSERT INTO pawn_amount_history (
+    -- Log the transaction in pawn_history (credit = money coming back)
+    INSERT INTO pawn_history (
       pawn_id,
       transaction_type,
       debit_amount,
@@ -156,8 +156,8 @@ BEGIN
         updated_at = NOW()
     WHERE id = pawn_record.store_id;
     
-    -- Log the transaction in pawn_amount_history (credit = money coming in)
-    INSERT INTO pawn_amount_history (
+    -- Log the transaction in pawn_history (credit = money coming in)
+    INSERT INTO pawn_history (
       pawn_id,
       transaction_type,
       debit_amount,
@@ -186,10 +186,10 @@ BEGIN
           updated_at = NOW()
       WHERE id = pawn_record.store_id;
       
-      -- Log the adjustment in pawn_amount_history
+      -- Log the adjustment in pawn_history
       IF amount_difference > 0 THEN
         -- Additional payment (credit)
-        INSERT INTO pawn_amount_history (
+        INSERT INTO pawn_history (
           pawn_id,
           transaction_type,
           debit_amount,
@@ -210,7 +210,7 @@ BEGIN
         );
       ELSE
         -- Payment reduction (debit)
-        INSERT INTO pawn_amount_history (
+        INSERT INTO pawn_history (
           pawn_id,
           transaction_type,
           debit_amount,
@@ -253,8 +253,8 @@ BEGIN
         updated_at = NOW()
     WHERE id = pawn_record.store_id;
     
-    -- Log the reversal in pawn_amount_history (debit = money going out due to reversal)
-    INSERT INTO pawn_amount_history (
+    -- Log the reversal in pawn_history (debit = money going out due to reversal)
+    INSERT INTO pawn_history (
       pawn_id,
       transaction_type,
       debit_amount,
@@ -312,8 +312,8 @@ CREATE TRIGGER trigger_pawn_payment_delete_cash_fund
   EXECUTE FUNCTION update_cash_fund_on_pawn_payment_delete();
 
 -- Add comments for documentation
-COMMENT ON FUNCTION update_cash_fund_on_pawn_create() IS 'Automatically decreases store cash fund and logs to pawn_amount_history when a pawn contract is created';
-COMMENT ON FUNCTION update_cash_fund_on_pawn_update() IS 'Automatically adjusts store cash fund and logs to pawn_amount_history when pawn loan amount changes';
-COMMENT ON FUNCTION update_cash_fund_on_pawn_close() IS 'Automatically increases store cash fund and logs to pawn_amount_history when a pawn contract is closed/redeemed';
-COMMENT ON FUNCTION update_cash_fund_on_pawn_payment() IS 'Automatically increases store cash fund and logs to pawn_amount_history when pawn interest payments are made';
-COMMENT ON FUNCTION update_cash_fund_on_pawn_payment_delete() IS 'Automatically reverses store cash fund and logs to pawn_amount_history when pawn payments are deleted'; 
+COMMENT ON FUNCTION update_cash_fund_on_pawn_create() IS 'Automatically decreases store cash fund and logs to pawn_history when a pawn contract is created';
+COMMENT ON FUNCTION update_cash_fund_on_pawn_update() IS 'Automatically adjusts store cash fund and logs to pawn_history when pawn loan amount changes';
+COMMENT ON FUNCTION update_cash_fund_on_pawn_close() IS 'Automatically increases store cash fund and logs to pawn_history when a pawn contract is closed/redeemed';
+COMMENT ON FUNCTION update_cash_fund_on_pawn_payment() IS 'Automatically increases store cash fund and logs to pawn_history when pawn interest payments are made';
+COMMENT ON FUNCTION update_cash_fund_on_pawn_payment_delete() IS 'Automatically reverses store cash fund and logs to pawn_history when pawn payments are deleted'; 

@@ -52,7 +52,7 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
             : 'Hoàn trả tiền thừa khi đóng hợp đồng';
             
           await supabase
-            .from('credit_amount_history')
+            .from('credit_history')
             .insert({
               credit_id: creditId,
               transaction_type: credit.debt_amount > 0 ? 'payment' : 'payment_cancel',

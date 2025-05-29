@@ -131,7 +131,7 @@ CREATE TABLE credit_payment_periods (
 );
 
 -- Credit amount history table
-CREATE TABLE credit_amount_history (
+CREATE TABLE credit_history (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   credit_id UUID NOT NULL REFERENCES credits(id),
   transaction_type credit_transaction_type NOT NULL,
@@ -193,7 +193,7 @@ CREATE TABLE installment_payment_period (
 );
 
 -- Installment amount history table
-CREATE TABLE installment_amount_history (
+CREATE TABLE installment_history (
   id SERIAL PRIMARY KEY,
   installment_id UUID NOT NULL REFERENCES installments(id),
   transaction_type TEXT NOT NULL,
@@ -254,7 +254,7 @@ BEGIN
   UPDATE credits SET loan_amount = v_new_amount, updated_at = NOW() WHERE id = p_credit_id;
   
   -- Record history
-  INSERT INTO credit_amount_history (
+  INSERT INTO credit_history (
     credit_id, transaction_type, amount, previous_loan_amount, new_loan_amount, 
     transaction_date, notes, created_at, updated_at
   ) VALUES (
@@ -291,7 +291,7 @@ BEGIN
   UPDATE credits SET loan_amount = v_new_amount, updated_at = NOW() WHERE id = p_credit_id;
   
   -- Record history
-  INSERT INTO credit_amount_history (
+  INSERT INTO credit_history (
     credit_id, transaction_type, amount, previous_loan_amount, new_loan_amount, 
     transaction_date, notes, created_at, updated_at
   ) VALUES (

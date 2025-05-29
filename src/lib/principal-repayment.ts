@@ -25,7 +25,6 @@ export async function getPrincipalRepayments(creditId: string): Promise<Principa
       .from('credit_amount_history')
       .select('*')
       .eq('credit_id', creditId)
-      .eq('transaction_type', CreditTransactionType.PRINCIPAL_REPAYMENT)
       .order('created_at', { ascending: false });
       
     if (error) {
@@ -37,9 +36,8 @@ export async function getPrincipalRepayments(creditId: string): Promise<Principa
     const principalRepayments: PrincipalRepayment[] = (data || []).map(record => ({
       id: record.id,
       credit_id: record.credit_id,
-      amount: record.credit_amount || 0, // For repayment, money comes in as credit
-      repayment_date: record.created_at,
-      notes: record.description || undefined,
+      amount: record.amount || 0, // For repayment, money comes in as credit
+      note: record.note || undefined,
       created_at: record.created_at
     }));
     
@@ -75,6 +73,25 @@ export async function addPrincipalRepayment(repayment: PrincipalRepayment): Prom
     const previousLoanAmount = creditData.loan_amount;
     const newLoanAmount = Math.max(0, previousLoanAmount - repayment.amount);
     
+    
+    // Insert into credit_history
+    const { data, error } = await supabase
+    .from('credit_amount_history')
+    .insert({
+      credit_id: repayment.credit_id,
+      amount: repayment.amount,
+      credit_amount: repayment.amount, // Positive for credit (money coming in)
+      debit_amount: 0, // No debit for repayment
+      description: repayment.note || "Trả bớt gốc"
+    })
+    .select()
+    .single();
+    
+    if (error) {
+      console.error('Error adding principal repayment:', error);
+      throw new Error(`Error adding principal repayment: ${error.message}`);
+    }
+    
     // Update credit with new loan amount
     const { error: updateError } = await supabase
       .from('credits')
@@ -85,32 +102,12 @@ export async function addPrincipalRepayment(repayment: PrincipalRepayment): Prom
       console.error('Error updating credit loan amount:', updateError);
       throw new Error(`Error updating credit loan amount: ${updateError.message}`);
     }
-    
-    // Insert into credit_amount_history
-    const { data, error } = await supabase
-      .from('credit_amount_history')
-      .insert({
-        credit_id: repayment.credit_id,
-        transaction_type: CreditTransactionType.PRINCIPAL_REPAYMENT,
-        credit_amount: repayment.amount, // Positive for credit (money coming in)
-        debit_amount: 0, // No debit for repayment
-        description: repayment.notes || null
-      })
-      .select()
-      .single();
-      
-    if (error) {
-      console.error('Error adding principal repayment:', error);
-      throw new Error(`Error adding principal repayment: ${error.message}`);
-    }
-    
     // Return in PrincipalRepayment format
     return {
       id: data.id,
       credit_id: data.credit_id,
-      amount: data.credit_amount || 0,
-      repayment_date: data.created_at,
-      notes: data.description || undefined,
+      amount: data.amount || 0,
+      note: data.note || undefined,
       created_at: data.created_at
     };
   } catch (error) {
@@ -123,7 +120,7 @@ export async function addPrincipalRepayment(repayment: PrincipalRepayment): Prom
  * Xóa một khoản trả bớt gốc
  * @param id - ID của khoản trả bớt gốc cần xóa
  */
-export async function deletePrincipalRepayment(id: string): Promise<void> {
+export async function deleteCreditAmountHistory(id: string): Promise<void> {
   try {
     // Get the record details first to restore the loan amount later
     const { data: record, error: fetchError } = await supabase
@@ -135,10 +132,6 @@ export async function deletePrincipalRepayment(id: string): Promise<void> {
     if (fetchError) {
       console.error('Error fetching repayment record:', fetchError);
       throw new Error(`Error fetching repayment record: ${fetchError.message}`);
-    }
-    
-    if (!record || record.transaction_type !== CreditTransactionType.PRINCIPAL_REPAYMENT) {
-      throw new Error('Principal repayment record not found');
     }
     
     // Need to get the current loan amount
@@ -154,9 +147,20 @@ export async function deletePrincipalRepayment(id: string): Promise<void> {
     }
     
     // Restore the loan amount by adding back the repayment amount
-    const repaymentAmount = record.credit_amount || 0;
-    const restoredAmount = (creditData?.loan_amount || 0) + repaymentAmount;
+    const repaymentAmount = record.amount || 0;
+    const restoredAmount = (creditData?.loan_amount || 0) - repaymentAmount;
     
+    
+    // Delete the history record
+    const { error: deleteError } = await supabase
+    .from('credit_amount_history')
+    .delete()
+    .eq('id', id);
+    
+    if (deleteError) {
+      console.error('Error deleting principal repayment:', deleteError);
+      throw new Error(`Error deleting principal repayment: ${deleteError.message}`);
+    }
     // Update credit with restored loan amount
     const { error: updateError } = await supabase
       .from('credits')
@@ -166,17 +170,6 @@ export async function deletePrincipalRepayment(id: string): Promise<void> {
     if (updateError) {
       console.error('Error restoring loan amount:', updateError);
       throw new Error(`Error restoring loan amount: ${updateError.message}`);
-    }
-    
-    // Delete the history record
-    const { error: deleteError } = await supabase
-      .from('credit_amount_history')
-      .delete()
-      .eq('id', id);
-      
-    if (deleteError) {
-      console.error('Error deleting principal repayment:', deleteError);
-      throw new Error(`Error deleting principal repayment: ${deleteError.message}`);
     }
   } catch (error) {
     console.error('Failed to delete principal repayment:', error);

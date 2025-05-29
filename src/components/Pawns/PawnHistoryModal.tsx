@@ -17,7 +17,7 @@ import { PawnActionTabs, DEFAULT_PAWN_TABS, PawnTabId } from './PawnActionTabs';
 import { AdditionalLoanTab, BadPawnTab, RedeemTab, DocumentsTab, ExtensionTab, PaymentTab, PrincipalRepaymentTab, LiquidationTab } from './tabs';
 import { getPawnById } from '@/lib/pawn';
 import { getPrincipalChangesForPawn } from '@/lib/pawn-principal-changes';
-import { PawnAmountHistory, PawnTransactionType, getPawnAmountHistory } from '@/lib/pawn-amount-history';
+import { PawnHistoryRecord, PawnTransactionType, getPawnAmountHistory } from '@/lib/pawn-amount-history';
 import { formatCurrency, calculateDaysBetween, formatDate, formatDateTime } from '@/lib/utils';
 
 interface PawnHistoryModalProps {
@@ -39,7 +39,7 @@ export function PawnHistoryModal({
   const [currentPawn, setCurrentPawn] = useState(pawn);
   const [principalChanges, setPrincipalChanges] = useState<PrincipalChange[]>([]);
   const [refreshRepayments, setRefreshRepayments] = useState(0);
-  const [pawnHistory, setPawnHistory] = useState<PawnAmountHistory[]>([]);
+  const [pawnHistory, setPawnHistory] = useState<PawnHistoryRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
@@ -392,7 +392,7 @@ export function PawnHistoryModal({
   // Helper function to get transaction type display text
   const getTransactionTypeDisplay = (type: PawnTransactionType | string): string => {
     switch (type) {
-      case PawnTransactionType.NEW_LOAN:
+      case PawnTransactionType.INITIAL_LOAN:
         return 'Tạo hợp đồng';
       case PawnTransactionType.PRINCIPAL_REPAYMENT:
         return 'Trả bớt gốc';
@@ -400,12 +400,16 @@ export function PawnHistoryModal({
         return 'Đóng lãi phí';
       case PawnTransactionType.CONTRACT_CLOSE:
         return 'Đóng hợp đồng';
-      case PawnTransactionType.CONTRACT_ROTATION:
-        return 'Xoay hợp đồng';
-      case 'payment_cancel':
+      case PawnTransactionType.PAYMENT_CANCEL:
         return 'Hủy đóng lãi phí';
-      case 'contract_reopen':
+      case PawnTransactionType.CONTRACT_REOPEN:
         return 'Mở lại hợp đồng';
+      case PawnTransactionType.ADDITIONAL_LOAN:
+        return 'Vay thêm';
+      case PawnTransactionType.CANCEL_ADDITIONAL_LOAN:
+        return 'Hủy vay thêm';
+      case PawnTransactionType.CANCEL_PRINCIPAL_REPAYMENT:
+        return 'Hủy trả bớt gốc';
       default:
         return 'Giao dịch khác';
     }

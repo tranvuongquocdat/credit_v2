@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS pawn_payment_periods (
 );
 
 -- Pawn amount history table
-CREATE TABLE IF NOT EXISTS pawn_amount_history (
+CREATE TABLE IF NOT EXISTS pawn_history (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   pawn_id UUID NOT NULL REFERENCES pawns(id),
   transaction_type pawn_transaction_type NOT NULL,
@@ -96,5 +96,5 @@ CREATE INDEX IF NOT EXISTS idx_pawns_collateral_id ON pawns(collateral_id);
 CREATE INDEX IF NOT EXISTS idx_pawns_status ON pawns(status);
 CREATE INDEX IF NOT EXISTS idx_pawns_contract_code ON pawns(contract_code);
 CREATE INDEX IF NOT EXISTS idx_pawn_payment_periods_pawn_id ON pawn_payment_periods(pawn_id);
-CREATE INDEX IF NOT EXISTS idx_pawn_amount_history_pawn_id ON pawn_amount_history(pawn_id);
+CREATE INDEX IF NOT EXISTS idx_pawn_history_pawn_id ON pawn_history(pawn_id);
 CREATE INDEX IF NOT EXISTS idx_pawn_principal_repayments_pawn_id ON pawn_principal_repayments(pawn_id); 

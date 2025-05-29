@@ -19,9 +19,9 @@ export async function getPrincipalChangesForCredit(creditId: string) {
       return { data: [], error: creditError };
     }
     
-    // Fetch all principal changes from credit_amount_history
+    // Fetch all principal changes from credit_history
     const { data, error } = await supabase
-      .from('credit_amount_history')
+      .from('credit_history')
       .select('*')
       .eq('credit_id', creditId)
       .in('transaction_type', [

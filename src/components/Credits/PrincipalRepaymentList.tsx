@@ -15,7 +15,7 @@ import {
 import { PrincipalRepayment } from '@/models/principal-repayment';
 import { 
   getPrincipalRepayments, 
-  deletePrincipalRepayment 
+  deleteCreditAmountHistory 
 } from '@/lib/principal-repayment';
 
 interface PrincipalRepaymentListProps {
@@ -75,7 +75,7 @@ export function PrincipalRepaymentList({
     if (!repaymentToDelete?.id) return;
     
     try {
-      await deletePrincipalRepayment(repaymentToDelete.id);
+      await deleteCreditAmountHistory(repaymentToDelete.id);
       
       // Cập nhật danh sách sau khi xóa
       setRepayments(repayments.filter(r => r.id !== repaymentToDelete.id));
@@ -145,10 +145,10 @@ export function PrincipalRepaymentList({
                 <tr key={repayment.id} className="hover:bg-gray-50">
                   <td className="px-2 py-2 text-center border">{index + 1}</td>
                   <td className="px-2 py-2 text-center border">
-                    {formatDate(repayment.repayment_date)}
+                    {formatDate(repayment.created_at || '')}
                   </td>
                   <td className="px-2 py-2 text-left border">
-                    {repayment.notes || 'Trả bớt gốc'}
+                    {repayment.note || 'Trả bớt gốc'}
                   </td>
                   <td className="px-2 py-2 text-right border font-medium">
                     {formatCurrency(repayment.amount)}

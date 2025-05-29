@@ -133,7 +133,7 @@ export function PaymentTab({
       // 3. Truy vấn history contract_reopen và contract_close
       const { supabase } = await import('@/lib/supabase');
       const { data: historyData } = await supabase
-        .from('credit_amount_history')
+        .from('credit_history')
         .select('transaction_type, debit_amount, credit_amount')
         .eq('credit_id', credit.id)
         .in('transaction_type', ['contract_reopen', 'contract_close'])

@@ -15,7 +15,7 @@ import {
 import { AdditionalLoan } from '@/models/additional-loan';
 import { 
   getAdditionalLoans, 
-  deleteAdditionalLoan 
+  deleteCreditAmountHistory 
 } from '@/lib/additional-loan';
 
 interface AdditionalLoanListProps {
@@ -75,7 +75,7 @@ export function AdditionalLoanList({
     if (!loanToDelete?.id) return;
     
     try {
-      await deleteAdditionalLoan(loanToDelete.id);
+      await deleteCreditAmountHistory(loanToDelete.id);
       
       // Cập nhật danh sách sau khi xóa
       setLoans(loans.filter(r => r.id !== loanToDelete.id));
@@ -145,10 +145,10 @@ export function AdditionalLoanList({
                 <tr key={loan.id} className="hover:bg-gray-50">
                   <td className="px-2 py-2 text-center border">{index + 1}</td>
                   <td className="px-2 py-2 text-center border">
-                    {formatDate(loan.loan_date)}
+                    {formatDate(loan.created_at || '')}
                   </td>
                   <td className="px-2 py-2 text-left border">
-                    {loan.notes || 'Vay thêm gốc'}
+                    {loan.note || 'Vay thêm gốc'}
                   </td>
                   <td className="px-2 py-2 text-right border font-medium">
                     {formatCurrency(loan.amount)}

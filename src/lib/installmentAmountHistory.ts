@@ -42,7 +42,7 @@ export interface InstallmentAmountHistory {
 export async function getInstallmentAmountHistory(installmentId: string) {
   try {
     const { data, error } = await supabase
-      .from('installment_amount_history')
+      .from('installment_history')
       .select('*')
       .eq('installment_id', installmentId)
       .order('created_at', { ascending: true });
@@ -80,7 +80,7 @@ export async function createInstallmentAmountHistory(params: {
     const { installmentId, employeeId, debitAmount = 0, creditAmount = 0, description, transactionType } = params;
     
     const { data, error } = await supabase
-      .from('installment_amount_history')
+      .from('installment_history')
       .insert({
         installment_id: installmentId,
         employee_id: employeeId,
@@ -243,7 +243,7 @@ export async function recordBulkPayment(
     };
     
     const { data, error } = await supabase
-      .from('installment_amount_history')
+      .from('installment_history')
       .insert(payload)
       .select();
       

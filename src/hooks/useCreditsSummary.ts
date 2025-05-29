@@ -71,7 +71,7 @@ export function useCreditsSummary() {
         console.error('Lỗi khi lấy dữ liệu tất cả hợp đồng:', allCreditsError);
       }
       
-      // Tính tổng lãi phí đã thu từ lịch sử giao dịch (credit_amount_history)
+      // Tính tổng lãi phí đã thu từ lịch sử giao dịch (credit_history)
       let collectedInterest = 0;
       
       if (allCredits && allCredits.length > 0) {
@@ -79,7 +79,7 @@ export function useCreditsSummary() {
         for (const credit of allCredits) {
           // Lấy lịch sử giao dịch của hợp đồng
           const { data: historyData, error: historyError } = await supabase
-            .from('credit_amount_history')
+            .from('credit_history')
             .select('*')
             .eq('credit_id', credit.id)
             .in('transaction_type', [

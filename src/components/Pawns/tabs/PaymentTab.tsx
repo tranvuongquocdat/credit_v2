@@ -470,7 +470,7 @@ export function PaymentTab({
                 const isEditing = editingPeriodId === period.id || editingPeriodId === `temp-${period.period_number}`;
                 const periodId = period.id || `temp-${period.period_number}`;
                 const isLoading = loadingPeriods[periodId];
-                const isDisabled = pawn.status === PawnStatus.CLOSED;
+                const isDisabled = pawn?.status === PawnStatus.CLOSED;
 
             return (
                   <tr key={periodId} className="hover:bg-gray-50">

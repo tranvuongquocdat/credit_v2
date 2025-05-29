@@ -21,6 +21,9 @@ export function PrincipalRepaymentTab({
 }: PrincipalRepaymentTabProps) {
   const [localRefreshTrigger, setLocalRefreshTrigger] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Check if pawn is closed
+  const isClosed = pawn?.status === PawnStatus.CLOSED;
 
   const refreshData = () => {
     // Update both the parent counter and local counter
@@ -37,17 +40,17 @@ export function PrincipalRepaymentTab({
     <div>
       <PrincipalRepaymentForm 
         pawnId={pawn?.id || ''}
-        disabled={pawn.status === PawnStatus.CLOSED}
+        disabled={isClosed}
         onSubmit={async (data) => {
           try {
-            if (!pawn?.id || isSubmitting) return;
+            if (!pawn?.id || isSubmitting || isClosed) return;
             
             setIsSubmitting(true);
             
             // Import dynamically to prevent duplicate imports
             const { recordPrincipalRepayment } = await import('@/lib/pawn-amount-history');
             
-            // Sử dụng API mới để ghi lại khoản trả bớt gốc vào pawn_amount_history
+            // Sử dụng API mới để ghi lại khoản trả bớt gốc vào pawn_history
             const { data: historyData, error } = await recordPrincipalRepayment(
               pawn.id,
               data.amount,
