@@ -62,7 +62,6 @@ export function useInstallmentsSummary() {
       let expectedProfit = 0; // Lãi phí dự kiến
       let collectedProfit = 0; // Lãi phí đã thu
       
-
       
       if (activeInstallments) {
         // Tính tiền nợ cũ và lãi phí đã thu

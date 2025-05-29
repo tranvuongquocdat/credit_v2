@@ -38,7 +38,7 @@ export function useCreditsSummary() {
       // 2. Lấy tổng tiền cho vay (tổng loan_amount của các hợp đồng đang vay)
       const { data: activeCreditsData, error: activeCreditsError } = await supabase
         .from('credits')
-        .select('loan_amount')
+        .select('id, loan_amount')
         .in('status', [CreditStatus.ON_TIME, CreditStatus.OVERDUE, CreditStatus.LATE_INTEREST, CreditStatus.BAD_DEBT]);
       
       if (activeCreditsError) {
@@ -62,21 +62,12 @@ export function useCreditsSummary() {
       const oldDebt = oldDebtData?.reduce((sum, credit) => sum + (credit.debt_amount || 0), 0) || 0;
       
       // 4. Lấy tổng lãi phí đã thu (sửa đổi công thức tính)
-      // Lấy tất cả các hợp đồng (bao gồm cả đang vay và đã đóng)
-      const { data: allCredits, error: allCreditsError } = await supabase
-        .from('credits')
-        .select('id, loan_amount');
-      
-      if (allCreditsError) {
-        console.error('Lỗi khi lấy dữ liệu tất cả hợp đồng:', allCreditsError);
-      }
-      
       // Tính tổng lãi phí đã thu từ lịch sử giao dịch (credit_history)
       let collectedInterest = 0;
       
-      if (allCredits && allCredits.length > 0) {
+      if (activeCreditsData && activeCreditsData.length > 0) {
         // Xử lý từng hợp đồng
-        for (const credit of allCredits) {
+        for (const credit of activeCreditsData) {
           // Lấy lịch sử giao dịch của hợp đồng
           const { data: historyData, error: historyError } = await supabase
             .from('credit_history')
@@ -99,16 +90,30 @@ export function useCreditsSummary() {
           // Tính tổng credit_amount và debit_amount
           const totalCredit = historyData.reduce((sum, record) => sum + (record.credit_amount || 0), 0);
           const totalDebit = historyData.reduce((sum, record) => sum + (record.debit_amount || 0), 0);
-          console.log(totalCredit, totalDebit);
+          
+          // Kiểm tra xem có giao dịch đóng hợp đồng không
+          const hasContractClose = historyData.some(record => record.transaction_type === 'contract_close');
+          
           // Tổng số tiền thực thu = tổng credit - tổng debit
           const totalCollected = totalCredit - totalDebit;
           console.log(totalCollected);
-          // Lãi phí thu được = tổng thu - tiền gốc
-          // Chỉ tính lãi nếu tổng thu lớn hơn tiền gốc
-          if (totalCollected > credit.loan_amount) {
-            const interestForThisCredit = totalCollected - credit.loan_amount;
-            collectedInterest += interestForThisCredit;
+          
+          // Lãi phí thu được
+          let interestForThisCredit = 0;
+          
+          if (hasContractClose) {
+            // Nếu có đóng hợp đồng, trừ đi tiền gốc
+            if (totalCollected > credit.loan_amount) {
+              interestForThisCredit = totalCollected - credit.loan_amount;
+            }
+          } else {
+            // Nếu chưa đóng hợp đồng, toàn bộ số tiền thu được là lãi phí
+            if (totalCollected > 0) {
+              interestForThisCredit = totalCollected;
+            }
           }
+          
+          collectedInterest += interestForThisCredit;
         }
       }
       
