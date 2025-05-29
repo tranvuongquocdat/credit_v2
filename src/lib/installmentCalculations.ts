@@ -10,7 +10,7 @@ export const calculateTotalPaidFromHistory = (amountHistory: InstallmentAmountHi
 
   return amountHistory.reduce((total: number, history: InstallmentAmountHistory) => {
     if (history.transactionType === 'payment' || 
-        history.transactionType === 'cancel_payment' ||
+        history.transactionType === 'payment_cancel' ||
         history.transactionType === 'debt_payment') {
       return total + (history.creditAmount || 0) - (history.debitAmount || 0);
     }
