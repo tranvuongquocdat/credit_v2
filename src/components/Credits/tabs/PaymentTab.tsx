@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PaymentForm } from '../PaymentForm';
@@ -62,6 +62,9 @@ export function PaymentTab({
   const [principalChangesLoaded, setPrincipalChangesLoaded] = useState(false);
   const [calculationCount, setCalculationCount] = useState(0);
   
+  // Use ref to store the calculation function to avoid dependency issues
+  const recalculateRef = useRef<(() => Promise<void>) | null>(null);
+  
   // Load principal changes if not provided
   useEffect(() => {
     if (principalChanges && principalChanges.length > 0) {
@@ -92,7 +95,7 @@ export function PaymentTab({
   }, [credit?.id, principalChanges]);
 
   // Simplified function to calculate periods - only generate new periods after last paid period
-  const recalculatePeriodsWithHistory = useCallback(async () => {
+  const recalculatePeriodsWithHistory = async () => {
     if (!credit?.id) return;
 
     console.log('🔄 Starting simplified calculation with:', {
@@ -193,7 +196,10 @@ export function PaymentTab({
     } finally {
       setIsRecalculating(false);
     }
-  }, [credit?.id, paymentPeriods, calculationCount]);
+  };
+
+  // Assign function to ref
+  recalculateRef.current = recalculatePeriodsWithHistory;
 
   // Effect to recalculate periods when credit or payment periods change
   useEffect(() => {
@@ -206,12 +212,12 @@ export function PaymentTab({
       
       // Debounce to prevent multiple calculations
       const timeoutId = setTimeout(() => {
-        recalculatePeriodsWithHistory();
+        recalculateRef.current?.();
       }, 300); // Reduced timeout
       
       return () => clearTimeout(timeoutId);
     }
-  }, [credit?.id, paymentPeriods, recalculatePeriodsWithHistory]);
+  }, [credit?.id, paymentPeriods]);
 
   // Use recalculated periods if available, otherwise use original combined periods
   const periodsToDisplay = recalculatedPeriods.length > 0 ? recalculatedPeriods : combinedPaymentPeriods;
@@ -238,7 +244,7 @@ export function PaymentTab({
   
   // Start editing a payment
   const startEditing = (period: CreditPaymentPeriod) => {
-    if (period.actual_amount >= period.expected_amount) return; // Don't edit paid periods
+    if (period.actual_amount > 0) return; // Don't edit periods that already have payment in DB
     
     setEditingPeriodId(period.id || `temp-${period.period_number}`);
     setPaymentAmount(period.actual_amount || period.expected_amount || 0);
@@ -307,8 +313,8 @@ export function PaymentTab({
         // Go through all periods up to the current one (inclusive)
         for (let i = 0; i <= index; i++) {
           const p = periodsToDisplay[i];
-          // Only include periods that aren't already paid
-          if (p.actual_amount < p.expected_amount) {
+          // Only include periods that don't have any payment in DB yet
+          if (p.actual_amount === 0) {
             periodsToCheck.push(p);
           }
         }
@@ -545,6 +551,7 @@ export function PaymentTab({
               const total = expected + other;
               const isPaid = period.actual_amount >= period.expected_amount;
               const isPartiallyPaid = period.actual_amount > 0 && period.actual_amount < period.expected_amount;
+              const hasPayment = period.actual_amount > 0; // Đã có thanh toán trong DB
               const isEditing = editingPeriodId === period.id || editingPeriodId === `temp-${period.period_number}`;
               const periodId = period.id || `temp-${period.period_number}`;
               const isLoading = loadingPeriods[periodId];
@@ -593,8 +600,8 @@ export function PaymentTab({
                       </div>
                     ) : (
                       <span 
-                        className={`${!isPaid && !isDisabled ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
-                        onClick={!isPaid && !isDisabled ? () => startEditing(period) : undefined}
+                        className={`${!hasPayment && !isDisabled ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
+                        onClick={!hasPayment && !isDisabled ? () => startEditing(period) : undefined}
                       >
                         {formatCurrency(actual).replace('₫', '')}
                       </span>
