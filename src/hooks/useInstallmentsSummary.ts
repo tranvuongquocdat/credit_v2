@@ -41,7 +41,7 @@ export function useInstallmentsSummary() {
           store_id,
           debt_amount
         `)
-        .neq('status', InstallmentStatus.DELETED)
+        .eq('status', InstallmentStatus.ON_TIME)
         .eq('store_id', currentStore.id);
       
       const { data: activeInstallments, error: installmentsError } = await query;
