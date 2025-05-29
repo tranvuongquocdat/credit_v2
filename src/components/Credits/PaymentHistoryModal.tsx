@@ -121,6 +121,10 @@ export function PaymentHistoryModal({
         return 'Đóng hợp đồng';
       case 'contract_reopen':
         return 'Mở lại hợp đồng';
+      case CreditTransactionType.CANCEL_PRINCIPAL_REPAYMENT:
+        return 'Hủy trả bớt gốc';
+      case CreditTransactionType.CANCEL_ADDITIONAL_LOAN:
+        return 'Hủy vay thêm';
       default:
         return 'Giao dịch khác';
     }
@@ -194,242 +198,18 @@ export function PaymentHistoryModal({
     fetchPrincipalChanges();
   }, [credit?.id, refreshRepayments, refreshAdditionalLoans]);
   
-  // Hàm tạo các kỳ thanh toán dựa trên thông tin hợp đồng
-  const generatePaymentPeriods = (credit: CreditWithCustomer | null): CreditPaymentPeriod[] => {
-    if (!credit) return [];
-    
-    const result: CreditPaymentPeriod[] = [];
-    const loanDate = new Date(credit.loan_date);
-    const interestPeriod = credit.interest_period; // Số ngày của một kỳ lãi
-    const loanPeriod = credit.loan_period; // Tổng số ngày vay
-    
-    // Tính toán tổng số kỳ
-    const totalPeriods = Math.ceil(loanPeriod / interestPeriod);
-    
-    // Tạo từng kỳ thanh toán
-    for (let i = 0; i < totalPeriods; i++) {
-      // Tính ngày bắt đầu và kết thúc của kỳ
-      let startDate;
-      
-      // Nếu là kỳ đầu tiên, ngày bắt đầu là loan_date
-      // Nếu không phải kỳ đầu tiên, ngày bắt đầu là ngày tiếp theo sau ngày kết thúc của kỳ trước
-      if (i > 0) {
-        // Tính ngày kết thúc của kỳ trước
-        const prevEndDate = new Date(loanDate.getTime());
-        prevEndDate.setDate(loanDate.getDate() + (i * interestPeriod - 1));
-        
-        // Ngày bắt đầu kỳ này = ngày sau ngày kết thúc kỳ trước
-        startDate = new Date(prevEndDate.getTime());
-        startDate.setDate(prevEndDate.getDate() + 1);
-      } else {
-        // Kỳ đầu tiên, giữ nguyên startDate = loanDate
-        startDate = new Date(loanDate.getTime());
-      }
-      
-      const endDate = new Date(startDate);
-      // Nếu là kỳ cuối cùng và không chia đều, chỉ cộng số ngày còn lại
-      if (i === totalPeriods - 1 && loanPeriod % interestPeriod !== 0) {
-        // Đảm bảo kỳ cuối không vượt quá tổng số ngày vay
-        const loanEndDate = new Date(loanDate);
-        loanEndDate.setDate(loanDate.getDate() + loanPeriod - 1); // Trừ 1 vì tính cả ngày đầu và cuối
-        endDate.setTime(loanEndDate.getTime()); // Gán trực tiếp thởi gian
-      } else {
-        endDate.setDate(startDate.getDate() + interestPeriod - 1); // Trừ 1 vì tính cả ngày đầu và cuối
-      }
-      
-      // Tính số ngày trong kỳ sử dụng hàm tính ngày chuẩn hóa
-      const dayCount = calculateDaysBetween(startDate, endDate);
-      
-      // Tính số tiền lãi dự kiến của kỳ, xem xét đến thay đổi gốc
-      let expectedAmount = 0;
-      if (principalChanges && principalChanges.length > 0) {
-        // Sử dụng hàm tính lãi nâng cao có xét đến thay đổi gốc
-        expectedAmount = calculateInterestWithPrincipalChanges(
-          credit,
-          startDate,
-          endDate,
-          principalChanges
-        );
-      } else {
-        // Sử dụng tính toán cũ nếu không có thay đổi gốc
-        if (credit.interest_type === InterestType.PERCENTAGE) {
-          // Xử lý dựa trên loại lãi suất (tuần, tháng, ngày)
-          if (credit.interest_ui_type?.startsWith('weekly')) {
-            // Lãi suất theo tuần (ví dụ 1%/tuần)
-            const weeksCount = Math.ceil(dayCount / 7);
-            expectedAmount = Math.round(credit.loan_amount * (credit.interest_value / 100) * weeksCount);
-          } else if (credit.interest_ui_type?.startsWith('monthly')) {
-            // Lãi suất theo tháng (ví dụ 3%/tháng)
-            const monthsCount = Math.ceil(dayCount / 30);
-            expectedAmount = Math.round(credit.loan_amount * (credit.interest_value / 100) * monthsCount);
-          } else {
-            // Lãi suất theo ngày (mặc định)
-            expectedAmount = Math.round(credit.loan_amount * (credit.interest_value / 100 / 30) * dayCount * 30);
-          }
-        } else {
-          // Lãi suất cố định
-          const loanAmountInMillions = credit.loan_amount / 1000;
-          expectedAmount = Math.round(credit.interest_value * loanAmountInMillions * dayCount);
-        }
-      }
-      
-      result.push({
-        id: `calculated-${i}`, // ID tạm thời
-        credit_id: credit.id,
-        period_number: i + 1,
-        start_date: startDate.toISOString(),
-        end_date: endDate.toISOString(),
-        expected_amount: expectedAmount,
-        actual_amount: 0,
-        payment_date: null,
-        notes: null,
-        other_amount: 0
-      });
-    }
-    
-    return result;
-  };
-  
-  // Kết hợp kỳ thanh toán tính toán với dữ liệu thực từ database
-  const mergePaymentPeriods = (calculated: CreditPaymentPeriod[], actual: CreditPaymentPeriod[]): CreditPaymentPeriod[] => {
-    if (!credit) return actual;
-    console.log('mergePaymentPeriods - actual:', actual.length);
-    if (actual.length === 0) return calculated;
-    if (calculated.length === 0) return actual;
-    
-    // Sắp xếp các kỳ thực tế theo số thứ tự
-    const sortedActual = [...actual].sort((a, b) => a.period_number - b.period_number);
-    // Tìm kỳ đã xác nhận sau cùng
-    const lastConfirmedPeriod = sortedActual[sortedActual.length - 1];
-    
-    // Kết quả sẽ chứa tất cả các kỳ đã xác nhận trước
-    const result: CreditPaymentPeriod[] = [...sortedActual];
-    
-    // Nếu có kỳ đã xác nhận, tính toán các kỳ tiếp theo dựa trên kỳ sau cùng
-    if (lastConfirmedPeriod) {
-      const loanEndDate = new Date(credit.loan_date);
-      loanEndDate.setDate(loanEndDate.getDate() + credit.loan_period - 1); // Tính cả ngày đầu và cuối
-      
-      // Lấy ngày cuối kỳ của kỳ đã đóng gần nhất
-      const lastEndDate = new Date(lastConfirmedPeriod.end_date);
-      
-      // Ngày bắt đầu kỳ tiếp theo là ngày sau của ngày kết thúc kỳ trước
-      let nextStartDate = new Date(lastEndDate);
-      nextStartDate.setDate(nextStartDate.getDate() + 1);
-      
-      // Nếu ngày bắt đầu kỳ tiếp theo đã vượt quá ngày kết thúc khoản vay, không cần tạo thêm kỳ
-      if (nextStartDate.getTime() > loanEndDate.getTime()) {
-        return result;
-      }
-      
-      // Tính số kỳ còn lại
-      const periodLength = credit.interest_period; // Số ngày của một kỳ
-      let nextPeriodNumber = lastConfirmedPeriod.period_number + 1;
-      
-      // Tạo các kỳ tiếp theo
-      while (nextStartDate.getTime() <= loanEndDate.getTime()) {
-        let nextEndDate = new Date(nextStartDate);
-        nextEndDate.setDate(nextStartDate.getDate() + periodLength - 1); // Trừ 1 vì tính cả ngày đầu và cuối
-        
-        // Nếu kỳ này vượt quá ngày kết thúc khoản vay, rút ngắn xuống ngày kết thúc
-        if (nextEndDate.getTime() > loanEndDate.getTime()) {
-          nextEndDate = new Date(loanEndDate);
-        }
-        
-        // Tính số ngày trong kỳ sử dụng hàm tính ngày chuẩn hóa
-        const daysCount = calculateDaysBetween(nextStartDate, nextEndDate);
-        
-        // Tính số tiền lãi dự kiến của kỳ, xem xét đến thay đổi gốc
-        let expectedAmount = 0;
-        if (principalChanges && principalChanges.length > 0) {
-          // Sử dụng hàm tính lãi nâng cao có xét đến thay đổi gốc
-          expectedAmount = calculateInterestWithPrincipalChanges(
-            credit,
-            nextStartDate,
-            nextEndDate,
-            principalChanges
-          );
-        } else {
-          // Sử dụng tính toán cũ nếu không có thay đổi gốc
-          if (credit.interest_type === InterestType.PERCENTAGE) {
-            // Xử lý dựa trên loại lãi suất (tuần, tháng, ngày)
-            if (credit.interest_ui_type?.startsWith('weekly')) {
-              // Lãi suất theo tuần (ví dụ 1%/tuần)
-              const weeksCount = Math.ceil(daysCount / 7);
-              expectedAmount = Math.round(credit.loan_amount * (credit.interest_value / 100) * weeksCount);
-            } else if (credit.interest_ui_type?.startsWith('monthly')) {
-              // Lãi suất theo tháng (ví dụ 3%/tháng)
-              const monthsCount = Math.ceil(daysCount / 30);
-              expectedAmount = Math.round(credit.loan_amount * (credit.interest_value / 100) * monthsCount);
-            } else {
-              // Lãi suất theo ngày (mặc định)
-              expectedAmount = Math.round(credit.loan_amount * (credit.interest_value / 100 / 30) * daysCount * 30);
-            }
-          } else {
-            // Lãi suất cố định
-            const loanAmountInMillions = credit.loan_amount / 1000;
-            expectedAmount = Math.round(credit.interest_value * loanAmountInMillions * daysCount);
-          }
-        }
-        
-        // Tạo kỳ mới
-        const newPeriod: CreditPaymentPeriod = {
-          id: `calculated-${nextPeriodNumber}`,
-          credit_id: credit.id,
-          period_number: nextPeriodNumber,
-          start_date: nextStartDate.toISOString(),
-          end_date: nextEndDate.toISOString(),
-          expected_amount: expectedAmount,
-          actual_amount: 0,
-          payment_date: null,
-          notes: null,
-          other_amount: 0
-        };
-        
-        // Thêm kỳ mới vào kết quả
-        result.push(newPeriod);
-        
-        // Chuẩn bị cho kỳ tiếp theo
-        nextStartDate = new Date(nextEndDate);
-        nextStartDate.setDate(nextEndDate.getDate() + 1);
-        nextPeriodNumber++;
-        
-        // Nếu ngày bắt đầu kỳ tiếp đã vượt quá ngày kết thúc khoản vay, dừng
-        if (nextStartDate.getTime() > loanEndDate.getTime()) {
-          break;
-        }
-      }
-    } else {
-      // Nếu chưa có kỳ nào được xác nhận, sử dụng các kỳ tính toán
-      return calculated;
-    }
-    
-    // Sắp xếp lại theo số thứ tự kỳ
-    return result.sort((a, b) => a.period_number - b.period_number);
-  };
-
-  // Generate calculated payment periods with useMemo
-  const calculatedPeriods = useMemo(() => {
-    return generatePaymentPeriods(credit);
-  }, [credit]);
-
-  // Merge with actual data from database with useMemo
-  const combinedPaymentPeriods = useMemo(() => {
-    return mergePaymentPeriods(calculatedPeriods, paymentPeriods);
-  }, [calculatedPeriods, paymentPeriods]);
-
   // Calculate total amounts with useMemo
   const totalAmount = useMemo(() => credit?.loan_amount || 0, [credit?.loan_amount]);
   
   // Calculate total expected, paid, and remaining amounts from payment periods with useMemo
   const totalExpected = useMemo(() => 
-    combinedPaymentPeriods.reduce((sum, period) => sum + (period.expected_amount || 0), 0),
-    [combinedPaymentPeriods]
+    paymentPeriods.reduce((sum, period) => sum + (period.expected_amount || 0), 0),
+    [paymentPeriods]
   );
 
   const totalPaid = useMemo(() => 
-    combinedPaymentPeriods.reduce((sum, period) => sum + (period.actual_amount || 0), 0),
-    [combinedPaymentPeriods]
+    paymentPeriods.reduce((sum, period) => sum + (period.actual_amount || 0), 0),
+    [paymentPeriods]
   );
   
   // Sử dụng debt_amount trực tiếp từ credit thay vì tính toán
@@ -578,7 +358,7 @@ export function PaymentHistoryModal({
             <PaymentTab
               credit={credit}
               paymentPeriods={paymentPeriods}
-              combinedPaymentPeriods={combinedPaymentPeriods}
+              combinedPaymentPeriods={[]}
               loading={loading}
               error={error}
               showPaymentForm={showPaymentForm}

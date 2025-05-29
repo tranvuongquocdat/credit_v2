@@ -548,23 +548,11 @@ export function PawnHistoryModal({
                           </tr>
                         ))}
                         
-                        {/* Initial loan entry */}
-                        <tr>
-                          <td className="px-4 py-3 text-sm text-gray-700 text-center">{pawnHistory.length + 1}</td>
-                          <td className="px-4 py-3 text-sm text-gray-700">{formatDate(currentPawn?.loan_date || '')}</td>
-                          <td className="px-4 py-3 text-sm text-gray-700">Tạo hợp đồng</td>
-                          <td className="px-4 py-3 text-sm text-gray-700 text-right text-red-600">
-                            {formatCurrency(currentPawn?.loan_amount || 0)}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-700 text-right">0</td>
-                          <td className="px-4 py-3 text-sm text-gray-700">Cho cầm</td>
-                        </tr>
-                        
                         {/* Summary rows */}
                         <tr className="bg-amber-50">
                           <td colSpan={3} className="px-4 py-2 text-sm font-medium text-right">Tổng Tiền</td>
                           <td className="px-4 py-2 text-sm font-medium text-right text-red-600">
-                            {formatCurrency(historyTotals.totalDebit + (currentPawn?.loan_amount || 0))}
+                            {formatCurrency(historyTotals.totalDebit)}
                           </td>
                           <td className="px-4 py-2 text-sm font-medium text-right text-green-600">
                             {formatCurrency(historyTotals.totalCredit)}
@@ -574,8 +562,8 @@ export function PawnHistoryModal({
                         <tr className="bg-amber-100">
                           <td colSpan={3} className="px-4 py-2 text-sm font-medium text-right">Chênh lệch</td>
                           <td colSpan={2} className="px-4 py-2 text-sm font-medium text-right">
-                            <span className={(historyTotals.totalDebit + (currentPawn?.loan_amount || 0)) - historyTotals.totalCredit >= 0 ? "text-red-600" : "text-green-600"}>
-                              {formatCurrency(historyTotals.totalCredit - (historyTotals.totalDebit + (currentPawn?.loan_amount || 0)))}
+                            <span className={(historyTotals.totalDebit) - historyTotals.totalCredit >= 0 ? "text-red-600" : "text-green-600"}>
+                              {formatCurrency(historyTotals.totalCredit - (historyTotals.totalDebit ))}
                             </span>
                           </td>
                           <td></td>

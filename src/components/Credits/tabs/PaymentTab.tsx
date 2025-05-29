@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PaymentForm } from '../PaymentForm';
@@ -59,11 +59,14 @@ export function PaymentTab({
   // State for recalculated periods based on new logic
   const [recalculatedPeriods, setRecalculatedPeriods] = useState<CreditPaymentPeriod[]>([]);
   const [isRecalculating, setIsRecalculating] = useState(false);
+  const [principalChangesLoaded, setPrincipalChangesLoaded] = useState(false);
+  const [calculationCount, setCalculationCount] = useState(0);
   
   // Load principal changes if not provided
   useEffect(() => {
     if (principalChanges && principalChanges.length > 0) {
       setLocalPrincipalChanges(principalChanges);
+      setPrincipalChangesLoaded(true);
       return;
     }
 
@@ -79,6 +82,7 @@ export function PaymentTab({
         }
         
         setLocalPrincipalChanges(data || []);
+        setPrincipalChangesLoaded(true);
       } catch (err) {
         console.error('Error fetching principal changes:', err);
       }
@@ -87,132 +91,68 @@ export function PaymentTab({
     loadPrincipalChanges();
   }, [credit?.id, principalChanges]);
 
-  // New function to recalculate periods based on new logic
-  const recalculatePeriodsWithHistory = async () => {
+  // Simplified function to calculate periods - only generate new periods after last paid period
+  const recalculatePeriodsWithHistory = useCallback(async () => {
     if (!credit?.id) return;
 
+    console.log('🔄 Starting simplified calculation with:', {
+      creditId: credit.id,
+      currentLoanAmount: credit.loan_amount,
+      paymentPeriodsCount: paymentPeriods.length,
+      calculationNumber: calculationCount + 1
+    });
+
+    setCalculationCount(prev => prev + 1);
     setIsRecalculating(true);
+
     try {
-      // 1. Lấy các kỳ đóng lãi đã có trong DB
-      const { getCreditPaymentPeriods } = await import('@/lib/credit-payment');
-      const { data: existingPeriods } = await getCreditPaymentPeriods(credit.id);
+      // 1. Get existing periods from DB (keep as-is)
+      const existingPeriods = paymentPeriods || [];
       
-      // 2. Tính ngày tiếp theo phải đóng và số tiền 1 ngày
-      let nextPaymentDate: Date;
-      let dailyAmount = 0;
+      // 2. Find the start date for next period
+      let nextStartDate: Date;
+      let nextPeriodNumber = 1;
       
-      // Tính daily rate
-      if (credit.interest_ui_type?.startsWith('daily')) {
-        if (credit.interest_notation === 'k_per_million') {
-          dailyAmount = (credit.loan_amount / 1000000) * credit.interest_value * 1000;
-        } else if (credit.interest_notation === 'k_per_day') {
-          dailyAmount = credit.interest_value * 1000;
-        }
-      } else if (credit.interest_ui_type?.startsWith('monthly')) {
-        const monthlyAmount = credit.loan_amount * (credit.interest_value / 100);
-        const daysInPeriod = credit.interest_period || 30;
-        dailyAmount = monthlyAmount / daysInPeriod;
-      } else if (credit.interest_ui_type?.startsWith('weekly')) {
-        const weeklyAmount = credit.interest_ui_type === 'weekly_percent' 
-          ? credit.loan_amount * (credit.interest_value / 100)
-          : credit.interest_value * 1000;
-        dailyAmount = weeklyAmount / 7;
-      }
-
-      // Xác định ngày tiếp theo phải đóng
-      if (existingPeriods && existingPeriods.length > 0) {
-        // Lấy kỳ cuối cùng và tính ngày tiếp theo
-        const lastPeriod = existingPeriods.sort((a, b) => b.period_number - a.period_number)[0];
-        nextPaymentDate = new Date(lastPeriod.end_date);
-        nextPaymentDate.setDate(nextPaymentDate.getDate() + 1);
+      if (existingPeriods.length > 0) {
+        // Start from day after last period
+        const lastPeriod = existingPeriods.sort((a, b) => a.period_number - b.period_number)[existingPeriods.length - 1];
+        nextStartDate = new Date(lastPeriod.end_date);
+        nextStartDate.setDate(nextStartDate.getDate() + 1);
+        nextPeriodNumber = lastPeriod.period_number + 1;
       } else {
-        // Chưa có kỳ nào, bắt đầu từ ngày vay
-        nextPaymentDate = new Date(credit.loan_date);
+        // No existing periods, start from loan date
+        nextStartDate = new Date(credit.loan_date);
       }
 
-      // 3. Truy vấn history contract_reopen và contract_close
-      const { supabase } = await import('@/lib/supabase');
-      const { data: historyData } = await supabase
-        .from('credit_history')
-        .select('transaction_type, debit_amount, credit_amount')
-        .eq('credit_id', credit.id)
-        .in('transaction_type', ['contract_reopen', 'contract_close'])
-        .order('created_at', { ascending: true });
-
-      // 4. Tính chênh lệch debit và credit amount
-      let historyBalance = 0;
-      if (historyData && historyData.length > 0) {
-        historyBalance = historyData.reduce((sum, record) => {
-          const debit = record.debit_amount || 0;
-          const credit = record.credit_amount || 0;
-          return sum + (credit - debit);
-        }, 0);
-      }
-
-      // Trừ đi tiền gốc của hợp đồng
-      const excessAmount = historyBalance - credit.loan_amount;
-      console.log('History balance:', historyBalance, 'Loan amount:', credit.loan_amount, 'Excess:', excessAmount);
-
-      const newPeriods: CreditPaymentPeriod[] = [...(existingPeriods || [])];
-      let currentPeriodNumber = existingPeriods ? Math.max(...existingPeriods.map(p => p.period_number), 0) + 1 : 1;
-      let currentStartDate = new Date(nextPaymentDate);
-
-      // 5. Nếu excess > 0, tạo kỳ "tạm thời"
-      if (excessAmount > 0 && dailyAmount > 0) {
-        const tempPeriodDays = Math.ceil(excessAmount / dailyAmount);
-        const tempEndDate = new Date(currentStartDate);
-        tempEndDate.setDate(currentStartDate.getDate() + tempPeriodDays - 1);
-
-        const tempPeriod: CreditPaymentPeriod = {
-          id: `temp-history-${currentPeriodNumber}`,
-          credit_id: credit.id,
-          period_number: currentPeriodNumber,
-          start_date: currentStartDate.toISOString(),
-          end_date: tempEndDate.toISOString(),
-          expected_amount: excessAmount,
-          actual_amount: 0,
-          payment_date: null,
-          notes: 'Kỳ tạm thời từ lịch sử mở/đóng hợp đồng',
-          other_amount: 0,
-          is_temporary: true
-        };
-
-        newPeriods.push(tempPeriod);
-        currentPeriodNumber++;
-        
-        // Cập nhật ngày bắt đầu cho kỳ tiếp theo
-        currentStartDate = new Date(tempEndDate);
-        currentStartDate.setDate(tempEndDate.getDate() + 1);
-      }
-
-      // 6. Tiếp tục tính các kỳ ước tính còn lại
+      // 3. Calculate loan end date
       const loanEndDate = new Date(credit.loan_date);
       loanEndDate.setDate(loanEndDate.getDate() + credit.loan_period - 1);
+
+      // 4. Generate new periods using current loan_amount
+      const newPeriods: CreditPaymentPeriod[] = [...existingPeriods];
       const interestPeriod = credit.interest_period || 30;
 
-      while (currentStartDate <= loanEndDate && newPeriods.length < 100) { // Giới hạn để tránh vòng lặp vô hạn
-        const periodEndDate = new Date(currentStartDate);
-        periodEndDate.setDate(currentStartDate.getDate() + interestPeriod - 1);
+      while (nextStartDate <= loanEndDate && newPeriods.length < 100) {
+        const periodEndDate = new Date(nextStartDate);
+        periodEndDate.setDate(nextStartDate.getDate() + interestPeriod - 1);
         
-        // Đảm bảo không vượt quá ngày kết thúc hợp đồng
+        // Don't exceed loan end date
         if (periodEndDate > loanEndDate) {
           periodEndDate.setTime(loanEndDate.getTime());
         }
 
-        // Tính số ngày trong kỳ này
-        const daysInPeriod = Math.floor((periodEndDate.getTime() - currentStartDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-        const expectedAmount = calculateInterestWithPrincipalChanges(
-          credit,
-          currentStartDate,
-          periodEndDate,
-          localPrincipalChanges
-        ) || Math.round(dailyAmount * daysInPeriod);
+        // Calculate days in this period
+        const daysInPeriod = Math.floor((periodEndDate.getTime() - nextStartDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        
+        // Calculate interest using current loan_amount (already updated by vay thêm/trả bớt)
+        const { calculateInterestAmount } = await import('@/lib/interest-calculator');
+        const expectedAmount = calculateInterestAmount(credit, daysInPeriod);
 
-        const estimatedPeriod: CreditPaymentPeriod = {
-          id: `calculated-${currentPeriodNumber}`,
+        const newPeriod: CreditPaymentPeriod = {
+          id: `calculated-${nextPeriodNumber}`,
           credit_id: credit.id,
-          period_number: currentPeriodNumber,
-          start_date: currentStartDate.toISOString(),
+          period_number: nextPeriodNumber,
+          start_date: nextStartDate.toISOString(),
           end_date: periodEndDate.toISOString(),
           expected_amount: expectedAmount,
           actual_amount: 0,
@@ -222,43 +162,60 @@ export function PaymentTab({
           is_temporary: false
         };
 
-        newPeriods.push(estimatedPeriod);
-        currentPeriodNumber++;
+        newPeriods.push(newPeriod);
+        nextPeriodNumber++;
 
-        // Chuẩn bị cho kỳ tiếp theo
-        currentStartDate = new Date(periodEndDate);
-        currentStartDate.setDate(periodEndDate.getDate() + 1);
+        // Prepare for next period
+        nextStartDate = new Date(periodEndDate);
+        nextStartDate.setDate(periodEndDate.getDate() + 1);
 
-        // Kiểm tra nếu ngày bắt đầu vượt quá ngày kết thúc hợp đồng
-        if (currentStartDate > loanEndDate) break;
+        // Stop if next start date exceeds loan end date
+        if (nextStartDate > loanEndDate) break;
       }
 
-      // Sắp xếp lại theo period_number
+      // Sort by period number and set result
       newPeriods.sort((a, b) => a.period_number - b.period_number);
       setRecalculatedPeriods(newPeriods);
 
+      console.log('✅ Simplified calculation completed:', {
+        totalPeriods: newPeriods.length,
+        existingPeriods: existingPeriods.length,
+        newGeneratedPeriods: newPeriods.length - existingPeriods.length
+      });
+
     } catch (error) {
-      console.error('Error recalculating periods with history:', error);
+      console.error('Error in simplified calculation:', error);
       toast({
         variant: "destructive",
         title: "Lỗi",
-        description: "Có lỗi xảy ra khi tính toán lại các kỳ thanh toán"
+        description: "Có lỗi xảy ra khi tính toán các kỳ thanh toán"
       });
     } finally {
       setIsRecalculating(false);
     }
-  };
+  }, [credit?.id, paymentPeriods, calculationCount]);
 
   // Effect to recalculate periods when credit or payment periods change
   useEffect(() => {
+    // Simplified: only need credit and paymentPeriods
     if (credit?.id) {
-      recalculatePeriodsWithHistory();
+      console.log('Triggering simplified recalculation:', {
+        creditId: credit.id,
+        paymentPeriodsCount: paymentPeriods.length
+      });
+      
+      // Debounce to prevent multiple calculations
+      const timeoutId = setTimeout(() => {
+        recalculatePeriodsWithHistory();
+      }, 300); // Reduced timeout
+      
+      return () => clearTimeout(timeoutId);
     }
-  }, [credit?.id, paymentPeriods]);
+  }, [credit?.id, paymentPeriods, recalculatePeriodsWithHistory]);
 
   // Use recalculated periods if available, otherwise use original combined periods
   const periodsToDisplay = recalculatedPeriods.length > 0 ? recalculatedPeriods : combinedPaymentPeriods;
-
+  
   // Calculate interest with principal changes
   const calculateInterestForPeriod = (startDate: string, endDate: string): number => {
     if (!credit) return 0;

@@ -7,7 +7,9 @@ export enum CreditTransactionType {
   PAYMENT = 'payment',
   PAYMENT_CANCEL = 'payment_cancel',
   CONTRACT_CLOSE = 'contract_close',
-  CONTRACT_REOPEN = 'contract_reopen'
+  CONTRACT_REOPEN = 'contract_reopen',
+  CANCEL_PRINCIPAL_REPAYMENT = 'cancel_principal_repayment',
+  CANCEL_ADDITIONAL_LOAN = 'cancel_additional_loan',
 }
 
 // Updated interface to match the new database schema
