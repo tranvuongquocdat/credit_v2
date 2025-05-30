@@ -262,6 +262,7 @@ export async function createInstallment(installment: CreateInstallmentParams) {
       loan_period: installment.loan_period,
       payment_period: installment.payment_period,
       loan_date: installment.loan_date,
+      payment_due_date: installment.payment_due_date,
       debt_amount: installment.debt_amount || 0, // Default 0
       notes: installment.notes || '',
       status: (installment.status || InstallmentStatus.ON_TIME).toString() as any
@@ -309,6 +310,7 @@ export async function createInstallment(installment: CreateInstallmentParams) {
       status: data.status as InstallmentStatus,
       due_date: calculateDueDate(loanDate, loanPeriod),
       start_date: new Date(loanDate).toISOString().split('T')[0],
+      payment_due_date: data.payment_due_date || null,
       
       // Direct DB field references
       down_payment: downPayment,
@@ -395,6 +397,10 @@ export async function updateInstallment(id: string, installment: Partial<Install
       dbInstallment.loan_date = installment.start_date;
     }
     
+    if (installment.payment_due_date !== undefined) {
+      dbInstallment.payment_due_date = installment.payment_due_date;
+    }
+    
     if (installment.notes !== undefined) {
       dbInstallment.notes = installment.notes;
     }
@@ -442,6 +448,7 @@ export async function updateInstallment(id: string, installment: Partial<Install
       status: data.status as InstallmentStatus,
       due_date: calculateDueDate(loanDate, loanPeriod),
       start_date: new Date(loanDate).toISOString().split('T')[0],
+      payment_due_date: data.payment_due_date || null,
       notes: data.notes || '',
       store_id: installment.store_id,
       created_at: data.created_at || undefined,
@@ -524,6 +531,7 @@ export async function updateInstallmentStatus(id: string, status: InstallmentSta
       status: data.status as InstallmentStatus,
       due_date: calculateDueDate(loanDate, loanPeriod),
       start_date: new Date(loanDate).toISOString().split('T')[0],
+      payment_due_date: data.payment_due_date || null,
       notes: data.notes || '',
       created_at: data.created_at || undefined,
       updated_at: data.updated_at || undefined
@@ -599,6 +607,44 @@ export async function hardDeleteInstallment(id: string) {
     console.error('Error hard deleting installment:', error);
     return { 
       success: false, 
+      error 
+    };
+  }
+}
+
+// Update installment payment due date
+export async function updateInstallmentPaymentDueDate(id: string, paymentDueDate: string) {
+  try {
+    const { data, error } = await supabase
+      .from('installments')
+      .update({ 
+        payment_due_date: paymentDueDate,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+      
+    if (error) {
+      throw error;
+    }
+    
+    if (!data) {
+      throw new Error('Failed to update payment due date');
+    }
+    
+    // Return the updated installment with simplified data
+    return { 
+      data: {
+        id: data.id,
+        payment_due_date: data.payment_due_date
+      }, 
+      error: null 
+    };
+  } catch (error: any) {
+    console.error('Error updating payment due date:', error);
+    return { 
+      data: null, 
       error 
     };
   }

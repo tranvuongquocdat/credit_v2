@@ -8,12 +8,13 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { Edit2Icon, MoreVerticalIcon, TrashIcon, AlertTriangleIcon, CalendarIcon, ClockIcon, FileTextIcon, DollarSignIcon, UnlockIcon } from "lucide-react";
+import { Edit2Icon, MoreVerticalIcon, TrashIcon, AlertTriangleIcon, CalendarIcon, ClockIcon, FileTextIcon, DollarSignIcon, UnlockIcon, CalendarDaysIcon } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import Spinner from "@/components/ui/spinner";
 import { useEffect, useState } from "react";
 import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
 import { getInstallmentPaymentPeriods, updateInstallmentStatus } from "@/lib/installmentPayment";
+import { updateInstallmentPaymentDueDate } from "@/lib/installment";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,7 +25,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { format } from "date-fns";
+import { Calendar } from "@/components/ui/calendar";
 import { useStore } from "@/contexts/StoreContext";
+import { useToast } from "@/components/ui/use-toast";
 import { 
   calculateDailyAmount,
   calculateRatio,
@@ -73,7 +82,14 @@ export function InstallmentsTable({
   // State for unlock confirmation dialog
   const [unlockConfirmOpen, setUnlockConfirmOpen] = useState(false);
   const [installmentToUnlock, setInstallmentToUnlock] = useState<InstallmentWithPayments | null>(null);
-
+  
+  // State for payment due date update
+  const [selectedDateInstallmentId, setSelectedDateInstallmentId] = useState<string | null>(null);
+  const [isUpdatingDueDate, setIsUpdatingDueDate] = useState(false);
+  
+  // Toast for notifications
+  const { toast } = useToast();
+  
   // Nạp dữ liệu thanh toán khi installments thay đổi
   useEffect(() => {
     async function loadPaymentData() {
@@ -317,6 +333,73 @@ export function InstallmentsTable({
     }
   };
 
+  // Function to handle payment due date update
+  const handlePaymentDueDateUpdate = async (installmentId: string, date: Date) => {
+    setIsUpdatingDueDate(true);
+    try {
+      // Format date as ISO string (YYYY-MM-DD)
+      const formattedDate = format(date, 'yyyy-MM-dd');
+      
+      // Call API to update payment due date
+      const { data, error } = await updateInstallmentPaymentDueDate(installmentId, formattedDate);
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Check if the selected date is today or tomorrow
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      // Determine what text to display
+      let displayText;
+      if (date.getDate() === today.getDate() && 
+          date.getMonth() === today.getMonth() && 
+          date.getFullYear() === today.getFullYear()) {
+        displayText = "Hôm nay";
+      } else if (date.getDate() === tomorrow.getDate() && 
+                date.getMonth() === tomorrow.getMonth() && 
+                date.getFullYear() === tomorrow.getFullYear()) {
+        displayText = "Ngày mai";
+      } else {
+        displayText = format(date, 'dd/MM/yyyy');
+      }
+      
+      // Update local state
+      const updatedInstallments = installmentsWithPayments.map(item => {
+        if (item.id === installmentId) {
+          return {
+            ...item,
+            payment_due_date: formattedDate,
+            nextPaymentDate: displayText
+          };
+        }
+        return item;
+      });
+      
+      setInstallmentsWithPayments(updatedInstallments);
+      
+      // Show success toast
+      toast({
+        title: "Thành công",
+        description: "Đã cập nhật ngày đóng tiền",
+      });
+    } catch (error) {
+      console.error('Error updating payment due date:', error);
+      toast({
+        title: "Lỗi",
+        description: "Không thể cập nhật ngày đóng tiền",
+        variant: "destructive"
+      });
+    } finally {
+      setIsUpdatingDueDate(false);
+      setSelectedDateInstallmentId(null);
+    }
+  };
+
   if (isLoading || loadingPayments) {
     return (
       <div className="h-96 flex items-center justify-center">
@@ -542,60 +625,125 @@ export function InstallmentsTable({
                     {installment.overdueDays ? ` (${installment.overdueDays} ngày)` : ''}
                   </Badge>
                 </td>
+                
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  <div className={`flex items-center justify-center gap-1 ${installment.overdueDays ? 'text-red-500 font-medium' : installment.isDueToday ? 'text-amber-500 font-medium' : installment.nextPaymentDate === "Ngày mai" ? 'text-blue-500 font-medium' : ''}`}>
-                    {(() => {
-                      // If remaining amount is 0 or less, show "Hoàn thành"
-                      if (installment.remainingToPay !== undefined && installment.remainingToPay <= 0) {
-                        return (
-                          <span className="text-green-600 font-medium">
-                            Hoàn thành
-                          </span>
-                        );
-                      }
-                      
-                      // If nextPaymentDate is "Hoàn thành", show that
-                      if (installment.nextPaymentDate === "Hoàn thành") {
-                        return (
-                          <span className="text-green-600 font-medium">
-                            Hoàn thành
-                          </span>
-                        );
-                      }
-                      
-                      // If nextPaymentDate is "Hôm nay", show that
-                      if (installment.nextPaymentDate === "Hôm nay") {
-                        return (
-                          <span className="text-amber-500 font-medium">
-                            Hôm nay
-                          </span>
-                        );
-                      }
-                      
-                      // If nextPaymentDate is "Ngày mai", show that
-                      if (installment.nextPaymentDate === "Ngày mai") {
-                        return (
-                          <span className="text-blue-500 font-medium">
-                            Ngày mai
-                          </span>
-                        );
-                      }
-                      
-                      // Format the next payment date for display
-                      if (installment.nextPaymentDate) {
-                        // For better readability, extract only the day and month (DD/MM)
-                        if (installment.nextPaymentDate.includes('/')) {
-                          const [day, month] = installment.nextPaymentDate.split('/');
-                          return `${day}/${month}`;
-                        } else {
-                          const date = new Date(installment.nextPaymentDate);
-                          return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-                        }
-                      } else {
-                        return new Date(installment.due_date).toLocaleDateString('vi-VN');
-                      }
-                    })()}
-                  </div>
+                  {installment.status === InstallmentStatus.CLOSED || 
+                   installment.nextPaymentDate == "Hoàn thành" || 
+                   (installment.remainingToPay ?? 0) <= 0 ? (
+                    <div className={`flex items-center justify-center gap-1 ${
+                      installment.overdueDays ? 'text-red-500 font-medium' : 
+                      installment.isDueToday ? 'text-amber-500 font-medium' : 
+                      installment.nextPaymentDate === "Ngày mai" ? 'text-blue-500 font-medium' : ''
+                    }`}>
+                      <span className="text-green-600 font-medium">
+                        Hoàn thành
+                      </span>
+                    </div>
+                  ) : (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          className={`flex items-center justify-center gap-1 h-8 w-full ${
+                            installment.overdueDays ? 'text-red-500 font-medium' : 
+                            installment.isDueToday ? 'text-amber-500 font-medium' : 
+                            installment.nextPaymentDate === "Ngày mai" ? 'text-blue-500 font-medium' : ''
+                          }`}
+                          disabled={isUpdatingDueDate || (installment.remainingToPay ?? 0) <= 0}
+                          onClick={() => setSelectedDateInstallmentId(installment.id)}
+                          title={(installment.remainingToPay ?? 0) > 0 ? "Nhấn để thay đổi ngày đóng tiền" : "Hợp đồng đã hoàn thành"}
+                        >
+                          {isUpdatingDueDate && selectedDateInstallmentId === installment.id ? (
+                            <Spinner size="sm" className="mr-1" />
+                          ) : (
+                            <CalendarDaysIcon className="h-4 w-4 mr-1" />
+                          )}
+                          {(() => {
+                            // If remaining amount is 0 or less, show "Hoàn thành"
+                            if (installment.remainingToPay !== undefined && installment.remainingToPay <= 0) {
+                              return (
+                                <span className="text-green-600 font-medium">
+                                  Hoàn thành
+                                </span>
+                              );
+                            }
+                            
+                            // If nextPaymentDate is "Hoàn thành", show that
+                            if (installment.nextPaymentDate === "Hoàn thành") {
+                              return (
+                                <span className="text-green-600 font-medium">
+                                  Hoàn thành
+                                </span>
+                              );
+                            }
+                            
+                            // If payment_due_date is available, prefer to use that
+                            if (installment.payment_due_date) {
+                              // Convert YYYY-MM-DD to DD/MM format
+                              const date = new Date(installment.payment_due_date);
+                              const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+                              
+                              // Check if it's today
+                              const today = new Date();
+                              today.setHours(0, 0, 0, 0);
+                              const isSameDay = 
+                                date.getDate() === today.getDate() &&
+                                date.getMonth() === today.getMonth() &&
+                                date.getFullYear() === today.getFullYear();
+                                
+                              if (isSameDay) {
+                                return "Hôm nay";
+                              }
+                              
+                              // Check if it's tomorrow
+                              const tomorrow = new Date(today);
+                              tomorrow.setDate(today.getDate() + 1);
+                              const isTomorrow = 
+                                date.getDate() === tomorrow.getDate() &&
+                                date.getMonth() === tomorrow.getMonth() &&
+                                date.getFullYear() === tomorrow.getFullYear();
+                                
+                              if (isTomorrow) {
+                                return "Ngày mai";
+                              }
+                              
+                              return formattedDate;
+                            }
+                            
+                            // Format the next payment date for display
+                            if (installment.nextPaymentDate) {
+                              // For better readability, extract only the day and month (DD/MM)
+                              if (installment.nextPaymentDate.includes('/')) {
+                                const [day, month] = installment.nextPaymentDate.split('/');
+                                return `${day}/${month}`;
+                              } else {
+                                const date = new Date(installment.nextPaymentDate);
+                                return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+                              }
+                            } else {
+                              return new Date(installment.due_date).toLocaleDateString('vi-VN');
+                            }
+                          })()}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="center">
+                        {(installment.remainingToPay ?? 0) > 0 && (
+                          <Calendar
+                            mode="single"
+                            initialFocus
+                            selected={installment.payment_due_date ? new Date(installment.payment_due_date) : undefined}
+                            onSelect={(date) => {
+                              if (date) {
+                                handlePaymentDueDateUpdate(installment.id, date);
+                              }
+                            }}
+                            disabled={isUpdatingDueDate}
+                            className="rounded-md border"
+                          />
+                        )}
+                      </PopoverContent>
+                    </Popover>
+                  )}
                 </td>
                 <td className="py-3 px-3 text-center">
                   <div className="inline-flex items-center justify-center gap-1">

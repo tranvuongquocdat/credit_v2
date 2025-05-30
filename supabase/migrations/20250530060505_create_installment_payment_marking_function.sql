@@ -11,8 +11,9 @@ DECLARE
   v_period_number INTEGER;
   expected_amount NUMERIC;
   other_amount NUMERIC;
-  start_date TIMESTAMP;
-  end_date TIMESTAMP;
+  start_date DATE;
+  end_date DATE;
+  payment_date DATE;
   existing_period RECORD;
   result JSONB := '{"success": true, "processed_periods": []}'::JSONB;
   processed_periods JSONB := '[]'::JSONB;
@@ -21,8 +22,8 @@ DECLARE
   -- Variables for auto-fill logic
   missing_period_num INTEGER;
   installment_info RECORD;
-  calculated_start_date TIMESTAMP;
-  calculated_end_date TIMESTAMP;
+  calculated_start_date DATE;
+  calculated_end_date DATE;
   calculated_amount NUMERIC;
   
   -- Variables for payment history logging (only for mark action)
@@ -67,18 +68,31 @@ BEGIN
       expected_amount := COALESCE((period_record->>'expectedAmount')::NUMERIC, 0);
       other_amount := COALESCE((period_record->>'otherAmount')::NUMERIC, 0);
       
-      -- Handle date parsing
+      -- Handle date parsing from DD/MM/YYYY format
       BEGIN
-        start_date := (period_record->>'dueDate')::TIMESTAMP;
+        -- Parse dueDate from DD/MM/YYYY to DATE
+        IF period_record->>'dueDate' IS NOT NULL THEN
+          start_date := TO_DATE(period_record->>'dueDate', 'DD/MM/YYYY');
+        ELSE
+          start_date := CURRENT_DATE;
+        END IF;
       EXCEPTION WHEN OTHERS THEN
-        start_date := NOW();
+        start_date := CURRENT_DATE;
       END;
       
       BEGIN
-        end_date := (period_record->>'endDate')::TIMESTAMP;
+        -- Parse endDate from DD/MM/YYYY to DATE
+        IF period_record->>'endDate' IS NOT NULL THEN
+          end_date := TO_DATE(period_record->>'endDate', 'DD/MM/YYYY');
+        ELSE
+          end_date := start_date + (installment_info.payment_period || 10);
+        END IF;
       EXCEPTION WHEN OTHERS THEN
-        end_date := start_date + INTERVAL '1 day';
+        end_date := start_date + (installment_info.payment_period || 10);
       END;
+      
+      -- Set payment date to today for new payments
+      payment_date := CURRENT_DATE;
 
       -- Only try to cast to UUID if it's not a calculated/temp ID
       IF period_id_string IS NOT NULL AND 
@@ -113,12 +127,12 @@ BEGIN
               
               -- If period doesn't exist or isn't fully paid, create/update it
               IF existing_period.id IS NULL THEN
-                -- Calculate dates for missing period
-                calculated_start_date := installment_info.start_date + ((missing_period_num - 1) * INTERVAL '1 month');
-                calculated_end_date := calculated_start_date + INTERVAL '1 month' - INTERVAL '1 day';
+                -- Calculate dates for missing period based on payment_period
+                calculated_start_date := installment_info.start_date::DATE + ((missing_period_num - 1) * (installment_info.payment_period || 10));
+                calculated_end_date := calculated_start_date + (installment_info.payment_period || 10) - 1;
                 
                 -- Use the expected amount from the installment calculation
-                calculated_amount := COALESCE(expected_amount, installment_info.monthly_payment);
+                calculated_amount := COALESCE(expected_amount, installment_info.installment_amount / CEIL(installment_info.duration::NUMERIC / (installment_info.payment_period || 10)));
                 
                 -- Create missing period
                 INSERT INTO installment_payment_period (
@@ -137,7 +151,7 @@ BEGIN
                   calculated_end_date,
                   calculated_amount,
                   calculated_amount,
-                  NOW(),
+                  payment_date,
                   'Auto-created via checkbox for sequential payment'
                 ) RETURNING id INTO period_id;
                 
@@ -155,7 +169,7 @@ BEGIN
                 UPDATE installment_payment_period 
                 SET 
                   actual_amount = existing_period.expected_amount,
-                  payment_start_date = NOW(),
+                  payment_start_date = payment_date,
                   notes = 'Auto-paid via checkbox for sequential payment',
                   updated_at = NOW()
                 WHERE id = existing_period.id;
@@ -193,7 +207,7 @@ BEGIN
               UPDATE installment_payment_period 
               SET 
                 actual_amount = expected_amount,
-                payment_start_date = NOW(),
+                payment_start_date = payment_date,
                 notes = 'Đóng tiền qua checkbox',
                 updated_at = NOW()
               WHERE id = existing_period.id;
@@ -225,7 +239,7 @@ BEGIN
               end_date,
               expected_amount,
               expected_amount,
-              NOW(),
+              payment_date,
               'Đóng tiền qua checkbox'
             ) RETURNING id INTO period_id;
             
@@ -269,7 +283,7 @@ BEGIN
           UPDATE installment_payment_period 
           SET 
             actual_amount = expected_amount,
-            payment_start_date = NOW(),
+            payment_start_date = payment_date,
             notes = 'Đóng tiền qua checkbox',
             updated_at = NOW()
           WHERE id = period_id;

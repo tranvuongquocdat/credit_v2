@@ -309,8 +309,14 @@ export function InstallmentCreateModal({
         loan_date: startDate,
         notes: notes || '',
         status: InstallmentStatus.ON_TIME
-      };
+      } as any; // Type assertion to avoid TypeScript error
       
+      // Calculate initial payment_due_date as start_date + paymentPeriod - 1
+      const startDateObj = new Date(startDate);
+      const paymentDueDate = new Date(startDateObj);
+      paymentDueDate.setDate(startDateObj.getDate() + paymentPrd - 1);
+      installmentData.payment_due_date = format(paymentDueDate, 'yyyy-MM-dd');
+
       // Call API to create installment
       await createInstallment(installmentData);
       // Success - close modal and notify parent
