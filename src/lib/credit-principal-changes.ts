@@ -19,20 +19,23 @@ export async function getPrincipalChangesForCredit(creditId: string) {
       return { data: [], error: creditError };
     }
     
-    // Fetch all principal changes from credit_history
+    // Fetch all principal changes from credit_amount_history
+    // This table contains the actual effective date of the principal changes
     const { data, error } = await supabase
-      .from('credit_history')
+      .from('credit_amount_history')
       .select('*')
       .eq('credit_id', creditId)
-      .in('transaction_type', [
-        CreditTransactionType.PRINCIPAL_REPAYMENT,
-        CreditTransactionType.ADDITIONAL_LOAN
-      ])
       .order('created_at', { ascending: true });
     
     if (error) {
       console.error('Error fetching principal changes:', error);
       return { data: [], error };
+    }
+    
+    console.log('Fetched principal changes from credit_amount_history:', data);
+    
+    if (!data || data.length === 0) {
+      return { data: [], error: null };
     }
     
     // Start with the current loan amount
@@ -41,22 +44,19 @@ export async function getPrincipalChangesForCredit(creditId: string) {
     // Reconstruct previous and new amounts by calculating backwards
     // We need to simulate the reverse of all transactions to get to the original amount
     const simulatedChanges = [...data].map(record => {
-      let changeAmount = 0;
+      // In credit_amount_history, the 'amount' field is:
+      // - positive for additional loans
+      // - negative for principal repayments
+      const amount = record.amount || 0;
       
-      if (record.transaction_type === CreditTransactionType.ADDITIONAL_LOAN) {
-        // For additional loans, subtract the debit amount to get the previous amount
-        changeAmount = record.debit_amount || 0;
-        runningAmount -= changeAmount;
-      } else if (record.transaction_type === CreditTransactionType.PRINCIPAL_REPAYMENT) {
-        // For repayments, add the credit amount to get the previous amount
-        changeAmount = record.credit_amount || 0;
-        runningAmount += changeAmount;
-      }
+      // Subtract the amount to get the previous amount (regardless of sign)
+      runningAmount -= amount;
       
       return {
         ...record,
         calculatedPreviousAmount: runningAmount,
-        changeAmount
+        changeAmount: Math.abs(amount),
+        isAdditional: amount > 0
       };
     });
     
@@ -73,27 +73,26 @@ export async function getPrincipalChangesForCredit(creditId: string) {
       // The previous amount is the current running amount
       const previousAmount = runningAmount;
       
-      // Update the running amount based on transaction type
-      if (record.transaction_type === CreditTransactionType.ADDITIONAL_LOAN) {
-        // For additional loans, add the debit amount
-        runningAmount += (record.debit_amount || 0);
-      } else if (record.transaction_type === CreditTransactionType.PRINCIPAL_REPAYMENT) {
-        // For repayments, subtract the credit amount
-        runningAmount -= (record.credit_amount || 0);
-      }
+      // The amount field in credit_amount_history:
+      // - positive for additional loans
+      // - negative for principal repayments
+      const amount = record.amount || 0;
+      
+      // Update the running amount based on the amount sign
+      runningAmount += amount;
       
       // The new amount is the updated running amount
       const newAmount = runningAmount;
       
       return {
-        date: record.created_at,
+        date: record.created_at, // Using created_at from credit_amount_history as the effective date
         previousAmount,
         newAmount,
-        changeType: record.transaction_type === CreditTransactionType.PRINCIPAL_REPAYMENT 
-          ? 'principal_repayment' 
-          : 'additional_loan'
+        changeType: (amount > 0 ? 'additional_loan' : 'principal_repayment') as 'additional_loan' | 'principal_repayment'
       };
     });
+    
+    console.log('Calculated principal changes:', principalChanges);
     
     return { data: principalChanges, error: null };
   } catch (error) {

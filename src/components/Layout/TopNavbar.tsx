@@ -24,12 +24,14 @@ const StoreDropdown = memo(({
   stores, 
   loading, 
   onSelectStore,
+  onRefreshStores,
   storeVersion
 }: { 
   currentStore: any, 
   stores: any[], 
   loading: boolean, 
   onSelectStore: (store: any) => void,
+  onRefreshStores: () => void,
   storeVersion: number
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -42,6 +44,11 @@ const StoreDropdown = memo(({
     onSelectStore(store);
     setIsOpen(false);
   }, [onSelectStore]);
+
+  const handleRefresh = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onRefreshStores();
+  }, [onRefreshStores]);
   
   return (
     <div className="relative">
@@ -59,15 +66,33 @@ const StoreDropdown = memo(({
       {/* Store dropdown menu */}
       {isOpen && (
         <div className="absolute left-0 top-full mt-1 w-64 bg-white rounded-md shadow-lg py-1 text-gray-700 z-50">
-          {stores.map(store => (
+          {/* Refresh button */}
+          <div className="px-4 py-2 border-b border-gray-200">
             <button
-              key={store.id}
-              className={`block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${currentStore?.id === store.id ? 'bg-gray-100 font-medium' : ''}`}
-              onClick={() => selectStore(store)}
+              onClick={handleRefresh}
+              className="flex items-center text-sm text-blue-600 hover:text-blue-800"
+              disabled={loading}
             >
-              <div className="font-medium">{store.name}</div>
+              <Settings className="h-4 w-4 mr-2" />
+              {loading ? 'Đang tải...' : 'Làm mới danh sách'}
             </button>
-          ))}
+          </div>
+          
+          {stores.length === 0 ? (
+            <div className="px-4 py-2 text-sm text-gray-500">
+              {loading ? 'Đang tải cửa hàng...' : 'Không có cửa hàng nào'}
+            </div>
+          ) : (
+            stores.map(store => (
+              <button
+                key={store.id}
+                className={`block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${currentStore?.id === store.id ? 'bg-gray-100 font-medium' : ''}`}
+                onClick={() => selectStore(store)}
+              >
+                <div className="font-medium">{store.name}</div>
+              </button>
+            ))
+          )}
         </div>
       )}
     </div>
@@ -94,7 +119,7 @@ export function TopNavbar({ onToggleSidebar }: TopNavbarProps) {
   const [storeVersion, setStoreVersion] = useState(0);
   
   // Use the store context instead of local state
-  const { currentStore, stores, setCurrentStore, loading } = useStore();
+  const { currentStore, stores, setCurrentStore, loading, refreshStores } = useStore();
   const router = useRouter();
   
   // Handler for store selection - memoized to prevent recreating on every render
@@ -253,6 +278,7 @@ export function TopNavbar({ onToggleSidebar }: TopNavbarProps) {
           stores={stores}
           loading={loading}
           onSelectStore={handleStoreChange}
+          onRefreshStores={refreshStores}
           storeVersion={storeVersion}
         />
         

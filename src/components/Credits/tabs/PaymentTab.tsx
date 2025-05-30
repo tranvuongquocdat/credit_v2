@@ -85,6 +85,9 @@ export function PaymentTab({
           return;
         }
         
+        console.log('Loaded principal changes:', data);
+        console.log('Credit:', credit);
+        
         setLocalPrincipalChanges(data || []);
         setPrincipalChangesLoaded(true);
       } catch (err) {
@@ -94,6 +97,32 @@ export function PaymentTab({
 
     loadPrincipalChanges();
   }, [credit?.id, principalChanges]);
+
+  // Calculate interest with principal changes
+  const calculateInterestForPeriod = useCallback((startDate: string, endDate: string): number => {
+    if (!credit) return 0;
+    
+    try {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      // Debug principal changes
+      console.log('----DEBUG CALCULATE INTEREST----');
+      console.log('Period:', startDate, 'to', endDate);
+      console.log('Principal changes:', localPrincipalChanges);
+      console.log('Filtered changes:', localPrincipalChanges.filter(change => new Date(change.date) < start));
+      
+      return calculateInterestWithPrincipalChanges(
+        credit,
+        start,
+        end,
+        localPrincipalChanges
+      );
+    } catch (err) {
+      console.error('Error calculating interest with principal changes:', err);
+      return 0;
+    }
+  }, [credit, localPrincipalChanges]);
 
   // Simplified function to calculate periods - only generate new periods after last paid period
   const recalculatePeriodsWithHistory = async () => {
@@ -105,6 +134,14 @@ export function PaymentTab({
       paymentPeriodsCount: paymentPeriods.length,
       calculationNumber: calculationCount + 1
     });
+    
+    // Debug principal changes
+    console.log('DEBUG: Principal changes for recalculation:', localPrincipalChanges);
+    if (localPrincipalChanges.length > 0) {
+      const changeDate = new Date(localPrincipalChanges[0].date);
+      console.log('DEBUG: First principal change date:', changeDate.toISOString());
+      console.log('DEBUG: First principal change is for kỳ 8?:', changeDate.getDate() === 18 && changeDate.getMonth() === 5); // 18/06 (month 5 = June)
+    }
 
     setCalculationCount(prev => prev + 1);
     setIsRecalculating(true);
@@ -148,9 +185,13 @@ export function PaymentTab({
         // Calculate days in this period
         const daysInPeriod = Math.floor((periodEndDate.getTime() - nextStartDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
         
-        // Calculate interest using current loan_amount (already updated by vay thêm/trả bớt)
-        const { calculateInterestAmount } = await import('@/lib/interest-calculator');
-        const expectedAmount = calculateInterestAmount(credit, daysInPeriod);
+        // Calculate interest using calculateInterestForPeriod to account for principal changes
+        const expectedAmount = calculateInterestForPeriod(
+          nextStartDate.toISOString(),
+          periodEndDate.toISOString()
+        );
+        
+        console.log(`Period ${nextPeriodNumber}: ${nextStartDate.toISOString()} to ${periodEndDate.toISOString()}, Expected: ${expectedAmount}`);
 
         const newPeriod: CreditPaymentPeriod = {
           id: `calculated-${nextPeriodNumber}`,
@@ -222,27 +263,7 @@ export function PaymentTab({
 
   // Use recalculated periods if available, otherwise use original combined periods
   const periodsToDisplay = recalculatedPeriods.length > 0 ? recalculatedPeriods : combinedPaymentPeriods;
-  
-  // Calculate interest with principal changes
-  const calculateInterestForPeriod = (startDate: string, endDate: string): number => {
-    if (!credit) return 0;
-    
-    try {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      
-      return calculateInterestWithPrincipalChanges(
-        credit,
-        start,
-        end,
-        localPrincipalChanges
-      );
-    } catch (err) {
-      console.error('Error calculating interest with principal changes:', err);
-      return 0;
-    }
-  };
-  
+  console.log(recalculatedPeriods)
   // Start editing a payment
   const startEditing = (period: CreditPaymentPeriod) => {
     // Don't edit periods that are already in DB or when processing checkbox
@@ -319,8 +340,8 @@ export function PaymentTab({
     setLoadingPeriods(prev => ({ ...prev, [periodId]: true }));
     
     try {
-      // Import necessary functions
-      const { savePaymentWithOtherAmount, markPeriodAsPaid, deletePaymentPeriod } = await import('@/lib/credit-payment');
+      // Import the new API function
+      const { markPaymentPeriods } = await import('@/lib/credit-payment-api');
       
       if (checked) {
         // Find all unchecked periods from the oldest up to this one
@@ -341,41 +362,57 @@ export function PaymentTab({
           return;
         }
         
-        // Perform all actions for all selected periods
-        for (const p of periodsToCheck) {
-          // Kiểm tra xem đây là kỳ tạm thời hay không
-          const isCalculatedPeriod = !p.id || p.id.startsWith('calculated-') || p.id.startsWith('temp-');
-          
-          if (isCalculatedPeriod) {
-            // Đối với kỳ tạm thời, sử dụng savePaymentWithOtherAmount để tạo mới
-            await savePaymentWithOtherAmount(
-              credit.id,
-              p,
-              p.expected_amount || 0,
-              p.other_amount || 0,
-              true // isCalculatedPeriod = true
-            );
-          } else {
-            // Đối với kỳ đã tồn tại, sử dụng markPeriodAsPaid để cập nhật
-            await markPeriodAsPaid(
-              p.id, 
-              p.expected_amount, 
-              new Date().toISOString(),
-              "Đóng lãi qua checkbox"
-            );
-          }
+        // Use the new API to mark periods
+        const result = await markPaymentPeriods(credit.id, periodsToCheck, 'mark');
+        
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to mark payment periods');
         }
         
-        // Notify success
+        // Check if any periods had issues
+        const hasErrors = result.processed_periods?.some(p => p.status === 'error');
+        const alreadyPaidCount = result.processed_periods?.filter(p => p.status === 'already_paid').length || 0;
+        const autoCreatedCount = result.processed_periods?.filter(p => p.status === 'auto_created').length || 0;
+        const autoUpdatedCount = result.processed_periods?.filter(p => p.status === 'auto_updated').length || 0;
+        
+        if (hasErrors) {
+          const errorPeriods = result.processed_periods?.filter(p => p.status === 'error') || [];
+          console.error('Some periods had errors:', errorPeriods);
+          toast({
+            variant: "destructive",
+            title: "Một số kỳ gặp lỗi",
+            description: `${errorPeriods.length} kỳ không thể xử lý. Vui lòng thử lại.`
+          });
+        }
+        
+        // Show success message with auto-fill info
+        let description = 'Đã đánh dấu các kỳ là đã thanh toán';
+        const additionalInfo = [];
+        
+        if (alreadyPaidCount > 0) {
+          additionalInfo.push(`${alreadyPaidCount} kỳ đã được thanh toán trước đó`);
+        }
+        if (autoCreatedCount > 0) {
+          additionalInfo.push(`${autoCreatedCount} kỳ được tạo tự động`);
+        }
+        if (autoUpdatedCount > 0) {
+          additionalInfo.push(`${autoUpdatedCount} kỳ được cập nhật tự động`);
+          }
+        
+        if (additionalInfo.length > 0) {
+          description += ` (${additionalInfo.join(', ')})`;
+        }
+        
         toast({
           title: 'Thành công',
-          description: 'Đã đánh dấu các kỳ là đã thanh toán',
+          description,
         });
         
         // Trigger data change
         if (onDataChange) onDataChange();
+        
       } else {
-        // If unchecking, find all checked periods from this one to the newest
+        // Find all checked periods from this one to the newest for unmarking
         const periodsToUncheck = [];
         
         // Check if any later periods have been paid (validation)
@@ -409,19 +446,30 @@ export function PaymentTab({
           return;
         }
         
-        // Perform all actions for all selected periods
-        for (const p of periodsToUncheck) {
-          // Chỉ xóa kỳ nếu đã có trong database (có ID hợp lệ)
-          if (p.id && !p.id.startsWith('calculated-') && !p.id.startsWith('temp-')) {
-            await deletePaymentPeriod(p.id);
-          }
+        // Use the new API to unmark periods
+        const result = await markPaymentPeriods(credit.id, periodsToUncheck, 'unmark');
+        
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to unmark payment periods');
         }
         
-        // Notify success
+        // Check for validation errors
+        const cannotUnmarkCount = result.processed_periods?.filter(p => 
+          p.status === 'cannot_unmark_has_later_payments'
+        ).length || 0;
+        
+        if (cannotUnmarkCount > 0) {
+          toast({
+            variant: "destructive",
+            title: "Không thể bỏ đánh dấu",
+            description: `${cannotUnmarkCount} kỳ không thể bỏ đánh dấu vì có kỳ sau đã được thanh toán.`
+          });
+        } else {
         toast({
           title: 'Thành công',
           description: 'Đã đánh dấu các kỳ là chưa thanh toán',
         });
+        }
         
         // Trigger data change
         if (onDataChange) onDataChange();
@@ -430,7 +478,7 @@ export function PaymentTab({
       console.error('Error changing payment status:', error);
       toast({
         title: 'Lỗi',
-        description: 'Không thể thay đổi trạng thái thanh toán',
+        description: error instanceof Error ? error.message : 'Không thể thay đổi trạng thái thanh toán',
         variant: 'destructive'
       });
     } finally {

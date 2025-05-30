@@ -27,8 +27,6 @@ type PaymentTabProps = {
   principalChanges?: PrincipalChange[];
 };
 
-
-
 export function PaymentTab({
   pawn,
   paymentPeriods,
@@ -49,6 +47,7 @@ export function PaymentTab({
   const [localPrincipalChanges, setLocalPrincipalChanges] = useState<PrincipalChange[]>(principalChanges);
   // Add loading state for checkbox operations
   const [loadingPeriods, setLoadingPeriods] = useState<Record<string, boolean>>({});
+  const [isProcessingCheckbox, setIsProcessingCheckbox] = useState<boolean>(false);
 
   // Load principal changes if not provided
   useEffect(() => {
@@ -67,6 +66,9 @@ export function PaymentTab({
           console.error('Error loading principal changes:', error);
           return;
         }
+        
+        console.log('Loaded pawn principal changes:', data);
+        console.log('Pawn:', pawn);
         
         setLocalPrincipalChanges(data || []);
       } catch (err) {
@@ -96,7 +98,18 @@ export function PaymentTab({
       };
       
       // Debug logging
-      console.log('Calculating interest for period:', { startDate, endDate, pawn: creditLikeObject, principalChanges: localPrincipalChanges });
+      console.log('Calculating interest for period:', { 
+        startDate, 
+        endDate, 
+        loanAmount: pawn.loan_amount,
+        principalChanges: localPrincipalChanges 
+      });
+      console.log('Principal changes with dates:', localPrincipalChanges.map(c => ({
+        date: c.date,
+        previousAmount: c.previousAmount,
+        newAmount: c.newAmount,
+        isBeforePeriod: new Date(c.date) < start
+      })));
       
       let result = 0;
       
@@ -202,15 +215,18 @@ export function PaymentTab({
   
   // Handler for checkbox change
   const handleCheckboxChange = async (period: PawnPaymentPeriod, checked: boolean, index: number) => {
-    if (!pawn?.id) return;
+    if (!pawn?.id || isProcessingCheckbox) return; // Prevent concurrent operations
+    
+    // Set global loading state
+    setIsProcessingCheckbox(true);
     
     // Set loading state for this period
     const periodId = period.id || `temp-${period.period_number}`;
     setLoadingPeriods(prev => ({ ...prev, [periodId]: true }));
     
     try {
-      // Import necessary functions
-      const { savePawnPayment, updatePawnPaymentPeriod, deletePawnPaymentPeriod } = await import('@/lib/pawn-payment');
+      // Import the new API function
+      const { markPawnPaymentPeriods } = await import('@/lib/pawn-payment-api');
       
       if (checked) {
         // Find all unchecked periods from the oldest up to this one
@@ -219,8 +235,8 @@ export function PaymentTab({
         // Go through all periods up to the current one (inclusive)
         for (let i = 0; i <= index; i++) {
           const p = combinedPaymentPeriods[i];
-          // Only include periods that aren't already paid
-          if (p.actual_amount < p.expected_amount) {
+          // Only include periods that don't have any payment in DB yet
+          if (p.id.startsWith('calculated-') || p.id.startsWith('temp-') || p.id.startsWith('estimated-')) {
             periodsToCheck.push(p);
           }
         }
@@ -231,104 +247,141 @@ export function PaymentTab({
           return;
         }
         
-        // Perform all actions for all selected periods
-        for (const p of periodsToCheck) {
-          // Check if this is a calculated/estimated period
-          const isCalculatedPeriod = !p.id || p.id.startsWith('calculated-') || p.id.startsWith('estimated-') || p.id.startsWith('temp-');
-          
-          if (isCalculatedPeriod) {
-            // For calculated periods, use savePawnPayment to create new
-            await savePawnPayment(
-              pawn.id,
-              p,
-              p.expected_amount || 0,
-              true // isCalculatedPeriod = true
-            );
-          } else {
-            // For existing periods, use updatePawnPaymentPeriod to update
-            await updatePawnPaymentPeriod(p.id, {
-              actual_amount: p.expected_amount,
-              payment_date: new Date().toISOString(),
-              notes: "Đóng lãi qua checkbox"
-            });
-          }
+        // Use the new API to mark periods
+        const result = await markPawnPaymentPeriods(pawn.id, periodsToCheck, 'mark');
+        
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to mark pawn payment periods');
         }
         
-        // Notify success
+        // Check if any periods had issues
+        const hasErrors = result.processed_periods?.some(p => p.status === 'error');
+        const alreadyPaidCount = result.processed_periods?.filter(p => p.status === 'already_paid').length || 0;
+        const autoCreatedCount = result.processed_periods?.filter(p => p.status === 'auto_created').length || 0;
+        const autoUpdatedCount = result.processed_periods?.filter(p => p.status === 'auto_updated').length || 0;
+          
+        if (hasErrors) {
+          const errorPeriods = result.processed_periods?.filter(p => p.status === 'error') || [];
+          console.error('Some periods had errors:', errorPeriods);
+          toast({
+            variant: "destructive",
+            title: "Một số kỳ gặp lỗi",
+            description: `${errorPeriods.length} kỳ không thể xử lý. Vui lòng thử lại.`
+          });
+        }
+        
+        // Show success message with auto-fill info
+        let description = 'Đã đánh dấu các kỳ là đã thanh toán';
+        const additionalInfo = [];
+        
+        if (alreadyPaidCount > 0) {
+          additionalInfo.push(`${alreadyPaidCount} kỳ đã được thanh toán trước đó`);
+        }
+        if (autoCreatedCount > 0) {
+          additionalInfo.push(`${autoCreatedCount} kỳ được tạo tự động`);
+        }
+        if (autoUpdatedCount > 0) {
+          additionalInfo.push(`${autoUpdatedCount} kỳ được cập nhật tự động`);
+          }
+        
+        if (additionalInfo.length > 0) {
+          description += ` (${additionalInfo.join(', ')})`;
+        }
+        
         toast({
           title: 'Thành công',
-          description: 'Đã đánh dấu các kỳ là đã thanh toán',
+          description,
         });
         
         // Trigger data change
         if (onDataChange) onDataChange();
+        
       } else {
-        // Only allow unchecking the latest paid period
-        const p = combinedPaymentPeriods[index];
+        // Find all checked periods from this one to the newest for unmarking
+        const periodsToUncheck = [];
         
-        // Check if this period has a real UUID (exists in database)
-        const isRealPayment = p.id && 
-          !p.id.startsWith('calculated-') && 
-          !p.id.startsWith('estimated-') && 
-          !p.id.startsWith('temp-') &&
-          p.actual_amount >= p.expected_amount;
-        
-        if (!isRealPayment) {
+        // Check if any later periods have been paid (validation)
+        const laterPeriods = combinedPaymentPeriods.slice(index + 1);
+        const anyLaterPeriodPaid = laterPeriods.some(
+          (p: PawnPaymentPeriod) => p && p.id && !p.id.startsWith('calculated-') && !p.id.startsWith('temp-') && !p.id.startsWith('estimated-')
+        );
+
+        if (anyLaterPeriodPaid) {
+          toast({
+            variant: "destructive",
+            title: "Lỗi",
+            description: "Không thể bỏ đánh dấu kỳ này vì có kỳ sau đã được thanh toán.",
+          });
           setLoadingPeriods(prev => ({ ...prev, [periodId]: false }));
           return;
         }
         
-        // Find the latest paid period (highest index with actual payment)
-        let latestPaidIndex = -1;
-        for (let i = combinedPaymentPeriods.length - 1; i >= 0; i--) {
-          const period = combinedPaymentPeriods[i];
-          if (period.id && 
-              !period.id.startsWith('calculated-') && 
-              !period.id.startsWith('estimated-') && 
-              !period.id.startsWith('temp-') &&
-              period.actual_amount >= period.expected_amount) {
-            latestPaidIndex = i;
-            break;
+        // Go through all periods from the current one to the end
+        for (let i = combinedPaymentPeriods.length - 1; i >= index; i--) {
+          const p = combinedPaymentPeriods[i];
+          // Include all periods that are in DB
+          if (p.id && !p.id.startsWith('calculated-') && !p.id.startsWith('temp-') && !p.id.startsWith('estimated-')) {
+            periodsToUncheck.push(p);
           }
         }
         
-        // Check if current period is the latest paid period
-        if (index !== latestPaidIndex) {
+        // If no periods to uncheck, exit early
+        if (periodsToUncheck.length === 0) {
           setLoadingPeriods(prev => ({ ...prev, [periodId]: false }));
-          toast({
-            title: 'Không thể thực hiện',
-            description: 'Chỉ có thể xóa kỳ thanh toán mới nhất. Vui lòng xóa theo thứ tự từ kỳ mới nhất.',
-            variant: 'destructive'
-          });
           return;
         }
         
-        // Delete the payment period from database
-        await deletePawnPaymentPeriod(p.id);
+        // Use the new API to unmark periods
+        const result = await markPawnPaymentPeriods(pawn.id, periodsToUncheck, 'unmark');
         
-        // Notify success
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to unmark pawn payment periods');
+        }
+        
+        // Check for validation errors
+        const cannotUnmarkCount = result.processed_periods?.filter(p => 
+          p.status === 'cannot_unmark_has_later_payments'
+        ).length || 0;
+        
+        if (cannotUnmarkCount > 0) {
+          toast({
+            variant: "destructive",
+            title: "Không thể bỏ đánh dấu",
+            description: `${cannotUnmarkCount} kỳ không thể bỏ đánh dấu vì có kỳ sau đã được thanh toán.`
+          });
+        } else {
         toast({
           title: 'Thành công',
-          description: 'Đã xóa kỳ thanh toán',
+            description: 'Đã đánh dấu các kỳ là chưa thanh toán',
         });
+        }
         
         // Trigger data change
         if (onDataChange) onDataChange();
       }
     } catch (error) {
-      console.error('Error changing payment status:', error);
+      console.error('Error changing pawn payment status:', error);
       toast({
         title: 'Lỗi',
-        description: 'Không thể thay đổi trạng thái thanh toán',
+        description: error instanceof Error ? error.message : 'Không thể thay đổi trạng thái thanh toán',
         variant: 'destructive'
       });
     } finally {
       setLoadingPeriods(prev => ({ ...prev, [periodId]: false }));
+      setIsProcessingCheckbox(false);
     }
   };
 
   return (
     <div>
+      {/* Loading indicator when processing checkbox */}
+      {isProcessingCheckbox && (
+        <div className="flex items-center justify-center p-4 mb-4 bg-orange-50 border border-orange-200 rounded">
+          <div className="h-4 w-4 rounded-full border-2 border-t-transparent border-orange-600 animate-spin mr-2"></div>
+          <span className="text-orange-700">Đang xử lý thanh toán...</span>
+        </div>
+      )}
+      
       {/* Link mở form đóng lãi phí */}
       <div className="flex items-center mb-2 ml-1">
         <ChevronDown className="h-4 w-4 text-blue-600" />
@@ -531,7 +584,7 @@ export function PaymentTab({
                         <Checkbox 
                           checked={isPaid || isPartiallyPaid} 
                           onCheckedChange={(checked) => handleCheckboxChange(period, !!checked, index)}
-                          disabled={isDisabled}
+                          disabled={isDisabled || isProcessingCheckbox}
                         />
                       )}
                     </td>

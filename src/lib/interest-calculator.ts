@@ -256,10 +256,29 @@ export function calculateInterestWithPrincipalChanges(
     return calculateInterestForDateRange(credit, startDate, endDate);
   }
 
-  // Sort all changes by date (including those outside our period)
+  // Sort all changes by date
   const sortedChanges = [...principalChanges].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
   );
+
+  // Find the original loan amount from the first change (if exists)
+  let originalLoanAmount = credit.loan_amount;
+  if (sortedChanges.length > 0) {
+    originalLoanAmount = sortedChanges[0].previousAmount;
+  }
+
+  // Calculate what the loan amount should be at the start of this period
+  // Start with original amount and apply only changes that happened before this period
+  let initialLoanAmount = originalLoanAmount;
+  
+  const changesBeforeThisPeriod = sortedChanges.filter(change => 
+    new Date(change.date) < startDate
+  );
+  
+  // Apply each change chronologically to get the correct starting amount
+  for (const change of changesBeforeThisPeriod) {
+    initialLoanAmount = change.newAmount;
+  }
 
   // Filter changes that fall within the payment period
   const relevantChanges = sortedChanges.filter(change => {
@@ -270,37 +289,14 @@ export function calculateInterestWithPrincipalChanges(
     );
   });
 
-  // Find the original loan amount by working backwards through changes
-  // First, assume it's the current loan amount in the credit object
-  let originalLoanAmount = credit.loan_amount;
-  
-  // Find the very first change in the full history to determine the original amount
-  if (sortedChanges.length > 0) {
-    const firstEverChange = sortedChanges[0];
-    originalLoanAmount = firstEverChange.previousAmount;
-  }
-  
-  console.log(`[Interest Calc] Original loan amount from history: ${originalLoanAmount}`);
-  
-  // Now determine the correct starting amount for this specific period
-  let initialLoanAmount = originalLoanAmount;
-  
-  // If there are changes before the start date, use the latest previous change
-  const previousChanges = sortedChanges.filter(change => 
-    new Date(change.date) < startDate
-  );
-  
-  if (previousChanges.length > 0) {
-    // Use the loan amount after the latest previous change
-    const latestPreviousChange = previousChanges[previousChanges.length - 1];
-    initialLoanAmount = latestPreviousChange.newAmount;
-    console.log(`[Interest Calc] Using loan amount after previous change: ${initialLoanAmount}`);
-  }
+  // Debug changes before this period
+  console.log(`[Interest Calc] All changes:`, sortedChanges);
+  console.log(`[Interest Calc] Changes before period (${startDate.toISOString()}):`, changesBeforeThisPeriod);
+  console.log(`[Interest Calc] Changes during period:`, relevantChanges);
 
-  // If no relevant changes in this period, just use the starting amount for the entire period
+  // If no relevant changes in this period, use the starting amount for the entire period
   if (relevantChanges.length === 0) {
     console.log(`[Interest Calc] No changes in this period, using initial amount: ${initialLoanAmount}`);
-    // Create a credit object with the initial loan amount for this period
     const periodCredit = { ...credit, loan_amount: initialLoanAmount };
     return calculateInterestForDateRange(periodCredit, startDate, endDate);
   }
@@ -308,12 +304,12 @@ export function calculateInterestWithPrincipalChanges(
   // Calculate interest in segments
   let totalInterest = 0;
   let currentDate = new Date(startDate);
-  let currentPrincipal = initialLoanAmount; // Start with the correct initial loan amount
+  let currentPrincipal = initialLoanAmount;
 
   // For logging and debugging
   console.log(`[Interest Calc] Period: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+  console.log(`[Interest Calc] Original loan amount: ${originalLoanAmount}`);
   console.log(`[Interest Calc] Initial loan amount for this period: ${initialLoanAmount}`);
-  console.log(`[Interest Calc] Credit object loan amount: ${credit.loan_amount}`);
   console.log(`[Interest Calc] Relevant changes in period: ${relevantChanges.length}`);
 
   // Process each change chronologically
@@ -342,7 +338,7 @@ export function calculateInterestWithPrincipalChanges(
     
     // Update current values for next segment
     currentDate = changeDate;
-    currentPrincipal = change.newAmount; // Use the new amount from this change
+    currentPrincipal = change.newAmount;
     console.log(`[Interest Calc] Principal changed to: ${currentPrincipal} on ${changeDate.toISOString()}`);
   }
   

@@ -61,7 +61,7 @@ export function SearchFilters({
   const handleStatusChange = (value: string) => {
     setFilters(prev => ({
       ...prev,
-      status: value
+      status: value === 'all' ? '' : value
     }));
   };
 

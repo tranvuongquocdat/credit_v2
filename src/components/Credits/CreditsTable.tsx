@@ -587,9 +587,6 @@ export function CreditsTable({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-44">
-                        <DropdownMenuItem onClick={() => onView(credit.id)}>
-                          Xem chi tiết
-                        </DropdownMenuItem>
                         {onShowPaymentHistory && (
                           <DropdownMenuItem onClick={() => onShowPaymentHistory(credit)}>
                             Lịch sử thanh toán

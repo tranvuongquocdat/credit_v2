@@ -11,6 +11,7 @@ interface StoreContextType {
   setCurrentStore: (store: Store) => void;
   loading: boolean;
   error: Error | null;
+  refreshStores: () => Promise<void>;
 }
 
 // Create the context with default values
@@ -36,54 +37,70 @@ export const StoreProvider = ({ children }: StoreProviderProps) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
+  // Function to fetch stores
+  const fetchStores = async () => {
+    try {
+      console.log('🔄 Fetching stores...');
+      const { data, error } = await getAllActiveStores();
+      
+      if (error) {
+        console.error('❌ Error fetching stores:', error);
+        throw new Error(error.message);
+      }
+      
+      console.log('✅ Stores fetched successfully:', data?.length || 0, 'stores');
+      
+      if (data && data.length > 0) {
+        setStores(data);
+        
+        // Lấy store đã chọn từ localStorage nếu có
+        const savedStoreId = localStorage.getItem('currentStoreId');
+        console.log('💾 Saved store ID from localStorage:', savedStoreId);
+        
+        if (savedStoreId) {
+          const savedStore = data.find(store => store.id === savedStoreId);
+          if (savedStore) {
+            console.log('✅ Found saved store:', savedStore.name);
+            setCurrentStoreState(savedStore);
+          } else {
+            console.log('⚠️ Saved store not found, using first store');
+            // Nếu không tìm thấy store đã lưu, mặc định chọn store đầu tiên
+            setCurrentStoreState(data[0]);
+            localStorage.setItem('currentStoreId', data[0].id);
+          }
+        } else {
+          console.log('📝 No saved store, using first store');
+          // Nếu không có store nào được lưu, mặc định chọn store đầu tiên
+          setCurrentStoreState(data[0]);
+          localStorage.setItem('currentStoreId', data[0].id);
+        }
+      } else {
+        console.log('⚠️ No stores available');
+        setStores([]);
+        setCurrentStoreState(null);
+      }
+      
+      setError(null);
+    } catch (err) {
+      console.error('❌ Failed to fetch stores:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setError(err instanceof Error ? err : new Error('Unknown error occurred'));
+    }
+  };
+
   // Load stores and verify/initialize current store
   useEffect(() => {
     let isMounted = true;
     
-    const fetchStores = async () => {
-      try {
-        const { data, error } = await getAllActiveStores();
-        
-        // Check if component is still mounted before updating state
-        if (!isMounted) return;
-        
-        if (error) {
-          throw new Error(error.message);
-        }
-        
-        if (data && data.length > 0) {
-          setStores(data);
-          
-          // Lấy store đã chọn từ localStorage nếu có
-          const savedStoreId = localStorage.getItem('currentStoreId');
-          if (savedStoreId) {
-            const savedStore = data.find(store => store.id === savedStoreId);
-            if (savedStore) {
-              setCurrentStoreState(savedStore);
-            } else {
-              // Nếu không tìm thấy store đã lưu, mặc định chọn store đầu tiên
-              setCurrentStoreState(data[0]);
-              localStorage.setItem('currentStoreId', data[0].id);
-            }
-          } else {
-            // Nếu không có store nào được lưu, mặc định chọn store đầu tiên
-            setCurrentStoreState(data[0]);
-            localStorage.setItem('currentStoreId', data[0].id);
-          }
-        }
-      } catch (err) {
-        if (!isMounted) return;
-        
-        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-        setError(err instanceof Error ? err : new Error('Unknown error occurred'));
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+    const initializeStores = async () => {
+      setLoading(true);
+      await fetchStores();
+      if (isMounted) {
+        setLoading(false);
       }
     };
     
-    fetchStores();
+    initializeStores();
     
     // Cleanup function to prevent state updates after unmount
     return () => {
@@ -91,15 +108,24 @@ export const StoreProvider = ({ children }: StoreProviderProps) => {
     };
   }, []);
 
+  // Function to refresh stores (can be called manually)
+  const refreshStores = async () => {
+    setLoading(true);
+    await fetchStores();
+    setLoading(false);
+  };
+
   // Hàm để cập nhật currentStore
   const setCurrentStore = (store: Store) => {
+    console.log('🔄 Setting current store:', store.name);
+    
     // Lưu vào state (quan trọng để trigger re-render)
     setCurrentStoreState(store);
     
     // Lưu vào localStorage
     localStorage.setItem('currentStoreId', store.id);
     
-    console.log('Store context updated:', store);
+    console.log('✅ Store context updated:', store.name);
   };
 
   // Use useMemo to prevent unnecessary re-renders
@@ -108,7 +134,8 @@ export const StoreProvider = ({ children }: StoreProviderProps) => {
     stores,
     setCurrentStore,
     loading,
-    error
+    error,
+    refreshStores
   }), [currentStore, stores, loading, error]);
 
   return (

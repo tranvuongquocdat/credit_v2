@@ -800,44 +800,6 @@ export type Database = {
           },
         ]
       }
-      pawn_principal_repayments: {
-        Row: {
-          amount: number
-          created_at: string | null
-          id: string
-          notes: string | null
-          pawn_id: string
-          repayment_date: string
-          updated_at: string | null
-        }
-        Insert: {
-          amount: number
-          created_at?: string | null
-          id?: string
-          notes?: string | null
-          pawn_id: string
-          repayment_date: string
-          updated_at?: string | null
-        }
-        Update: {
-          amount?: number
-          created_at?: string | null
-          id?: string
-          notes?: string | null
-          pawn_id?: string
-          repayment_date?: string
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pawn_principal_repayments_pawn_id_fkey"
-            columns: ["pawn_id"]
-            isOneToOne: false
-            referencedRelation: "pawns"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       pawns: {
         Row: {
           collateral_detail: string | null
@@ -1139,6 +1101,14 @@ export type Database = {
         Args: { employee_id: string }
         Returns: Json
       }
+      handle_pawn_payment_marking: {
+        Args: { p_pawn_id: string; p_periods: Json; p_action: string }
+        Returns: Json
+      }
+      handle_payment_marking: {
+        Args: { p_credit_id: string; p_periods: Json; p_action: string }
+        Returns: Json
+      }
       recreate_payment_periods: {
         Args: { credit_id_param: string; periods_param: Json }
         Returns: Json
@@ -1162,6 +1132,7 @@ export type Database = {
         | "contract_reopen"
         | "cancel_additional_loan"
         | "cancel_principal_repayment"
+        | "contract_extension"
       installment_payment_status:
         | "pending"
         | "paid"
@@ -1176,6 +1147,12 @@ export type Database = {
         | "closed"
         | "deleted"
         | "finished"
+      installment_transaction_type:
+        | "payment"
+        | "payment_cancel"
+        | "contract_close"
+        | "contract_reopen"
+        | "initial_loan"
       interest_type: "percentage" | "fixed_amount"
       pawn_status:
         | "on_time"
@@ -1328,6 +1305,7 @@ export const Constants = {
         "contract_reopen",
         "cancel_additional_loan",
         "cancel_principal_repayment",
+        "contract_extension",
       ],
       installment_payment_status: [
         "pending",
@@ -1344,6 +1322,13 @@ export const Constants = {
         "closed",
         "deleted",
         "finished",
+      ],
+      installment_transaction_type: [
+        "payment",
+        "payment_cancel",
+        "contract_close",
+        "contract_reopen",
+        "initial_loan",
       ],
       interest_type: ["percentage", "fixed_amount"],
       pawn_status: [
