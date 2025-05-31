@@ -98,6 +98,7 @@ export async function getInstallments(
         status: item.status as InstallmentStatus,
         due_date: calculateDueDate(loanDate, loanPeriod),
         start_date: new Date(loanDate).toISOString().split('T')[0],
+        payment_due_date: item.payment_due_date || null,
         store_id: item.store_id || '',
         created_at: item.created_at || undefined,
         updated_at: item.updated_at || undefined,

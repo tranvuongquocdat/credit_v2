@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { 
@@ -12,7 +12,7 @@ import {
 import { CreditWithCustomer, InterestType, Credit } from '@/models/credit';
 import { CreditPaymentPeriod } from '@/models/credit-payment';
 import { getCreditPaymentPeriods, savePaymentWithOtherAmount } from '@/lib/credit-payment';
-import { getInterestDisplayString, calculateInterestAmount as calculateInterestForPeriod, calculateInterestWithPrincipalChanges, PrincipalChange } from '@/lib/interest-calculator';
+import { getInterestDisplayString, calculateInterestAmount as calculateInterestForPeriod, calculateInterestWithPrincipalChanges, PrincipalChange, calculateDailyRateForCredit } from '@/lib/interest-calculator';
 import { addPrincipalRepayment, updateCreditPrincipal } from '@/lib/principal-repayment';
 import { addAdditionalLoan, updateCreditWithAdditionalLoan } from '@/lib/additional-loan';
 import { addExtension, updateCreditEndDate } from '@/lib/extension';
@@ -201,11 +201,140 @@ export function PaymentHistoryModal({
   // Calculate total amounts with useMemo
   const totalAmount = useMemo(() => credit?.loan_amount || 0, [credit?.loan_amount]);
   
-  // Calculate total expected, paid, and remaining amounts from payment periods with useMemo
-  const totalExpected = useMemo(() => 
-    paymentPeriods.reduce((sum, period) => sum + (period.expected_amount || 0), 0),
-    [paymentPeriods]
-  );
+  // Calculate interest for a specific period (similar to PaymentTab logic)
+  const calculateInterestForPeriod = useCallback((startDate: string, endDate: string): number => {
+    if (!credit) return 0;
+    
+    try {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      // If no principal changes, use simple calculation
+      if (!principalChanges || principalChanges.length === 0) {
+        const days = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        const dailyRate = calculateDailyRateForCredit(credit);
+        return Math.round(credit.loan_amount * dailyRate * days);
+      }
+      
+      // Filter relevant principal changes (those that occur before or during this period)
+      const relevantChanges = principalChanges.filter(change => {
+        const changeDate = new Date(change.date);
+        return changeDate >= start;
+      });
+      
+      // Sort changes by date
+      relevantChanges.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      
+      // Use calculateInterestWithPrincipalChanges with relevant changes
+      return calculateInterestWithPrincipalChanges(
+        credit,
+        start,
+        end,
+        relevantChanges
+      );
+    } catch (err) {
+      console.error('Error calculating interest for period:', err);
+      return 0;
+    }
+  }, [credit, principalChanges]);
+  
+  // Calculate displayed periods (similar to PaymentTab logic)
+  const calculatedDisplayedPeriods = useMemo(() => {
+    if (!credit) return paymentPeriods;
+    
+    // If no principal changes, just return existing payment periods
+    if (!principalChanges || principalChanges.length === 0) {
+      return paymentPeriods;
+    }
+    
+    // Start with existing periods from database
+    const existingPeriods = paymentPeriods || [];
+    
+    // Find the start date for next period calculation
+    let nextStartDate: Date;
+    let nextPeriodNumber = 1;
+    
+    if (existingPeriods.length > 0) {
+      // Start from day after last period
+      const lastPeriod = existingPeriods.sort((a, b) => a.period_number - b.period_number)[existingPeriods.length - 1];
+      nextStartDate = new Date(lastPeriod.end_date);
+      nextStartDate.setDate(nextStartDate.getDate() + 1);
+      nextPeriodNumber = lastPeriod.period_number + 1;
+    } else {
+      // No existing periods, start from loan date
+      nextStartDate = new Date(credit.loan_date);
+    }
+    
+    // Calculate loan end date
+    const loanEndDate = new Date(credit.loan_date);
+    loanEndDate.setDate(loanEndDate.getDate() + credit.loan_period - 1);
+    
+    // Generate additional periods if needed
+    const newPeriods: CreditPaymentPeriod[] = [...existingPeriods];
+    const interestPeriod = credit.interest_period || 30;
+    
+    while (nextStartDate <= loanEndDate && newPeriods.length < 100) {
+      const periodEndDate = new Date(nextStartDate);
+      periodEndDate.setDate(nextStartDate.getDate() + interestPeriod - 1);
+      
+      // Don't exceed loan end date
+      if (periodEndDate > loanEndDate) {
+        periodEndDate.setTime(loanEndDate.getTime());
+      }
+      
+      // Calculate expected amount using the dedicated function
+      const expectedAmount = calculateInterestForPeriod(
+        nextStartDate.toISOString(),
+        periodEndDate.toISOString()
+      );
+      
+      const newPeriod: CreditPaymentPeriod = {
+        id: `calculated-${nextPeriodNumber}`,
+        credit_id: credit.id,
+        period_number: nextPeriodNumber,
+        start_date: nextStartDate.toISOString(),
+        end_date: periodEndDate.toISOString(),
+        expected_amount: expectedAmount,
+        actual_amount: 0,
+        payment_date: null,
+        notes: null,
+        other_amount: 0,
+        is_temporary: false
+      };
+      
+      newPeriods.push(newPeriod);
+      nextPeriodNumber++;
+      
+      // Move to next period
+      nextStartDate = new Date(periodEndDate);
+      nextStartDate.setDate(nextStartDate.getDate() + 1);
+      
+      // Stop if next start date exceeds loan end date
+      if (nextStartDate > loanEndDate) break;
+    }
+    
+    // Sort by period number
+    newPeriods.sort((a, b) => a.period_number - b.period_number);
+    return newPeriods;
+  }, [credit, paymentPeriods, principalChanges, calculateInterestForPeriod]);
+  
+  // Calculate total expected interest from displayed periods
+  const totalExpected = useMemo(() => {
+    const total = calculatedDisplayedPeriods.reduce((sum, period) => sum + (period.expected_amount || 0), 0);
+    
+    // Debug logging
+    console.log('=== DEBUG TOTAL EXPECTED ===');
+    console.log('Calculated displayed periods:', calculatedDisplayedPeriods.length);
+    console.log('Periods details:', calculatedDisplayedPeriods.map(p => ({
+      period: p.period_number,
+      expected: p.expected_amount,
+      id: p.id
+    })));
+    console.log('Total expected:', total);
+    console.log('===========================');
+    
+    return total;
+  }, [calculatedDisplayedPeriods]);
 
   const totalPaid = useMemo(() => 
     paymentPeriods.reduce((sum, period) => sum + (period.actual_amount || 0), 0),

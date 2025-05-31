@@ -109,14 +109,41 @@ export function PaymentTab({
       // Debug principal changes
       console.log('----DEBUG CALCULATE INTEREST----');
       console.log('Period:', startDate, 'to', endDate);
-      console.log('Principal changes:', localPrincipalChanges);
-      console.log('Filtered changes:', localPrincipalChanges.filter(change => new Date(change.date) < start));
+      console.log('All principal changes:', localPrincipalChanges);
       
+      // Lọc tất cả thay đổi gốc có liên quan đến kỳ này
+      // Bao gồm:
+      // - Tất cả thay đổi gốc xảy ra trước kỳ này và trong kỳ này
+      // - Không bao gồm những thay đổi xảy ra sau kỳ này
+      const relevantChanges = localPrincipalChanges.filter(change => {
+        const changeDate = new Date(change.date);
+        // Chỉ bao gồm các thay đổi xảy ra trước hoặc trong kỳ này
+        return changeDate >= start;
+      });
+      
+      // Sắp xếp các thay đổi theo thứ tự thời gian
+      relevantChanges.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      
+      // Log để debug
+      console.log('Relevant changes for calculation:', relevantChanges);
+      
+      // Kiểm tra xem có thay đổi nào trong kỳ không
+      const changesWithinPeriod = relevantChanges.filter(change => {
+        const changeDate = new Date(change.date);
+        return changeDate >= start && changeDate <= end;
+      });
+      
+      console.log('Changes within this period:', changesWithinPeriod.length);
+      if (changesWithinPeriod.length > 0) {
+        console.log('Detailed changes within period:', changesWithinPeriod);
+      }
+      
+      // Gọi hàm tính lãi với tất cả thay đổi gốc có liên quan
       return calculateInterestWithPrincipalChanges(
         credit,
         start,
         end,
-        localPrincipalChanges
+        relevantChanges
       );
     } catch (err) {
       console.error('Error calculating interest with principal changes:', err);
@@ -128,19 +155,22 @@ export function PaymentTab({
   const recalculatePeriodsWithHistory = async () => {
     if (!credit?.id) return;
 
-    console.log('🔄 Starting simplified calculation with:', {
+    console.log('🔄 Starting calculation with:', {
       creditId: credit.id,
       currentLoanAmount: credit.loan_amount,
       paymentPeriodsCount: paymentPeriods.length,
-      calculationNumber: calculationCount + 1
+      calculationNumber: calculationCount + 1,
+      principalChangesCount: localPrincipalChanges.length
     });
     
     // Debug principal changes
     console.log('DEBUG: Principal changes for recalculation:', localPrincipalChanges);
     if (localPrincipalChanges.length > 0) {
-      const changeDate = new Date(localPrincipalChanges[0].date);
-      console.log('DEBUG: First principal change date:', changeDate.toISOString());
-      console.log('DEBUG: First principal change is for kỳ 8?:', changeDate.getDate() === 18 && changeDate.getMonth() === 5); // 18/06 (month 5 = June)
+      console.log('DEBUG: First principal change date:', new Date(localPrincipalChanges[0].date).toISOString());
+      console.log('DEBUG: Last principal change date:', new Date(localPrincipalChanges[localPrincipalChanges.length - 1].date).toISOString());
+      
+      // Sắp xếp theo thứ tự thời gian
+      localPrincipalChanges.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }
 
     setCalculationCount(prev => prev + 1);
@@ -173,6 +203,22 @@ export function PaymentTab({
       const newPeriods: CreditPaymentPeriod[] = [...existingPeriods];
       const interestPeriod = credit.interest_period || 30;
 
+      // Log một số thông tin hữu ích
+      console.log('Next period starts from:', nextStartDate.toISOString());
+      console.log('Loan ends on:', loanEndDate.toISOString());
+      console.log('Interest period length:', interestPeriod, 'days');
+      
+      // Tìm tất cả các thay đổi gốc xảy ra trong khoảng thời gian còn lại của khoản vay
+      const futureChanges = localPrincipalChanges.filter(change => {
+        const changeDate = new Date(change.date);
+        return changeDate >= nextStartDate && changeDate <= loanEndDate;
+      });
+      
+      console.log('Future principal changes that will affect remaining periods:', futureChanges.length);
+      if (futureChanges.length > 0) {
+        console.log('Future changes details:', futureChanges);
+      }
+
       while (nextStartDate <= loanEndDate && newPeriods.length < 100) {
         const periodEndDate = new Date(nextStartDate);
         periodEndDate.setDate(nextStartDate.getDate() + interestPeriod - 1);
@@ -185,13 +231,20 @@ export function PaymentTab({
         // Calculate days in this period
         const daysInPeriod = Math.floor((periodEndDate.getTime() - nextStartDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
         
-        // Calculate interest using calculateInterestForPeriod to account for principal changes
+        // Kiểm tra xem kỳ này có thay đổi gốc hay không
+        const changesInThisPeriod = localPrincipalChanges.filter(change => {
+          const changeDate = new Date(change.date);
+          return changeDate >= nextStartDate && changeDate <= periodEndDate;
+        });
+        
+        // Tính lãi sử dụng hàm calculateInterestForPeriod để tính đúng với các thay đổi gốc
+        // Chuyển đổi Date thành ISO string trước khi gửi vào hàm
         const expectedAmount = calculateInterestForPeriod(
           nextStartDate.toISOString(),
           periodEndDate.toISOString()
         );
         
-        console.log(`Period ${nextPeriodNumber}: ${nextStartDate.toISOString()} to ${periodEndDate.toISOString()}, Expected: ${expectedAmount}`);
+        console.log(`Period ${nextPeriodNumber}: ${nextStartDate.toISOString()} to ${periodEndDate.toISOString()}, Expected: ${expectedAmount}, Days: ${daysInPeriod}, Changes in period: ${changesInThisPeriod.length}`);
 
         const newPeriod: CreditPaymentPeriod = {
           id: `calculated-${nextPeriodNumber}`,
@@ -222,14 +275,15 @@ export function PaymentTab({
       newPeriods.sort((a, b) => a.period_number - b.period_number);
       setRecalculatedPeriods(newPeriods);
 
-      console.log('✅ Simplified calculation completed:', {
+      console.log('✅ Calculation completed:', {
         totalPeriods: newPeriods.length,
         existingPeriods: existingPeriods.length,
-        newGeneratedPeriods: newPeriods.length - existingPeriods.length
+        newGeneratedPeriods: newPeriods.length - existingPeriods.length,
+        principalChangesApplied: localPrincipalChanges.length
       });
 
     } catch (error) {
-      console.error('Error in simplified calculation:', error);
+      console.error('Error in calculation:', error);
       toast({
         variant: "destructive",
         title: "Lỗi",
@@ -263,10 +317,36 @@ export function PaymentTab({
 
   // Use recalculated periods if available, otherwise use original combined periods
   const periodsToDisplay = recalculatedPeriods.length > 0 ? recalculatedPeriods : combinedPaymentPeriods;
-  console.log(recalculatedPeriods)
-  // Start editing a payment
+  
+  // Prepare tooltip info for each period that has principal changes within it
+  const periodPrincipalChanges = useMemo(() => {
+    const result: Record<number, { hasChanges: boolean, changes: PrincipalChange[] }> = {};
+    
+    if (!localPrincipalChanges || localPrincipalChanges.length === 0) {
+      return result;
+    }
+    
+    // For each period, check if there are any principal changes within it
+    periodsToDisplay.forEach(period => {
+      const periodStart = new Date(period.start_date);
+      const periodEnd = new Date(period.end_date);
+      
+      // Find changes within this period
+      const changesInPeriod = localPrincipalChanges.filter(change => {
+        const changeDate = new Date(change.date);
+        return changeDate >= periodStart && changeDate <= periodEnd;
+      });
+      
+      result[period.period_number] = {
+        hasChanges: changesInPeriod.length > 0,
+        changes: changesInPeriod
+      };
+    });
+    
+    return result;
+  }, [periodsToDisplay, localPrincipalChanges]);
+
   const startEditing = (period: CreditPaymentPeriod) => {
-    // Don't edit periods that are already in DB or when processing checkbox
     if ((period.id && !period.id.startsWith('calculated-') && !period.id.startsWith('temp-')) || isProcessingCheckbox) return;
     
     // Only allow editing the earliest unpaid period
@@ -663,7 +743,9 @@ export function PaymentTab({
                       calculateDaysBetween(new Date(period.start_date), new Date(period.end_date)) : 0
                     }
                   </td>
-                  <td className="px-2 py-2 text-right border">{formatCurrency(expected)}</td>
+                  <td className="px-2 py-2 text-right border">
+                    {formatCurrency(expected)}
+                  </td>
                   <td className="px-2 py-2 text-right border">{formatCurrency(other)}</td>
                   <td className="px-2 py-2 text-right border">{formatCurrency(total)}</td>
                   <td className="px-2 py-2 text-right border">

@@ -148,7 +148,7 @@ export function AdditionalLoanList({
                     {formatDate(loan.created_at || '')}
                   </td>
                   <td className="px-2 py-2 text-left border">
-                    {loan.note || 'Vay thêm gốc'}
+                    {loan.note}
                   </td>
                   <td className="px-2 py-2 text-right border font-medium">
                     {formatCurrency(loan.amount)}

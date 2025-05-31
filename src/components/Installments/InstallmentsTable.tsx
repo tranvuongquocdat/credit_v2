@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Edit2Icon, MoreVerticalIcon, TrashIcon, AlertTriangleIcon, CalendarIcon, ClockIcon, FileTextIcon, DollarSignIcon, UnlockIcon, CalendarDaysIcon } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import Spinner from "@/components/ui/spinner";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
 import { getInstallmentPaymentPeriods, updateInstallmentStatus } from "@/lib/installmentPayment";
 import { updateInstallmentPaymentDueDate } from "@/lib/installment";
@@ -39,6 +39,7 @@ import {
   calculateRatio,
   calculateRemainingToPay
 } from "@/lib/installmentCalculations";
+import { supabase } from "@/lib/supabase";
 
 // Định nghĩa cấu trúc dữ liệu mở rộng bao gồm thông tin kỳ thanh toán
 interface InstallmentWithPayments extends InstallmentWithCustomer {
@@ -49,6 +50,8 @@ interface InstallmentWithPayments extends InstallmentWithCustomer {
   overdueDays?: number;  // Number of days overdue for display
   isDueToday?: boolean;  // Flag for payments due today
   nextPaymentDate?: string; // Next payment date
+  payment_due_date?: string | null;  // Payment due date from DB
+  statusInfo?: { label: string; color: string }; // Status info for display
 }
 
 interface InstallmentsTableProps {
@@ -89,208 +92,156 @@ export function InstallmentsTable({
   
   // Toast for notifications
   const { toast } = useToast();
-  
-  // Nạp dữ liệu thanh toán khi installments thay đổi
-  useEffect(() => {
-    async function loadPaymentData() {
-      if (!installments.length) return;
+
+  // Extract loadPaymentData to a separate function so it can be called from other places
+  const loadPaymentData = useCallback(async () => {
+    if (!installments.length) return;
+    
+    setLoadingPayments(true);
+    
+    try {
+      // Tạo bản sao dữ liệu ban đầu
+      const enhancedInstallments: InstallmentWithPayments[] = [...installments];
+      // Filter installments by store_id if currentStore is available
+      const filteredInstallments = currentStore ? 
+        enhancedInstallments.filter(installment => installment.store_id === currentStore.id) : 
+        enhancedInstallments;
       
-      setLoadingPayments(true);
-      
-      try {
-        // Tạo bản sao dữ liệu ban đầu
-        const enhancedInstallments: InstallmentWithPayments[] = [...installments];
-        // Filter installments by store_id if currentStore is available
-        const filteredInstallments = currentStore ? 
-          enhancedInstallments.filter(installment => installment.store_id === currentStore.id) : 
-          enhancedInstallments;
+      // Nạp dữ liệu thanh toán cho từng hợp đồng
+      for (let i = 0; i < filteredInstallments.length; i++) {
+        const installment = filteredInstallments[i];
         
-        // Nạp dữ liệu thanh toán cho từng hợp đồng
-        for (let i = 0; i < filteredInstallments.length; i++) {
-          const installment = filteredInstallments[i];
+        // Fetch fresh installment data from database to get latest payment_due_date
+        const { data: freshInstallmentData } = await supabase
+          .from('installments')
+          .select('payment_due_date')
+          .eq('id', installment.id)
+          .single();
+        
+        // Update the installment with fresh payment_due_date if available
+        if (freshInstallmentData) {
+          installment.payment_due_date = freshInstallmentData.payment_due_date;
+        }
+        
+        // Lấy dữ liệu kỳ thanh toán từ API
+        const { data, error } = await getInstallmentPaymentPeriods(installment.id);
+        
+        if (error) {
+          console.error(`Error loading payment data for installment ${installment.id}:`, error);
+          continue;
+        }
+        
+        // Lưu dữ liệu kỳ thanh toán
+        installment.payments = data || [];
+        
+        // Tính tổng tiền đã đóng (tổng của actual_amount)
+        installment.totalPaid = installment.payments.reduce(
+          (sum, period) => sum + (period.actualAmount || 0), 
+          0
+        );
+        
+        // Tính còn phải đóng sử dụng utility function
+        installment.remainingToPay = calculateRemainingToPay(installment, installment.totalPaid || 0);
+        if (installment.oldDebt && installment.oldDebt < 0) {
+          // If there's negative oldDebt (customer owes more), add the absolute value
+          installment.remainingToPay += Math.abs(installment.oldDebt);
+        }
+        
+        // Xử lý ngày đóng tiền tiếp theo dựa trên payment_due_date
+        if (installment.payment_due_date) {
+          // Có payment_due_date => chưa hoàn thành
+          const dueDateObj = new Date(installment.payment_due_date);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
           
-          // Lấy dữ liệu kỳ thanh toán từ API
-          const { data, error } = await getInstallmentPaymentPeriods(installment.id);
+          // So sánh ngày chuẩn xác
+          const isSameDay = (date1: Date, date2: Date) => {
+            return date1.getDate() === date2.getDate() &&
+                   date1.getMonth() === date2.getMonth() &&
+                   date1.getFullYear() === date2.getFullYear();
+          };
           
-          if (error) {
-            console.error(`Error loading payment data for installment ${installment.id}:`, error);
-            continue;
-          }
+          // Format ngày
+          const day = dueDateObj.getDate().toString().padStart(2, '0');
+          const month = (dueDateObj.getMonth() + 1).toString().padStart(2, '0');
+          const year = dueDateObj.getFullYear();
+          installment.nextPaymentDate = `${day}/${month}/${year}`;
           
-          // Lưu dữ liệu kỳ thanh toán
-          installment.payments = data || [];
-          
-          // Tính tổng tiền đã đóng (tổng của actual_amount)
-          installment.totalPaid = installment.payments.reduce(
-            (sum, period) => sum + (period.actualAmount || 0), 
-            0
-          );
-          
-          // Tính còn phải đóng sử dụng utility function
-          installment.remainingToPay = calculateRemainingToPay(installment, installment.totalPaid || 0);
-          if (installment.oldDebt && installment.oldDebt < 0) {
-            // If there's negative oldDebt (customer owes more), add the absolute value
-            installment.remainingToPay += Math.abs(installment.oldDebt);
-          }
-          console.log('installment.payments', installment.payments);
-          // Find next payment date based on payment periods
-          if (installment.payments && installment.payments.length > 0) {
-            console.log('Calculating next payment date for installment:', installment.id);
+          // Kiểm tra hôm nay/ngày mai
+          if (isSameDay(today, dueDateObj)) {
+            installment.isDueToday = true;
+            installment.nextPaymentDate = "Hôm nay";
+          } else {
+            const tomorrow = new Date(today);
+            tomorrow.setDate(today.getDate() + 1);
             
-            // Lấy kỳ mới nhất từ DB (có period_number lớn nhất)
-            const latestPeriod = [...installment.payments]
-              .sort((a, b) => b.periodNumber - a.periodNumber)[0];
-            
-            // Tính ngày kết thúc hợp đồng
-            const startDate = new Date(installment.start_date);
-            const contractEndDate = new Date(startDate);
-            contractEndDate.setDate(startDate.getDate() + installment.duration - 1);
-            
-            // Parse payment_end_date từ kỳ mới nhất
-            let latestPeriodEndDate: Date;
-            if (latestPeriod.endDate && latestPeriod.endDate.includes('/')) {
-              // Format: DD/MM/YYYY
-              const [day, month, year] = latestPeriod.endDate.split('/').map(Number);
-              latestPeriodEndDate = new Date(year, month - 1, day);
-            } else if (latestPeriod.dueDate && latestPeriod.dueDate.includes('/')) {
-              // Fallback to dueDate if endDate is not available
-              const [day, month, year] = latestPeriod.dueDate.split('/').map(Number);
-              latestPeriodEndDate = new Date(year, month - 1, day);
-            } else {
-              // Fallback to dueDate as ISO string
-              latestPeriodEndDate = new Date(latestPeriod.dueDate);
+            if (isSameDay(tomorrow, dueDateObj)) {
+              installment.nextPaymentDate = "Ngày mai";
             }
-            
-            // Kiểm tra nếu payment_end_date bằng ngày kết thúc hợp đồng
-            if (
-              latestPeriodEndDate.getDate() === contractEndDate.getDate() &&
-              latestPeriodEndDate.getMonth() === contractEndDate.getMonth() &&
-              latestPeriodEndDate.getFullYear() === contractEndDate.getFullYear()
-            ) {
-              // Đã đến kỳ cuối cùng của hợp đồng
-              installment.nextPaymentDate = "Hoàn thành";
-            } else if (latestPeriodEndDate < contractEndDate) {
-              // Tính ngày ngay sau payment_end_date + payment_period
-              const nextStartDate = new Date(latestPeriodEndDate);
-              nextStartDate.setDate(nextStartDate.getDate() + 1);
-              
-              const paymentPeriod = installment.payment_period || 10;
-              let nextEndDate = new Date(nextStartDate);
-              nextEndDate.setDate(nextStartDate.getDate() + paymentPeriod - 1);
-              
-              // Kiểm tra nếu vượt quá ngày kết thúc hợp đồng
-              if (nextEndDate > contractEndDate) {
-                nextEndDate = new Date(contractEndDate);
-              }
-              
-              // Format the end date as DD/MM/YYYY
-              const day = nextEndDate.getDate().toString().padStart(2, '0');
-              const month = (nextEndDate.getMonth() + 1).toString().padStart(2, '0');
-              const year = nextEndDate.getFullYear();
-              installment.nextPaymentDate = `${day}/${month}/${year}`;
-              
-              // Check if it's due today
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-              
-              // So sánh ngày chuẩn xác hơn
-              const isSameDay = (date1: Date, date2: Date) => {
-                return date1.getDate() === date2.getDate() &&
-                       date1.getMonth() === date2.getMonth() &&
-                       date1.getFullYear() === date2.getFullYear();
-              };
-              
-              if (isSameDay(today, nextEndDate)) {
-                installment.isDueToday = true;
-                // Đánh dấu là ngày hôm nay để hiển thị "Hôm nay" thay vì ngày tháng
-                installment.nextPaymentDate = "Hôm nay";
-              } else {
-                // Đảm bảo không đánh dấu là hôm nay khi không phải
-                installment.isDueToday = false;
-              }
+          }
+          
+          // Kiểm tra quá hạn
+          if (today > dueDateObj) {
+            installment.overdueDays = Math.floor((today.getTime() - dueDateObj.getTime()) / (1000 * 60 * 60 * 24));
+          }
+          
+          // Cập nhật trạng thái dựa trên payment_due_date
+          if (installment.status !== InstallmentStatus.CLOSED && 
+              installment.status !== InstallmentStatus.DELETED && 
+              installment.status !== InstallmentStatus.FINISHED) {
+            if (today > dueDateObj) {
+              // Nếu ngày hiện tại > ngày đóng tiền => Quá hạn
+              installment.status = InstallmentStatus.OVERDUE;
+            } else if (isSameDay(today, dueDateObj)) {
+              // Nếu là ngày hôm nay => Đến hạn hôm nay
+              installment.status = InstallmentStatus.ON_TIME;
+              installment.isDueToday = true;
+            } else {
+              // Các trường hợp khác => Đúng hạn
+              installment.status = InstallmentStatus.ON_TIME;
               
               // Kiểm tra ngày mai
               const tomorrow = new Date(today);
               tomorrow.setDate(today.getDate() + 1);
               
-              if (!installment.isDueToday && isSameDay(tomorrow, nextEndDate)) {
-                installment.nextPaymentDate = "Ngày mai";
+              if (isSameDay(tomorrow, dueDateObj)) {
+                installment.status = InstallmentStatus.DUE_TOMORROW;
               }
-              
-              // Check if period is overdue
-              if (today > nextEndDate) {
-                installment.overdueDays = Math.floor((today.getTime() - nextEndDate.getTime()) / (1000 * 60 * 60 * 24));
-              }
-            } else {
-              // Nếu payment_end_date > contract_end_date (trường hợp dữ liệu bất thường)
-              // Trả về ngày kết thúc hợp đồng
-              const day = contractEndDate.getDate().toString().padStart(2, '0');
-              const month = (contractEndDate.getMonth() + 1).toString().padStart(2, '0');
-              const year = contractEndDate.getFullYear();
-              installment.nextPaymentDate = `${day}/${month}/${year}`;
-            }
-          } else {
-            // If no payment periods, use the first period end date
-            console.log('No payment periods found, calculating first period end date');
-            
-            // Calculate the first period end date
-            const startDate = new Date(installment.start_date);
-            const paymentPeriod = installment.payment_period || 10;
-            
-            const firstPeriodEndDate = new Date(startDate);
-            firstPeriodEndDate.setDate(startDate.getDate() + paymentPeriod - 1);
-            
-            // Format the end date as DD/MM/YYYY
-            const day = firstPeriodEndDate.getDate().toString().padStart(2, '0');
-            const month = (firstPeriodEndDate.getMonth() + 1).toString().padStart(2, '0');
-            const year = firstPeriodEndDate.getFullYear();
-            installment.nextPaymentDate = `${day}/${month}/${year}`;
-            
-            // Check if it's due today
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            
-            // So sánh ngày chuẩn xác hơn
-            const isSameDay = (date1: Date, date2: Date) => {
-              return date1.getDate() === date2.getDate() &&
-                     date1.getMonth() === date2.getMonth() &&
-                     date1.getFullYear() === date2.getFullYear();
-            };
-            
-            if (isSameDay(today, firstPeriodEndDate)) {
-              installment.isDueToday = true;
-              // Đánh dấu là ngày hôm nay để hiển thị "Hôm nay" thay vì ngày tháng
-              installment.nextPaymentDate = "Hôm nay";
-            } else {
-              // Đảm bảo không đánh dấu là hôm nay khi không phải
-              installment.isDueToday = false;
-            }
-            
-            // Kiểm tra ngày mai
-            const tomorrow = new Date(today);
-            tomorrow.setDate(today.getDate() + 1);
-            
-            if (!installment.isDueToday && isSameDay(tomorrow, firstPeriodEndDate)) {
-              installment.nextPaymentDate = "Ngày mai";
-            }
-            
-            // Check if period is overdue
-            if (today > firstPeriodEndDate) {
-              installment.overdueDays = Math.floor((today.getTime() - firstPeriodEndDate.getTime()) / (1000 * 60 * 60 * 24));
             }
           }
+        } else {
+          // Không có payment_due_date => đã hoàn thành
+          installment.nextPaymentDate = "Hoàn thành";
+          
+          // Cập nhật trạng thái nếu chưa phải CLOSED hoặc DELETED
+          if (installment.status !== InstallmentStatus.CLOSED && 
+              installment.status !== InstallmentStatus.DELETED) {
+            installment.status = InstallmentStatus.FINISHED;
+          }
         }
-        
-        setInstallmentsWithPayments(filteredInstallments);
-      } catch (err) {
-        console.error("Error loading payment data:", err);
-      } finally {
-        setLoadingPayments(false);
       }
+      
+      // Cập nhật statusInfo sau khi cập nhật status
+      for (const installment of filteredInstallments) {
+        const statusInfo = statusMap[installment.status] || {
+          label: "Không xác định",
+          color: "bg-gray-100 text-gray-800",
+        };
+        installment.statusInfo = statusInfo;
+      }
+      
+      setInstallmentsWithPayments(filteredInstallments);
+    } catch (err) {
+      console.error("Error loading payment data:", err);
+    } finally {
+      setLoadingPayments(false);
     }
-    
+  }, [installments, currentStore, statusMap]);
+
+  // Nạp dữ liệu thanh toán khi installments thay đổi
+  useEffect(() => {
     loadPaymentData();
-  }, [installments, currentStore]);
+  }, [loadPaymentData]);
 
   // Show confirmation dialog before unlocking
   const confirmUnlockInstallment = (installment: InstallmentWithPayments) => {
@@ -347,46 +298,14 @@ export function InstallmentsTable({
         throw error;
       }
       
-      // Check if the selected date is today or tomorrow
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      
-      // Determine what text to display
-      let displayText;
-      if (date.getDate() === today.getDate() && 
-          date.getMonth() === today.getMonth() && 
-          date.getFullYear() === today.getFullYear()) {
-        displayText = "Hôm nay";
-      } else if (date.getDate() === tomorrow.getDate() && 
-                date.getMonth() === tomorrow.getMonth() && 
-                date.getFullYear() === tomorrow.getFullYear()) {
-        displayText = "Ngày mai";
-      } else {
-        displayText = format(date, 'dd/MM/yyyy');
-      }
-      
-      // Update local state
-      const updatedInstallments = installmentsWithPayments.map(item => {
-        if (item.id === installmentId) {
-          return {
-            ...item,
-            payment_due_date: formattedDate,
-            nextPaymentDate: displayText
-          };
-        }
-        return item;
-      });
-      
-      setInstallmentsWithPayments(updatedInstallments);
-      
       // Show success toast
       toast({
         title: "Thành công",
         description: "Đã cập nhật ngày đóng tiền",
       });
+      
+      // Reload data to get updated payment periods and status with fresh payment_due_date
+      await loadPaymentData();
     } catch (error) {
       console.error('Error updating payment due date:', error);
       toast({
@@ -440,112 +359,10 @@ export function InstallmentsTable({
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
           {installmentsWithPayments.map((installment, index) => {
-            const statusInfo = statusMap[installment.status] || {
+            const statusInfo = installment.statusInfo || {
               label: "Không xác định",
               color: "bg-gray-100 text-gray-800",
             };
-
-            // Auto-determine status based on payment data
-            if (installment.payments && installment.payments.length > 0) {
-              // Calculate if all expected payments have been made
-              const allPaid = installment.payments.every(payment => payment.actualAmount && payment.actualAmount >= payment.expectedAmount);
-              
-              // Check if there are any overdue payments (past due date without full payment)
-              const today = new Date();
-              const hasOverduePayments = installment.payments.some(payment => {
-                const dueDate = new Date(payment.dueDate);
-                return dueDate < today && (!payment.actualAmount || payment.actualAmount < payment.expectedAmount);
-              });
-              
-              // Tomorrow's date
-              const tomorrow = new Date();
-              tomorrow.setDate(tomorrow.getDate() + 1);
-              const tomorrowString = tomorrow.toISOString().split('T')[0];
-              
-              // Check if any payment is due tomorrow
-              const dueTomorrow = installment.payments.some(payment => 
-                payment.dueDate.startsWith(tomorrowString) && 
-                (!payment.actualAmount || payment.actualAmount < payment.expectedAmount)
-              );
-
-              // Check if today has any payments due
-              const todayString = today.toISOString().split('T')[0];
-              const dueToday = installment.payments.some(payment => 
-                payment.dueDate.startsWith(todayString) && 
-                (!payment.actualAmount || payment.actualAmount < payment.expectedAmount)
-              );
-              
-              // Find the longest overdue payment to determine if it's BAD_DEBT
-              let longestOverdueDays = 0;
-              let mostOverduePeriod = null;
-              
-              if (hasOverduePayments) {
-                installment.payments.forEach(payment => {
-                  const dueDate = new Date(payment.dueDate);
-                  if (dueDate < today && (!payment.actualAmount || payment.actualAmount < payment.expectedAmount)) {
-                    const overdueDays = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
-                    if (overdueDays > longestOverdueDays) {
-                      longestOverdueDays = overdueDays;
-                      mostOverduePeriod = payment;
-                    }
-                  }
-                });
-              }
-              
-              // Store the overdue days for display
-              installment.overdueDays = longestOverdueDays > 0 ? longestOverdueDays : undefined;
-              
-              // Update status based on payment data
-              if (installment.status === InstallmentStatus.CLOSED) {
-                // Keep CLOSED status if it's already set in the database
-                // Do nothing, keep it CLOSED
-              } else if (installment.status === InstallmentStatus.DELETED) {
-                // Keep DELETED status if it was set manually
-                // Do nothing, keep it DELETED
-              } else if (installment.status === InstallmentStatus.FINISHED) {
-                // Keep FINISHED status if it was set via unlock contract
-                // Do nothing, keep it FINISHED
-              } 
-              // else if (longestOverdueDays >= 60) { // More than 60 days overdue = BAD_DEBT
-              //   installment.status = InstallmentStatus.BAD_DEBT;
-              // } 
-              else if (hasOverduePayments) {
-                // Find the latest payment period
-                const latestPeriod = installment.payments
-                  .filter(p => p.actualAmount && p.actualAmount > 0)
-                  .sort((a, b) => b.periodNumber - a.periodNumber)[0];
-                
-                if (latestPeriod && latestPeriod.paymentStartDate) {
-                  // Convert paymentStartDate string (DD/MM/YYYY) to Date object
-                  const [day, month, year] = latestPeriod.paymentStartDate.split('/').map(Number);
-                  const latestPaymentDate = new Date(year, month - 1, day); // month is 0-indexed in JS Date
-                  
-                  // If payment was made but too late, mark as LATE_INTEREST
-                  const dueDateParts = latestPeriod.dueDate.split('/').map(Number);
-                  const dueDate = new Date(dueDateParts[2], dueDateParts[1] - 1, dueDateParts[0]);
-                  
-                  if (latestPaymentDate > dueDate) {
-                    installment.status = InstallmentStatus.LATE_INTEREST;
-                  } else {
-                    installment.status = InstallmentStatus.ON_TIME;
-                  }
-                } else {
-                  installment.status = InstallmentStatus.OVERDUE;
-                }
-              } else if (dueToday) {
-                // Due today is treated as ON_TIME but we'll mark it specially in the UI
-                installment.status = InstallmentStatus.ON_TIME;
-                installment.isDueToday = true;
-              } else if (dueTomorrow) {
-                installment.status = InstallmentStatus.DUE_TOMORROW;
-              } else {
-                installment.status = InstallmentStatus.ON_TIME;
-              }
-              
-              // Update statusInfo after status update
-              statusInfo.label = statusMap[installment.status]?.label || statusInfo.label;
-              statusInfo.color = statusMap[installment.status]?.color || statusInfo.color;
-            }
 
             return (
               <tr 
@@ -622,19 +439,14 @@ export function InstallmentsTable({
                     className={statusInfo.color}
                   >
                     {statusInfo.label}
-                    {installment.overdueDays ? ` (${installment.overdueDays} ngày)` : ''}
                   </Badge>
                 </td>
-                
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
                   {installment.status === InstallmentStatus.CLOSED || 
                    installment.nextPaymentDate == "Hoàn thành" || 
-                   (installment.remainingToPay ?? 0) <= 0 ? (
-                    <div className={`flex items-center justify-center gap-1 ${
-                      installment.overdueDays ? 'text-red-500 font-medium' : 
-                      installment.isDueToday ? 'text-amber-500 font-medium' : 
-                      installment.nextPaymentDate === "Ngày mai" ? 'text-blue-500 font-medium' : ''
-                    }`}>
+                   (installment.remainingToPay ?? 0) <= 0 || 
+                   !installment.payment_due_date ? (
+                    <div className="flex items-center justify-center gap-1">
                       <span className="text-green-600 font-medium">
                         Hoàn thành
                       </span>
@@ -649,98 +461,70 @@ export function InstallmentsTable({
                             installment.isDueToday ? 'text-amber-500 font-medium' : 
                             installment.nextPaymentDate === "Ngày mai" ? 'text-blue-500 font-medium' : ''
                           }`}
-                          disabled={isUpdatingDueDate || (installment.remainingToPay ?? 0) <= 0}
+                          disabled={isUpdatingDueDate || !installment.payment_due_date}
                           onClick={() => setSelectedDateInstallmentId(installment.id)}
-                          title={(installment.remainingToPay ?? 0) > 0 ? "Nhấn để thay đổi ngày đóng tiền" : "Hợp đồng đã hoàn thành"}
+                          title="Nhấn để thay đổi ngày đóng tiền"
                         >
                           {isUpdatingDueDate && selectedDateInstallmentId === installment.id ? (
                             <Spinner size="sm" className="mr-1" />
                           ) : (
                             <CalendarDaysIcon className="h-4 w-4 mr-1" />
                           )}
-                          {(() => {
-                            // If remaining amount is 0 or less, show "Hoàn thành"
-                            if (installment.remainingToPay !== undefined && installment.remainingToPay <= 0) {
-                              return (
-                                <span className="text-green-600 font-medium">
-                                  Hoàn thành
-                                </span>
-                              );
-                            }
-                            
-                            // If nextPaymentDate is "Hoàn thành", show that
-                            if (installment.nextPaymentDate === "Hoàn thành") {
-                              return (
-                                <span className="text-green-600 font-medium">
-                                  Hoàn thành
-                                </span>
-                              );
-                            }
-                            
-                            // If payment_due_date is available, prefer to use that
-                            if (installment.payment_due_date) {
-                              // Convert YYYY-MM-DD to DD/MM format
-                              const date = new Date(installment.payment_due_date);
-                              const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-                              
-                              // Check if it's today
-                              const today = new Date();
-                              today.setHours(0, 0, 0, 0);
-                              const isSameDay = 
-                                date.getDate() === today.getDate() &&
-                                date.getMonth() === today.getMonth() &&
-                                date.getFullYear() === today.getFullYear();
-                                
-                              if (isSameDay) {
-                                return "Hôm nay";
-                              }
-                              
-                              // Check if it's tomorrow
-                              const tomorrow = new Date(today);
-                              tomorrow.setDate(today.getDate() + 1);
-                              const isTomorrow = 
-                                date.getDate() === tomorrow.getDate() &&
-                                date.getMonth() === tomorrow.getMonth() &&
-                                date.getFullYear() === tomorrow.getFullYear();
-                                
-                              if (isTomorrow) {
-                                return "Ngày mai";
-                              }
-                              
-                              return formattedDate;
-                            }
-                            
-                            // Format the next payment date for display
-                            if (installment.nextPaymentDate) {
-                              // For better readability, extract only the day and month (DD/MM)
-                              if (installment.nextPaymentDate.includes('/')) {
-                                const [day, month] = installment.nextPaymentDate.split('/');
-                                return `${day}/${month}`;
-                              } else {
-                                const date = new Date(installment.nextPaymentDate);
-                                return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-                              }
-                            } else {
-                              return new Date(installment.due_date).toLocaleDateString('vi-VN');
-                            }
-                          })()}
+                    {(() => {
+                      // Chỉ hiển thị dựa trên payment_due_date
+                      if (!installment.payment_due_date) {
+                        return (
+                          <span className="text-green-600 font-medium">
+                            Hoàn thành
+                          </span>
+                        );
+                      }
+                      
+                      // Convert date để hiển thị
+                      const dueDateObj = new Date(installment.payment_due_date);
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      
+                      // So sánh ngày chuẩn xác
+                      const isSameDay = (date1: Date, date2: Date) => {
+                        return date1.getDate() === date2.getDate() &&
+                               date1.getMonth() === date2.getMonth() &&
+                               date1.getFullYear() === date2.getFullYear();
+                      };
+                      
+                      if (isSameDay(today, dueDateObj)) {
+                        return "Hôm nay";
+                      }
+                      
+                      // Kiểm tra ngày mai
+                      const tomorrow = new Date(today);
+                      tomorrow.setDate(today.getDate() + 1);
+                      
+                      if (isSameDay(tomorrow, dueDateObj)) {
+                        return "Ngày mai";
+                      }
+                      
+                      // Format ngày tháng
+                      const day = dueDateObj.getDate().toString().padStart(2, '0');
+                      const month = (dueDateObj.getMonth() + 1).toString().padStart(2, '0');
+                      return `${day}/${month}`;
+                    })()}
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="center">
-                        {(installment.remainingToPay ?? 0) > 0 && (
-                          <Calendar
-                            mode="single"
-                            initialFocus
-                            selected={installment.payment_due_date ? new Date(installment.payment_due_date) : undefined}
-                            onSelect={(date) => {
-                              if (date) {
-                                handlePaymentDueDateUpdate(installment.id, date);
-                              }
-                            }}
-                            disabled={isUpdatingDueDate}
-                            className="rounded-md border"
-                          />
-                        )}
+                        <Calendar
+                          mode="single"
+                          initialFocus
+                          selected={installment.payment_due_date ? new Date(installment.payment_due_date) : undefined}
+                          onSelect={(date) => {
+                            if (date) {
+                              handlePaymentDueDateUpdate(installment.id, date);
+                              
+                            }
+                          }}
+                          disabled={isUpdatingDueDate}
+                          className="rounded-md border"
+                        />
                       </PopoverContent>
                     </Popover>
                   )}

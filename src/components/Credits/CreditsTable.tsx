@@ -7,6 +7,7 @@ import {
   TableRow 
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -390,31 +391,49 @@ export function CreditsTable({
     setNextPaymentInfo(initialNextPaymentState);
     setInterestTodayInfo(initialInterestTodayState);
     
-    // Tải dữ liệu cho từng credit
+    // Tải dữ liệu cho tất cả credit song song
     const loadData = async () => {
-      for (const credit of credits) {
-        const info = await calculateCreditPayment(credit.id);
-        const nextPayment = await calculateNextPaymentDate(credit.id, credit);
-        const interestToday = await calculateInterestToday(credit.id, credit);
+      try {
+        // Process all credits in parallel using Promise.all
+        const results = await Promise.all(
+          credits.map(async (credit) => {
+            const [info, nextPayment, interestToday] = await Promise.all([
+              calculateCreditPayment(credit.id),
+              calculateNextPaymentDate(credit.id, credit),
+              calculateInterestToday(credit.id, credit)
+            ]);
+            
+            return {
+              creditId: credit.id,
+              info,
+              nextPayment,
+              interestToday
+            };
+          })
+        );
         
-        setPaymentInfo(prev => ({
-          ...prev,
-          [credit.id]: info
-        }));
+        // Update all states at once
+        const newPaymentInfo: Record<string, CreditPaymentInfo> = {};
+        const newNextPaymentInfo: Record<string, NextPaymentInfo> = {};
+        const newInterestTodayInfo: Record<string, InterestTodayInfo> = {};
         
-        setNextPaymentInfo(prev => ({
-          ...prev,
-          [credit.id]: nextPayment
-        }));
+        results.forEach(({ creditId, info, nextPayment, interestToday }) => {
+          newPaymentInfo[creditId] = info;
+          newNextPaymentInfo[creditId] = nextPayment;
+          newInterestTodayInfo[creditId] = interestToday;
+        });
         
-        setInterestTodayInfo(prev => ({
-          ...prev,
-          [credit.id]: interestToday
-        }));
+        setPaymentInfo(newPaymentInfo);
+        setNextPaymentInfo(newNextPaymentInfo);
+        setInterestTodayInfo(newInterestTodayInfo);
+      } catch (error) {
+        console.error('Error loading credit data:', error);
       }
     };
     
-    loadData();
+    if (credits.length > 0) {
+      loadData();
+    }
   }, [credits, calculateCreditPayment, calculateNextPaymentDate, calculateInterestToday]);
 
   return (
@@ -522,12 +541,95 @@ export function CreditsTable({
                 </TableCell>
                 <TableCell className="py-3 px-3 border-b border-r border-gray-200">
                   <div className="flex justify-center">
-                    <span className={cn(
-                      "px-2 py-1 rounded-full text-xs",
-                      statusMap[credit.status || CreditStatus.ON_TIME]?.color || "bg-gray-100 text-gray-800"
-                    )}>
-                      {statusMap[credit.status || CreditStatus.ON_TIME]?.label || "Không xác định"}
-                    </span>
+                    <Badge
+                      variant="outline"
+                      className={(() => {
+                        // Determine status based on next payment date, similar to InstallmentsTable
+                        if (credit.status === 'closed' || credit.status === 'deleted') {
+                          return statusMap[credit.status]?.color || "bg-gray-100 text-gray-800";
+                        }
+                        
+                        const nextPayment = nextPaymentInfo[credit.id];
+                        if (nextPayment?.isCompleted) {
+                          return "bg-emerald-100 text-emerald-800 border-emerald-200"; // Finished
+                        }
+                        
+                        if (nextPayment?.nextDate) {
+                          const nextPaymentDate = new Date(nextPayment.nextDate);
+                          const today = new Date();
+                          today.setHours(0, 0, 0, 0);
+                          nextPaymentDate.setHours(0, 0, 0, 0);
+                          
+                          // Check if payment is overdue
+                          if (today > nextPaymentDate) {
+                            return "bg-red-100 text-red-800 border-red-200"; // Overdue
+                          }
+                          
+                          // Check if payment is due today
+                          if (today.getTime() === nextPaymentDate.getTime()) {
+                            return "bg-amber-100 text-amber-800 border-amber-200"; // Due today
+                          }
+                          
+                          // Check if payment is due tomorrow
+                          const tomorrow = new Date(today);
+                          tomorrow.setDate(today.getDate() + 1);
+                          if (tomorrow.getTime() === nextPaymentDate.getTime()) {
+                            return "bg-blue-100 text-blue-800 border-blue-200"; // Due tomorrow
+                          }
+                          
+                          // Payment is in the future
+                          return "bg-green-100 text-green-800 border-green-200"; // On time
+                        }
+                        
+                        // Default to original status
+                        return statusMap[credit.status || CreditStatus.ON_TIME]?.color || "bg-gray-100 text-gray-800";
+                      })()}
+                    >
+                      {(() => {
+                        // Determine status label based on next payment date
+                        if (credit.status === 'closed') {
+                          return "Đã đóng";
+                        }
+                        if (credit.status === 'deleted') {
+                          return "Đã xóa";
+                        }
+                        
+                        const nextPayment = nextPaymentInfo[credit.id];
+                        if (nextPayment?.isCompleted) {
+                          return "Hoàn thành";
+                        }
+                        
+                        if (nextPayment?.nextDate) {
+                          const nextPaymentDate = new Date(nextPayment.nextDate);
+                          const today = new Date();
+                          today.setHours(0, 0, 0, 0);
+                          nextPaymentDate.setHours(0, 0, 0, 0);
+                          
+                          // Check if payment is overdue
+                          if (today > nextPaymentDate) {
+                            return "Quá hạn";
+                          }
+                          
+                          // Check if payment is due today
+                          if (today.getTime() === nextPaymentDate.getTime()) {
+                            return "Hôm nay";
+                          }
+                          
+                          // Check if payment is due tomorrow
+                          const tomorrow = new Date(today);
+                          tomorrow.setDate(today.getDate() + 1);
+                          if (tomorrow.getTime() === nextPaymentDate.getTime()) {
+                            return "Ngày mai";
+                          }
+                          
+                          // Payment is in the future
+                          return "Đang vay";
+                        }
+                        
+                        // Default to original status
+                        return statusMap[credit.status || CreditStatus.ON_TIME]?.label || "Không xác định";
+                      })()}
+                    </Badge>
                   </div>
                 </TableCell>
                 <TableCell className="py-3 px-3 border-b border-gray-200">

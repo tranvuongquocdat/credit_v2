@@ -4,6 +4,7 @@ CREATE OR REPLACE FUNCTION handle_installment_payment_marking(
   p_periods JSONB,
   p_action TEXT
 ) RETURNS JSONB AS $$
+
 DECLARE
   period_record JSONB;
   period_id UUID;
@@ -30,6 +31,11 @@ DECLARE
   total_payment_amount NUMERIC := 0;
   payment_description TEXT;
   periods_array JSONB;
+  
+  -- Variables for payment_due_date update
+  next_unpaid_period RECORD;
+  last_period_number INTEGER;
+  calculated_last_period INTEGER;
 BEGIN
   -- Validate action
   IF p_action NOT IN ('mark', 'unmark') THEN
@@ -119,7 +125,7 @@ BEGIN
           -- For periods > 1, auto-create any missing previous periods
           IF v_period_number > 1 THEN
             FOR missing_period_num IN 1..(v_period_number - 1) LOOP
-              -- Check if this period exists and is paid
+              -- Check if this period exists and is paid (use table alias to avoid ambiguity)
               SELECT ipp.* INTO existing_period 
               FROM installment_payment_period ipp
               WHERE ipp.installment_id = p_installment_id 
@@ -128,11 +134,11 @@ BEGIN
               -- If period doesn't exist or isn't fully paid, create/update it
               IF existing_period.id IS NULL THEN
                 -- Calculate dates for missing period based on payment_period
-                calculated_start_date := installment_info.start_date::DATE + ((missing_period_num - 1) * (installment_info.payment_period || 10));
+                calculated_start_date := installment_info.loan_date::DATE + ((missing_period_num - 1) * (installment_info.payment_period || 10));
                 calculated_end_date := calculated_start_date + (installment_info.payment_period || 10) - 1;
                 
                 -- Use the expected amount from the installment calculation
-                calculated_amount := COALESCE(expected_amount, installment_info.installment_amount / CEIL(installment_info.duration::NUMERIC / (installment_info.payment_period || 10)));
+                calculated_amount := COALESCE(expected_amount, installment_info.installment_amount / CEIL(installment_info.loan_period::NUMERIC / (installment_info.payment_period || 10)));
                 
                 -- Create missing period
                 INSERT INTO installment_payment_period (
@@ -165,7 +171,7 @@ BEGIN
                 );
                 
               ELSIF existing_period.actual_amount < existing_period.expected_amount THEN
-                -- Update existing unpaid period
+                -- Update existing unpaid period (use qualified column names)
                 UPDATE installment_payment_period 
                 SET 
                   actual_amount = existing_period.expected_amount,
@@ -203,10 +209,10 @@ BEGIN
               );
               CONTINUE;
             ELSE
-              -- Update existing period
+              -- Update existing period - use function variable expected_amount
               UPDATE installment_payment_period 
               SET 
-                actual_amount = expected_amount,
+                actual_amount = expected_amount, -- This is the function variable, not table column
                 payment_start_date = payment_date,
                 notes = 'Đóng tiền qua checkbox',
                 updated_at = NOW()
@@ -222,7 +228,7 @@ BEGIN
               );
             END IF;
           ELSE
-            -- Create new period
+            -- Create new period - use function variable expected_amount
             INSERT INTO installment_payment_period (
               installment_id,
               period_number,
@@ -237,8 +243,8 @@ BEGIN
               v_period_number,
               start_date,
               end_date,
-              expected_amount,
-              expected_amount,
+              expected_amount, -- Function variable
+              expected_amount, -- Function variable
               payment_date,
               'Đóng tiền qua checkbox'
             ) RETURNING id INTO period_id;
@@ -282,7 +288,7 @@ BEGIN
           
           UPDATE installment_payment_period 
           SET 
-            actual_amount = expected_amount,
+            actual_amount = expected_amount, -- Function variable
             payment_start_date = payment_date,
             notes = 'Đóng tiền qua checkbox',
             updated_at = NOW()
@@ -323,6 +329,7 @@ BEGIN
           CONTINUE;
         END IF;
         
+        -- Check for later payments - use qualified column names
         IF EXISTS (
           SELECT 1 FROM installment_payment_period ipp2
           WHERE ipp2.installment_id = p_installment_id 
@@ -367,8 +374,8 @@ BEGIN
     END IF;
     payment_description := payment_description || ' - Hợp đồng: ' || COALESCE(installment_info.contract_code, installment_info.id::text);
     
-    -- Insert into installment_histories
-    INSERT INTO installment_histories (
+    -- Insert into installment_history
+    INSERT INTO installment_history (
       installment_id,
       transaction_type,
       debit_amount,
@@ -387,6 +394,211 @@ BEGIN
     );
   END IF;
   
+  -- 🔄 UPDATE PAYMENT_DUE_DATE
+  -- After all periods have been processed, update the payment_due_date field
+  
+  -- For unmark action, get end_date from the deleted period 
+  -- This is a simpler approach that sets payment_due_date to the end_date of the unmarked period
+  IF p_action = 'unmark' THEN
+    -- Look for the EARLIEST unmarked period (the one with lowest period_number)
+    -- This is the one that should become the next payment due date
+    DECLARE
+      deleted_periods JSONB;
+      min_period_number INTEGER := NULL;
+      unmarked_period_end_date DATE := NULL;
+    BEGIN
+      -- Create array of deleted periods
+      deleted_periods := '[]'::JSONB;
+      
+      -- Filter and collect deleted periods
+      FOR period_record IN SELECT * FROM jsonb_array_elements(processed_periods)
+      LOOP
+        IF period_record->>'status' = 'deleted' THEN
+          deleted_periods := deleted_periods || period_record;
+        END IF;
+      END LOOP;
+      
+      -- If we have deleted periods, find the one with lowest period_number
+      IF jsonb_array_length(deleted_periods) > 0 THEN
+        -- Find the lowest period_number in deleted_periods
+        SELECT MIN((p->>'period_number')::INTEGER) INTO min_period_number
+        FROM jsonb_array_elements(deleted_periods) p;
+        
+        -- Now we have the earliest unmarked period number
+        -- We'll update payment_due_date with this period's end_date
+        IF min_period_number IS NOT NULL THEN
+          -- This period was just deleted from DB, but its end_date was passed in the input
+          -- We need to find it in the original input periods_array
+          FOR period_record IN SELECT * FROM jsonb_array_elements(periods_array)
+          LOOP
+            IF (period_record->>'periodNumber')::INTEGER = min_period_number THEN
+              -- Found the period, extract its end date
+              BEGIN
+                IF period_record->>'endDate' IS NOT NULL THEN
+                  unmarked_period_end_date := TO_DATE(period_record->>'endDate', 'DD/MM/YYYY');
+                END IF;
+              EXCEPTION WHEN OTHERS THEN
+                -- If parsing fails, use current date as fallback
+                unmarked_period_end_date := CURRENT_DATE;
+              END;
+              
+              EXIT; -- Found what we need, exit loop
+            END IF;
+          END LOOP;
+          
+          -- Update installment with this date
+          IF unmarked_period_end_date IS NOT NULL THEN
+            -- Đúng như yêu cầu: Khi uncheck, lấy ngày cuối cùng của kỳ bị uncheck làm payment_due_date
+            UPDATE installments
+            SET payment_due_date = unmarked_period_end_date,
+                updated_at = NOW()
+            WHERE id = p_installment_id;
+            
+            -- Add to result for logging
+            result := jsonb_set(result, '{payment_due_date_action}', 
+              jsonb_build_object(
+                'action', 'set_to_unmarked_period_end_date',
+                'period_number', min_period_number,
+                'date', unmarked_period_end_date
+              )
+            );
+          END IF;
+        END IF;
+      END IF;
+    END;
+  ELSE -- For mark action, keep existing calculation logic for next payment due date
+    -- Calculate the theoretical last period based on loan loan_period and payment period
+    calculated_last_period := CEIL(installment_info.loan_period::NUMERIC / installment_info.payment_period::NUMERIC);
+    
+    -- Find the highest period number that has been marked as paid - use qualified column names
+    SELECT MAX(ipp.period_number) INTO last_period_number
+    FROM installment_payment_period ipp
+    WHERE ipp.installment_id = p_installment_id
+      AND ipp.actual_amount >= ipp.expected_amount;
+    
+    -- If we just marked the last period of the loan, set payment_due_date to NULL
+    IF last_period_number = calculated_last_period THEN
+      -- Đúng như yêu cầu: Nếu đây là kỳ cuối cùng của hợp đồng, set payment_due_date về null
+      UPDATE installments
+      SET payment_due_date = NULL,
+          updated_at = NOW()
+      WHERE id = p_installment_id;
+      
+      -- Add to result for logging
+      result := jsonb_set(result, '{payment_due_date_action}', '"cleared"'::jsonb);
+    ELSE
+      -- Tính toán ngày kết thúc của hợp đồng để so sánh
+      DECLARE
+        contract_end_date DATE;
+      BEGIN
+        -- Lấy ngày kết thúc từ ngày bắt đầu + loan_period
+        contract_end_date := installment_info.loan_date::DATE + installment_info.loan_period::INTEGER - 1;
+        
+        -- Find the next unpaid period - use qualified column names
+        SELECT ipp.* INTO next_unpaid_period
+        FROM installment_payment_period ipp
+        WHERE ipp.installment_id = p_installment_id
+          AND (ipp.actual_amount IS NULL OR ipp.actual_amount < ipp.expected_amount)
+        ORDER BY ipp.period_number
+        LIMIT 1;
+        
+        IF next_unpaid_period.id IS NULL THEN
+          -- No unpaid periods in database, calculate the next period manually
+          IF last_period_number IS NULL THEN
+            -- No payments yet, use loan start date
+            UPDATE installments
+            SET payment_due_date = (installment_info.loan_date::DATE + installment_info.payment_period::INTEGER - 1),
+                updated_at = NOW()
+            WHERE id = p_installment_id;
+            
+            -- Add to result for logging
+            result := jsonb_set(result, '{payment_due_date_action}', '"set_to_first_period"'::jsonb);
+          ELSE
+            -- Calculate the end date of the next period after the last paid one
+            DECLARE
+              calculated_next_end_date DATE;
+            BEGIN
+              calculated_next_end_date := (
+                installment_info.loan_date::DATE + 
+                (last_period_number * installment_info.payment_period::INTEGER) + 
+                installment_info.payment_period::INTEGER - 1
+              );
+              
+              -- Check if calculated end date exceeds contract end date
+              -- If so, use contract end date instead
+              IF calculated_next_end_date > contract_end_date THEN
+                calculated_next_end_date := contract_end_date;
+                
+                -- Log that we're using contract end date because it's shorter
+                result := jsonb_set(result, '{payment_due_date_action}', 
+                  jsonb_build_object(
+                    'action', 'using_contract_end_date',
+                    'last_period', last_period_number,
+                    'next_period', last_period_number + 1,
+                    'original_calculated_date', (installment_info.loan_date::DATE + 
+                                                (last_period_number * installment_info.payment_period::INTEGER) + 
+                                                installment_info.payment_period::INTEGER - 1),
+                    'adjusted_to', contract_end_date
+                  )
+                );
+              ELSE
+                -- Add to result for logging (normal case)
+                result := jsonb_set(result, '{payment_due_date_action}', 
+                  jsonb_build_object(
+                    'action', 'calculated_next_period',
+                    'last_period', last_period_number,
+                    'next_period', last_period_number + 1
+                  )
+                );
+              END IF;
+              
+              -- Update with either calculated date or contract end date (whichever is earlier)
+              UPDATE installments
+              SET payment_due_date = calculated_next_end_date,
+                  updated_at = NOW()
+              WHERE id = p_installment_id;
+            END;
+          END IF;
+        ELSE
+          -- We found an existing next unpaid period
+          -- Check if this is the last period with shorter duration
+          IF next_unpaid_period.period_number = calculated_last_period AND 
+             (next_unpaid_period.payment_end_date::DATE > contract_end_date) THEN
+            -- Use contract end date instead
+            UPDATE installments
+            SET payment_due_date = contract_end_date,
+                updated_at = NOW()
+            WHERE id = p_installment_id;
+            
+            -- Log the adjustment
+            result := jsonb_set(result, '{payment_due_date_action}', 
+              jsonb_build_object(
+                'action', 'adjusted_last_period_end_date',
+                'period_number', next_unpaid_period.period_number,
+                'original_date', next_unpaid_period.payment_end_date,
+                'adjusted_to', contract_end_date
+              )
+            );
+          ELSE
+            -- Use the payment_end_date of the next unpaid period (normal case)
+            UPDATE installments
+            SET payment_due_date = next_unpaid_period.payment_end_date,
+                updated_at = NOW()
+            WHERE id = p_installment_id;
+            
+            -- Add to result for logging
+            result := jsonb_set(result, '{payment_due_date_action}', 
+              jsonb_build_object(
+                'action', 'set_to_existing_period',
+                'period_number', next_unpaid_period.period_number
+              )
+            );
+          END IF;
+        END IF;
+      END;
+    END IF;
+  END IF;
+  
   result := jsonb_set(result, '{processed_periods}', processed_periods);
   RETURN result;
   
@@ -397,4 +609,4 @@ EXCEPTION WHEN OTHERS THEN
     'processed_periods', processed_periods
   );
 END;
-$$ LANGUAGE plpgsql; 
+$$ LANGUAGE plpgsql;

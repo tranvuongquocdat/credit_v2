@@ -52,7 +52,7 @@ export interface Installment {
   status: InstallmentStatus;  // Tình trạng
   due_date: string;           // Ngày phải đóng tiền (calculated)
   start_date: string;         // loan_date (Ngày bắt đầu)
-  payment_due_date?: string;  // Ngày phải đóng tiền từ DB
+  payment_due_date?: string | null;  // Ngày phải đóng tiền từ DB
   
   notes?: string;             // Ghi chú
   store_id?: string;          // ID cửa hàng (from employee.store_id)

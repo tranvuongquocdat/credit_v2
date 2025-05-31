@@ -316,7 +316,7 @@ export function InstallmentCreateModal({
       const paymentDueDate = new Date(startDateObj);
       paymentDueDate.setDate(startDateObj.getDate() + paymentPrd - 1);
       installmentData.payment_due_date = format(paymentDueDate, 'yyyy-MM-dd');
-
+      
       // Call API to create installment
       await createInstallment(installmentData);
       // Success - close modal and notify parent
