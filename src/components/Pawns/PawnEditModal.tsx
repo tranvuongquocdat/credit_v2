@@ -67,6 +67,25 @@ export function PawnEditModal({
   const [error, setError] = useState<string | null>(null);
   const [pawn, setPawn] = useState<Pawn | null>(null);
   
+  // State for interest rate validation warning
+  const [interestRateWarning, setInterestRateWarning] = useState<string | null>(null);
+  
+  // Function to validate interest rate (for pawn monthly percentage)
+  const validateInterestRate = (value: string) => {
+    const numValue = parseFloat(value || '0');
+    if (isNaN(numValue) || numValue <= 0) {
+      setInterestRateWarning(null);
+      return;
+    }
+    
+    // For pawn interest rate (monthly percentage), check if > 8.3%
+    if (numValue > 8.3) {
+      setInterestRateWarning('Lãi suất nhập vượt mức cho phép (100%/năm), vi phạm Điều 201 Bộ luật Hình sự. Vui lòng điều chỉnh.');
+    } else {
+      setInterestRateWarning(null);
+    }
+  };
+  
   // Format number with thousand separators
   const formatNumber = (value: string | number): string => {
     const numericValue = value.toString().replace(/[^0-9]/g, '');
@@ -366,12 +385,27 @@ export function PawnEditModal({
                 id="interestRate"
                 type="number"
                 value={interestRate}
-                onChange={(e) => setInterestRate(e.target.value)}
+                onChange={(e) => {
+                  setInterestRate(e.target.value);
+                  validateInterestRate(e.target.value);
+                }}
                 required
                 placeholder="0"
                 step="0.1"
               />
             </div>
+            
+            {interestRateWarning && (
+              <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
+                <div></div>
+                <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm" role="alert">
+                  <span className="flex items-center">
+                    <AlertCircle className="h-4 w-4 mr-2" />
+                    {interestRateWarning}
+                  </span>
+                </div>
+              </div>
+            )}
             
             <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
               <Label htmlFor="loanPeriod" className="text-right">

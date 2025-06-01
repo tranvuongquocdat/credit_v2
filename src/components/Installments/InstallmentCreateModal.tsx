@@ -527,6 +527,7 @@ export function InstallmentCreateModal({
                   required
                   className="w-24"
                   placeholder="0"
+                  min={0}
                 />
                 <span>ngày</span>
               </div>
@@ -550,6 +551,7 @@ export function InstallmentCreateModal({
                   required
                   className="w-24"
                   placeholder="0"
+                  min={0}
                 />
                 <span>ngày</span>
               </div>

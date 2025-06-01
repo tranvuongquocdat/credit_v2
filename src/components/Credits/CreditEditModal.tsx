@@ -19,6 +19,7 @@ import { getCustomers } from '@/lib/customer';
 import { Customer } from '@/models/customer';
 import { UpdateCreditParams, InterestType, CreditStatus, Credit, CreditWithCustomer } from '@/models/credit';
 import { toast } from '@/components/ui/use-toast';
+import { AlertCircle } from 'lucide-react';
 
 interface CreditEditModalProps {
   isOpen: boolean;
@@ -67,6 +68,48 @@ export function CreditEditModal({
   
   // Quick buttons for loan amount
   const loanAmountPresets = [-5, +5, 10, 20, 30, 40, 50];
+  
+  // State for interest rate validation warning
+  const [interestRateWarning, setInterestRateWarning] = useState<string | null>(null);
+  
+  // Function to validate interest rate
+  const validateInterestRate = (value: string, type: string, notation: string) => {
+    const numValue = parseFloat(value || '0');
+    if (isNaN(numValue) || numValue <= 0) {
+      setInterestRateWarning(null);
+      return;
+    }
+    
+    let isExceeded = false;
+    
+    if (type === 'daily') {
+      // Lãi ngày > 2.74
+      if (numValue > 2.74) {
+        isExceeded = true;
+      }
+    } else if (type === 'monthly_30' || type === 'monthly_custom') {
+      // Lãi phí tháng (%) > 8.3
+      if (numValue > 8.3) {
+        isExceeded = true;
+      }
+    } else if (type === 'weekly_percent') {
+      // Lãi phí tuần (%) > 1.92
+      if (numValue > 1.92) {
+        isExceeded = true;
+      }
+    } else if (type === 'weekly_k') {
+      // Lãi phí tuần (k) > 19.17
+      if (numValue > 19.17) {
+        isExceeded = true;
+      }
+    }
+    
+    if (isExceeded) {
+      setInterestRateWarning('Lãi suất nhập vượt mức cho phép (100%/năm), vi phạm Điều 201 Bộ luật Hình sự. Vui lòng điều chỉnh.');
+    } else {
+      setInterestRateWarning(null);
+    }
+  };
   
   // Format number with thousand separators
   const formatNumber = (value: string | number): string => {
@@ -145,6 +188,9 @@ export function CreditEditModal({
       default:
         setInterestNotation('k_per_million');
     }
+    
+    // Validate interest rate with new type
+    validateInterestRate(interestValue, value, interestNotation);
   };
   
   // Load credit data and customers when modal opens
@@ -522,7 +568,10 @@ export function CreditEditModal({
                   id="interestValue"
                   type="number"
                   value={interestValue}
-                  onChange={(e) => setInterestValue(e.target.value)}
+                  onChange={(e) => {
+                    setInterestValue(e.target.value);
+                    validateInterestRate(e.target.value, interestType, interestNotation);
+                  }}
                   required
                   className="w-32"
                   placeholder="0"
@@ -536,7 +585,10 @@ export function CreditEditModal({
                           id="interestDaily1" 
                           name="interestDaily" 
                           checked={interestNotation === 'k_per_million'}
-                          onChange={() => setInterestNotation('k_per_million')}
+                          onChange={() => {
+                            setInterestNotation('k_per_million');
+                            validateInterestRate(interestValue, interestType, 'k_per_million');
+                          }}
                           className="mr-2"
                         />
                         <label htmlFor="interestDaily1" className="text-sm">k/1 triệu</label>
@@ -547,7 +599,10 @@ export function CreditEditModal({
                           id="interestDaily2" 
                           name="interestDaily" 
                           checked={interestNotation === 'k_per_day'}
-                          onChange={() => setInterestNotation('k_per_day')}
+                          onChange={() => {
+                            setInterestNotation('k_per_day');
+                            validateInterestRate(interestValue, interestType, 'k_per_day');
+                          }}
                           className="mr-2"
                         />
                         <label htmlFor="interestDaily2" className="text-sm">k/1 ngày</label>
@@ -563,7 +618,10 @@ export function CreditEditModal({
                           id="interestMonthly1" 
                           name="interestMonthly" 
                           checked={interestNotation === 'percent_per_month'}
-                          onChange={() => setInterestNotation('percent_per_month')}
+                          onChange={() => {
+                            setInterestNotation('percent_per_month');
+                            validateInterestRate(interestValue, interestType, 'percent_per_month');
+                          }}
                           className="mr-2"
                         />
                         <label htmlFor="interestMonthly1" className="text-sm">%/1 tháng</label>
@@ -579,7 +637,10 @@ export function CreditEditModal({
                           id="interestWeeklyPercent1" 
                           name="interestWeeklyPercent" 
                           checked={interestNotation === 'percent_per_week'}
-                          onChange={() => setInterestNotation('percent_per_week')}
+                          onChange={() => {
+                            setInterestNotation('percent_per_week');
+                            validateInterestRate(interestValue, interestType, 'percent_per_week');
+                          }}
                           className="mr-2"
                         />
                         <label htmlFor="interestWeeklyPercent1" className="text-sm">% /1 tuần (VD : 2% / 1 tuần)</label>
@@ -604,6 +665,18 @@ export function CreditEditModal({
                 </div>
               </div>
             </div>
+            
+            {interestRateWarning && (
+              <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
+                <div></div>
+                <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm" role="alert">
+                  <span className="flex items-center">
+                    <AlertCircle className="h-4 w-4 mr-2" />
+                    {interestRateWarning}
+                  </span>
+                </div>
+              </div>
+            )}
             
             <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
               <Label htmlFor="loanPeriod" className="text-right">

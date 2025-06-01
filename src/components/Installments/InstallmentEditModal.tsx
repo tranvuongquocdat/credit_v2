@@ -387,6 +387,7 @@ export function InstallmentEditModal({
                   className="w-24"
                   placeholder="0"
                   disabled={hasPayments}
+                  min={0}
                 />
                 <span>ngày</span>
               </div>
@@ -410,6 +411,7 @@ export function InstallmentEditModal({
                   required
                   className="w-24"
                   placeholder="0"
+                  min={0}
                 />
                 <span>ngày</span>
               </div>

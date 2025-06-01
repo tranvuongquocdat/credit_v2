@@ -76,10 +76,8 @@ export const DEFAULT_PAWN_TABS: PawnTab[] = [
   { id: 'payment', label: 'Đóng lãi phí' },
   { id: 'principal-repayment', label: 'Trả bớt gốc' },
   { id: 'additional-loan', label: 'Vay thêm' },
-  { id: 'extension', label: 'Gia hạn' },
   { id: 'redeem', label: 'Chuộc đồ' },
-  { id: 'liquidation', label: 'Thanh lý' },
   { id: 'documents', label: 'Chứng từ' },
   { id: 'history', label: 'Lịch sử' },
-  { id: 'bad-credit', label: 'Báo xấu khách hàng' },
+  // { id: 'bad-credit', label: 'Báo xấu khách hàng' },
 ] as PawnTab[]; 
