@@ -238,11 +238,45 @@ export async function updatePawn(id: string, params: UpdatePawnParams) {
 }
 
 /**
- * Xóa hợp đồng cầm đồ (hoặc cập nhật trạng thái thành đã xóa)
+ * Xóa hợp đồng cầm đồ (chỉ khi chưa có kỳ thanh toán nào)
  */
 export async function deletePawn(id: string) {
   try {
-    // Không xóa thật, chỉ cập nhật trạng thái thành DELETED
+    // Kiểm tra xem hợp đồng có kỳ thanh toán nào không
+    const { data: paymentPeriods, error: paymentError } = await supabase
+      .from('pawn_payment_periods')
+      .select('id')
+      .eq('pawn_id', id)
+      .limit(1);
+    
+    if (paymentError) throw paymentError;
+    
+    // Nếu có kỳ thanh toán, không cho phép xóa
+    if (paymentPeriods && paymentPeriods.length > 0) {
+      return { 
+        data: null, 
+        error: { message: 'Không thể xóa hợp đồng đã có kỳ thanh toán' } 
+      };
+    }
+    
+    // Lấy thông tin hợp đồng để ghi lịch sử
+    const { data: pawnData, error: pawnError } = await supabase
+      .from('pawns')
+      .select('loan_amount, contract_code')
+      .eq('id', id)
+      .single();
+    
+    if (pawnError) throw pawnError;
+    
+    // Ghi lịch sử xóa hợp đồng
+    const { recordPawnContractDeletion } = await import('@/lib/pawn-amount-history');
+    await recordPawnContractDeletion(
+      id,
+      pawnData.loan_amount,
+      `Xóa hợp đồng cầm đồ ${pawnData.contract_code || id}`
+    );
+    
+    // Cập nhật trạng thái hợp đồng thành DELETED
     const { data, error } = await supabase
       .from('pawns')
       .update({

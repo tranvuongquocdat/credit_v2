@@ -405,7 +405,7 @@ export function PaymentTab({
             onClose={() => setShowPaymentForm(false)}
             pawn={pawn}
             selectedPeriods={[]}
-            disabled={pawn.status === PawnStatus.CLOSED}
+            disabled={pawn.status === PawnStatus.CLOSED || pawn.status === PawnStatus.DELETED}
             onSuccess={async (data) => {
               try {
                 console.log('Payment data submitted:', data);
@@ -523,7 +523,7 @@ export function PaymentTab({
                 const isEditing = editingPeriodId === period.id || editingPeriodId === `temp-${period.period_number}`;
                 const periodId = period.id || `temp-${period.period_number}`;
                 const isLoading = loadingPeriods[periodId];
-                const isDisabled = pawn?.status === PawnStatus.CLOSED;
+                const isDisabled = pawn?.status === PawnStatus.CLOSED || pawn?.status === PawnStatus.DELETED;
 
             return (
                   <tr key={periodId} className="hover:bg-gray-50">

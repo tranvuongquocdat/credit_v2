@@ -26,7 +26,7 @@ import { calculateDaysBetween, formatCurrency, formatDate, formatDateTime } from
 
 interface PaymentHistoryModalProps {
   isOpen: boolean;
-  onClose: () => void;
+  onClose: (hasDataChanged?: boolean) => void;
   credit: CreditWithCustomer;
 }
 
@@ -48,6 +48,9 @@ export function PaymentHistoryModal({
   const [principalChanges, setPrincipalChanges] = useState<PrincipalChange[]>([]);
   const [creditHistory, setCreditHistory] = useState<CreditAmountHistory[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  
+  // State để track việc có thay đổi dữ liệu hay không
+  const [hasDataChanged, setHasDataChanged] = useState(false);
   
   // State cho modal nhập tiền khách trả
   const [showPaymentInput, setShowPaymentInput] = useState(false);
@@ -125,6 +128,8 @@ export function PaymentHistoryModal({
         return 'Hủy trả bớt gốc';
       case CreditTransactionType.CANCEL_ADDITIONAL_LOAN:
         return 'Hủy vay thêm';
+      case CreditTransactionType.CONTRACT_DELETE:
+        return 'Xóa hợp đồng';
       default:
         return 'Giao dịch khác';
     }
@@ -413,7 +418,7 @@ export function PaymentHistoryModal({
   }
   
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(hasDataChanged)}>
       <DialogContent 
         className="sm:max-w-[800px] md:max-w-[900px] max-h-[90vh] overflow-y-auto" 
       >
@@ -481,7 +486,7 @@ export function PaymentHistoryModal({
             variant="scrollable"
             className="mb-2"
           />
-          
+
           {/* Nội dung theo tab */}
           {activeTab === 'payment' && (
             <PaymentTab
@@ -497,6 +502,9 @@ export function PaymentHistoryModal({
               calculateDaysBetween={calculateDaysBetween}
               principalChanges={principalChanges}
               onDataChange={() => {
+                // Mark that data has changed
+                setHasDataChanged(true);
+                
                 // Reload payment periods data
                 if (credit?.id) {
                   setLoading(true);
@@ -522,7 +530,11 @@ export function PaymentHistoryModal({
               credit={credit}
               refreshRepayments={refreshRepayments}
               setRefreshRepayments={setRefreshRepayments}
-              onDataChange={reloadCreditInfo}
+              onDataChange={() => {
+                // Mark that data has changed
+                setHasDataChanged(true);
+                reloadCreditInfo();
+              }}
             />
           )}
           
@@ -531,6 +543,8 @@ export function PaymentHistoryModal({
               credit={credit}
               key={refreshAdditionalLoans}
               onDataChange={() => {
+                // Mark that data has changed
+                setHasDataChanged(true);
                 setRefreshAdditionalLoans(prev => prev + 1);
                 reloadCreditInfo();
               }}
@@ -540,16 +554,20 @@ export function PaymentHistoryModal({
           {activeTab === 'extension' && (
             <ExtensionTab 
               credit={credit} 
-              onDataChange={reloadCreditInfo}
+              onDataChange={() => {
+                // Mark that data has changed
+                setHasDataChanged(true);
+                reloadCreditInfo();
+              }}
             />
           )}
           
           {activeTab === 'close' && (
-            <CloseTab credit={credit} onClose={onClose} />
+            <CloseTab credit={credit} onClose={() => onClose(hasDataChanged)} />
           )}
           
           {activeTab === 'documents' && (
-            <DocumentsTab creditId={creditId} />
+            <DocumentsTab creditId={creditId} creditStatus={credit?.status || undefined} />
           )}
           
           {activeTab === 'history' && credit && (

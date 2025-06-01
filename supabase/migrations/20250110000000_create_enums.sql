@@ -10,7 +10,8 @@ CREATE TYPE IF NOT EXISTS credit_transaction_type AS ENUM (
   'contract_close',
   'contract_reopen',
   'cancel_additional_loan',
-  'cancel_principal_repayment'
+  'cancel_principal_repayment',
+  'contract_delete'
 );
 CREATE TYPE IF NOT EXISTS pawn_status AS ENUM ('on_time', 'overdue', 'late_interest', 'bad_debt', 'closed', 'deleted');
 CREATE TYPE IF NOT EXISTS pawn_transaction_type AS ENUM (

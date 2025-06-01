@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,7 @@ import {
   TableRow 
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
 
 interface StatusMapType {
   [key: string]: { 
@@ -53,6 +54,55 @@ export function PawnTable({
 }: PawnTableProps) {
   const [sortField, setSortField] = useState<string>('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  
+  // State để lưu trữ thông tin có kỳ thanh toán đã được thanh toán hay không cho mỗi pawn
+  const [hasPaidPaymentPeriods, setHasPaidPaymentPeriods] = useState<Record<string, boolean>>({});
+  
+  // Hàm kiểm tra xem pawn có kỳ thanh toán nào đã được thanh toán không
+  const checkHasPaidPaymentPeriods = useCallback(async (pawnId: string): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase
+        .from('pawn_payment_periods')
+        .select('actual_amount')
+        .eq('pawn_id', pawnId)
+        .gt('actual_amount', 0)
+        .limit(1);
+      
+      if (error) {
+        console.error('Error checking paid payment periods:', error);
+        return false;
+      }
+      
+      return data && data.length > 0;
+    } catch (error) {
+      console.error('Error in checkHasPaidPaymentPeriods:', error);
+      return false;
+    }
+  }, []);
+  
+  // Load thông tin về payment periods đã thanh toán khi pawns thay đổi
+  useEffect(() => {
+    const loadPaidPaymentPeriodsInfo = async () => {
+      const newHasPaidPaymentPeriodsInfo: Record<string, boolean> = {};
+      
+      const results = await Promise.all(
+        pawns.map(async (pawn) => {
+          const hasPaidPayments = await checkHasPaidPaymentPeriods(pawn.id);
+          return { pawnId: pawn.id, hasPaidPayments };
+        })
+      );
+      
+      results.forEach(({ pawnId, hasPaidPayments }) => {
+        newHasPaidPaymentPeriodsInfo[pawnId] = hasPaidPayments;
+      });
+      
+      setHasPaidPaymentPeriods(newHasPaidPaymentPeriodsInfo);
+    };
+    
+    if (pawns.length > 0) {
+      loadPaidPaymentPeriodsInfo();
+    }
+  }, [pawns, checkHasPaidPaymentPeriods]);
 
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -267,55 +317,85 @@ export function PawnTable({
                 </TableCell>
                 <TableCell className="py-3 px-3 border-b border-gray-200">
                   <div className="flex justify-center space-x-1">
-                    <Button 
-                      variant="ghost" 
-                      className="h-8 w-8 p-0" 
-                      onClick={() => handleViewDetail(pawn)}
-                      title="Lịch sử thanh toán"
-                    >
-                      <DollarSign className="h-4 w-4 text-gray-500" />
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                          <span className="sr-only">Mở menu</span>
-                          <MoreHorizontal className="h-4 w-4 text-gray-500" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-44">
-                        <DropdownMenuItem onClick={() => handleViewDetail(pawn)} className="cursor-pointer">
-                          <Eye className="mr-2 h-4 w-4" />
-                          <span>Xem chi tiết</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onEdit(pawn.id)} className="cursor-pointer">
-                          <Edit className="mr-2 h-4 w-4" />
-                          <span>Chỉnh sửa</span>
-                        </DropdownMenuItem>
-                        
-                        {pawn.status === PawnStatus.ON_TIME && (
-                          <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => handleExtend(pawn.id)} className="cursor-pointer">
-                              <Calendar className="mr-2 h-4 w-4" />
-                              <span>Gia hạn</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleRedeem(pawn.id)} className="cursor-pointer">
-                              <DollarSign className="mr-2 h-4 w-4" />
-                              <span>Chuộc đồ</span>
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                        
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem 
-                          onClick={() => handleDelete(pawn.id)} 
-                          className="cursor-pointer text-red-600 focus:text-red-600"
+                    {/* Chỉ hiển thị nút xem chi tiết nếu hợp đồng đã bị xóa */}
+                    {pawn.status === PawnStatus.DELETED ? (
+                      <Button 
+                        variant="ghost" 
+                        className="h-8 w-8 p-0" 
+                        onClick={() => handleViewDetail(pawn)}
+                        title="Xem chi tiết"
+                      >
+                        <DollarSign className="h-4 w-4 text-gray-400" />
+                      </Button>
+                    ) : (
+                      <>
+                        <Button 
+                          variant="ghost" 
+                          className="h-8 w-8 p-0" 
+                          onClick={() => handleViewDetail(pawn)}
+                          title="Lịch sử thanh toán"
                         >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          <span>Xóa</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                          <DollarSign className="h-4 w-4 text-gray-500" />
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <span className="sr-only">Mở menu</span>
+                              <MoreHorizontal className="h-4 w-4 text-gray-500" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem onClick={() => handleViewDetail(pawn)} className="cursor-pointer">
+                              <Eye className="mr-2 h-4 w-4" />
+                              <span>Xem chi tiết</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => onEdit(pawn.id)} className="cursor-pointer">
+                              <Edit className="mr-2 h-4 w-4" />
+                              <span>Chỉnh sửa</span>
+                            </DropdownMenuItem>
+                            
+                            {/* Hiển thị "Lịch sử thanh toán" cho hợp đồng đã đóng */}
+                            {pawn.status === PawnStatus.CLOSED && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => handleViewDetail(pawn)} className="cursor-pointer">
+                                  <DollarSign className="mr-2 h-4 w-4" />
+                                  <span>Lịch sử thanh toán</span>
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                            
+                            {pawn.status === PawnStatus.ON_TIME && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => handleExtend(pawn.id)} className="cursor-pointer">
+                                  <Calendar className="mr-2 h-4 w-4" />
+                                  <span>Gia hạn</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleRedeem(pawn.id)} className="cursor-pointer">
+                                  <DollarSign className="mr-2 h-4 w-4" />
+                                  <span>Chuộc đồ</span>
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                            
+                            {/* Chỉ hiển thị nút xóa nếu hợp đồng chưa có kỳ thanh toán đã được thanh toán và chưa đóng */}
+                            {!hasPaidPaymentPeriods[pawn.id] && pawn.status !== PawnStatus.CLOSED && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  onClick={() => handleDelete(pawn.id)} 
+                                  className="cursor-pointer text-red-600 focus:text-red-600"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  <span>Xóa</span>
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

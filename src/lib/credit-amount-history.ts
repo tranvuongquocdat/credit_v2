@@ -10,6 +10,7 @@ export enum CreditTransactionType {
   CONTRACT_REOPEN = 'contract_reopen',
   CANCEL_PRINCIPAL_REPAYMENT = 'cancel_principal_repayment',
   CANCEL_ADDITIONAL_LOAN = 'cancel_additional_loan',
+  CONTRACT_DELETE = 'contract_delete',
 }
 
 // Updated interface to match the new database schema
@@ -355,5 +356,35 @@ export async function recordContractReopening(
   } catch (error) {
     console.error('Error recording contract reopening:', error);
     return { data: null, error, lastClosureAmount: 0 };
+  }
+}
+
+/**
+ * Record contract deletion
+ */
+export async function recordContractDeletion(
+  creditId: string,
+  loanAmount: number,
+  description?: string
+) {
+  try {
+    const { data, error } = await supabase
+      .from('credit_history')
+      .insert({
+        credit_id: creditId,
+        transaction_type: CreditTransactionType.CONTRACT_DELETE,
+        credit_amount: loanAmount, // Positive for credit (returning the loan amount)
+        debit_amount: 0,
+        description: description || 'Xóa hợp đồng'
+      } as any)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error recording contract deletion:', error);
+    return { data: null, error };
   }
 } 

@@ -105,11 +105,13 @@ export default function CreditWarningPage() {
   };
   
   // Handle closing payment history modal
-  const handleClosePaymentHistory = () => {
+  const handleClosePaymentHistory = (hasDataChanged?: boolean) => {
     setIsPaymentHistoryModalOpen(false);
     setPaymentHistoryCredit(null);
-    // Refresh data when payment history modal is closed
-    loadCredits();
+    // Only refresh data if there were actual changes
+    if (hasDataChanged) {
+      loadCredits();
+    }
   };
   
   return (

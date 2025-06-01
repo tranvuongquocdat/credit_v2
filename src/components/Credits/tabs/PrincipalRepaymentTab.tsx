@@ -22,8 +22,8 @@ export function PrincipalRepaymentTab({
   const [localRefreshTrigger, setLocalRefreshTrigger] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Check if credit is closed
-  const isClosed = credit?.status === CreditStatus.CLOSED;
+  // Check if credit is closed or deleted
+  const isClosed = credit?.status === CreditStatus.CLOSED || credit?.status === CreditStatus.DELETED;
   
   const refreshData = () => {
     // Update both the parent counter and local counter

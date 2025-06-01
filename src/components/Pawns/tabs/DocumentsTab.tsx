@@ -1,6 +1,6 @@
 'use client';
 
-import { PawnWithCustomerAndCollateral } from '@/models/pawn';
+import { PawnWithCustomerAndCollateral, PawnStatus } from '@/models/pawn';
 import { Button } from '@/components/ui/button';
 import { FileText, Download, Upload, Eye } from 'lucide-react';
 
@@ -17,6 +17,9 @@ export function DocumentsTab({ pawn }: DocumentsTabProps) {
     { id: 'extension_docs', name: 'Giấy tờ gia hạn', icon: FileText },
     { id: 'liquidation_docs', name: 'Chứng từ thanh lý', icon: FileText },
   ];
+
+  // Check if pawn is closed or deleted
+  const isDisabled = pawn?.status === PawnStatus.CLOSED || pawn?.status === PawnStatus.DELETED;
 
   return (
     <div className="p-6 space-y-6">
@@ -68,6 +71,7 @@ export function DocumentsTab({ pawn }: DocumentsTabProps) {
                       size="sm"
                       variant="outline"
                       className="flex-1"
+                      disabled={isDisabled}
                     >
                       <Upload className="h-4 w-4 mr-1" />
                       Tải lên

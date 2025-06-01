@@ -86,6 +86,9 @@ export function CreditsTable({
   // State để lưu trữ thông tin lãi phí đến hôm nay
   const [interestTodayInfo, setInterestTodayInfo] = useState<Record<string, InterestTodayInfo>>({});
   
+  // State để lưu trữ thông tin có kỳ thanh toán đã được thanh toán hay không cho mỗi credit
+  const [hasPaidPaymentPeriods, setHasPaidPaymentPeriods] = useState<Record<string, boolean>>({});
+  
   // Toast hook
   const { toast } = useToast();
   
@@ -374,22 +377,47 @@ export function CreditsTable({
     }
   }, []);
   
+  // Hàm kiểm tra xem credit có kỳ thanh toán nào đã được thanh toán không
+  const checkHasPaidPaymentPeriods = useCallback(async (creditId: string): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase
+        .from('credit_payment_periods')
+        .select('actual_amount')
+        .eq('credit_id', creditId)
+        .gt('actual_amount', 0)
+        .limit(1);
+      
+      if (error) {
+        console.error('Error checking paid payment periods:', error);
+        return false;
+      }
+      
+      return data && data.length > 0;
+    } catch (error) {
+      console.error('Error in checkHasPaidPaymentPeriods:', error);
+      return false;
+    }
+  }, []);
+  
   // Tải dữ liệu thanh toán cho tất cả các credit
   useEffect(() => {
     // Khởi tạo trạng thái loading cho tất cả credit
     const initialLoadingState: Record<string, CreditPaymentInfo> = {};
     const initialNextPaymentState: Record<string, NextPaymentInfo> = {};
     const initialInterestTodayState: Record<string, InterestTodayInfo> = {};
+    const initialHasPaidPaymentPeriodsState: Record<string, boolean> = {};
     
     credits.forEach(credit => {
       initialLoadingState[credit.id] = { paidInterest: 0, oldDebt: 0, loading: true };
       initialNextPaymentState[credit.id] = { nextDate: null, isCompleted: false, loading: true };
       initialInterestTodayState[credit.id] = { interestToday: 0, loading: true };
+      initialHasPaidPaymentPeriodsState[credit.id] = false;
     });
     
     setPaymentInfo(initialLoadingState);
     setNextPaymentInfo(initialNextPaymentState);
     setInterestTodayInfo(initialInterestTodayState);
+    setHasPaidPaymentPeriods(initialHasPaidPaymentPeriodsState);
     
     // Tải dữ liệu cho tất cả credit song song
     const loadData = async () => {
@@ -397,17 +425,19 @@ export function CreditsTable({
         // Process all credits in parallel using Promise.all
         const results = await Promise.all(
           credits.map(async (credit) => {
-            const [info, nextPayment, interestToday] = await Promise.all([
+            const [info, nextPayment, interestToday, hasPaidPayments] = await Promise.all([
               calculateCreditPayment(credit.id),
               calculateNextPaymentDate(credit.id, credit),
-              calculateInterestToday(credit.id, credit)
+              calculateInterestToday(credit.id, credit),
+              checkHasPaidPaymentPeriods(credit.id)
             ]);
             
             return {
               creditId: credit.id,
               info,
               nextPayment,
-              interestToday
+              interestToday,
+              hasPaidPayments
             };
           })
         );
@@ -416,16 +446,19 @@ export function CreditsTable({
         const newPaymentInfo: Record<string, CreditPaymentInfo> = {};
         const newNextPaymentInfo: Record<string, NextPaymentInfo> = {};
         const newInterestTodayInfo: Record<string, InterestTodayInfo> = {};
+        const newHasPaidPaymentPeriodsInfo: Record<string, boolean> = {};
         
-        results.forEach(({ creditId, info, nextPayment, interestToday }) => {
+        results.forEach(({ creditId, info, nextPayment, interestToday, hasPaidPayments }) => {
           newPaymentInfo[creditId] = info;
           newNextPaymentInfo[creditId] = nextPayment;
           newInterestTodayInfo[creditId] = interestToday;
+          newHasPaidPaymentPeriodsInfo[creditId] = hasPaidPayments;
         });
         
         setPaymentInfo(newPaymentInfo);
         setNextPaymentInfo(newNextPaymentInfo);
         setInterestTodayInfo(newInterestTodayInfo);
+        setHasPaidPaymentPeriods(newHasPaidPaymentPeriodsInfo);
       } catch (error) {
         console.error('Error loading credit data:', error);
       }
@@ -434,7 +467,7 @@ export function CreditsTable({
     if (credits.length > 0) {
       loadData();
     }
-  }, [credits, calculateCreditPayment, calculateNextPaymentDate, calculateInterestToday]);
+  }, [credits, calculateCreditPayment, calculateNextPaymentDate, calculateInterestToday, checkHasPaidPaymentPeriods]);
 
   return (
     <div className="rounded-md border overflow-hidden mb-4">
@@ -670,6 +703,16 @@ export function CreditsTable({
                             <UnlockIcon className="h-4 w-4 text-amber-500" />
                           </Button>
                         </>
+                      ) : credit.status === 'deleted' ? (
+                        // Hợp đồng đã xóa - chỉ hiển thị nút xem chi tiết
+                        <Button 
+                          variant="ghost" 
+                          className="h-8 w-8 p-0" 
+                          onClick={() => onShowPaymentHistory(credit)}
+                          title="Xem chi tiết"
+                        >
+                          <DollarSignIcon className="h-4 w-4 text-gray-400" />
+                        </Button>
                       ) : (
                         <Button 
                           variant="ghost" 
@@ -681,28 +724,31 @@ export function CreditsTable({
                         </Button>
                       )
                     )}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <span className="sr-only">Mở menu</span>
-                          <MoreVertical className="h-4 w-4 text-gray-500" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-44">
-                        {onShowPaymentHistory && (
-                          <DropdownMenuItem onClick={() => onShowPaymentHistory(credit)}>
-                            Lịch sử thanh toán
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem onClick={() => onUpdateStatus(credit)}>
-                          Cập nhật trạng thái
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => onDelete(credit)} className="text-red-600">
-                          Xóa hợp đồng
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {/* Hiển thị dropdown menu nếu: hợp đồng đã đóng HOẶC (hợp đồng chưa bị xóa và chưa có kỳ thanh toán đã được thanh toán) */}
+                    {(credit.status === 'closed' || (credit.status !== 'deleted' && !hasPaidPaymentPeriods[credit.id])) && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="h-8 w-8 p-0">
+                            <span className="sr-only">Mở menu</span>
+                            <MoreVertical className="h-4 w-4 text-gray-500" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          {/* Hiển thị "Lịch sử thanh toán" cho hợp đồng đã đóng */}
+                          {credit.status === 'closed' && onShowPaymentHistory && (
+                            <DropdownMenuItem onClick={() => onShowPaymentHistory(credit)}>
+                              Lịch sử thanh toán
+                            </DropdownMenuItem>
+                          )}
+                          {/* Hiển thị "Xóa hợp đồng" cho hợp đồng chưa có kỳ thanh toán đã được thanh toán */}
+                          {credit.status !== 'closed' && (
+                            <DropdownMenuItem onClick={() => onDelete(credit)} className="text-red-600">
+                              Xóa hợp đồng
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

@@ -26,8 +26,8 @@ export function ExtensionTab({ credit, onDataChange }: ExtensionTabProps) {
     }
   };
 
-  // Check if credit is closed
-  const isClosed = credit?.status === CreditStatus.CLOSED;
+  // Check if credit is closed or deleted
+  const isClosed = credit?.status === CreditStatus.CLOSED || credit?.status === CreditStatus.DELETED;
 
   return (
     <div>

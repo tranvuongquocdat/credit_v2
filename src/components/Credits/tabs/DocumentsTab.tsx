@@ -3,12 +3,17 @@ import { Button } from '@/components/ui/button';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
+import { CreditStatus } from '@/models/credit';
 
 interface DocumentsTabProps {
   creditId: string;
+  creditStatus?: string;
 }
 
-export function DocumentsTab({ creditId }: DocumentsTabProps) {
+export function DocumentsTab({ creditId, creditStatus }: DocumentsTabProps) {
+  // Check if credit is closed or deleted
+  const isDisabled = creditStatus === CreditStatus.CLOSED || creditStatus === CreditStatus.DELETED;
+
   return (
     <div className="p-4">
       <SectionHeader
@@ -18,12 +23,12 @@ export function DocumentsTab({ creditId }: DocumentsTabProps) {
       />
       
       <div className="flex flex-wrap gap-4 mb-6">
-        <Button className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2">
+        <Button className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2" disabled={isDisabled}>
           <Icon name="upload" size={16} />
           Upload Ảnh
         </Button>
         
-        <Button className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2">
+        <Button className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2" disabled={isDisabled}>
           <Icon name="document" size={16} />
           In Chứng Từ
         </Button>
@@ -34,7 +39,7 @@ export function DocumentsTab({ creditId }: DocumentsTabProps) {
         <div className="border-2 border-dashed border-gray-300 rounded-md p-6 text-center">
           <Icon name="upload" size={40} className="mx-auto text-gray-400 mb-2" />
           <p className="text-gray-600 mb-2">Kéo thả hình ảnh vào đây hoặc</p>
-          <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+          <Button className="bg-blue-600 hover:bg-blue-700 text-white" disabled={isDisabled}>
             Chọn từ máy tính
           </Button>
           <p className="text-gray-500 text-sm mt-2">

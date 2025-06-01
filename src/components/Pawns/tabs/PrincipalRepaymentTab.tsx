@@ -22,8 +22,8 @@ export function PrincipalRepaymentTab({
   const [localRefreshTrigger, setLocalRefreshTrigger] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Check if pawn is closed
-  const isClosed = pawn?.status === PawnStatus.CLOSED;
+  // Check if pawn is closed or deleted
+  const isClosed = pawn?.status === PawnStatus.CLOSED || pawn?.status === PawnStatus.DELETED;
 
   const refreshData = () => {
     // Update both the parent counter and local counter

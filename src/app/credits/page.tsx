@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { ChevronLeft } from 'lucide-react';
+import { toast } from '@/components/ui/use-toast';
 
 // Import custom components
 import { FinancialSummary } from '@/components/common/FinancialSummary';
@@ -177,7 +178,11 @@ export default function CreditsPage() {
       refreshFinancial();
     } catch (error) {
       console.error('Error reopening contract:', error);
-      alert('Có lỗi xảy ra khi mở lại hợp đồng');
+      toast({
+        title: 'Lỗi',
+        description: 'Có lỗi xảy ra khi mở lại hợp đồng',
+        variant: 'destructive',
+      });
     }
   };
   
@@ -209,9 +214,39 @@ export default function CreditsPage() {
   };
   
   // Handle deleting credit
-  const handleDeleteCredit = (creditId: string) => {
-    handleDelete(creditId);
-    handleCloseDeleteDialog();
+  const handleDeleteCredit = async (creditId: string) => {
+    try {
+      const result = await handleDelete(creditId);
+      
+      // Kiểm tra nếu có lỗi từ việc xóa
+      if (result && result.error) {
+        // Hiển thị thông báo lỗi
+        toast({
+          title: 'Lỗi',
+          description: result.error.message || 'Không thể xóa hợp đồng',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      toast({
+        title: 'Thành công',
+        description: 'Hợp đồng đã được xóa thành công',
+        variant: 'default',
+      });
+      
+      // Refresh dữ liệu tài chính sau khi xóa thành công
+      refreshFinancial();
+    } catch (error) {
+      console.error('Error in handleDeleteCredit:', error);
+      toast({
+        title: 'Lỗi',
+        description: 'Có lỗi xảy ra khi xóa hợp đồng',
+        variant: 'destructive',
+      });
+    } finally {
+      handleCloseDeleteDialog();
+    }
   };
   
   // Handle opening payment history modal
@@ -221,11 +256,13 @@ export default function CreditsPage() {
   };
   
   // Handle closing payment history modal
-  const handleClosePaymentHistory = () => {
+  const handleClosePaymentHistory = (hasDataChanged?: boolean) => {
     setIsPaymentHistoryModalOpen(false);
     setPaymentHistoryCredit(null);
-    // Refresh data when payment history modal is closed
-    handleRefresh();
+    // Only refresh data if there were actual changes
+    if (hasDataChanged) {
+      handleRefresh();
+    }
   };
   
   // Handle refresh after contract operations

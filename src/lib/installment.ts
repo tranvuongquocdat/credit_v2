@@ -563,17 +563,51 @@ export async function updateInstallmentStatus(id: string, status: InstallmentSta
   }
 }
 
-// Delete an installment (soft delete by changing status)
+// Delete an installment (only if no payment periods exist)
 export async function deleteInstallment(id: string) {
   try {
+    // Check if installment has any payment periods
+    const { data: paymentPeriods, error: paymentError } = await supabase
+      .from('installment_payment_period')
+      .select('id')
+      .eq('installment_id', id)
+      .limit(1);
+    
+    if (paymentError) throw paymentError;
+    
+    // If there are payment periods, don't allow deletion
+    if (paymentPeriods && paymentPeriods.length > 0) {
+      return { 
+        success: false, 
+        error: { message: 'Không thể xóa hợp đồng đã có kỳ thanh toán' } 
+      };
+    }
+    
+    // Get installment data for history logging
+    const { data: installmentData, error: installmentError } = await supabase
+      .from('installments')
+      .select('down_payment, contract_code, employee_id')
+      .eq('id', id)
+      .single();
+    
+    if (installmentError) throw installmentError;
+    
+    // Record deletion history
+    const { recordInstallmentContractDeletion } = await import('@/lib/installmentAmountHistory');
+    await recordInstallmentContractDeletion(
+      id,
+      installmentData.employee_id,
+      installmentData.down_payment,
+      `Xóa hợp đồng trả góp ${installmentData.contract_code || id}`
+    );
+    
+    // Update status to DELETED instead of hard delete
     const { error } = await supabase
       .from('installments')
       .update({ status: InstallmentStatus.DELETED.toString() as any })
       .eq('id', id);
       
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
     
     return { 
       success: true, 

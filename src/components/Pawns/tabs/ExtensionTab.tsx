@@ -145,7 +145,7 @@ export function ExtensionTab({ pawn, onDataChange }: ExtensionTabProps) {
                     placeholder="Nhập số ngày gia hạn"
                     className="mt-1"
                     min={1}
-                    disabled={pawn.status === PawnStatus.CLOSED}
+                    disabled={pawn.status === PawnStatus.CLOSED || pawn.status === PawnStatus.DELETED}
                   />
                 </div>
 
@@ -161,7 +161,7 @@ export function ExtensionTab({ pawn, onDataChange }: ExtensionTabProps) {
                     }))}
                     placeholder="Nhập phí gia hạn"
                     className="mt-1"
-                    disabled={pawn.status === PawnStatus.CLOSED}
+                    disabled={pawn.status === PawnStatus.CLOSED || pawn.status === PawnStatus.DELETED}
                   />
                 </div>
 
@@ -176,7 +176,7 @@ export function ExtensionTab({ pawn, onDataChange }: ExtensionTabProps) {
                       date: e.target.value
                     }))}
                     className="mt-1"
-                    disabled={pawn.status === PawnStatus.CLOSED}
+                    disabled={pawn.status === PawnStatus.CLOSED || pawn.status === PawnStatus.DELETED}
                   />
                 </div>
 
@@ -192,7 +192,7 @@ export function ExtensionTab({ pawn, onDataChange }: ExtensionTabProps) {
                     placeholder="Ghi chú về việc gia hạn..."
                     className="mt-1"
                     rows={3}
-                    disabled={pawn.status === PawnStatus.CLOSED}
+                    disabled={pawn.status === PawnStatus.CLOSED || pawn.status === PawnStatus.DELETED}
                   />
                 </div>
               </div>
@@ -265,7 +265,7 @@ export function ExtensionTab({ pawn, onDataChange }: ExtensionTabProps) {
             <Button
               onClick={handleExtension}
               className="bg-orange-600 hover:bg-orange-700 text-white px-8 py-2"
-              disabled={loading || extensionData.extension_days <= 0 || pawn.status === PawnStatus.CLOSED}
+              disabled={loading || extensionData.extension_days <= 0 || pawn.status === PawnStatus.CLOSED || pawn.status === PawnStatus.DELETED}
             >
               {loading ? 'Đang xử lý...' : 'Xác nhận gia hạn'}
             </Button>
@@ -278,7 +278,7 @@ export function ExtensionTab({ pawn, onDataChange }: ExtensionTabProps) {
               })}
               variant="outline"
               className="px-8 py-2"
-              disabled={pawn.status === PawnStatus.CLOSED}
+              disabled={pawn.status === PawnStatus.CLOSED || pawn.status === PawnStatus.DELETED}
             >
               Đặt lại
             </Button>

@@ -22,7 +22,7 @@ import { formatCurrency, calculateDaysBetween, formatDate, formatDateTime } from
 
 interface PawnHistoryModalProps {
   isOpen: boolean;
-  onClose: () => void;
+  onClose: (hasDataChanged?: boolean) => void;
   pawn: PawnWithCustomerAndCollateral;
 }
 
@@ -42,6 +42,9 @@ export function PawnHistoryModal({
   const [pawnHistory, setPawnHistory] = useState<PawnHistoryRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+  
+  // State để track việc có thay đổi dữ liệu hay không
+  const [hasDataChanged, setHasDataChanged] = useState(false);
 
   const loadPaymentPeriods = useCallback(async () => {
     if (!pawn?.id) return;
@@ -129,6 +132,9 @@ export function PawnHistoryModal({
       } catch (err) {
         console.error('Error reloading pawn data:', err);
       }
+      
+      // Mark that data has changed
+      setHasDataChanged(true);
     } catch (err) {
       console.error('Error refreshing data:', err);
     }
@@ -410,6 +416,8 @@ export function PawnHistoryModal({
         return 'Hủy vay thêm';
       case PawnTransactionType.CANCEL_PRINCIPAL_REPAYMENT:
         return 'Hủy trả bớt gốc';
+      case 'contract_delete':
+        return 'Xóa hợp đồng';
       default:
         return 'Giao dịch khác';
     }
@@ -587,8 +595,42 @@ export function PawnHistoryModal({
     }
   };
 
+  // Cập nhật state pawn khi initialPawn thay đổi
+  useEffect(() => {
+    setCurrentPawn(pawn);
+  }, [pawn]);
+
+  // Load initial data when modal opens
+  useEffect(() => {
+    if (!isOpen || !pawn?.id) return;
+    
+    const loadInitialData = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        // Load payment periods
+        const { data: periodsData, error: periodsError } = await getPawnPaymentPeriods(pawn.id);
+        
+        if (periodsError) {
+          throw periodsError;
+        }
+        
+        setPaymentPeriods(periodsData || []);
+        setInitialLoadComplete(true);
+      } catch (err) {
+        console.error('Error loading initial data:', err);
+        setError('Không thể tải dữ liệu thanh toán');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadInitialData();
+  }, [isOpen, pawn?.id]);
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(hasDataChanged)}>
       <DialogContent className="sm:max-w-[800px] md:max-w-[900px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Hợp đồng cầm đồ</DialogTitle>
@@ -654,7 +696,7 @@ export function PawnHistoryModal({
           <PawnActionTabs
             tabs={DEFAULT_PAWN_TABS}
             activeTab={activeTab}
-            onChangeTab={setActiveTab}
+            onChangeTab={(tabId: PawnTabId) => setActiveTab(tabId)}
             variant="scrollable"
             className="mb-2"
           />

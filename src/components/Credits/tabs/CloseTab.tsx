@@ -22,7 +22,7 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   
   const loanAmount = credit?.loan_amount || 0;
-  const isClosed = credit?.status === CreditStatus.CLOSED;
+  const isClosed = credit?.status === CreditStatus.CLOSED || credit?.status === CreditStatus.DELETED;
   
   const handleCloseCredit = async (creditId: string) => {
     console.log('Closing credit:', creditId);
@@ -104,8 +104,8 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
     async function fetchPaymentPeriods() {
       if (!credit?.id) return;
       
-      // If credit is already closed, set remainingAmount to 0
-      if (credit.status === CreditStatus.CLOSED) {
+      // If credit is already closed or deleted, set remainingAmount to 0
+      if (credit.status === CreditStatus.CLOSED || credit.status === CreditStatus.DELETED) {
         setRemainingAmount(0);
         return;
       }
@@ -421,7 +421,8 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
             className="bg-blue-600 hover:bg-blue-700 text-white px-8"
             disabled={isClosed}
           >
-            {isClosed ? "Hợp đồng đã đóng" : "Đóng HĐ"}
+            {credit?.status === CreditStatus.DELETED ? "Hợp đồng đã xóa" : 
+             credit?.status === CreditStatus.CLOSED ? "Hợp đồng đã đóng" : "Đóng HĐ"}
           </Button>
         </div>
       </div>

@@ -24,8 +24,8 @@ export function AdditionalLoanTab({ pawn, onDataChange }: AdditionalLoanTabProps
     }
   };
 
-  // Check if pawn is closed
-  const isClosed = pawn?.status === PawnStatus.CLOSED;
+  // Check if pawn is closed or deleted
+  const isClosed = pawn?.status === PawnStatus.CLOSED || pawn?.status === PawnStatus.DELETED;
 
   return (
     <div>

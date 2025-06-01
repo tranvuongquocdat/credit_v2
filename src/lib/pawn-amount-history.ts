@@ -242,4 +242,35 @@ export async function deletePawnAmountHistory(historyId: string) {
     console.error('Error deleting pawn amount history:', error);
     return { data: null, error };
   }
+}
+
+/**
+ * Record pawn contract deletion
+ */
+export async function recordPawnContractDeletion(
+  pawnId: string,
+  loanAmount: number,
+  description?: string
+) {
+  try {
+    const { data, error } = await supabase
+      .from('pawn_history')
+      .insert({
+        pawn_id: pawnId,
+        transaction_type: 'contract_delete',
+        credit_amount: loanAmount, // Positive for credit (returning the loan amount)
+        debit_amount: 0,
+        transaction_date: new Date().toISOString(),
+        notes: description || 'Xóa hợp đồng cầm đồ'
+      } as any)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error recording pawn contract deletion:', error);
+    return { data: null, error };
+  }
 } 

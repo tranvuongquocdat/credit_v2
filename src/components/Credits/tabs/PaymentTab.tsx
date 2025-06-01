@@ -605,7 +605,7 @@ export function PaymentTab({
         <div className="border p-4 rounded mb-4">
           <PaymentForm 
             onClose={() => setShowPaymentForm(false)}
-            disabled={credit.status === CreditStatus.CLOSED}
+            disabled={credit.status === CreditStatus.CLOSED || credit.status === CreditStatus.DELETED}
             onSubmit={async (data) => {
               try {
               console.log('Payment data submitted:', data);
@@ -722,7 +722,7 @@ export function PaymentTab({
               const isEditing = editingPeriodId === period.id || editingPeriodId === `temp-${period.period_number}`;
               const periodId = period.id || `temp-${period.period_number}`;
               const isLoading = loadingPeriods[periodId];
-              const isDisabled = credit?.status === CreditStatus.CLOSED;
+              const isDisabled = credit?.status === CreditStatus.CLOSED || credit?.status === CreditStatus.DELETED;
               
               // Find the earliest unpaid period (first period not in DB)
               const earliestUnpaidIndex = periodsToDisplay.findIndex(p => 

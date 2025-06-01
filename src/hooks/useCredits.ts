@@ -91,7 +91,8 @@ export function useCredits() {
       const result = await deleteCredit(id);
       
       if (result.error) {
-        throw result.error;
+        setLoading(false);
+        return result; // Trả về kết quả có lỗi
       }
       
       // Remove from local state
@@ -103,9 +104,12 @@ export function useCredits() {
       } else {
         fetchCredits();
       }
+      
+      return result; // Trả về kết quả thành công
     } catch (err) {
       console.error('Error deleting credit:', err);
       setError(err);
+      return { data: null, error: err }; // Trả về lỗi
     } finally {
       setLoading(false);
     }

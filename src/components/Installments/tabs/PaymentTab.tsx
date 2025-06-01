@@ -125,13 +125,13 @@ export const PaymentTab: React.FC<PaymentTabProps> = ({
                             handleSaveDate(period, date);
                           }}
                           className="w-32 text-center mx-auto"
-                          disabled={installment.status === InstallmentStatus.CLOSED}
+                          disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
                         />
                       ) : (
                         <span
-                          className={`${index === findOldestUnpaidPeriodIndex && !isPaid && installment.status !== InstallmentStatus.CLOSED ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
+                          className={`${index === findOldestUnpaidPeriodIndex && !isPaid && installment.status !== InstallmentStatus.CLOSED && installment.status !== InstallmentStatus.DELETED ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
                           onClick={
-                            index === findOldestUnpaidPeriodIndex && !isPaid && installment.status !== InstallmentStatus.CLOSED
+                            index === findOldestUnpaidPeriodIndex && !isPaid && installment.status !== InstallmentStatus.CLOSED && installment.status !== InstallmentStatus.DELETED
                               ? () => handleStartDateEditing(period, index)
                               : undefined
                           }
@@ -163,21 +163,21 @@ export const PaymentTab: React.FC<PaymentTabProps> = ({
                                 setSelectedPeriodId(null);
                               }
                             }}
-                            disabled={installment.status === InstallmentStatus.CLOSED}
+                            disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
                           />
                           <button
                             className="text-xs bg-blue-500 text-white px-1 rounded"
                             onClick={() => handleSavePayment(period)}
-                            disabled={installment.status === InstallmentStatus.CLOSED}
+                            disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
                           >
                             OK
                           </button>
                         </div>
                       ) : (
                         <span
-                          className={`${index === findOldestUnpaidPeriodIndex && !isPaid && installment.status !== InstallmentStatus.CLOSED ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
+                          className={`${index === findOldestUnpaidPeriodIndex && !isPaid && installment.status !== InstallmentStatus.CLOSED && installment.status !== InstallmentStatus.DELETED ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
                           onClick={
-                            index === findOldestUnpaidPeriodIndex && !isPaid && installment.status !== InstallmentStatus.CLOSED
+                            index === findOldestUnpaidPeriodIndex && !isPaid && installment.status !== InstallmentStatus.CLOSED && installment.status !== InstallmentStatus.DELETED
                               ? () => handleStartEditing(period, index)
                               : undefined
                           }
@@ -191,7 +191,7 @@ export const PaymentTab: React.FC<PaymentTabProps> = ({
                     <td className="px-2 py-2 text-center border">
                       <Checkbox
                         checked={isPaid}
-                        disabled={processingCheckbox || installment.status === InstallmentStatus.CLOSED}
+                        disabled={processingCheckbox || installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
                         onCheckedChange={(checked) => {
                           console.log("checked",period.id);
                           if (period && period.id) {

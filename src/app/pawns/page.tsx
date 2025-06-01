@@ -13,11 +13,22 @@ import { FinancialSummary } from '@/components/common/FinancialSummary';
 import { useRouter } from 'next/navigation';
 import { PawnWithCustomerAndCollateral, PawnStatus } from '@/models/pawn';
 import { getPawns } from '@/lib/pawn';
+import { deletePawn } from '@/lib/pawn';
 import { Button } from '@/components/ui/button';
 import { Plus, Download } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/supabase';
 import { StoreFinancialData } from '@/lib/store';
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface PawnFilters {
   contract_code: string;
@@ -252,6 +263,10 @@ export default function PawnsPage() {
   const [selectedPawnId, setSelectedPawnId] = useState<string>('');
   const [selectedPawn, setSelectedPawn] = useState<PawnWithCustomerAndCollateral | null>(null);
   
+  // State for delete confirmation dialog
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [pawnToDelete, setPawnToDelete] = useState<PawnWithCustomerAndCollateral | null>(null);
+  
   // Lấy dữ liệu tài chính tổng hợp
   const { data: financialSummary, refresh: refreshFinancial } = usePawnsSummary();
   
@@ -391,9 +406,63 @@ export default function PawnsPage() {
   };
 
   // Handle close history modal
-  const handleCloseHistoryModal = () => {
+  const handleCloseHistoryModal = (hasDataChanged?: boolean) => {
     setIsHistoryModalOpen(false);
     setSelectedPawn(null);
+    // Only refresh data if there were actual changes
+    if (hasDataChanged) {
+      loadPawns(currentPage, filters);
+      refreshFinancial();
+    }
+  };
+  
+  // Handle delete pawn
+  const handleDelete = async (pawnId: string) => {
+    // Find the pawn to delete
+    const pawn = pawns.find(p => p.id === pawnId);
+    if (!pawn) return;
+    
+    // Set the pawn to delete and open dialog
+    setPawnToDelete(pawn);
+    setIsDeleteDialogOpen(true);
+  };
+  
+  // Handle confirming delete
+  const handleConfirmDelete = async () => {
+    if (!pawnToDelete) return;
+    
+    try {
+      const result = await deletePawn(pawnToDelete.id);
+      
+      if (result.error) {
+        toast({
+          title: 'Lỗi',
+          description: result.error.message || 'Không thể xóa hợp đồng',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      toast({
+        title: 'Thành công',
+        description: 'Hợp đồng đã được xóa thành công',
+        variant: 'default',
+      });
+      
+      // Reload data
+      loadPawns(currentPage, filters);
+      refreshFinancial();
+    } catch (error) {
+      console.error('Error deleting pawn:', error);
+      toast({
+        title: 'Lỗi',
+        description: 'Có lỗi xảy ra khi xóa hợp đồng',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setPawnToDelete(null);
+    }
   };
   
   // Handle export Excel
@@ -479,6 +548,7 @@ export default function PawnsPage() {
           statusMap={statusMap}
           onEdit={handleEditPawn}
           onViewDetail={handleViewDetail}
+          onDelete={handleDelete}
         />
         
         {/* Pagination */}
@@ -514,6 +584,28 @@ export default function PawnsPage() {
           pawn={selectedPawn}
         />
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xóa hợp đồng</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bạn có chắc chắn muốn xóa hợp đồng {pawnToDelete?.contract_code}?
+              Hành động này không thể hoàn tác.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleConfirmDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Xóa
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 } 

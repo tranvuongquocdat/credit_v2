@@ -66,7 +66,7 @@ export const DEFAULT_INSTALLMENT_TABS = [
 ];
 
 interface CreditActionTabsProps {
-  tabs: { id: TabId; label: string }[];
+  tabs: { id: TabId; label: string; disabled?: boolean }[];
   activeTab: string;
   onChangeTab: (tabId: TabId) => void;
   variant?: "default" | "scrollable";
@@ -94,12 +94,13 @@ export function CreditActionTabs({
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => onChangeTab(tab.id as TabId)}
+            onClick={() => !tab.disabled && onChangeTab(tab.id as TabId)}
+            disabled={tab.disabled}
             className={`px-4 py-2 transition-all ${
               activeTab === tab.id
                 ? "border-b-2 border-blue-500 text-blue-600 font-medium"
                 : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-            }`}
+            } ${tab.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
           >
             {tab.label}
           </button>
@@ -111,7 +112,7 @@ export function CreditActionTabs({
 
 interface InstallmentPaymentHistoryModalProps {
   isOpen: boolean;
-  onClose: () => void;
+  onClose: (hasDataChanged?: boolean) => void;
   installment: InstallmentWithCustomer;
   onContractStatusChange?: () => void;
   onPaymentUpdate?: () => void;
@@ -180,6 +181,9 @@ export function InstallmentPaymentHistoryModal({
   const [tempEditedDate, setTempEditedDate] = useState<string | null>(null);
   const [tempEditedAmount, setTempEditedAmount] = useState<number | null>(null);
 
+  // State để track việc có thay đổi dữ liệu hay không
+  const [hasDataChanged, setHasDataChanged] = useState(false);
+
   // Pre-load các modules cần thiết để tránh lag khi sử dụng dynamic imports
   useEffect(() => {
     if (isOpen) {
@@ -202,12 +206,15 @@ export function InstallmentPaymentHistoryModal({
     async (currentInstallmentId: string, sessionId: string) => {
       if (!currentInstallmentId) return;
 
+      console.log('loadPaymentPeriods called with:', currentInstallmentId, sessionId);
       setLoading(true);
       setError(null);
 
       try {
         const { data, error } =
           await getInstallmentPaymentPeriods(currentInstallmentId);
+
+        console.log('getInstallmentPaymentPeriods result:', { data, error });
 
         // Kiểm tra nếu modal session vẫn là session hiện tại
         if (sessionId !== modalSessionId.current) {
@@ -221,6 +228,7 @@ export function InstallmentPaymentHistoryModal({
 
         // Set payment periods directly from data
         setPaymentPeriods(data || []);
+        console.log('Payment periods set:', data?.length || 0, 'periods');
       } catch (err) {
         console.error("Error loading payment periods:", err);
         setError("Không thể tải dữ liệu thanh toán");
@@ -233,20 +241,19 @@ export function InstallmentPaymentHistoryModal({
     [],
   );
 
-  // Cập nhật state installment khi initialInstallment thay đổi và tải dữ liệu kỳ thanh toán
+  // Cập nhật state installment khi initialInstallment thay đổi
   useEffect(() => {
-    if (!isOpen) return;
-
     setInstallment(initialInstallment);
-    console.log("Installment data:", initialInstallment);
+  }, [initialInstallment]);
 
-    // Tải lại dữ liệu kỳ thanh toán mỗi khi installment thay đổi và modal đang mở
-    if (initialInstallment?.id) {
-      loadPaymentPeriods(initialInstallment.id, modalSessionId.current);
+  // Load dữ liệu kỳ thanh toán khi modal mở
+  useEffect(() => {
+    if (isOpen && installment?.id) {
+      console.log('Loading payment periods for installment:', installment.id);
+      const currentSessionId = modalSessionId.current;
+      loadPaymentPeriods(installment.id, currentSessionId);
     }
-    setRotationLoanAmount(initialInstallment?.installment_amount?.toString() || "0");
-    setRotationDownPayment(initialInstallment?.amount_given?.toString() || "0");
-  }, [initialInstallment, isOpen, loadPaymentPeriods]);
+  }, [isOpen, installment?.id, loadPaymentPeriods]);
 
   // Hàm reload thông tin hợp đồng
   const reloadInstallmentInfo = async () => {
@@ -312,6 +319,12 @@ export function InstallmentPaymentHistoryModal({
   // Memoize kết quả để tránh tính toán lại nhiều lần, cải thiện hiệu năng
   const calculateCombinedPaymentPeriods =
     useMemo((): InstallmentPaymentPeriod[] => {
+      console.log('calculateCombinedPaymentPeriods called with:', {
+        installment: installment?.id,
+        paymentPeriods: paymentPeriods.length,
+        hasInstallmentData: !!installment
+      });
+
       // Nếu không có dữ liệu hợp đồng, trả về mảng rỗng
       if (
         !installment ||
@@ -319,6 +332,7 @@ export function InstallmentPaymentHistoryModal({
         !installment.payment_period ||
         !installment.start_date
       ) {
+        console.log('Missing installment data, returning paymentPeriods:', paymentPeriods.length);
         return paymentPeriods;
       }
 
@@ -672,6 +686,7 @@ export function InstallmentPaymentHistoryModal({
       
       // Refresh data after successful operation
       if (installment?.id) {
+        // Reload payment periods data
         const { data: paymentData } = await getInstallmentPaymentPeriods(installment.id);
         if (paymentData) {
           setPaymentPeriods(paymentData);
@@ -689,10 +704,13 @@ export function InstallmentPaymentHistoryModal({
           setInstallment(installmentData);
         }
         
-        // Call callback to update summary
+        // Call callback to update summary immediately
         if (onPaymentUpdate) {
           onPaymentUpdate();
         }
+        
+        // Mark that data has changed
+        setHasDataChanged(true);
       }
       
       const endTime = performance.now();
@@ -899,6 +917,9 @@ export function InstallmentPaymentHistoryModal({
       if (onPaymentUpdate) {
         onPaymentUpdate();
       }
+      
+      // Mark that data has changed
+      setHasDataChanged(true);
     } catch (error) {
       console.error("Error rotating contract:", error);
       toast({
@@ -1001,6 +1022,9 @@ export function InstallmentPaymentHistoryModal({
       if (onPaymentUpdate) {
         onPaymentUpdate();
       }
+      
+      // Mark that data has changed
+      setHasDataChanged(true);
 
       toast({
         title: "Thành công",
@@ -1017,7 +1041,7 @@ export function InstallmentPaymentHistoryModal({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(hasDataChanged)}>
       <DialogContent className="sm:max-w-[800px] md:max-w-[900px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Hợp đồng trả góp</DialogTitle>
@@ -1151,7 +1175,7 @@ export function InstallmentPaymentHistoryModal({
             variant="scrollable"
             className="mb-2"
           />
-
+          
           {/* Content based on active tab */}
           {activeTab === "payment" && (
             <PaymentTab
@@ -1245,7 +1269,7 @@ export function InstallmentPaymentHistoryModal({
                 <Button
                   className="bg-blue-600 hover:bg-blue-700 text-white px-8"
                   onClick={showCloseInstallmentConfirmation}
-                  disabled={installment?.status === InstallmentStatus.CLOSED}
+                  disabled={installment?.status === InstallmentStatus.CLOSED || installment?.status === InstallmentStatus.DELETED}
                 >
                   Đóng HĐ
                 </Button>
@@ -1287,12 +1311,18 @@ export function InstallmentPaymentHistoryModal({
               />
 
               <div className="flex flex-wrap gap-4 mb-6">
-                <Button className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2">
+                <Button 
+                  className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
+                  disabled={installment?.status === InstallmentStatus.DELETED}
+                >
                   <Icon name="upload" size={16} />
                   Upload Ảnh
                 </Button>
 
-                <Button className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2">
+                <Button 
+                  className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
+                  disabled={installment?.status === InstallmentStatus.DELETED}
+                >
                   <Icon name="document" size={16} />
                   In Chứng Từ
                 </Button>
@@ -1300,7 +1330,7 @@ export function InstallmentPaymentHistoryModal({
 
               {/* Document upload area */}
               <div className="mb-6">
-                <div className="border-2 border-dashed border-gray-300 rounded-md p-6 text-center">
+                <div className={`border-2 border-dashed border-gray-300 rounded-md p-6 text-center ${installment?.status === InstallmentStatus.DELETED ? 'opacity-50 pointer-events-none' : ''}`}>
                   <Icon
                     name="upload"
                     size={40}
@@ -1309,7 +1339,10 @@ export function InstallmentPaymentHistoryModal({
                   <p className="text-gray-600 mb-2">
                     Kéo thả hình ảnh vào đây hoặc
                   </p>
-                  <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                  <Button 
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                    disabled={installment?.status === InstallmentStatus.DELETED}
+                  >
                     Chọn từ máy tính
                   </Button>
                   <p className="text-gray-500 text-sm mt-2">
@@ -1531,7 +1564,7 @@ export function InstallmentPaymentHistoryModal({
                         value={rotationLoanDate}
                         onChange={(date) => setRotationLoanDate(date)}
                         className="w-full"
-                        disabled={installment.status === InstallmentStatus.CLOSED}
+                        disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
                       />
                     </div>
                     <div className="ml-3 text-sm text-gray-500">
@@ -1551,7 +1584,7 @@ export function InstallmentPaymentHistoryModal({
                         className="border rounded p-2 w-full"
                         value={formatNumberWithDot(parseFormattedNumber(rotationLoanAmount))}
                         onChange={handleRotationLoanAmountChange}
-                        disabled={installment.status === InstallmentStatus.CLOSED}
+                        disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
                       />
                     </div>
                     <div className="ml-3 text-sm text-gray-500">
@@ -1571,7 +1604,7 @@ export function InstallmentPaymentHistoryModal({
                         className="border rounded p-2 w-full"
                         value={formatNumberWithDot(parseFormattedNumber(rotationDownPayment))}
                         onChange={handleRotationDownPaymentChange}
-                        disabled={installment.status === InstallmentStatus.CLOSED}
+                        disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
                       />
                     </div>
                     <div className="ml-3 text-sm text-gray-500">
@@ -1593,7 +1626,7 @@ export function InstallmentPaymentHistoryModal({
                         className="border rounded p-2 w-full"
                         value={rotationDuration}
                         onChange={(e) => setRotationDuration(e.target.value)}
-                        disabled={installment.status === InstallmentStatus.CLOSED}
+                        disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
                       />
                     </div>
                     <div className="ml-3 text-sm text-gray-500">
@@ -1621,7 +1654,7 @@ export function InstallmentPaymentHistoryModal({
                         className="border rounded p-2 w-full"
                         value={rotationPaymentPeriod}
                         onChange={(e) => setRotationPaymentPeriod(e.target.value)}
-                        disabled={installment.status === InstallmentStatus.CLOSED}
+                        disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
                       />
                     </div>
                     <div className="ml-3 text-sm text-gray-500">
@@ -1650,7 +1683,7 @@ export function InstallmentPaymentHistoryModal({
                   <Button
                     className="bg-blue-600 hover:bg-blue-700 text-white px-8"
                     onClick={handleRotateContract}
-                    disabled={isRotating || installment.status === InstallmentStatus.CLOSED}
+                    disabled={isRotating || installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
                   >
                     {isRotating ? (
                       <>

@@ -50,17 +50,11 @@ const sidebarItems: SidebarItem[] = [
     title: 'Cầm đồ', 
     path: '/pawns', 
     icon: <FiShoppingBag size={20} />,
-    redColor: true,
-    submenu: [
-      { title: 'Quản lý cầm đồ', path: '/pawns', icon: <FiShoppingBag size={18} /> },
-      { title: 'Cảnh báo cầm đồ', path: '/pawn-warnings', icon: <FiAlertTriangle size={18} />, redColor: true },
-    ]
   },
   { 
     title: 'Tín chấp', 
     path: '/credits', 
     icon: <FiCreditCard size={20} />,
-    redColor: true,
   },
   { 
     title: 'Trả góp', 

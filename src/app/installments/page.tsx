@@ -89,7 +89,6 @@ export default function InstallmentsPage() {
   }, [searchParams]);
   
   // State for dialogs
-  const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedInstallment, setSelectedInstallment] = useState<InstallmentWithCustomer | null>(null);
   
@@ -136,12 +135,10 @@ export default function InstallmentsPage() {
   // Handle opening status dialog
   const handleOpenStatusDialog = (installment: InstallmentWithCustomer) => {
     setSelectedInstallment(installment);
-    setIsStatusDialogOpen(true);
   };
   
   // Handle closing status dialog
   const handleCloseStatusDialog = () => {
-    setIsStatusDialogOpen(false);
     setSelectedInstallment(null);
   };
   
@@ -200,6 +197,17 @@ export default function InstallmentsPage() {
   const handleShowPaymentActions = (installment: InstallmentWithCustomer) => {
     setSelectedInstallmentForPayment(installment);
     setIsPaymentActionsModalOpen(true);
+  };
+
+  // Handle closing payment history modal
+  const handleClosePaymentHistory = (hasDataChanged?: boolean) => {
+    setIsPaymentActionsModalOpen(false);
+    setSelectedInstallmentForPayment(null);
+    // Only refresh data if there were actual changes
+    if (hasDataChanged) {
+      refetch();
+      refreshFinancial();
+    }
   };
 
   return (
@@ -278,11 +286,11 @@ export default function InstallmentsPage() {
         {selectedInstallmentForPayment && (
           <InstallmentPaymentHistoryModal
             isOpen={isPaymentActionsModalOpen}
-            onClose={() => setIsPaymentActionsModalOpen(false)}
+            onClose={handleClosePaymentHistory}
             installment={selectedInstallmentForPayment}
             onContractStatusChange={() => {
               refetch();
-              setIsPaymentActionsModalOpen(false);
+              handleClosePaymentHistory(true);
             }}
             onPaymentUpdate={refreshFinancial}
           />
@@ -299,45 +307,13 @@ export default function InstallmentsPage() {
           />
         </div>
         
-        {/* Status Update Dialog */}
-        <Dialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
-          <DialogContent className="sm:max-w-[400px]">
-            <DialogHeader>
-              <DialogTitle>Cập nhật trạng thái</DialogTitle>
-              <DialogDescription>
-                Cập nhật trạng thái cho hợp đồng <strong>{selectedInstallment?.contract_code}</strong>
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="grid grid-cols-2 gap-3 py-4">
-              {Object.entries(statusMap).map(([status, { label, color }]) => (
-                <Button
-                  key={status}
-                  className={cn("justify-start", color)}
-                  variant="outline"
-                  onClick={() => handleUpdateStatusAction(status as InstallmentStatus)}
-                >
-                  {label}
-                </Button>
-              ))}
-            </div>
-            
-            <DialogFooter>
-              <Button variant="outline" onClick={handleCloseStatusDialog}>
-                Hủy
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-        
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Xác nhận xóa</AlertDialogTitle>
+              <AlertDialogTitle>Xóa hợp đồng</AlertDialogTitle>
               <AlertDialogDescription>
-                Bạn có chắc chắn muốn xóa hợp đồng <strong>{selectedInstallment?.contract_code}</strong>?
-                <br />
+                Bạn có chắc chắn muốn xóa hợp đồng {selectedInstallment?.contract_code}?
                 Hành động này không thể hoàn tác.
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -345,9 +321,9 @@ export default function InstallmentsPage() {
               <AlertDialogCancel>Hủy</AlertDialogCancel>
               <AlertDialogAction
                 onClick={handleDeleteAction}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                className="bg-red-600 hover:bg-red-700"
               >
-                Xác nhận xóa
+                Xóa
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

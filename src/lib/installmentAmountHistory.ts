@@ -9,7 +9,8 @@ export enum TransactionType {
   CLOSE_CONTRACT = 'contract_close',
   REOPEN_CONTRACT = 'contract_reopen',
   ROTATE_CONTRACT = 'contract_rotate',
-  DEBT_PAYMENT = 'debt_payment'
+  DEBT_PAYMENT = 'debt_payment',
+  CONTRACT_DELETE = 'contract_delete'
 }
 
 // DB model - map trực tiếp với database
@@ -260,6 +261,24 @@ export async function recordBulkPayment(
       error
     };
   }
+}
+
+/**
+ * Record installment contract deletion
+ */
+export async function recordInstallmentContractDeletion(
+  installmentId: string,
+  employeeId: string,
+  downPayment: number,
+  description?: string
+) {
+  return createInstallmentAmountHistory({
+    installmentId,
+    employeeId,
+    creditAmount: downPayment, // Positive for credit (returning the down payment)
+    description: description || 'Xóa hợp đồng trả góp',
+    transactionType: TransactionType.CONTRACT_DELETE
+  });
 }
 
 /**

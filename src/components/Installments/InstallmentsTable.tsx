@@ -49,9 +49,27 @@ interface InstallmentWithPayments extends InstallmentWithCustomer {
   remainingToPay?: number;
   overdueDays?: number;  // Number of days overdue for display
   isDueToday?: boolean;  // Flag for payments due today
-  nextPaymentDate?: string; // Next payment date
+  nextPaymentDate?: string | null; // Next payment date
   payment_due_date?: string | null;  // Payment due date from DB
   statusInfo?: { label: string; color: string }; // Status info for display
+}
+
+// Define status info interface
+interface StatusInfo {
+  label: string;
+  color: string;
+}
+
+// Define installment with status info
+interface InstallmentWithStatusInfo extends InstallmentWithCustomer {
+  statusInfo?: StatusInfo;
+  totalPaid?: number;
+  remainingToPay?: number;
+  payments?: InstallmentPaymentPeriod[];
+  oldDebt?: number;
+  nextPaymentDate?: string | null;
+  isDueToday?: boolean;
+  overdueDays?: number;
 }
 
 interface InstallmentsTableProps {
@@ -76,22 +94,45 @@ export function InstallmentsTable({
   onShowPaymentActions,
 }: InstallmentsTableProps) {
   // State để lưu trữ dữ liệu hợp đồng đã kèm thông tin thanh toán
-  const [installmentsWithPayments, setInstallmentsWithPayments] = useState<InstallmentWithPayments[]>([]);
+  const [installmentsWithPayments, setInstallmentsWithPayments] = useState<InstallmentWithStatusInfo[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
   
-  // Get current store from store context
-  const { currentStore } = useStore();
+  // State để lưu trữ thông tin có kỳ thanh toán đã được thanh toán hay không cho mỗi installment
+  const [hasPaidPaymentPeriods, setHasPaidPaymentPeriods] = useState<Record<string, boolean>>({});
   
   // State for unlock confirmation dialog
   const [unlockConfirmOpen, setUnlockConfirmOpen] = useState(false);
-  const [installmentToUnlock, setInstallmentToUnlock] = useState<InstallmentWithPayments | null>(null);
+  const [installmentToUnlock, setInstallmentToUnlock] = useState<InstallmentWithStatusInfo | null>(null);
   
   // State for payment due date update
   const [selectedDateInstallmentId, setSelectedDateInstallmentId] = useState<string | null>(null);
   const [isUpdatingDueDate, setIsUpdatingDueDate] = useState(false);
   
-  // Toast for notifications
+  // Get current store and toast
+  const { currentStore } = useStore();
   const { toast } = useToast();
+  
+  // Hàm kiểm tra xem installment có kỳ thanh toán nào đã được thanh toán không
+  const checkHasPaidPaymentPeriods = useCallback(async (installmentId: string): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase
+        .from('installment_payment_period')
+        .select('actual_amount')
+        .eq('installment_id', installmentId)
+        .gt('actual_amount', 0)
+        .limit(1);
+      
+      if (error) {
+        console.error('Error checking paid payment periods:', error);
+        return false;
+      }
+      
+      return data && data.length > 0;
+    } catch (error) {
+      console.error('Error in checkHasPaidPaymentPeriods:', error);
+      return false;
+    }
+  }, []);
 
   // Extract loadPaymentData to a separate function so it can be called from other places
   const loadPaymentData = useCallback(async () => {
@@ -101,7 +142,7 @@ export function InstallmentsTable({
     
     try {
       // Tạo bản sao dữ liệu ban đầu
-      const enhancedInstallments: InstallmentWithPayments[] = [...installments];
+      const enhancedInstallments: InstallmentWithStatusInfo[] = [...installments];
       // Filter installments by store_id if currentStore is available
       const filteredInstallments = currentStore ? 
         enhancedInstallments.filter(installment => installment.store_id === currentStore.id) : 
@@ -241,16 +282,38 @@ export function InstallmentsTable({
   // Nạp dữ liệu thanh toán khi installments thay đổi
   useEffect(() => {
     loadPaymentData();
-  }, [loadPaymentData]);
+    
+    // Load payment periods info
+    const loadPaymentPeriodsInfo = async () => {
+      const newHasPaidPaymentPeriodsInfo: Record<string, boolean> = {};
+      
+      const results = await Promise.all(
+        installments.map(async (installment) => {
+          const hasPaidPayments = await checkHasPaidPaymentPeriods(installment.id);
+          return { installmentId: installment.id, hasPaidPayments };
+        })
+      );
+      
+      results.forEach(({ installmentId, hasPaidPayments }) => {
+        newHasPaidPaymentPeriodsInfo[installmentId] = hasPaidPayments;
+      });
+      
+      setHasPaidPaymentPeriods(newHasPaidPaymentPeriodsInfo);
+    };
+    
+    if (installments.length > 0) {
+      loadPaymentPeriodsInfo();
+    }
+  }, [loadPaymentData, installments, checkHasPaidPaymentPeriods]);
 
   // Show confirmation dialog before unlocking
-  const confirmUnlockInstallment = (installment: InstallmentWithPayments) => {
+  const confirmUnlockInstallment = (installment: InstallmentWithStatusInfo) => {
     setInstallmentToUnlock(installment);
     setUnlockConfirmOpen(true);
   };
 
   // Add function to handle unlocking a closed installment
-  const handleUnlockInstallment = async (installment: InstallmentWithPayments) => {
+  const handleUnlockInstallment = async (installment: InstallmentWithStatusInfo) => {
     // Close the dialog
     setUnlockConfirmOpen(false);
     
@@ -531,6 +594,7 @@ export function InstallmentsTable({
                 </td>
                 <td className="py-3 px-3 text-center">
                   <div className="inline-flex items-center justify-center gap-1">
+                    {/* Luôn hiển thị nút xem chi tiết thanh toán */}
                     {onShowPaymentHistory && (
                       <Button 
                         variant="ghost" 
@@ -541,63 +605,59 @@ export function InstallmentsTable({
                         <CalendarIcon className="h-4 w-4 text-gray-500" />
                       </Button>
                     )}
-                    {installment.status === InstallmentStatus.CLOSED ? (
-                      <Button 
-                        variant="ghost" 
-                        className="h-8 w-8 p-0" 
-                        onClick={() => confirmUnlockInstallment(installment)}
-                        title="Mở lại hợp đồng"
-                      >
-                        <UnlockIcon className="h-4 w-4 text-amber-500" />
-                      </Button>
-                    ) : onShowPaymentActions && (
+                    
+                    {/* Luôn hiển thị nút thao tác thanh toán/xem chi tiết tài chính */}
+                    {onShowPaymentActions && (
                       <Button 
                         variant="ghost" 
                         className="h-8 w-8 p-0" 
                         onClick={() => onShowPaymentActions(installment)}
-                        title="Thao tác thanh toán"
+                        title={installment.status === InstallmentStatus.DELETED ? "Xem chi tiết tài chính" : "Thao tác thanh toán"}
                       >
-                        <DollarSignIcon className="h-4 w-4 text-gray-500" />
+                        <DollarSignIcon className={`h-4 w-4 ${installment.status === InstallmentStatus.DELETED ? 'text-gray-400' : 'text-gray-500'}`} />
                       </Button>
                     )}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <span className="sr-only">Mở menu</span>
-                          <MoreVerticalIcon className="h-4 w-4 text-gray-500" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-44">
-                        <DropdownMenuItem onClick={() => onUpdateStatus(installment)}>
-                          Cập nhật trạng thái
-                        </DropdownMenuItem>
-                        {onShowPaymentHistory && (
-                          <DropdownMenuItem onClick={() => onShowPaymentHistory(installment)}>
-                            Lịch sử thanh toán
-                          </DropdownMenuItem>
+                    
+                    {/* Chỉ hiển thị các nút khác nếu hợp đồng chưa bị xóa */}
+                    {installment.status !== InstallmentStatus.DELETED && (
+                      <>
+                        {installment.status === InstallmentStatus.CLOSED && (
+                          <Button 
+                            variant="ghost" 
+                            className="h-8 w-8 p-0" 
+                            onClick={() => confirmUnlockInstallment(installment)}
+                            title="Mở lại hợp đồng"
+                          >
+                            <UnlockIcon className="h-4 w-4 text-amber-500" />
+                          </Button>
                         )}
-                        {installment.status === InstallmentStatus.CLOSED ? (
-                          <>
-                            <DropdownMenuItem onClick={() => confirmUnlockInstallment(installment)}>
-                              Mở khoá hợp đồng
-                            </DropdownMenuItem>
-                            {onShowPaymentActions && (
-                              <DropdownMenuItem onClick={() => onShowPaymentActions(installment)}>
-                                Thao tác thanh toán
-                              </DropdownMenuItem>
-                            )}
-                          </>
-                        ) : onShowPaymentActions && (
-                          <DropdownMenuItem onClick={() => onShowPaymentActions(installment)}>
-                            Thao tác thanh toán
-                          </DropdownMenuItem>
+                        {/* Hiển thị dropdown menu nếu: hợp đồng đã đóng HOẶC chưa có kỳ thanh toán đã được thanh toán */}
+                        {(installment.status === InstallmentStatus.CLOSED || !hasPaidPaymentPeriods[installment.id]) && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-8 w-8 p-0">
+                                <span className="sr-only">Mở menu</span>
+                                <MoreVerticalIcon className="h-4 w-4 text-gray-500" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              {/* Hiển thị "Lịch sử thanh toán" cho hợp đồng đã đóng */}
+                              {installment.status === InstallmentStatus.CLOSED && onShowPaymentHistory && (
+                                <DropdownMenuItem onClick={() => onShowPaymentHistory(installment)}>
+                                  Lịch sử thanh toán
+                                </DropdownMenuItem>
+                              )}
+                              {/* Hiển thị "Xóa hợp đồng" cho hợp đồng chưa có kỳ thanh toán đã được thanh toán */}
+                              {installment.status !== InstallmentStatus.CLOSED && (
+                                <DropdownMenuItem onClick={() => onDelete(installment)} className="text-red-600">
+                                  Xóa hợp đồng
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         )}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => onDelete(installment)} className="text-red-600">
-                          Xóa hợp đồng
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                      </>
+                    )}
                   </div>
                 </td>
               </tr>

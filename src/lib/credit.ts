@@ -247,10 +247,45 @@ export async function markCreditAsOverdue(id: string) {
 }
 
 /**
- * Xoá hợp đồng
+ * Xoá hợp đồng (chỉ khi chưa có kỳ thanh toán nào)
  */
 export async function deleteCredit(id: string) {
   try {
+    // Kiểm tra xem hợp đồng có kỳ thanh toán nào không
+    const { data: paymentPeriods, error: paymentError } = await supabase
+      .from('credit_payment_periods')
+      .select('id')
+      .eq('credit_id', id)
+      .limit(1);
+    
+    if (paymentError) throw paymentError;
+    
+    // Nếu có kỳ thanh toán, không cho phép xóa
+    if (paymentPeriods && paymentPeriods.length > 0) {
+      return { 
+        data: null, 
+        error: { message: 'Không thể xóa hợp đồng đã có kỳ thanh toán' } 
+      };
+    }
+    
+    // Lấy thông tin hợp đồng để ghi lịch sử
+    const { data: creditData, error: creditError } = await supabase
+      .from('credits')
+      .select('loan_amount, contract_code')
+      .eq('id', id)
+      .single();
+    
+    if (creditError) throw creditError;
+    
+    // Ghi lịch sử xóa hợp đồng
+    const { recordContractDeletion } = await import('@/lib/credit-amount-history');
+    await recordContractDeletion(
+      id,
+      creditData.loan_amount,
+      `Xóa hợp đồng ${creditData.contract_code || id}`
+    );
+    
+    // Cập nhật trạng thái hợp đồng thành DELETED
     const { data, error } = await supabase
       .from('credits')
       .update({
