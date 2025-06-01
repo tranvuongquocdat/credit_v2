@@ -1,19 +1,19 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
-import { PaymentForm } from '../PaymentForm';
 import { CreditWithCustomer, CreditStatus } from '@/models/credit';
 import { CreditPaymentPeriod } from '@/models/credit-payment';
 import { toast } from '@/components/ui/use-toast';
-import { PrincipalChange, calculateInterestWithPrincipalChanges } from '@/lib/interest-calculator';
-import { getPrincipalChangesForCredit } from '@/lib/credit-principal-changes';
+import { getExpectedMoney } from '@/lib/Credits/create_principal_payment_history';
+import { supabase } from '@/lib/supabase';
+import { convertFromHistoryToTimeArrayWithStatus } from '@/lib/Credits/convert_from_history_to_time_array';
+import { getCreditPaymentHistory } from '@/lib/Credits/payment_history';
 
 type PaymentTabProps = {
   credit: CreditWithCustomer | null;
   paymentPeriods: CreditPaymentPeriod[];
-  combinedPaymentPeriods: CreditPaymentPeriod[];
   loading: boolean;
   error: string | null;
   showPaymentForm: boolean;
@@ -22,7 +22,6 @@ type PaymentTabProps = {
   formatDate: (date: string) => string;
   calculateDaysBetween: (start: Date, end: Date) => number;
   onDataChange?: () => void;
-  principalChanges?: PrincipalChange[];
 };
 
 // Helper function to format number with thousand separators for input
@@ -37,8 +36,6 @@ const parseFormattedNumber = (str: string): number => {
 
 export function PaymentTab({
   credit,
-  paymentPeriods,
-  combinedPaymentPeriods,
   loading,
   error,
   showPaymentForm,
@@ -46,312 +43,148 @@ export function PaymentTab({
   formatCurrency,
   formatDate,
   calculateDaysBetween,
-  onDataChange,
-  principalChanges = [] // Default to empty array
+  onDataChange
 }: PaymentTabProps) {
   // State for inline payment editing
   const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
-  const [localPrincipalChanges, setLocalPrincipalChanges] = useState<PrincipalChange[]>(principalChanges);
   // Add loading state for checkbox operations
   const [loadingPeriods, setLoadingPeriods] = useState<Record<string, boolean>>({});
-  const [isProcessingCheckbox, setIsProcessingCheckbox] = useState(false); // Global loading state
+  const [isProcessingCheckbox, setIsProcessingCheckbox] = useState(false);
   
-  // State for recalculated periods based on new logic
-  const [recalculatedPeriods, setRecalculatedPeriods] = useState<CreditPaymentPeriod[]>([]);
-  const [isRecalculating, setIsRecalculating] = useState(false);
-  const [principalChangesLoaded, setPrincipalChangesLoaded] = useState(false);
-  const [calculationCount, setCalculationCount] = useState(0);
-  
-  // Use ref to store the calculation function to avoid dependency issues
-  const recalculateRef = useRef<(() => Promise<void>) | null>(null);
-  
-  // Load principal changes if not provided
+  // State for generated periods from getExpectedMoney
+  const [generatedPeriods, setGeneratedPeriods] = useState<CreditPaymentPeriod[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  // Generate periods using convertFromHistoryToTimeArrayWithStatus + getExpectedMoney
   useEffect(() => {
-    if (principalChanges && principalChanges.length > 0) {
-      setLocalPrincipalChanges(principalChanges);
-      setPrincipalChangesLoaded(true);
-      return;
-    }
-
-    async function loadPrincipalChanges() {
+    async function generatePeriodsFromExpectedMoney() {
       if (!credit?.id) return;
-
+      
+      setIsGenerating(true);
       try {
-        const { data, error } = await getPrincipalChangesForCredit(credit.id);
+        console.log('🔄 Generating periods using convertFromHistoryToTimeArrayWithStatus + getExpectedMoney');
         
-        if (error) {
-          console.error('Error loading principal changes:', error);
-          return;
-        }
+        // 1. Get payment history from database - filter out deleted records
+        const allPaymentHistory = await getCreditPaymentHistory(credit.id);
+        const paymentHistory = allPaymentHistory.filter(record => !record.is_deleted);
+        console.log('Payment history from DB:', paymentHistory.length, 'active records (', allPaymentHistory.length, 'total)');
         
-        console.log('Loaded principal changes:', data);
-        console.log('Credit:', credit);
+        // 2. Get daily interest amounts using getExpectedMoney
+        const dailyAmounts = await getExpectedMoney(credit.id);
+        console.log('Daily amounts from getExpectedMoney:', dailyAmounts.length, 'days');
         
-        setLocalPrincipalChanges(data || []);
-        setPrincipalChangesLoaded(true);
-      } catch (err) {
-        console.error('Error fetching principal changes:', err);
-      }
-    }
-
-    loadPrincipalChanges();
-  }, [credit?.id, principalChanges]);
-
-  // Calculate interest with principal changes
-  const calculateInterestForPeriod = useCallback((startDate: string, endDate: string): number => {
-    if (!credit) return 0;
-    
-    try {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      
-      // Debug principal changes
-      console.log('----DEBUG CALCULATE INTEREST----');
-      console.log('Period:', startDate, 'to', endDate);
-      console.log('All principal changes:', localPrincipalChanges);
-      
-      // Lọc tất cả thay đổi gốc có liên quan đến kỳ này
-      // Bao gồm:
-      // - Tất cả thay đổi gốc xảy ra trước kỳ này và trong kỳ này
-      // - Không bao gồm những thay đổi xảy ra sau kỳ này
-      const relevantChanges = localPrincipalChanges.filter(change => {
-        const changeDate = new Date(change.date);
-        // Chỉ bao gồm các thay đổi xảy ra trước hoặc trong kỳ này
-        return changeDate >= start;
-      });
-      
-      // Sắp xếp các thay đổi theo thứ tự thời gian
-      relevantChanges.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      
-      // Log để debug
-      console.log('Relevant changes for calculation:', relevantChanges);
-      
-      // Kiểm tra xem có thay đổi nào trong kỳ không
-      const changesWithinPeriod = relevantChanges.filter(change => {
-        const changeDate = new Date(change.date);
-        return changeDate >= start && changeDate <= end;
-      });
-      
-      console.log('Changes within this period:', changesWithinPeriod.length);
-      if (changesWithinPeriod.length > 0) {
-        console.log('Detailed changes within period:', changesWithinPeriod);
-      }
-      
-      // Gọi hàm tính lãi với tất cả thay đổi gốc có liên quan
-      return calculateInterestWithPrincipalChanges(
-        credit,
-        start,
-        end,
-        relevantChanges
-      );
-    } catch (err) {
-      console.error('Error calculating interest with principal changes:', err);
-      return 0;
-    }
-  }, [credit, localPrincipalChanges]);
-
-  // Simplified function to calculate periods - only generate new periods after last paid period
-  const recalculatePeriodsWithHistory = async () => {
-    if (!credit?.id) return;
-
-    console.log('🔄 Starting calculation with:', {
-      creditId: credit.id,
-      currentLoanAmount: credit.loan_amount,
-      paymentPeriodsCount: paymentPeriods.length,
-      calculationNumber: calculationCount + 1,
-      principalChangesCount: localPrincipalChanges.length
-    });
-    
-    // Debug principal changes
-    console.log('DEBUG: Principal changes for recalculation:', localPrincipalChanges);
-    if (localPrincipalChanges.length > 0) {
-      console.log('DEBUG: First principal change date:', new Date(localPrincipalChanges[0].date).toISOString());
-      console.log('DEBUG: Last principal change date:', new Date(localPrincipalChanges[localPrincipalChanges.length - 1].date).toISOString());
-      
-      // Sắp xếp theo thứ tự thời gian
-      localPrincipalChanges.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    }
-
-    setCalculationCount(prev => prev + 1);
-    setIsRecalculating(true);
-
-    try {
-      // 1. Get existing periods from DB (keep as-is)
-      const existingPeriods = paymentPeriods || [];
-      
-      // 2. Find the start date for next period
-      let nextStartDate: Date;
-      let nextPeriodNumber = 1;
-      
-      if (existingPeriods.length > 0) {
-        // Start from day after last period
-        const lastPeriod = existingPeriods.sort((a, b) => a.period_number - b.period_number)[existingPeriods.length - 1];
-        nextStartDate = new Date(lastPeriod.end_date);
-        nextStartDate.setDate(nextStartDate.getDate() + 1);
-        nextPeriodNumber = lastPeriod.period_number + 1;
-      } else {
-        // No existing periods, start from loan date
-        nextStartDate = new Date(credit.loan_date);
-      }
-
-      // 3. Calculate loan end date
-      const loanEndDate = new Date(credit.loan_date);
-      loanEndDate.setDate(loanEndDate.getDate() + credit.loan_period - 1);
-
-      // 4. Generate new periods using current loan_amount
-      const newPeriods: CreditPaymentPeriod[] = [...existingPeriods];
-      const interestPeriod = credit.interest_period || 30;
-
-      // Log một số thông tin hữu ích
-      console.log('Next period starts from:', nextStartDate.toISOString());
-      console.log('Loan ends on:', loanEndDate.toISOString());
-      console.log('Interest period length:', interestPeriod, 'days');
-      
-      // Tìm tất cả các thay đổi gốc xảy ra trong khoảng thời gian còn lại của khoản vay
-      const futureChanges = localPrincipalChanges.filter(change => {
-        const changeDate = new Date(change.date);
-        return changeDate >= nextStartDate && changeDate <= loanEndDate;
-      });
-      
-      console.log('Future principal changes that will affect remaining periods:', futureChanges.length);
-      if (futureChanges.length > 0) {
-        console.log('Future changes details:', futureChanges);
-      }
-
-      while (nextStartDate <= loanEndDate && newPeriods.length < 100) {
-        const periodEndDate = new Date(nextStartDate);
-        periodEndDate.setDate(nextStartDate.getDate() + interestPeriod - 1);
+        // 3. Calculate loan end date
+        const loanStartDate = credit.loan_date;
+        const startDate = new Date(loanStartDate);
+        const endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + dailyAmounts.length - 1);
+        const loanEndDate = endDate.toISOString().split('T')[0];
         
-        // Don't exceed loan end date
-        if (periodEndDate > loanEndDate) {
-          periodEndDate.setTime(loanEndDate.getTime());
-        }
-
-        // Calculate days in this period
-        const daysInPeriod = Math.floor((periodEndDate.getTime() - nextStartDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        console.log('Loan period:', loanStartDate, '→', loanEndDate);
         
-        // Kiểm tra xem kỳ này có thay đổi gốc hay không
-        const changesInThisPeriod = localPrincipalChanges.filter(change => {
-          const changeDate = new Date(change.date);
-          return changeDate >= nextStartDate && changeDate <= periodEndDate;
-        });
-        
-        // Tính lãi sử dụng hàm calculateInterestForPeriod để tính đúng với các thay đổi gốc
-        // Chuyển đổi Date thành ISO string trước khi gửi vào hàm
-        const expectedAmount = calculateInterestForPeriod(
-          nextStartDate.toISOString(),
-          periodEndDate.toISOString()
+        // 4. Use convertFromHistoryToTimeArrayWithStatus to get periods and statuses
+        const interestPeriod = credit.interest_period || 30;
+        const { periods: timePeriods, statuses } = convertFromHistoryToTimeArrayWithStatus(
+          loanStartDate,
+          loanEndDate,
+          interestPeriod,
+          paymentHistory,
+          paymentHistory
         );
         
-        console.log(`Period ${nextPeriodNumber}: ${nextStartDate.toISOString()} to ${periodEndDate.toISOString()}, Expected: ${expectedAmount}, Days: ${daysInPeriod}, Changes in period: ${changesInThisPeriod.length}`);
-
-        const newPeriod: CreditPaymentPeriod = {
-          id: `calculated-${nextPeriodNumber}`,
-          credit_id: credit.id,
-          period_number: nextPeriodNumber,
-          start_date: nextStartDate.toISOString(),
-          end_date: periodEndDate.toISOString(),
-          expected_amount: expectedAmount,
-          actual_amount: 0,
-          payment_date: null,
-          notes: null,
-          other_amount: 0,
-          is_temporary: false
-        };
-
-        newPeriods.push(newPeriod);
-        nextPeriodNumber++;
-
-        // Prepare for next period
-        nextStartDate = new Date(periodEndDate);
-        nextStartDate.setDate(periodEndDate.getDate() + 1);
-
-        // Stop if next start date exceeds loan end date
-        if (nextStartDate > loanEndDate) break;
+        console.log('Generated time periods:', timePeriods.length, 'periods');
+        console.log('Statuses:', statuses);
+        
+        // 5. Calculate expected amount for each period using getExpectedMoney
+        const allPeriods: CreditPaymentPeriod[] = [];
+        const loanStart = new Date(loanStartDate);
+        
+        timePeriods.forEach((timePeriod, index) => {
+          const [start_date, end_date] = timePeriod;
+          const isChecked = statuses[index];
+          const periodNumber = index + 1;
+          
+          // Calculate start and end day indices relative to loan start
+          const periodStartDate = new Date(start_date);
+          const periodEndDate = new Date(end_date);
+          
+          const startDayIndex = Math.floor((periodStartDate.getTime() - loanStart.getTime()) / (1000 * 60 * 60 * 24));
+          const endDayIndex = Math.floor((periodEndDate.getTime() - loanStart.getTime()) / (1000 * 60 * 60 * 24));
+          
+          // Calculate expected amount by summing daily amounts from getExpectedMoney
+          let expectedAmount = 0;
+          for (let dayIndex = startDayIndex; dayIndex <= endDayIndex && dayIndex < dailyAmounts.length; dayIndex++) {
+            if (dayIndex >= 0) {
+              expectedAmount += dailyAmounts[dayIndex];
+            }
+          }
+          
+          // Calculate actual amount if period is checked (has payments in DB)
+          let actualAmount = 0;
+          if (isChecked) {
+            const periodPayments = paymentHistory.filter(payment => {
+              const paymentDate = payment.effective_date?.split('T')[0] || '';
+              const startDate = start_date.split('T')[0]; // Remove time part
+              const endDate = end_date.split('T')[0];     // Remove time part
+              
+              console.log('Comparing:', paymentDate, 'between', startDate, 'and', endDate);
+              return paymentDate >= startDate && paymentDate <= endDate;
+            });
+            
+            actualAmount = periodPayments.reduce((sum, payment) => {
+              return sum + (payment.credit_amount || 0) - (payment.debit_amount || 0);
+            }, 0);
+          }
+          
+          console.log(`Period ${periodNumber}: ${start_date} → ${end_date} (${isChecked ? 'checked' : 'unchecked'}), Expected: ${Math.round(expectedAmount)}, Actual: ${Math.round(actualAmount)}`);
+          
+          const newPeriod: CreditPaymentPeriod = {
+            id: isChecked ? `db-${periodNumber}` : `generated-${periodNumber}`,
+            credit_id: credit.id,
+            period_number: periodNumber,
+            start_date: periodStartDate.toISOString(),
+            end_date: periodEndDate.toISOString(),
+            expected_amount: Math.round(expectedAmount),
+            actual_amount: Math.round(actualAmount),
+            payment_date: isChecked ? end_date : null,
+            notes: null,
+            other_amount: 0,
+            is_temporary: false
+          };
+          
+          allPeriods.push(newPeriod);
+        });
+        
+        setGeneratedPeriods(allPeriods);
+        console.log('✅ Generated', allPeriods.length, 'periods using convertFromHistoryToTimeArrayWithStatus + getExpectedMoney');
+        
+      } catch (error) {
+        console.error('Error generating periods:', error);
+        toast({
+          variant: "destructive",
+          title: "Lỗi",
+          description: "Có lỗi xảy ra khi tạo các kỳ thanh toán"
+        });
+      } finally {
+        setIsGenerating(false);
       }
-
-      // Sort by period number and set result
-      newPeriods.sort((a, b) => a.period_number - b.period_number);
-      setRecalculatedPeriods(newPeriods);
-
-      console.log('✅ Calculation completed:', {
-        totalPeriods: newPeriods.length,
-        existingPeriods: existingPeriods.length,
-        newGeneratedPeriods: newPeriods.length - existingPeriods.length,
-        principalChangesApplied: localPrincipalChanges.length
-      });
-
-    } catch (error) {
-      console.error('Error in calculation:', error);
-      toast({
-        variant: "destructive",
-        title: "Lỗi",
-        description: "Có lỗi xảy ra khi tính toán các kỳ thanh toán"
-      });
-    } finally {
-      setIsRecalculating(false);
-    }
-  };
-
-  // Assign function to ref
-  recalculateRef.current = recalculatePeriodsWithHistory;
-
-  // Effect to recalculate periods when credit or payment periods change
-  useEffect(() => {
-    // Simplified: only need credit and paymentPeriods
-    if (credit?.id) {
-      console.log('Triggering simplified recalculation:', {
-        creditId: credit.id,
-        paymentPeriodsCount: paymentPeriods.length
-      });
-      
-      // Debounce to prevent multiple calculations
-      const timeoutId = setTimeout(() => {
-        recalculateRef.current?.();
-      }, 300); // Reduced timeout
-      
-      return () => clearTimeout(timeoutId);
-    }
-  }, [credit?.id, paymentPeriods]);
-
-  // Use recalculated periods if available, otherwise use original combined periods
-  const periodsToDisplay = recalculatedPeriods.length > 0 ? recalculatedPeriods : combinedPaymentPeriods;
-  
-  // Prepare tooltip info for each period that has principal changes within it
-  const periodPrincipalChanges = useMemo(() => {
-    const result: Record<number, { hasChanges: boolean, changes: PrincipalChange[] }> = {};
-    
-    if (!localPrincipalChanges || localPrincipalChanges.length === 0) {
-      return result;
     }
     
-    // For each period, check if there are any principal changes within it
-    periodsToDisplay.forEach(period => {
-      const periodStart = new Date(period.start_date);
-      const periodEnd = new Date(period.end_date);
-      
-      // Find changes within this period
-      const changesInPeriod = localPrincipalChanges.filter(change => {
-        const changeDate = new Date(change.date);
-        return changeDate >= periodStart && changeDate <= periodEnd;
-      });
-      
-      result[period.period_number] = {
-        hasChanges: changesInPeriod.length > 0,
-        changes: changesInPeriod
-      };
-    });
-    
-    return result;
-  }, [periodsToDisplay, localPrincipalChanges]);
+    generatePeriodsFromExpectedMoney();
+  }, [credit?.id, onDataChange]);
+
+  // Use generated periods for display
+  const periodsToDisplay = generatedPeriods;
 
   const startEditing = (period: CreditPaymentPeriod) => {
-    if ((period.id && !period.id.startsWith('calculated-') && !period.id.startsWith('temp-')) || isProcessingCheckbox) return;
+    // Don't allow editing if period already has payments or if processing
+    const hasPayments = period.id && period.id.startsWith('db-') && (period.actual_amount || 0) > 0;
+    if (hasPayments || isProcessingCheckbox) return;
     
     // Only allow editing the earliest unpaid period
     const earliestUnpaidIndex = periodsToDisplay.findIndex(p => 
-      !p.id || p.id.startsWith('calculated-') || p.id.startsWith('temp-')
+      (!p.id || p.id.startsWith('generated-')) || (p.id.startsWith('db-') && (p.actual_amount || 0) === 0)
     );
     const currentIndex = periodsToDisplay.findIndex(p => 
       (p.id === period.id) || (p.period_number === period.period_number)
@@ -368,28 +201,79 @@ export function PaymentTab({
     setEditingPeriodId(null);
   };
   
-  // Handle saving payment
+  // Handle saving payment - updated to adjust last day amount
   const savePayment = async (period: CreditPaymentPeriod) => {
     console.log('Saving payment for period:', period);
     if (!credit?.id) return;
     
     try {
-      const today = new Date().toISOString().split('T')[0];
-      console.log(today)
-      const isCalculatedPeriod = !period.id || period.id.startsWith('calculated-');
-      console.log(paymentAmount)
+      const isCalculatedPeriod = !period.id || period.id.startsWith('generated-');
       
-      // Import dynamically to prevent import cycle
-      const { savePaymentWithOtherAmount } = await import('@/lib/credit-payment');
+      // Calculate daily amounts with adjustment for last day
+      const startDate = new Date(period.start_date);
+      const endDate = new Date(period.end_date);
+      const totalDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
       
-      // Save the payment (debt_amount is automatically updated inside this function)
-      await savePaymentWithOtherAmount(
-        credit.id,
-        period,
-        paymentAmount,
-        period.other_amount || 0,
-        isCalculatedPeriod
-      );
+      // Calculate daily amount and adjustment for last day
+      const dailyAmount = Math.floor(paymentAmount / totalDays);
+      const lastDayAdjustment = paymentAmount - (dailyAmount * totalDays);
+      
+      console.log(`Payment distribution: ${totalDays} days, ${dailyAmount} per day, last day adjustment: ${lastDayAdjustment}`);
+      
+      // Prepare daily records with adjusted amounts
+      const dailyRecords = [];
+      
+      for (let dayOffset = 0; dayOffset < totalDays; dayOffset++) {
+        const currentDate = new Date(startDate);
+        currentDate.setDate(startDate.getDate() + dayOffset);
+        
+        // Determine date_status
+        let dateStatus: string | null = null;
+        if (totalDays === 1) {
+          dateStatus = 'only';
+        } else if (dayOffset === 0) {
+          dateStatus = 'start';
+        } else if (dayOffset === totalDays - 1) {
+          dateStatus = 'end';
+        }
+        
+        // Calculate amount for this day
+        let dayAmount = dailyAmount;
+        if (dayOffset === totalDays - 1) {
+          // Last day gets the adjustment
+          dayAmount = dailyAmount + lastDayAdjustment;
+        }
+        
+        const dailyRecord = {
+          credit_id: credit.id,
+          transaction_type: 'payment' as const,
+          effective_date: currentDate.toISOString(),
+          date_status: dateStatus,
+          credit_amount: dayAmount,
+          debit_amount: 0,
+          description: `Thanh toán ngày ${dayOffset + 1}/${totalDays} của kỳ ${period.period_number}`,
+        };
+        
+        dailyRecords.push(dailyRecord);
+        console.log(`Day ${dayOffset + 1}: ${currentDate.toISOString().split('T')[0]}, amount: ${dayAmount}, status: ${dateStatus}`);
+      }
+      
+      // Insert daily records into credit_history
+      const { data, error } = await supabase
+        .from('credit_history')
+        .insert(dailyRecords)
+        .select();
+      
+      if (error) {
+        throw new Error(error.message);
+      }
+      
+      console.log('Inserted', dailyRecords.length, 'daily payment records with custom amounts');
+      
+      toast({
+        title: 'Thành công',
+        description: `Đã lưu thanh toán ${formatCurrency(paymentAmount)} cho kỳ ${period.period_number}`,
+      });
       
       // Clear editing state
       setEditingPeriodId(null);
@@ -408,9 +292,9 @@ export function PaymentTab({
     }
   };
   
-  // Handler for checkbox change
+  // Updated checkbox handler - add better debugging and fix potential issues
   const handleCheckboxChange = async (period: CreditPaymentPeriod, checked: boolean, index: number) => {
-    if (!credit?.id || isProcessingCheckbox) return; // Prevent concurrent operations
+    if (!credit?.id || isProcessingCheckbox) return;
     
     // Set global loading state
     setIsProcessingCheckbox(true);
@@ -420,145 +304,157 @@ export function PaymentTab({
     setLoadingPeriods(prev => ({ ...prev, [periodId]: true }));
     
     try {
-      // Import the new API function
-      const { markPaymentPeriods } = await import('@/lib/credit-payment-api');
-      
       if (checked) {
-        // Find all unchecked periods from the oldest up to this one
-        const periodsToCheck = [];
+        console.log('Inserting daily payment records for period:', period.period_number);
         
-        // Go through all periods up to the current one (inclusive)
-        for (let i = 0; i <= index; i++) {
-          const p = periodsToDisplay[i];
-          // Only include periods that don't have any payment in DB yet
-          if (p.id.startsWith('calculated-') || p.id.startsWith('temp-')) {
-            periodsToCheck.push(p);
+        // Calculate all days in this period
+        const startDate = new Date(period.start_date);
+        const endDate = new Date(period.end_date);
+        const totalDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        
+        console.log(`Period ${period.period_number}: ${totalDays} days from ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`);
+        
+        // Use expected amount for checkbox payment (equal distribution)
+        const totalAmount = period.expected_amount || 0;
+        const dailyAmount = Math.floor(totalAmount / totalDays);
+        const lastDayAdjustment = totalAmount - (dailyAmount * totalDays);
+        
+        console.log(`Expected distribution: ${totalDays} days, ${dailyAmount} per day, last day adjustment: ${lastDayAdjustment}`);
+        
+        // Prepare daily records to insert
+        const dailyRecords = [];
+        
+        for (let dayOffset = 0; dayOffset < totalDays; dayOffset++) {
+          const currentDate = new Date(startDate);
+          currentDate.setDate(startDate.getDate() + dayOffset);
+          
+          // Determine date_status
+          let dateStatus: string | null = null; // Default for middle days
+          if (totalDays === 1) {
+            dateStatus = 'only';
+          } else if (dayOffset === 0) {
+            dateStatus = 'start';
+          } else if (dayOffset === totalDays - 1) {
+            dateStatus = 'end';
           }
-        }
-        
-        // If no periods to check, exit early
-        if (periodsToCheck.length === 0) {
-          setLoadingPeriods(prev => ({ ...prev, [periodId]: false }));
-          return;
-        }
-        
-        // Use the new API to mark periods
-        const result = await markPaymentPeriods(credit.id, periodsToCheck, 'mark');
-        
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to mark payment periods');
-        }
-        
-        // Check if any periods had issues
-        const hasErrors = result.processed_periods?.some(p => p.status === 'error');
-        const alreadyPaidCount = result.processed_periods?.filter(p => p.status === 'already_paid').length || 0;
-        const autoCreatedCount = result.processed_periods?.filter(p => p.status === 'auto_created').length || 0;
-        const autoUpdatedCount = result.processed_periods?.filter(p => p.status === 'auto_updated').length || 0;
-        
-        if (hasErrors) {
-          const errorPeriods = result.processed_periods?.filter(p => p.status === 'error') || [];
-          console.error('Some periods had errors:', errorPeriods);
-          toast({
-            variant: "destructive",
-            title: "Một số kỳ gặp lỗi",
-            description: `${errorPeriods.length} kỳ không thể xử lý. Vui lòng thử lại.`
-          });
-        }
-        
-        // Show success message with auto-fill info
-        let description = 'Đã đánh dấu các kỳ là đã thanh toán';
-        const additionalInfo = [];
-        
-        if (alreadyPaidCount > 0) {
-          additionalInfo.push(`${alreadyPaidCount} kỳ đã được thanh toán trước đó`);
-        }
-        if (autoCreatedCount > 0) {
-          additionalInfo.push(`${autoCreatedCount} kỳ được tạo tự động`);
-        }
-        if (autoUpdatedCount > 0) {
-          additionalInfo.push(`${autoUpdatedCount} kỳ được cập nhật tự động`);
+          
+          // Calculate amount for this day
+          let dayAmount = dailyAmount;
+          if (dayOffset === totalDays - 1) {
+            // Last day gets the adjustment
+            dayAmount = dailyAmount + lastDayAdjustment;
           }
-        
-        if (additionalInfo.length > 0) {
-          description += ` (${additionalInfo.join(', ')})`;
+          
+          const dailyRecord = {
+            credit_id: credit.id,
+            transaction_type: 'payment' as const,
+            effective_date: currentDate.toISOString(),
+            date_status: dateStatus,
+            credit_amount: dayAmount,
+            debit_amount: 0,
+            description: `Thanh toán ngày ${dayOffset + 1}/${totalDays} của kỳ ${period.period_number}`,
+            is_deleted: false
+          };
+          
+          dailyRecords.push(dailyRecord);
+          console.log(`Day ${dayOffset + 1}: ${currentDate.toISOString().split('T')[0]}, amount: ${dayAmount}, status: ${dateStatus}`);
         }
+        
+        // Insert daily records into credit_history
+        const { data, error } = await supabase
+          .from('credit_history')
+          .insert(dailyRecords)
+          .select();
+        
+        if (error) {
+          throw new Error(error.message);
+        }
+        
+        console.log('Inserted', dailyRecords.length, 'daily payment records');
         
         toast({
           title: 'Thành công',
-          description,
+          description: `Đã ghi ${totalDays} bản ghi thanh toán hàng ngày cho kỳ ${period.period_number}`,
         });
         
-        // Trigger data change
+        // Trigger data change to regenerate periods
         if (onDataChange) onDataChange();
         
       } else {
-        // Find all checked periods from this one to the newest for unmarking
-        const periodsToUncheck = [];
+        console.log('Marking daily payment records as deleted for period:', period.period_number);
         
-        // Check if any later periods have been paid (validation)
-        const laterPeriods = periodsToDisplay.slice(index + 1);
-        const anyLaterPeriodPaid = laterPeriods.some(
-          (p: CreditPaymentPeriod) => p && p.id && !p.id.startsWith('calculated-') && !p.id.startsWith('temp-')
-        );
-
-        if (anyLaterPeriodPaid) {
-          toast({
-            variant: "destructive",
-            title: "Lỗi",
-            description: "Không thể bỏ đánh dấu kỳ này vì có kỳ sau đã được thanh toán.",
-          });
-          setLoadingPeriods(prev => ({ ...prev, [periodId]: false }));
-          return;
+        // Mark daily records for this period as deleted (soft delete)
+        const startDate = period.start_date.split('T')[0];
+        const endDate = period.end_date.split('T')[0];
+        
+        console.log('Deleting records between:', startDate, 'and', endDate);
+        
+        // First, check what records exist
+        const { data: existingRecords, error: checkError } = await supabase
+          .from('credit_history')
+          .select('id, effective_date, is_deleted')
+          .eq('credit_id', credit.id)
+          .eq('transaction_type', 'payment')
+          .gte('effective_date', startDate)
+          .lte('effective_date', endDate + 'T23:59:59Z');
+        console.log('Existing records:', existingRecords);
+        if (checkError) {
+          console.error('Error checking existing records:', checkError);
+          throw new Error(checkError.message);
         }
         
-        // Go through all periods from the current one to the end
-        for (let i = periodsToDisplay.length - 1; i >= index; i--) {
-          const p = periodsToDisplay[i];
-          // Include all periods that are in DB
-          if (p.id && !p.id.startsWith('calculated-') && !p.id.startsWith('temp-')) {
-            periodsToUncheck.push(p);
+        console.log('Found existing records:', existingRecords);
+        
+        // Update records to is_deleted = true
+        const { data, error } = await supabase
+          .from('credit_history')
+          .update({is_deleted: true})
+          .eq('credit_id', credit.id)
+          .eq('transaction_type', 'payment')
+          .gte('effective_date', startDate)  // Add time part
+          .lte('effective_date', endDate + 'T23:59:59Z')
+          .select(); // Add select to see what was updated
+        
+        if (error) {
+          console.error('Update error:', error);
+          throw new Error(error.message);
+        }
+        
+        console.log('Updated records:', data);
+        console.log('Number of records updated:', data?.length || 0);
+        
+        if (!data || data.length === 0) {
+          console.warn('No records were updated!');
+          // Try alternative approach - remove the is_deleted filter
+          const { data: altData, error: altError } = await supabase
+            .from('credit_history')
+            .update({ is_deleted: true })
+            .eq('credit_id', credit.id)
+            .eq('transaction_type', 'payment')
+            .gte('effective_date', startDate + 'T00:00:00Z')
+            .lte('effective_date', endDate + 'T23:59:59Z')
+            .select();
+          
+          if (altError) {
+            throw new Error(altError.message);
           }
+          
+          console.log('Alternative update result:', altData);
         }
         
-        // If no periods to uncheck, exit early
-        if (periodsToUncheck.length === 0) {
-          setLoadingPeriods(prev => ({ ...prev, [periodId]: false }));
-          return;
-        }
-        
-        // Use the new API to unmark periods
-        const result = await markPaymentPeriods(credit.id, periodsToUncheck, 'unmark');
-        
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to unmark payment periods');
-        }
-        
-        // Check for validation errors
-        const cannotUnmarkCount = result.processed_periods?.filter(p => 
-          p.status === 'cannot_unmark_has_later_payments'
-        ).length || 0;
-        
-        if (cannotUnmarkCount > 0) {
-          toast({
-            variant: "destructive",
-            title: "Không thể bỏ đánh dấu",
-            description: `${cannotUnmarkCount} kỳ không thể bỏ đánh dấu vì có kỳ sau đã được thanh toán.`
-          });
-        } else {
         toast({
           title: 'Thành công',
-          description: 'Đã đánh dấu các kỳ là chưa thanh toán',
+          description: `Đã đánh dấu xóa ${data?.length || 0} bản ghi thanh toán cho kỳ ${period.period_number}`,
         });
-        }
         
-        // Trigger data change
+        // Trigger data change to regenerate periods
         if (onDataChange) onDataChange();
       }
     } catch (error) {
-      console.error('Error changing payment status:', error);
+      console.error('Error handling daily payment records:', error);
       toast({
         title: 'Lỗi',
-        description: error instanceof Error ? error.message : 'Không thể thay đổi trạng thái thanh toán',
+        description: error instanceof Error ? error.message : 'Không thể xử lý bản ghi thanh toán hàng ngày',
         variant: 'destructive'
       });
     } finally {
@@ -569,11 +465,11 @@ export function PaymentTab({
 
   return (
     <div>
-      {/* Loading indicator when recalculating */}
-      {isRecalculating && (
+      {/* Loading indicator when generating periods */}
+      {isGenerating && (
         <div className="flex items-center justify-center p-4 mb-4 bg-blue-50 border border-blue-200 rounded">
           <div className="h-4 w-4 rounded-full border-2 border-t-transparent border-blue-600 animate-spin mr-2"></div>
-          <span className="text-blue-700">Đang tính toán lại các kỳ thanh toán...</span>
+          <span className="text-blue-700">Đang tạo các kỳ thanh toán từ getExpectedMoney...</span>
         </div>
       )}
       
@@ -599,84 +495,6 @@ export function PaymentTab({
           Đóng lãi phí tùy biến theo ngày
         </a>
       </div>
-      
-      {/* Form đóng lãi phí */}
-      {showPaymentForm && credit && (
-        <div className="border p-4 rounded mb-4">
-          <PaymentForm 
-            onClose={() => setShowPaymentForm(false)}
-            disabled={credit.status === CreditStatus.CLOSED || credit.status === CreditStatus.DELETED}
-            onSubmit={async (data) => {
-              try {
-              console.log('Payment data submitted:', data);
-                
-                // Calculate interest considering principal changes
-                const interestAmount = calculateInterestForPeriod(
-                  data.startDate,
-                  data.endDate
-                );
-                
-                // Import the function dynamically to prevent import cycle
-                const { savePaymentWithOtherAmount } = await import('@/lib/credit-payment');
-                
-                await savePaymentWithOtherAmount(
-                  credit.id,
-                  {
-                    period_number: periodsToDisplay.filter(p => p.actual_amount >= p.expected_amount).length + 1, // Custom payment
-                    start_date: data.startDate,
-                    end_date: data.endDate,
-                    expected_amount: interestAmount,
-                    other_amount: data.otherAmount,
-                    actual_amount: data.totalAmount
-                  },
-                  interestAmount,
-                  data.otherAmount,
-                  true // isCalculatedPeriod
-                );
-                
-                toast({
-                  title: "Thành công",
-                  description: "Đã cập nhật khoản thanh toán thành công",
-                });
-                
-              setShowPaymentForm(false);
-              if (onDataChange) onDataChange();
-              } catch (err) {
-                console.error('Error submitting payment:', err);
-                toast({
-                  variant: "destructive",
-                  title: "Lỗi",
-                  description: "Có lỗi xảy ra khi lưu thanh toán. Vui lòng thử lại sau."
-                });
-              }
-            }}
-            interestCalculator={(startDate, endDate) => {
-              // Function to calculate interest based on dates
-              return calculateInterestForPeriod(startDate, endDate);
-            }}
-            creditId={credit.id}
-            // Truyền thêm các thông tin về kỳ thanh toán
-            loanDate={credit.loan_date}
-            loanPeriod={credit.loan_period}
-            interestPeriod={credit.interest_period}
-            // Truyền thông tin về kỳ thanh toán cuối cùng ĐÃ THANH TOÁN
-            lastPaymentEndDate={(() => {
-              // Tìm kỳ cuối cùng đã thanh toán
-              const paidPeriods = periodsToDisplay.filter(
-                p => p.actual_amount >= p.expected_amount
-              );
-              
-              // Nếu có kỳ đã thanh toán, trả về ngày kết thúc của kỳ cuối cùng
-              if (paidPeriods.length > 0) {
-                return paidPeriods[paidPeriods.length - 1].end_date;
-              }
-              
-              // Nếu không có kỳ nào đã thanh toán, trả về undefined để sử dụng loan_date
-              return undefined;
-            })()}
-          />
-        </div>
-      )}
       
       <div className="overflow-auto mt-2" style={{ maxHeight: '400px' }}>
         <table className="w-full border-collapse">
@@ -708,30 +526,32 @@ export function PaymentTab({
           ) : periodsToDisplay.length === 0 ? (
             <tr>
               <td colSpan={8} className="py-4 text-center text-gray-500">
-                Chưa có dữ liệu thanh toán
+                Đang tạo dữ liệu từ getExpectedMoney...
               </td>
             </tr>
           ) : (
-            // Hiển thị kết hợp của dữ liệu tính toán trước và dữ liệu thực từ database
+            // Hiển thị dữ liệu từ getExpectedMoney với chức năng editable
             periodsToDisplay.map((period, index) => {
               const expected = period.expected_amount || 0;
-              const actual = period.actual_amount || (period.expected_amount || 0) + (period.other_amount || 0);
+              const actual = period.actual_amount || period.expected_amount;
               const other = period.other_amount || 0;
               const total = expected + other;
-              const isInDB = period.id && !period.id.startsWith('calculated-') && !period.id.startsWith('temp-'); // Kỳ có trong DB
+              
+              // Updated logic to determine if period has payments in DB
+              const hasPayments = Boolean(period.id && period.id.startsWith('db-') && actual > 0);
               const isEditing = editingPeriodId === period.id || editingPeriodId === `temp-${period.period_number}`;
               const periodId = period.id || `temp-${period.period_number}`;
               const isLoading = loadingPeriods[periodId];
               const isDisabled = credit?.status === CreditStatus.CLOSED || credit?.status === CreditStatus.DELETED;
               
-              // Find the earliest unpaid period (first period not in DB)
+              // Find the earliest unpaid period (first period with generated- id or db- id with no actual amount)
               const earliestUnpaidIndex = periodsToDisplay.findIndex(p => 
-                !p.id || p.id.startsWith('calculated-') || p.id.startsWith('temp-')
+                (!p.id || p.id.startsWith('generated-')) || (p.id.startsWith('db-') && (p.actual_amount || 0) === 0)
               );
               const isEarliestUnpaid = index === earliestUnpaidIndex;
               
               return (
-                <tr key={periodId} className="hover:bg-gray-50">
+                <tr key={period.id} className="hover:bg-gray-50">
                   <td className="px-2 py-2 text-center border">{period.period_number}</td>
                   <td className="px-2 py-2 text-center border">
                     {formatDate(period.start_date)} 
@@ -775,10 +595,10 @@ export function PaymentTab({
                       </div>
                     ) : (
                       <span 
-                        className={`${!isInDB && !isDisabled && !isProcessingCheckbox && isEarliestUnpaid ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
-                        onClick={!isInDB && !isDisabled && !isProcessingCheckbox && isEarliestUnpaid ? () => startEditing(period) : undefined}
+                        className={`${!hasPayments && !isDisabled && !isProcessingCheckbox && isEarliestUnpaid ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
+                        onClick={!hasPayments && !isDisabled && !isProcessingCheckbox && isEarliestUnpaid ? () => startEditing(period) : undefined}
                       >
-                        {formatCurrency(actual).replace('₫', '')}
+                        {formatCurrency(actual)}
                       </span>
                     )}
                   </td>
@@ -789,7 +609,7 @@ export function PaymentTab({
                       </div>
                     ) : (
                       <Checkbox 
-                        checked={!!isInDB} 
+                        checked={hasPayments} 
                         onCheckedChange={(checked) => handleCheckboxChange(period, !!checked, index)}
                         disabled={isDisabled || isProcessingCheckbox}
                       />

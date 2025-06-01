@@ -25,6 +25,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
+import { format } from 'date-fns';
 
 export default function InstallmentWarningsPage() {
   const [installments, setInstallments] = useState<InstallmentWithCustomer[]>([]);
@@ -171,8 +172,8 @@ export default function InstallmentWarningsPage() {
         ? installment.installment_amount / (installment.duration) * paymentPeriod 
         : installment.daily_amount * paymentPeriod;
       
-      // Create payment records for each period
-      const paymentPromises = [];
+      // Create periods data for the new API
+      const periodsToMark = [];
       
       for (let i = 0; i < periods; i++) {
         const periodStartDate = i === 0 
@@ -181,48 +182,68 @@ export default function InstallmentWarningsPage() {
         
         const periodEndDate = addDays(periodStartDate, paymentPeriod - 1);
         
-        // Format dates to store in DB (YYYY-MM-DD)
-        const startDateFormatted = `${periodStartDate.getFullYear()}-${String(periodStartDate.getMonth() + 1).padStart(2, '0')}-${String(periodStartDate.getDate()).padStart(2, '0')}`;
-        
-        const endDateFormatted = `${periodEndDate.getFullYear()}-${String(periodEndDate.getMonth() + 1).padStart(2, '0')}-${String(periodEndDate.getDate()).padStart(2, '0')}`;
-        
-        // Format for display (DD/MM/YYYY)
+        // Format dates for display (DD/MM/YYYY)
         const startDateDisplay = `${String(periodStartDate.getDate()).padStart(2, '0')}/${String(periodStartDate.getMonth() + 1).padStart(2, '0')}/${periodStartDate.getFullYear()}`;
         const endDateDisplay = `${String(periodEndDate.getDate()).padStart(2, '0')}/${String(periodEndDate.getMonth() + 1).padStart(2, '0')}/${periodEndDate.getFullYear()}`;
         
-        // Create the payment record
-        const today = new Date();
-        const todayFormatted = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-        
-        const periodParams = {
-          installment_id: installment.id,
-          period_number: nextPeriodNumber + i,
-          date: startDateFormatted,
-          payment_end_date: endDateFormatted,
-          expected_amount: amountPerPeriod,
-          actual_amount: amountPerPeriod, // Set actual amount equal to expected (fully paid)
-          payment_start_date: todayFormatted, // Payment made today
+        // Create period data compatible with markInstallmentPaymentPeriods
+        periodsToMark.push({
+          id: `temp-${nextPeriodNumber + i}`, // Temporary ID for new periods
+          installmentId: installment.id,
+          periodNumber: nextPeriodNumber + i,
+          dueDate: startDateDisplay,
+          endDate: endDateDisplay,
+          paymentStartDate: format(new Date(), 'dd/MM/yyyy'),
+          expectedAmount: amountPerPeriod,
+          actualAmount: amountPerPeriod,
+          isOverdue: false, // New periods are not overdue
           notes: `Thanh toán kỳ ${nextPeriodNumber + i} (${startDateDisplay} - ${endDateDisplay})`
-        };
-        
-        // Add to promises array
-        paymentPromises.push(createInstallmentPaymentPeriod(periodParams));
+        });
       }
       
-      // Execute all payment creations
-      const results = await Promise.all(paymentPromises);
+      // Use the same API as PaymentTab for consistency
+      const { markInstallmentPaymentPeriods } = await import('@/lib/installment-payment-api');
       
-      // Check for errors
-      const errors = results.filter(result => result.error).map(result => result.error);
+      const result = await markInstallmentPaymentPeriods(installment.id, periodsToMark, 'mark');
       
-      if (errors.length > 0) {
-        throw new Error(`Có lỗi khi tạo ${errors.length} kỳ thanh toán`);
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to mark installment payment periods');
+      }
+      
+      // Check if any periods had issues
+      const hasErrors = result.processed_periods?.some(p => p.status === 'error');
+      const autoCreatedCount = result.processed_periods?.filter(p => p.status === 'auto_created').length || 0;
+      const updatedCount = result.processed_periods?.filter(p => p.status === 'updated').length || 0;
+      const createdCount = result.processed_periods?.filter(p => p.status === 'created').length || 0;
+      
+      if (hasErrors) {
+        const errorPeriods = result.processed_periods?.filter(p => p.status === 'error') || [];
+        console.error('Some periods had errors:', errorPeriods);
+        
+        toast({
+          variant: "destructive",
+          title: "Một số kỳ gặp lỗi",
+          description: `Có ${errorPeriods.length} kỳ không thể xử lý. Vui lòng kiểm tra lại.`,
+        });
+        return;
+      }
+      
+      // Show success message with details
+      let successMessage = `Đã thanh toán ${amount.toLocaleString()} VND cho hợp đồng ${installment.contract_code}`;
+      const totalProcessed = (autoCreatedCount + updatedCount + createdCount);
+      
+      if (totalProcessed > 1) {
+        successMessage += ` (${totalProcessed} kỳ)`;
+      }
+      
+      if (autoCreatedCount > 0) {
+        successMessage += ` - Tự động tạo ${autoCreatedCount} kỳ`;
       }
       
       // Success
       toast({
         title: "Thanh toán thành công",
-        description: `Đã thanh toán ${amount.toLocaleString()} VND cho ${periods} kỳ của hợp đồng ${installment.contract_code}`,
+        description: successMessage,
       });
       
       // Reload installments to update the UI
