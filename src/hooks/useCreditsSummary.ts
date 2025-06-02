@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { CreditStatus } from '@/models/credit';
 import { useStore } from '@/contexts/StoreContext';
 import { getExpectedMoney } from '@/lib/Credits/create_principal_payment_history';
+import { calculateDebtToLatestPaidPeriod } from '@/lib/Credits/calculate_remaining_debt';
 
 // Định nghĩa interface cho dữ liệu tài chính của cửa hàng
 export interface StoreFinancialData {
@@ -44,18 +45,25 @@ export function useCreditsSummary() {
       // Tính tổng tiền cho vay
       const totalLoan = activeCreditsData?.reduce((sum, credit) => sum + (credit.loan_amount || 0), 0) || 0;
       
-      // 3. Lấy tổng tiền nợ cũ
-      const { data: oldDebtData, error: oldDebtError } = await supabase
-        .from('credits')
-        .select('debt_amount')
-        .in('status', [CreditStatus.ON_TIME, CreditStatus.OVERDUE, CreditStatus.LATE_INTEREST, CreditStatus.BAD_DEBT]);
+      // 3. Tính tổng tiền nợ cũ bằng calculateDebtToLatestPaidPeriod
+      let oldDebt = 0;
       
-      if (oldDebtError) {
-        console.error('Lỗi khi lấy dữ liệu nợ cũ:', oldDebtError);
+      if (activeCreditsData && activeCreditsData.length > 0) {
+        console.log(`Calculating total debt for ${activeCreditsData.length} active credits`);
+        
+        for (const credit of activeCreditsData) {
+          try {
+            const creditDebt = await calculateDebtToLatestPaidPeriod(credit.id);
+            oldDebt += creditDebt;
+            
+            console.log(`Credit ${credit.id}: ${Math.round(creditDebt)} VNĐ debt`);
+          } catch (error) {
+            console.error(`Error calculating debt for credit ${credit.id}:`, error);
+          }
+        }
+        
+        console.log(`Total old debt: ${Math.round(oldDebt)} VNĐ`);
       }
-      
-      // Tính tổng tiền nợ cũ sử dụng trường debt_amount
-      const oldDebt = oldDebtData?.reduce((sum, credit) => sum + (credit.debt_amount || 0), 0) || 0;
       
       // 4. Tính lãi phí đã thu = tổng credit_amount của các bản ghi payment có is_deleted = false
       let collectedInterest = 0;
@@ -108,7 +116,7 @@ export function useCreditsSummary() {
         totalFund: storeData?.investment || 0,
         availableFund: storeData?.cash_fund || 0,
         totalLoan: totalLoan,
-        oldDebt: oldDebt,
+        oldDebt: Math.round(oldDebt),
         profit: Math.round(profit),
         collectedInterest: Math.round(collectedInterest)
       };

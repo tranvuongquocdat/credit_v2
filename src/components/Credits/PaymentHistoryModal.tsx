@@ -25,6 +25,7 @@ import { calculateDaysBetween, formatCurrency, formatDate, formatDateTime } from
 import { getExpectedMoney } from '@/lib/Credits/create_principal_payment_history';
 import { calculateDebtToLatestPaidPeriod } from '@/lib/Credits/calculate_remaining_debt';
 import { getCreditPaymentHistory } from '@/lib/Credits/payment_history';
+import { calculateActualLoanAmount } from '@/lib/Credits/calculate_actual_loan_amount';
 
 
 interface PaymentHistoryModalProps {
@@ -69,6 +70,10 @@ export function PaymentHistoryModal({
   // State cho payment history từ getCreditPaymentHistory
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
   const [loadingPaymentHistory, setLoadingPaymentHistory] = useState(false);
+  
+  // State cho actual loan amount
+  const [actualLoanAmount, setActualLoanAmount] = useState<number>(0);
+  const [loadingActualAmount, setLoadingActualAmount] = useState(false);
   
   // Cập nhật state credit khi initialCredit thay đổi
   useEffect(() => {
@@ -292,6 +297,30 @@ export function PaymentHistoryModal({
     calculateFinancials();
   }, [credit?.id, hasDataChanged]);
 
+  // useEffect để tính actual loan amount
+  useEffect(() => {
+    async function loadActualLoanAmount() {
+      if (!credit?.id) {
+        setActualLoanAmount(0);
+        return;
+      }
+
+      setLoadingActualAmount(true);
+      try {
+        const amount = await calculateActualLoanAmount(credit.id);
+        setActualLoanAmount(amount);
+        console.log('Actual loan amount calculated:', amount);
+      } catch (error) {
+        console.error('Error calculating actual loan amount:', error);
+        setActualLoanAmount(credit.loan_amount || 0); // Fallback to original amount
+      } finally {
+        setLoadingActualAmount(false);
+      }
+    }
+
+    loadActualLoanAmount();
+  }, [credit?.id, hasDataChanged]); // Reload khi có data change
+
   // Sử dụng giá trị đơn giản
   const totalExpected = totalExpectedInterest;
   const remainingAmount = remainingDebt;
@@ -341,7 +370,13 @@ export function PaymentHistoryModal({
                 <tbody>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Tiền vay</td>
-                    <td className="py-1 px-2 text-right border" colSpan={2}>{formatCurrency(credit?.loan_amount || 0)}</td>
+                    <td className="py-1 px-2 text-right border" colSpan={2}>
+                      {loadingActualAmount ? (
+                        <div className="h-4 w-4 rounded-full border-2 border-t-transparent border-blue-600 animate-spin mx-auto"></div>
+                      ) : (
+                        formatCurrency(actualLoanAmount)
+                      )}
+                    </td>
                   </tr>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Lãi phí</td>

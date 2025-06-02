@@ -9,9 +9,11 @@ import { CreditTransactionType } from './credit-amount-history';
 export async function getAdditionalLoans(creditId: string): Promise<AdditionalLoan[]> {
   try {
     const { data, error } = await supabase
-      .from('credit_amount_history')
+      .from('credit_history')
       .select('*')
       .eq('credit_id', creditId)
+      .eq('transaction_type', 'additional_loan')
+      .eq('is_deleted', false)
       .order('created_at', { ascending: true });
       
     if (error) {
@@ -23,9 +25,9 @@ export async function getAdditionalLoans(creditId: string): Promise<AdditionalLo
     const additionalLoans: AdditionalLoan[] = (data || []).map(record => ({
       id: record.id,
       credit_id: record.credit_id,
-      amount: record.amount || 0, // For additional loan, money goes out as debit
-      note: record.note || undefined,
-      created_at: record.created_at
+      amount: record.credit_amount || 0, // For additional loan, money goes out as debit
+      note: record.description || undefined,
+      created_at: record.effective_date || '' 
     }));
     
     return additionalLoans;
@@ -63,11 +65,12 @@ export async function addAdditionalLoan(loan: AdditionalLoan): Promise<Additiona
     
     // Insert into credit_history
     const { data, error } = await supabase
-    .from('credit_amount_history')
+    .from('credit_history')
     .insert({
       credit_id: loan.credit_id,
-      amount: loan.amount,
-      note: loan.note || "Vay thêm",
+      debit_amount: loan.amount,
+      transaction_type: 'additional_loan',
+      description: loan.note || "Vay thêm",
       created_at: new Date().toISOString(),
     })
     .select()
@@ -92,8 +95,8 @@ export async function addAdditionalLoan(loan: AdditionalLoan): Promise<Additiona
     return {
       id: data.id,
       credit_id: data.credit_id,
-      amount: data.amount || 0,
-      note: data.note || undefined,
+      amount: data.debit_amount || 0,
+      note: data.description || undefined,
       created_at: data.created_at
     };
   } catch (error) {

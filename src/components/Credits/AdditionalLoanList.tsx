@@ -57,6 +57,7 @@ export function AdditionalLoanList({
       try {
         setLoading(true);
         const data = await getAdditionalLoans(creditId);
+        console.log(data)
         setLoans(data);
         setError(null);
       } catch (err) {
