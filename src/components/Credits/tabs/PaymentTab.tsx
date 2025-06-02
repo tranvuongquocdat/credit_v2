@@ -12,6 +12,13 @@ import { convertFromHistoryToTimeArrayWithStatus } from '@/lib/Credits/convert_f
 import { getCreditPaymentHistory } from '@/lib/Credits/payment_history';
 import { calculateDebtToLatestPaidPeriod } from '@/lib/Credits/calculate_remaining_debt';
 import { calculateCloseContractInterest } from '@/lib/Credits/calculate_close_contract_interest';
+import { PaymentForm } from '../PaymentForm';
+import { recordDailyPayments } from '@/lib/Credits/record_daily_payments';
+import { 
+  saveCustomPayment, 
+  calculateCustomPeriodInterest, 
+  getLastPaidPeriodEndDate 
+} from '@/lib/Credits/save_custom_payment';
 
 type PaymentTabProps = {
   credit: CreditWithCustomer | null;
@@ -466,9 +473,73 @@ export function PaymentTab({
     }
   };
 
+  // Hàm tính lãi cho khoảng thời gian tùy biến - RETURN PROMISE
+  const calculateInterestForCustomPeriod = async (startDate: string, endDate: string): Promise<number> => {
+    if (!credit?.id) return 0;
+    
+    try {
+      const result = await calculateCustomPeriodInterest(credit.id, startDate, endDate);
+      console.log(`Calculated interest for ${startDate} → ${endDate}:`, result);
+      return result;
+    } catch (err) {
+      console.error('Error calculating interest:', err);
+      return 0;
+    }
+  };
+
+  // Xử lý submit form đóng lãi tùy biến
+  const handleCustomPaymentSubmit = async (data: {
+    startDate: string;
+    endDate: string;
+    days: number;
+    interestAmount: number;
+    otherAmount: number;
+    totalAmount: number;
+  }) => {
+    if (!credit?.id) return;
+
+    try {
+      await saveCustomPayment(credit.id, data);
+
+      toast({
+        title: "Thành công",
+        description: "Đã ghi lịch sử đóng lãi phí tùy biến thành công",
+      });
+
+      setShowPaymentForm(false);
+      if (onDataChange) onDataChange();
+    } catch (error) {
+      console.error('Error submitting custom payment:', error);
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: error instanceof Error ? error.message : "Có lỗi xảy ra khi ghi lịch sử thanh toán"
+      });
+    }
+  };
+
+  // State để lưu ngày kết thúc kỳ cuối
+  const [lastPaymentEndDate, setLastPaymentEndDate] = useState<string | undefined>();
+
+  // Load ngày kết thúc kỳ cuối khi component mount
+  useEffect(() => {
+    async function loadLastPaymentEndDate() {
+      if (!credit?.id) return;
+      
+      try {
+        const endDate = await getLastPaidPeriodEndDate(credit.id);
+        setLastPaymentEndDate(endDate);
+      } catch (err) {
+        console.error('Error loading last payment end date:', err);
+      }
+    }
+    
+    loadLastPaymentEndDate();
+  }, [credit?.id, onDataChange]); // Reload khi có thay đổi dữ liệu
+
   return (
     <div>
-      {/* Loading indicator when generating periods */}
+      {/* Loading indicators */}
       {isGenerating && (
         <div className="flex items-center justify-center p-4 mb-4 bg-blue-50 border border-blue-200 rounded">
           <div className="h-4 w-4 rounded-full border-2 border-t-transparent border-blue-600 animate-spin mr-2"></div>
@@ -476,7 +547,6 @@ export function PaymentTab({
         </div>
       )}
       
-      {/* Loading indicator when processing checkbox */}
       {isProcessingCheckbox && (
         <div className="flex items-center justify-center p-4 mb-4 bg-orange-50 border border-orange-200 rounded">
           <div className="h-4 w-4 rounded-full border-2 border-t-transparent border-orange-600 animate-spin mr-2"></div>
@@ -498,7 +568,25 @@ export function PaymentTab({
           Đóng lãi phí tùy biến theo ngày
         </a>
       </div>
+
+      {/* Form đóng lãi phí tùy biến */}
+      {showPaymentForm && (
+        <div className="mb-4">
+          <PaymentForm
+            onClose={() => setShowPaymentForm(false)}
+            creditId={credit?.id}
+            interestCalculator={calculateInterestForCustomPeriod}
+            onSubmit={handleCustomPaymentSubmit}
+            loanDate={credit?.loan_date}
+            loanPeriod={credit?.loan_period}
+            interestPeriod={credit?.interest_period}
+            lastPaymentEndDate={lastPaymentEndDate}
+            disabled={credit?.status === CreditStatus.CLOSED || credit?.status === CreditStatus.DELETED}
+          />
+        </div>
+      )}
       
+      {/* Bảng hiển thị các kỳ thanh toán */}
       <div className="overflow-auto mt-2" style={{ maxHeight: '400px' }}>
         <table className="w-full border-collapse">
         <thead className="bg-gray-50 sticky top-0">
