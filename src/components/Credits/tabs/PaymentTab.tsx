@@ -60,7 +60,6 @@ export function PaymentTab({
 
   // Generate periods using convertFromHistoryToTimeArrayWithStatus + getExpectedMoney
   useEffect(() => {
-    calculateCloseContractInterest(credit?.id || '', '2025-06-02');
     async function generatePeriodsFromExpectedMoney() {
       if (!credit?.id) return;
       
@@ -414,6 +413,7 @@ export function PaymentTab({
           .update({is_deleted: true})
           .eq('credit_id', credit.id)
           .eq('transaction_type', 'payment')
+          .eq('is_deleted', false)
           .gte('effective_date', startDate)  // Add time part
           .lte('effective_date', endDate + 'T23:59:59Z')
           .select(); // Add select to see what was updated

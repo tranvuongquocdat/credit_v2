@@ -141,9 +141,14 @@ export function PaymentHistoryModal({
     let totalCredit = 0;
 
     creditHistory.forEach(history => {
-      // Add debit and credit amounts
+      // Add debit and credit amounts from original records
       totalDebit += history.debit_amount || 0;
       totalCredit += history.credit_amount || 0;
+      
+      // Add cancel records if they exist
+      if (history.updated_at && history.transaction_type === 'payment' && history.is_deleted === true) {
+        totalDebit += history.credit_amount || 0; // Cancel record adds to debit
+      }
     });
 
     return {
@@ -608,20 +613,67 @@ export function PaymentHistoryModal({
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                          {creditHistory.map((history, index) => (
-                            <tr key={history.id}>
-                              <td className="px-4 py-3 text-sm text-gray-700 text-center">{index + 1}</td>
-                              <td className="px-4 py-3 text-sm text-gray-700">{formatDateTime(history.created_at)}</td>
-                              <td className="px-4 py-3 text-sm text-gray-700">{getTransactionTypeDisplay(history.transaction_type)}</td>
-                              <td className="px-4 py-3 text-sm text-gray-700 text-right text-red-600">
-                                {history.debit_amount > 0 ? formatCurrency(history.debit_amount) : ""}
-                              </td>
-                              <td className="px-4 py-3 text-sm text-gray-700 text-right text-green-600">
-                                {history.credit_amount > 0 ? formatCurrency(history.credit_amount) : ""}
-                              </td>
-                              <td className="px-4 py-3 text-sm text-gray-700">{history.description || '-'}</td>
-                            </tr>
-                          ))}
+                          {(() => {
+                            // Tạo danh sách records mở rộng với các bản ghi hủy
+                            const expandedHistory: Array<{
+                              id: string;
+                              created_at: string;
+                              transaction_type: string;
+                              debit_amount: number;
+                              credit_amount: number;
+                              description: string;
+                              isCancel?: boolean;
+                            }> = [];
+
+                            creditHistory.forEach(history => {
+                              // Thêm bản ghi gốc
+                              expandedHistory.push({
+                                id: history.id,
+                                created_at: history.created_at,
+                                transaction_type: history.transaction_type,
+                                debit_amount: history.debit_amount || 0,
+                                credit_amount: history.credit_amount || 0,
+                                description: history.description || '-'
+                              });
+
+                              // Nếu có updated_at và là payment, thêm bản ghi hủy
+                              if (history.updated_at && history.transaction_type === 'payment' && history.is_deleted === true) {
+                                expandedHistory.push({
+                                  id: `${history.id}-cancel`,
+                                  created_at: history.updated_at,
+                                  transaction_type: 'payment_cancel',
+                                  debit_amount: history.credit_amount || 0, // Số tiền ghi nợ của bản ghi gốc
+                                  credit_amount: 0,
+                                  description: `Hủy đóng lãi phí - ${history.description || ''}`,
+                                  isCancel: true
+                                });
+                              }
+                            });
+
+                            // Sắp xếp theo thời gian
+                            expandedHistory.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+                            return expandedHistory.map((record, index) => (
+                              <tr key={record.id} className={record.isCancel ? 'bg-red-50' : ''}>
+                                <td className="px-4 py-3 text-sm text-gray-700 text-center">{index + 1}</td>
+                                <td className="px-4 py-3 text-sm text-gray-700">{formatDateTime(record.created_at)}</td>
+                                <td className="px-4 py-3 text-sm text-gray-700">
+                                  {record.isCancel ? (
+                                    <span className="text-red-600 font-medium">Hủy đóng lãi phí</span>
+                                  ) : (
+                                    getTransactionTypeDisplay(record.transaction_type)
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-700 text-right text-red-600">
+                                  {record.debit_amount > 0 ? formatCurrency(record.debit_amount) : ""}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-700 text-right text-green-600">
+                                  {record.credit_amount > 0 ? formatCurrency(record.credit_amount) : ""}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-700">{record.description}</td>
+                              </tr>
+                            ));
+                          })()}
                           
                           {/* Summary rows */}
                           <tr className="bg-amber-50">

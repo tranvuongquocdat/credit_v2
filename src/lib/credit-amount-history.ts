@@ -11,6 +11,7 @@ export enum CreditTransactionType {
   CANCEL_PRINCIPAL_REPAYMENT = 'cancel_principal_repayment',
   CANCEL_ADDITIONAL_LOAN = 'cancel_additional_loan',
   CONTRACT_DELETE = 'contract_delete',
+  DEBT_PAYMENT = 'debt_payment',
 }
 
 // Updated interface to match the new database schema
@@ -23,6 +24,8 @@ export interface CreditAmountHistory {
   description: string | null;
   employee_id: string | null;
   created_at: string;
+  updated_at?: string | null;
+  is_deleted?: boolean | null;
 }
 
 // Function to transform database record to UI model
@@ -35,7 +38,9 @@ function transformHistory(record: Record<string, any>): CreditAmountHistory {
     credit_amount: record.credit_amount || 0,
     description: record.description,
     employee_id: record.employee_id,
-    created_at: record.created_at
+    created_at: record.created_at,
+    updated_at: record.updated_at,
+    is_deleted: record.is_deleted
   };
 }
 
@@ -371,6 +376,70 @@ export async function recordContractDeletion(
     return { data, error: null };
   } catch (error) {
     console.error('Error recording contract deletion:', error);
+    return { data: null, error };
+  }
+}
+
+/**
+ * Record debt payment (thanh toán nợ)
+ */
+export async function recordDebtPayment(
+  creditId: string,
+  amount: number,
+  transactionDate: string,
+  description?: string,
+  isRefund: boolean = false // true nếu là hoàn trả tiền thừa
+) {
+  try {
+    const { data, error } = await supabase
+      .from('credit_history')
+      .insert({
+        credit_id: creditId,
+        transaction_type: 'debt_payment' as CreditTransactionType,
+        credit_amount: isRefund ? 0 : amount, // Nếu là thanh toán nợ
+        debit_amount: isRefund ? amount : 0,  // Nếu là hoàn trả tiền thừa
+        description: description || (isRefund ? 'Hoàn trả tiền thừa' : 'Thanh toán nợ cũ'),
+        effective_date: transactionDate
+      } as CreditAmountHistoryInsert)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error recording debt payment:', error);
+    return { data: null, error };
+  }
+}
+
+/**
+ * Record debt payment cancellation (hủy thanh toán nợ)
+ */
+export async function recordCancelDebtPayment(
+  creditId: string,
+  amount: number,
+  description?: string,
+  wasRefund: boolean = false // true nếu cancel một lần hoàn trả
+) {
+  try {
+    const { data, error } = await supabase
+      .from('credit_history')
+      .insert({
+        credit_id: creditId,
+        transaction_type: 'debt_payment',
+        credit_amount: wasRefund ? amount : 0,  // Ngược lại với record ban đầu
+        debit_amount: wasRefund ? 0 : amount,   // Ngược lại với record ban đầu
+        description: description || (wasRefund ? 'Hủy hoàn trả tiền thừa' : 'Hủy thanh toán nợ cũ')
+      } as any)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error recording debt payment cancellation:', error);
     return { data: null, error };
   }
 } 

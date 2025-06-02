@@ -28,6 +28,7 @@ import { supabase } from '@/lib/supabase';
 import { recordContractReopening } from '@/lib/credit-amount-history';
 import { updateCredit } from '@/lib/credit';
 import { useToast } from '@/components/ui/use-toast';
+import { reopenContract } from '@/lib/Credits/reopen_contract';
 
 interface StatusMapType {
   [key: string]: { 
@@ -675,8 +676,7 @@ export function CreditsTable({
                             className="h-8 w-8 p-0 text-green-700" 
                             onClick={async () => { 
                               try {
-                                await updateCredit(credit.id, { status: 'on_time' as CreditStatus }); 
-                                await recordContractReopening(credit.id, new Date().toISOString(), 'Mở lại hợp đồng từ trạng thái đóng');
+                                await reopenContract(credit.id);
                                 
                                 // Show success toast
                                 toast({
@@ -693,7 +693,7 @@ export function CreditsTable({
                                 // Show error toast
                                 toast({
                                   title: "Lỗi",
-                                  description: "Có lỗi xảy ra khi mở lại hợp đồng",
+                                  description: error instanceof Error ? error.message : "Có lỗi xảy ra khi mở lại hợp đồng",
                                   variant: "destructive",
                                 });
                               }

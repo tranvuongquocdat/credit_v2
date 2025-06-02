@@ -96,8 +96,8 @@ export async function calculateCloseContractInterest(creditId: string, inputDate
       }
     }
 
-    // 8. Kết quả = Expected của các kỳ đã đóng - Expected từ ngày bắt đầu đến ngày input
-    const result = totalExpectedOfPaidPeriods - expectedFromStartToInput;
+    // 8. Kết quả = Expected từ ngày bắt đầu đến ngày input - Expected của các kỳ đã đóng
+    const result = expectedFromStartToInput - totalExpectedOfPaidPeriods;
     console.log("totalExpectedOfPaidPeriods", totalExpectedOfPaidPeriods);
     console.log("expectedFromStartToInput", expectedFromStartToInput);
     return Math.round(result);
