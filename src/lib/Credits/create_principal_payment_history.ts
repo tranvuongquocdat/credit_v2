@@ -31,7 +31,7 @@ export async function getExpectedMoney(creditId: string) {
     let result = Array(credit.loan_period).fill(credit.loan_amount);
 
 
-    // tính toán số tiền expected cho từng kì lãi phải trả
+    // với mỗi lịch sử thay đổi gốc, tạo mảng mới ghi nhận chênh lệch ở ngày đó trong mảng
     for (let i = 0; i < principalPaymentHistory.length; i++) {
         // Tạo mảng thay đổi cho bản ghi hiện tại
         const changeArray = historyToArray(

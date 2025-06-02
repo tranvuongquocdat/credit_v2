@@ -10,6 +10,8 @@ import { getExpectedMoney } from '@/lib/Credits/create_principal_payment_history
 import { supabase } from '@/lib/supabase';
 import { convertFromHistoryToTimeArrayWithStatus } from '@/lib/Credits/convert_from_history_to_time_array';
 import { getCreditPaymentHistory } from '@/lib/Credits/payment_history';
+import { calculateDebtToLatestPaidPeriod } from '@/lib/Credits/calculate_remaining_debt';
+import { calculateCloseContractInterest } from '@/lib/Credits/calculate_close_contract_interest';
 
 type PaymentTabProps = {
   credit: CreditWithCustomer | null;
@@ -58,6 +60,7 @@ export function PaymentTab({
 
   // Generate periods using convertFromHistoryToTimeArrayWithStatus + getExpectedMoney
   useEffect(() => {
+    calculateCloseContractInterest(credit?.id || '', '2025-06-02');
     async function generatePeriodsFromExpectedMoney() {
       if (!credit?.id) return;
       
@@ -120,7 +123,7 @@ export function PaymentTab({
             }
           }
           
-          // Calculate actual amount if period is checked (has payments in DB)
+          // Tính actual amount dựa vào lịch sử (dùng effective date để query đúng kỳ cần tính)
           let actualAmount = 0;
           if (isChecked) {
             const periodPayments = paymentHistory.filter(payment => {
