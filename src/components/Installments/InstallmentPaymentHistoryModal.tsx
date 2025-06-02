@@ -580,7 +580,13 @@ export function InstallmentPaymentHistoryModal({
           const p = calculateCombinedPaymentPeriods[i];
           // Only include periods that don't have any payment in DB yet
           if (!isPeriodInDatabase(p)) {
-            periodsToCheck.push(p);
+            // Create a copy of the period with updated actualAmount if this is the edited period
+            const periodToAdd = {
+              ...p,
+              // If this is the period being edited and we have a tempEditedAmount, use it
+              actualAmount: (i === index && tempEditedAmount !== null) ? tempEditedAmount : (p.actualAmount || 0)
+            };
+            periodsToCheck.push(periodToAdd);
           }
         }
         

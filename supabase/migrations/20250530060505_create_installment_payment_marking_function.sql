@@ -12,6 +12,8 @@ DECLARE
   v_period_number INTEGER;
   expected_amount NUMERIC;
   other_amount NUMERIC;
+  input_actual_amount NUMERIC;
+  final_actual_amount NUMERIC;
   start_date DATE;
   end_date DATE;
   payment_date DATE;
@@ -73,6 +75,16 @@ BEGIN
       v_period_number := (period_record->>'periodNumber')::INTEGER;
       expected_amount := COALESCE((period_record->>'expectedAmount')::NUMERIC, 0);
       other_amount := COALESCE((period_record->>'otherAmount')::NUMERIC, 0);
+      
+      -- Determine the actual payment amount: use actualAmount if provided and non-zero, otherwise use expectedAmount
+      input_actual_amount := COALESCE((period_record->>'actualAmount')::NUMERIC, 0);
+      
+      -- If actualAmount is provided and non-zero, use it; otherwise use expectedAmount
+      IF input_actual_amount > 0 THEN
+        final_actual_amount := input_actual_amount;
+      ELSE
+        final_actual_amount := expected_amount;
+      END IF;
       
       -- Handle date parsing from DD/MM/YYYY format
       BEGIN
@@ -156,7 +168,7 @@ BEGIN
                   calculated_start_date,
                   calculated_end_date,
                   calculated_amount,
-                  calculated_amount,
+                  calculated_amount, -- For auto-created periods, actual = expected
                   payment_date,
                   'Auto-created via checkbox for sequential payment'
                 ) RETURNING id INTO period_id;
@@ -209,17 +221,17 @@ BEGIN
               );
               CONTINUE;
             ELSE
-              -- Update existing period - use function variable expected_amount
+              -- Update existing period - use final_actual_amount (which could be user-edited amount)
               UPDATE installment_payment_period 
               SET 
-                actual_amount = expected_amount, -- This is the function variable, not table column
+                actual_amount = final_actual_amount, -- Use final_actual_amount which includes user edits
                 payment_start_date = payment_date,
                 notes = 'Đóng tiền qua checkbox',
                 updated_at = NOW()
               WHERE id = existing_period.id;
               
               -- Add to total payment amount for history logging
-              total_payment_amount := total_payment_amount + (expected_amount - existing_period.actual_amount);
+              total_payment_amount := total_payment_amount + (final_actual_amount - existing_period.actual_amount);
               
               processed_periods := processed_periods || jsonb_build_object(
                 'period_number', v_period_number,
@@ -228,7 +240,7 @@ BEGIN
               );
             END IF;
           ELSE
-            -- Create new period - use function variable expected_amount
+            -- Create new period - use expected_amount from input for both expected and actual
             INSERT INTO installment_payment_period (
               installment_id,
               period_number,
@@ -243,14 +255,14 @@ BEGIN
               v_period_number,
               start_date,
               end_date,
-              expected_amount, -- Function variable
-              expected_amount, -- Function variable
+              expected_amount, -- Expected amount from input
+              final_actual_amount, -- Actual amount = expected amount when paying via checkbox
               payment_date,
               'Đóng tiền qua checkbox'
             ) RETURNING id INTO period_id;
             
             -- Add to total payment amount for history logging
-            total_payment_amount := total_payment_amount + expected_amount;
+            total_payment_amount := total_payment_amount + final_actual_amount;
             
             processed_periods := processed_periods || jsonb_build_object(
               'period_number', v_period_number,
@@ -284,11 +296,11 @@ BEGIN
           END IF;
           
           -- Add to total payment amount for history logging
-          total_payment_amount := total_payment_amount + (expected_amount - existing_period.actual_amount);
+          total_payment_amount := total_payment_amount + (final_actual_amount - existing_period.actual_amount);
           
           UPDATE installment_payment_period 
           SET 
-            actual_amount = expected_amount, -- Function variable
+            actual_amount = final_actual_amount, -- Use final_actual_amount which includes user edits
             payment_start_date = payment_date,
             notes = 'Đóng tiền qua checkbox',
             updated_at = NOW()
