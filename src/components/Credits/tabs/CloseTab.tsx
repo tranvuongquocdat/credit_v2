@@ -37,7 +37,7 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
     setIsClosing(true);
     
     try {
-      const contractCloseAmount = loanAmount; // Tiền gốc + chênh lệch lãi phí
+      const contractCloseAmount = loanAmount; // Tiền gốc
       
       // Case 1: Nếu tiền lãi phí <= 0, chỉ cần chuyển trạng thái sang CLOSED
       if (remainingAmount < 0) {
@@ -49,7 +49,7 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
           .insert({
             credit_id: creditId,
             transaction_type: 'contract_close',
-            credit_amount: contractCloseAmount,
+            credit_amount: contractCloseAmount + remainingAmount,
             debit_amount: 0,
             description: `Đóng hợp đồng (gốc: ${formatCurrency(loanAmount)} + lãi: ${formatCurrency(remainingAmount)})`,
             is_created_from_contract_closure: true
