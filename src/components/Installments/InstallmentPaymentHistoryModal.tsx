@@ -154,7 +154,7 @@ export function InstallmentPaymentHistoryModal({
   const [rotationLoanAmount, setRotationLoanAmount] =
     useState<string>("1,000,000");
   const [rotationDownPayment, setRotationDownPayment] =
-    useState<string>("800,000");
+    useState<string>("800.000");
   const [rotationDuration, setRotationDuration] = useState<string>("10");
   const [rotationPaymentPeriod, setRotationPaymentPeriod] =
     useState<string>("6");
@@ -787,6 +787,7 @@ export function InstallmentPaymentHistoryModal({
   // Calculate customer receive amount
   const calculateCustomerReceiveAmount = (): number => {
     const downPayment = parseFormattedNumber(rotationDownPayment);
+    console.log("downPayment", rotationDownPayment);
     const amountToPay = Math.max(0, calculateRemainingPeriods() * (installment?.installment_amount || 0) / Math.ceil((installment?.duration || 0) / (installment?.payment_period || 1)));
     const remainingDebt = 0 - (installment.debt_amount || 0);
 
@@ -812,11 +813,11 @@ export function InstallmentPaymentHistoryModal({
   const handleRotationDownPaymentChange = (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
-    const value = e.target.value.replace(/,/g, "");
+    const value = e.target.value.replace(/\./g, "");
     const numberValue = parseInt(value, 10);
 
     if (!isNaN(numberValue)) {
-      setRotationDownPayment(formatNumberWithCommas(numberValue));
+      setRotationDownPayment(formatNumberWithDot(numberValue));
     } else if (value === "") {
       setRotationDownPayment("");
     }
