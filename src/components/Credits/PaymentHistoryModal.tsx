@@ -22,6 +22,9 @@ import { getCreditById } from '@/lib/credit';
 import { getPrincipalChangesForCredit } from '@/lib/credit-principal-changes';
 import { CreditAmountHistory, CreditTransactionType, getCreditAmountHistory } from '@/lib/credit-amount-history';
 import { calculateDaysBetween, formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
+import { getExpectedMoney } from '@/lib/Credits/create_principal_payment_history';
+import { calculateDebtToLatestPaidPeriod } from '@/lib/Credits/calculate_remaining_debt';
+import { getCreditPaymentHistory } from '@/lib/Credits/payment_history';
 
 
 interface PaymentHistoryModalProps {
@@ -57,6 +60,15 @@ export function PaymentHistoryModal({
   const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [otherAmount, setOtherAmount] = useState<number>(0);
+  
+  // State đơn giản cho tổng lãi phí và nợ cũ
+  const [totalExpectedInterest, setTotalExpectedInterest] = useState<number>(0);
+  const [remainingDebt, setRemainingDebt] = useState<number>(0);
+  const [loadingFinancials, setLoadingFinancials] = useState(false);
+  
+  // State cho payment history từ getCreditPaymentHistory
+  const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
+  const [loadingPaymentHistory, setLoadingPaymentHistory] = useState(false);
   
   // Cập nhật state credit khi initialCredit thay đổi
   useEffect(() => {
@@ -211,216 +223,91 @@ export function PaymentHistoryModal({
   // Calculate total amounts with useMemo
   const totalAmount = useMemo(() => credit?.loan_amount || 0, [credit?.loan_amount]);
   
-  // Calculate interest for a specific period (similar to PaymentTab logic)
-  const calculateInterestForPeriod = useCallback((startDate: string, endDate: string): number => {
-    if (!credit) return 0;
-    
-    try {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      
-      // If no principal changes, use simple calculation
-      if (!principalChanges || principalChanges.length === 0) {
-        const days = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-        const dailyRate = calculateDailyRateForCredit(credit);
-        return Math.round(credit.loan_amount * dailyRate * days);
+  // useEffect để load payment history
+  useEffect(() => {
+    async function loadPaymentHistory() {
+      if (!credit?.id) {
+        setPaymentHistory([]);
+        return;
       }
-      
-      // Filter relevant principal changes (those that occur before or during this period)
-      const relevantChanges = principalChanges.filter(change => {
-        const changeDate = new Date(change.date);
-        return changeDate >= start;
-      });
-      
-      // Sort changes by date
-      relevantChanges.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      
-      // Use calculateInterestWithPrincipalChanges with relevant changes
-      return calculateInterestWithPrincipalChanges(
-        credit,
-        start,
-        end,
-        relevantChanges
-      );
-    } catch (err) {
-      console.error('Error calculating interest for period:', err);
-      return 0;
-    }
-  }, [credit, principalChanges]);
-  
-  // Calculate displayed periods (similar to PaymentTab logic)
-  const calculatedDisplayedPeriods = useMemo(() => {
-    if (!credit) return paymentPeriods;
-    
-    // If no principal changes, just return existing payment periods
-    if (!principalChanges || principalChanges.length === 0) {
-      return paymentPeriods;
-    }
-    
-    // Start with existing periods from database
-    const existingPeriods = paymentPeriods || [];
-    
-    // Find the start date for next period calculation
-    let nextStartDate: Date;
-    let nextPeriodNumber = 1;
-    
-    if (existingPeriods.length > 0) {
-      // Start from day after last period
-      const lastPeriod = existingPeriods.sort((a, b) => a.period_number - b.period_number)[existingPeriods.length - 1];
-      nextStartDate = new Date(lastPeriod.end_date);
-      nextStartDate.setDate(nextStartDate.getDate() + 1);
-      nextPeriodNumber = lastPeriod.period_number + 1;
-    } else {
-      // No existing periods, start from loan date
-      nextStartDate = new Date(credit.loan_date);
-    }
-    
-    // Calculate loan end date
-    const loanEndDate = new Date(credit.loan_date);
-    loanEndDate.setDate(loanEndDate.getDate() + credit.loan_period - 1);
-    
-    // Generate additional periods if needed
-    const newPeriods: CreditPaymentPeriod[] = [...existingPeriods];
-    const interestPeriod = credit.interest_period || 30;
-    
-    while (nextStartDate <= loanEndDate && newPeriods.length < 100) {
-      const periodEndDate = new Date(nextStartDate);
-      periodEndDate.setDate(nextStartDate.getDate() + interestPeriod - 1);
-      
-      // Don't exceed loan end date
-      if (periodEndDate > loanEndDate) {
-        periodEndDate.setTime(loanEndDate.getTime());
-      }
-      
-      // Calculate expected amount using the dedicated function
-      const expectedAmount = calculateInterestForPeriod(
-        nextStartDate.toISOString(),
-        periodEndDate.toISOString()
-      );
-      
-      const newPeriod: CreditPaymentPeriod = {
-        id: `calculated-${nextPeriodNumber}`,
-        credit_id: credit.id,
-        period_number: nextPeriodNumber,
-        start_date: nextStartDate.toISOString(),
-        end_date: periodEndDate.toISOString(),
-        expected_amount: expectedAmount,
-        actual_amount: 0,
-        payment_date: null,
-        notes: null,
-        other_amount: 0,
-        is_temporary: false
-      };
-      
-      newPeriods.push(newPeriod);
-      nextPeriodNumber++;
-      
-      // Move to next period
-      nextStartDate = new Date(periodEndDate);
-      nextStartDate.setDate(nextStartDate.getDate() + 1);
-      
-      // Stop if next start date exceeds loan end date
-      if (nextStartDate > loanEndDate) break;
-    }
-    
-    // Sort by period number
-    newPeriods.sort((a, b) => a.period_number - b.period_number);
-    return newPeriods;
-  }, [credit, paymentPeriods, principalChanges, calculateInterestForPeriod]);
-  
-  // Calculate total expected interest from displayed periods
-  const totalExpected = useMemo(() => {
-    const total = calculatedDisplayedPeriods.reduce((sum, period) => sum + (period.expected_amount || 0), 0);
-    
-    // Debug logging
-    console.log('=== DEBUG TOTAL EXPECTED ===');
-    console.log('Calculated displayed periods:', calculatedDisplayedPeriods.length);
-    console.log('Periods details:', calculatedDisplayedPeriods.map(p => ({
-      period: p.period_number,
-      expected: p.expected_amount,
-      id: p.id
-    })));
-    console.log('Total expected:', total);
-    console.log('===========================');
-    
-    return total;
-  }, [calculatedDisplayedPeriods]);
 
-  const totalPaid = useMemo(() => 
-    paymentPeriods.reduce((sum, period) => sum + (period.actual_amount || 0), 0),
-    [paymentPeriods]
-  );
+      setLoadingPaymentHistory(true);
+      try {
+        const history = await getCreditPaymentHistory(credit.id);
+        // Filter chỉ lấy payment records chưa bị xóa
+        const paymentRecords = history.filter(record => 
+          record.transaction_type === 'payment' && 
+          record.is_deleted === false
+        );
+        setPaymentHistory(paymentRecords);
+        
+        console.log('Payment history loaded:', {
+          total: history.length,
+          payments: paymentRecords.length
+        });
+      } catch (error) {
+        console.error('Error loading payment history:', error);
+        setPaymentHistory([]);
+      } finally {
+        setLoadingPaymentHistory(false);
+      }
+    }
+
+    loadPaymentHistory();
+  }, [credit?.id, hasDataChanged]); // Reload khi có data change
   
-  // Sử dụng debt_amount trực tiếp từ credit thay vì tính toán
-  const remainingAmount = credit?.debt_amount !== undefined ? -(credit.debt_amount) : 0;
-  
+  // useEffect đơn giản để tính tổng lãi phí và nợ cũ
+  useEffect(() => {
+    async function calculateFinancials() {
+      if (!credit?.id) {
+        setTotalExpectedInterest(0);
+        setRemainingDebt(0);
+        return;
+      }
+
+      setLoadingFinancials(true);
+      try {
+        // 1. Gọi getExpectedMoney và tính tổng
+        const dailyAmounts = await getExpectedMoney(credit.id);
+        const total = dailyAmounts.reduce((sum, amount) => sum + amount, 0);
+        setTotalExpectedInterest(Math.round(total));
+
+        // 2. Gọi calculateDebtToLatestPaidPeriod
+        const debt = await calculateDebtToLatestPaidPeriod(credit.id);
+        setRemainingDebt(debt);
+
+        console.log('Financials calculated:', {
+          totalExpected: Math.round(total),
+          debt: debt
+        });
+      } catch (error) {
+        console.error('Error calculating financials:', error);
+        setTotalExpectedInterest(0);
+        setRemainingDebt(0);
+      } finally {
+        setLoadingFinancials(false);
+      }
+    }
+
+    calculateFinancials();
+  }, [credit?.id, hasDataChanged]);
+
+  // Sử dụng giá trị đơn giản
+  const totalExpected = totalExpectedInterest;
+  const remainingAmount = remainingDebt;
+
+  // CẬP NHẬT: totalPaid từ getCreditPaymentHistory
+  const totalPaid = useMemo(() => {
+    return paymentHistory.reduce((sum, payment) => sum + (payment.credit_amount || 0), 0);
+  }, [paymentHistory]);
+
   // Generate date range for display
   const loanDateFormatted = formatDate(credit?.loan_date);
   const endDateFormatted = credit?.loan_date 
     ? formatDate(new Date(new Date(credit.loan_date).getTime() + (credit.loan_period - 1) * 24 * 60 * 60 * 1000).toISOString())
     : '-';
-  
-  // Giải thích: Chúng ta trừ 1 vì khi tính số ngày, ngày đầu và ngày cuối đều được tính vào (inclusive)
-  // Ví dụ: từ 18/5 đến 17/6 là 31 ngày, nhưng khi tính số ngày cần nhảy là 30 ngày
-  
-  // Calculate totals for history display
+
   const historyTotals = calculateHistoryTotals();
-  
-  // Hàm xử lý việc lưu thanh toán khi người dùng nhập xong
-  const handleSavePayment = async () => {
-    if (!selectedPeriodId || !credit) return;
-    
-    try {
-      // Tìm kỳ được chọn
-      const periodToUpdate = paymentPeriods.find(p => p.id === selectedPeriodId);
-      if (!periodToUpdate) return;
-      
-      // Kiểm tra xem đây có phải kỳ tính toán chưa lưu trong DB không
-      const isCalculatedPeriod = selectedPeriodId.startsWith('calculated-');
-      
-      // Sử dụng hàm savePaymentWithOtherAmount để lưu hoặc cập nhật
-      const { data, error } = await savePaymentWithOtherAmount(
-        credit.id,
-        periodToUpdate,
-        paymentAmount,
-        otherAmount,
-        isCalculatedPeriod
-      );
-      
-      if (error) {
-        console.error('Lỗi khi lưu thanh toán:', error);
-        return;
-      }
-      
-      // Cập nhật lại danh sách kỳ thanh toán
-      if (data) {
-        // Tạo bản sao của danh sách hiện tại
-        const updatedPeriods = [...paymentPeriods];
-        
-        // Tìm và thay thế kỳ được cập nhật
-        const periodIndex = updatedPeriods.findIndex(p => p.id === selectedPeriodId);
-        if (periodIndex >= 0) {
-          // Nếu đây là kỳ tính toán, thay thế ID tạm bởi ID thật
-          updatedPeriods[periodIndex] = {
-            ...periodToUpdate,
-            id: isCalculatedPeriod ? data.id : periodToUpdate.id,
-            actual_amount: paymentAmount,
-            other_amount: otherAmount,
-            payment_date: new Date().toISOString(),
-          };
-        }
-        
-        // Cập nhật state
-        setPaymentPeriods(updatedPeriods);
-      }
-      
-      // Đóng dialog
-      setShowPaymentInput(false);
-      setSelectedPeriodId(null);
-    } catch (error) {
-      console.error('Lỗi khi xử lý thanh toán:', error);
-    }
-  }
   
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(hasDataChanged)}>
@@ -435,7 +322,16 @@ export function PaymentHistoryModal({
           {/* Thông tin khách hàng */}
           <div className="flex justify-between items-center mb-2">
             <h3 className="font-medium">{credit?.customer?.name || 'Khách hàng'}</h3>
-            <h3 className="font-medium">Tổng lãi phí: {formatCurrency(totalExpected)}</h3>
+            <h3 className="font-medium">
+              {loadingFinancials ? (
+                <span className="flex items-center gap-2">
+                  <div className="h-4 w-4 rounded-full border-2 border-t-transparent border-blue-600 animate-spin"></div>
+                  Đang tính...
+                </span>
+              ) : (
+                `Tổng lãi phí: ${formatCurrency(totalExpected)}`
+              )}
+            </h3>
           </div>
           
           {/* Tổng hợp chi tiết */}
@@ -466,17 +362,34 @@ export function PaymentHistoryModal({
                 <tbody>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Đã thanh toán</td>
-                    <td className="py-1 px-2 text-right border">{formatCurrency(totalPaid)}</td>
+                    <td className="py-1 px-2 text-right border">
+                      {loadingPaymentHistory ? (
+                        <div className="h-4 w-4 rounded-full border-2 border-t-transparent border-blue-600 animate-spin mx-auto"></div>
+                      ) : (
+                        formatCurrency(totalPaid)
+                      )}
+                    </td>
                   </tr>
                   <tr>
-                    <td className="py-1 px-2 border font-bold">{remainingAmount < 0 ? 'Tiền thừa' : 'Nợ cũ'}</td>
-                    <td className={`py-1 px-2 text-right border ${remainingAmount < 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatCurrency(Math.abs(remainingAmount))}
+                    <td className="py-1 px-2 border font-bold">
+                      {loadingFinancials ? 'Đang tính...' : (remainingAmount < 0 ? 'Tiền thừa' : 'Nợ cũ')}
+                    </td>
+                    <td className={`py-1 px-2 text-right border ${
+                      loadingFinancials ? 'text-gray-500' : 
+                      remainingAmount < 0 ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {loadingFinancials ? (
+                        <div className="h-4 w-4 rounded-full border-2 border-t-transparent border-blue-600 animate-spin mx-auto"></div>
+                      ) : (
+                        formatCurrency(Math.abs(remainingAmount))
+                      )}
                     </td>
                   </tr>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Trạng thái</td>
-                    <td className="py-1 px-2 text-right border">Đang vay</td>
+                    <td className="py-1 px-2 text-right border">
+                      {credit?.status === 'closed' ? 'Đã đóng' : 'Đang vay'}
+                    </td>
                   </tr>
                 </tbody>
               </table>

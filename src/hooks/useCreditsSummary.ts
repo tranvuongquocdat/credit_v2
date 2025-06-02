@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { CreditStatus } from '@/models/credit';
 import { useStore } from '@/contexts/StoreContext';
+import { getExpectedMoney } from '@/lib/Credits/create_principal_payment_history';
 
 // Định nghĩa interface cho dữ liệu tài chính của cửa hàng
 export interface StoreFinancialData {
@@ -30,11 +31,6 @@ export function useCreditsSummary() {
         .eq('id', storeId)
         .single();
       
-      // Get credits for interest calculation
-      const today = new Date();
-      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-      const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      
       // 2. Lấy tổng tiền cho vay (tổng loan_amount của các hợp đồng đang vay)
       const { data: activeCreditsData, error: activeCreditsError } = await supabase
         .from('credits')
@@ -61,155 +57,51 @@ export function useCreditsSummary() {
       // Tính tổng tiền nợ cũ sử dụng trường debt_amount
       const oldDebt = oldDebtData?.reduce((sum, credit) => sum + (credit.debt_amount || 0), 0) || 0;
       
-      // 4. Lấy tổng lãi phí đã thu (sửa đổi công thức tính)
-      // Tính tổng lãi phí đã thu từ lịch sử giao dịch (credit_history)
+      // 4. Tính lãi phí đã thu = tổng credit_amount của các bản ghi payment có is_deleted = false
       let collectedInterest = 0;
       
-      if (activeCreditsData && activeCreditsData.length > 0) {
-        // Xử lý từng hợp đồng
-        for (const credit of activeCreditsData) {
-          // Lấy lịch sử giao dịch của hợp đồng
-          const { data: historyData, error: historyError } = await supabase
-            .from('credit_history')
-            .select('*')
-            .eq('credit_id', credit.id)
-            .in('transaction_type', [
-              'payment', // đóng lãi
-              'payment_cancel', // hủy đóng lãi
-              'contract_close', // đóng hợp đồng
-            ]);
-          
-          if (historyError) {
-            console.error(`Lỗi khi lấy lịch sử giao dịch cho hợp đồng ${credit.id}:`, historyError);
-            continue;
-          }
-          
-          if (!historyData || historyData.length === 0) {
-            continue;
-          }
-          // Tính tổng credit_amount và debit_amount
-          const totalCredit = historyData.reduce((sum, record) => sum + (record.credit_amount || 0), 0);
-          const totalDebit = historyData.reduce((sum, record) => sum + (record.debit_amount || 0), 0);
-          
-          // Kiểm tra xem có giao dịch đóng hợp đồng không
-          const hasContractClose = historyData.some(record => record.transaction_type === 'contract_close');
-          
-          // Tổng số tiền thực thu = tổng credit - tổng debit
-          const totalCollected = totalCredit - totalDebit;
-          console.log(totalCollected);
-          
-          // Lãi phí thu được
-          let interestForThisCredit = 0;
-          
-          if (hasContractClose) {
-            // Nếu có đóng hợp đồng, trừ đi tiền gốc
-            if (totalCollected > credit.loan_amount) {
-              interestForThisCredit = totalCollected - credit.loan_amount;
-            }
-          } else {
-            // Nếu chưa đóng hợp đồng, toàn bộ số tiền thu được là lãi phí
-            if (totalCollected > 0) {
-              interestForThisCredit = totalCollected;
-            }
-          }
-          
-          collectedInterest += interestForThisCredit;
-        }
+      const { data: paymentHistory, error: paymentError } = await supabase
+        .from('credit_history')
+        .select('credit_amount')
+        .eq('transaction_type', 'payment')
+        .eq('is_deleted', false);
+      
+      if (paymentError) {
+        console.error('Lỗi khi lấy lịch sử thanh toán:', paymentError);
+      } else if (paymentHistory) {
+        collectedInterest = paymentHistory.reduce((sum, record) => sum + (record.credit_amount || 0), 0);
+        console.log(`Collected interest from ${paymentHistory.length} payment records: ${Math.round(collectedInterest)} VNĐ`);
       }
       
-      // 5. Lấy dữ liệu credits đang hoạt động để tính lãi dự kiến trong tháng này
-      const { data: activeCredits, error: expectedInterestError } = await supabase
+      // 5. Tính lãi phí dự kiến = tổng getExpectedMoney của các hợp đồng ON_TIME
+      let profit = 0;
+      
+      // Lấy danh sách hợp đồng ON_TIME
+      const { data: onTimeCredits, error: onTimeCreditsError } = await supabase
         .from('credits')
-        .select(`
-          id, 
-          loan_amount, 
-          interest_type, 
-          interest_value, 
-          loan_period,
-          interest_period,
-          interest_ui_type,
-          interest_notation,
-          loan_date,
-          status
-        `)
-        .in('status', [CreditStatus.ON_TIME, CreditStatus.OVERDUE, CreditStatus.LATE_INTEREST, CreditStatus.BAD_DEBT])
-        .lte('loan_date', lastDayOfMonth.toISOString());
+        .select('id')
+        .eq('status', CreditStatus.ON_TIME);
       
-      if (expectedInterestError) {
-        console.error('Lỗi khi lấy dữ liệu tín dụng đang hoạt động:', expectedInterestError);
-      }
-      
-      // Tính tổng lãi phí dự kiến trong tháng này
-      let monthlyInterestAmount = 0;
-      
-      if (activeCredits) {
-        monthlyInterestAmount = activeCredits.reduce((total, credit) => {
-          let interestPerMonth = 0;
-          
-          // Đã vay được bao nhiêu ngày
-          const loanDate = new Date(credit.loan_date);
-          const daysSinceLoan = Math.max(0, Math.floor((today.getTime() - loanDate.getTime()) / (1000 * 60 * 60 * 24)));
-          
-          // Không tính nếu khoản vay bắt đầu sau tháng này
-          if (loanDate > lastDayOfMonth) return total;
-          
-          // Kiểm tra credit còn trong thời hạn vay không
-          const isWithinLoanPeriod = daysSinceLoan <= credit.loan_period;
-          if (!isWithinLoanPeriod) return total;
-          
-          // Tính toán lãi dựa trên loại lãi và cách tính
-          switch (credit.interest_ui_type) {
-            case 'daily':
-              // Số ngày trong tháng này mà khoản vay đang hoạt động
-              const daysInMonth = Math.min(
-                lastDayOfMonth.getDate(),
-                credit.loan_period - (daysSinceLoan - today.getDate())
-              );
-              
-              if (credit.interest_notation === 'k_per_million') {
-                // k/triệu/ngày
-                interestPerMonth = (credit.loan_amount / 1000000) * credit.interest_value * daysInMonth * 1000;
-              } else if (credit.interest_notation === 'k_per_day') {
-                // k/ngày
-                interestPerMonth = credit.interest_value * daysInMonth * 1000;
-              }
-              break;
-              
-            case 'monthly_30':
-            case 'monthly_custom':
-              if (credit.interest_notation === 'percent_per_month') {
-                // %/tháng
-                const monthlyRate = credit.interest_value / 100;
-                interestPerMonth = credit.loan_amount * monthlyRate;
-              }
-              break;
-              
-            case 'weekly_percent':
-              if (credit.interest_notation === 'percent_per_week') {
-                // %/tuần
-                const weeklyRate = credit.interest_value / 100;
-                // Số tuần trong tháng này (xấp xỉ 4.35 tuần/tháng)
-                const weeksInMonth = 4.35;
-                interestPerMonth = credit.loan_amount * weeklyRate * weeksInMonth;
-              }
-              break;
-              
-            case 'weekly_k':
-              if (credit.interest_notation === 'k_per_week') {
-                // k/tuần
-                // Số tuần trong tháng này (xấp xỉ 4.35 tuần/tháng)
-                const weeksInMonth = 4.35;
-                interestPerMonth = credit.interest_value * weeksInMonth * 1000;
-              }
-              break;
+      if (onTimeCreditsError) {
+        console.error('Lỗi khi lấy dữ liệu hợp đồng ON_TIME:', onTimeCreditsError);
+      } else if (onTimeCredits && onTimeCredits.length > 0) {
+        console.log(`Calculating expected profit for ${onTimeCredits.length} ON_TIME credits`);
+        
+        // Tính tổng getExpectedMoney cho tất cả hợp đồng ON_TIME
+        for (const credit of onTimeCredits) {
+          try {
+            const dailyAmounts = await getExpectedMoney(credit.id);
+            const totalExpected = dailyAmounts.reduce((sum, amount) => sum + amount, 0);
+            profit += totalExpected;
+            
+            console.log(`Credit ${credit.id}: ${Math.round(totalExpected)} VNĐ expected`);
+          } catch (error) {
+            console.error(`Error calculating expected money for credit ${credit.id}:`, error);
           }
-          
-          return total + interestPerMonth;
-        }, 0);
+        }
+        
+        console.log(`Total expected profit: ${Math.round(profit)} VNĐ`);
       }
-      
-      // Sử dụng monthlyInterestAmount làm profit
-      const profit = Math.round(monthlyInterestAmount);
       
       // 6. Tổng hợp dữ liệu
       const financialSummary: StoreFinancialData = {
@@ -217,8 +109,8 @@ export function useCreditsSummary() {
         availableFund: storeData?.cash_fund || 0,
         totalLoan: totalLoan,
         oldDebt: oldDebt,
-        profit: profit,
-        collectedInterest: collectedInterest
+        profit: Math.round(profit),
+        collectedInterest: Math.round(collectedInterest)
       };
       
       setFinancialData(financialSummary);

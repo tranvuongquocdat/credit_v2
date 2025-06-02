@@ -10,10 +10,7 @@ import { getExpectedMoney } from '@/lib/Credits/create_principal_payment_history
 import { supabase } from '@/lib/supabase';
 import { convertFromHistoryToTimeArrayWithStatus } from '@/lib/Credits/convert_from_history_to_time_array';
 import { getCreditPaymentHistory } from '@/lib/Credits/payment_history';
-import { calculateDebtToLatestPaidPeriod } from '@/lib/Credits/calculate_remaining_debt';
-import { calculateCloseContractInterest } from '@/lib/Credits/calculate_close_contract_interest';
 import { PaymentForm } from '../PaymentForm';
-import { recordDailyPayments } from '@/lib/Credits/record_daily_payments';
 import { 
   saveCustomPayment, 
   calculateCustomPeriodInterest, 
