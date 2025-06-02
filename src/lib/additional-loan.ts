@@ -113,7 +113,7 @@ export async function deleteCreditAmountHistory(id: string): Promise<void> {
   try {
     // Get the record details first to restore the loan amount later
     const { data: record, error: fetchError } = await supabase
-      .from('credit_amount_history')
+      .from('credit_history')
       .select('*')
       .eq('id', id)
       .single();
@@ -135,14 +135,14 @@ export async function deleteCreditAmountHistory(id: string): Promise<void> {
     }
     
     // Restore the loan amount by subtracting the additional loan amount
-    const additionalAmount = record.amount || 0;
+    const additionalAmount = record.debit_amount || 0;
     const restoredAmount = Math.max(0, (creditData?.loan_amount || 0) - additionalAmount);
     
     
-    // Delete the history record
+    // Delete the history record by setting is_deleted = true
     const { error: deleteError } = await supabase
-    .from('credit_amount_history')
-    .delete()
+    .from('credit_history')
+    .update({ is_deleted: true })
     .eq('id', id);
     
     if (deleteError) {
