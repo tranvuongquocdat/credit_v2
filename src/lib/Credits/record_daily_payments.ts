@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import { getExpectedMoney } from './create_principal_payment_history';
+import { getExpectedMoney } from './get_expected_money';
 
 /**
  * Ghi từng bản ghi payment hàng ngày từ startDate đến endDate

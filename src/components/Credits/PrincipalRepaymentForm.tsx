@@ -6,6 +6,7 @@ import { toast } from '@/components/ui/use-toast';
 import { getCreditPaymentPeriods } from '@/lib/credit-payment';
 import { getCreditById } from '@/lib/credit';
 import { calculateActualLoanAmount } from '@/lib/Credits/calculate_actual_loan_amount';
+import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_date';
 
 interface PrincipalRepaymentFormProps {
   onSubmit: (data: {
@@ -76,54 +77,17 @@ export function PrincipalRepaymentForm({ onSubmit, creditId, disabled = false }:
   }, [creditId]);
 
   useEffect(() => {
-    async function fetchData() {
+    async function fetchLatestPaymentPaidDate() {
       if (!creditId) return;
       
       setIsLoading(true);
       try {
-        // Fetch credit info to get the loan_date
-        const { data: creditData, error: creditError } = await getCreditById(creditId);
-        
-        if (creditError) {
-          console.error('Error fetching credit info:', creditError);
-          return;
-        }
-        
-        // Set minimum date as loan start date
-        const loanStartDate = creditData?.loan_date ? new Date(creditData.loan_date) : new Date();
-        
-        // Fetch payment periods to get the most recent period
-        const { data, error } = await getCreditPaymentPeriods(creditId);
-        
-        if (error) {
-          console.error('Error fetching payment periods:', error);
-          return;
-        }
-        
-        if (data && data.length > 0) {
-          // Sort by end_date to find the most recent period
-          const sortedPeriods = [...data].sort((a, b) => 
-            new Date(b.end_date).getTime() - new Date(a.end_date).getTime()
-          );
-          
-          // Get the most recent period
-          const lastPeriod = sortedPeriods[0];
-          
-          // Set the repayment date to the day after the end_date of the most recent period
-          if (lastPeriod.end_date) {
-            const nextDay = addDays(new Date(lastPeriod.end_date), 1);
-            
-            // The date should be the maximum of loan start date and the day after the last period
-            const finalDate = max([loanStartDate, nextDay]);
-            
-            setRepaymentDate(format(finalDate, 'yyyy-MM-dd'));
-            setMinDateStr(format(finalDate, 'yyyy-MM-dd'));
-          } else {
-            setMinDateStr(format(loanStartDate, 'yyyy-MM-dd'));
-          }
+        const latestPaymentPaidDate = await getLatestPaymentPaidDate(creditId);
+        console.log('Latest payment paid date:', latestPaymentPaidDate);
+        if (latestPaymentPaidDate) {
+          setMinDateStr(latestPaymentPaidDate);
         } else {
-          // If no payment periods, use loan start date
-          setMinDateStr(format(loanStartDate, 'yyyy-MM-dd'));
+          setMinDateStr(format(new Date(), 'yyyy-MM-dd'));
         }
       } catch (err) {
         console.error('Error in fetchData:', err);
@@ -132,7 +96,7 @@ export function PrincipalRepaymentForm({ onSubmit, creditId, disabled = false }:
       }
     }
     
-    fetchData();
+    fetchLatestPaymentPaidDate();
   }, [creditId]);
 
   const handleDateChange = (date: string) => {
@@ -167,7 +131,7 @@ export function PrincipalRepaymentForm({ onSubmit, creditId, disabled = false }:
     }
 
     // Validate date is not before min date
-    if (new Date(repaymentDate) < new Date(minDateStr)) {
+    if (new Date(repaymentDate) <= new Date(minDateStr)) {
       toast({
         variant: "destructive",
         title: "Lỗi",

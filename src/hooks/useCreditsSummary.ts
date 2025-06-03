@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { CreditStatus } from '@/models/credit';
 import { useStore } from '@/contexts/StoreContext';
-import { getExpectedMoney } from '@/lib/Credits/create_principal_payment_history';
+import { getExpectedMoney } from '@/lib/Credits/get_expected_money';
 import { calculateDebtToLatestPaidPeriod } from '@/lib/Credits/calculate_remaining_debt';
 
 // Định nghĩa interface cho dữ liệu tài chính của cửa hàng

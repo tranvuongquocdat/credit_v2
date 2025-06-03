@@ -17,6 +17,8 @@ import {
   getAdditionalLoans, 
   deleteCreditAmountHistory 
 } from '@/lib/additional-loan';
+import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_date';
+import { toast } from '../ui/use-toast';
 
 interface AdditionalLoanListProps {
   creditId: string;
@@ -76,6 +78,25 @@ export function AdditionalLoanList({
     if (!loanToDelete?.id) return;
     
     try {
+      // tìm ra ngày hiệu lực của lịch sử này và so sánh với ngày cuối cùng đóng lãi để 
+      // quyết định xem phần trả bớt gốc này có được xóa hay không
+      const latestPaymentPaidDate = await getLatestPaymentPaidDate(creditId);
+      if (!latestPaymentPaidDate) {
+        toast({
+          variant: "destructive",
+          title: "Lỗi",
+          description: "Không thể xác định ngày đóng lãi gần nhất"
+        });
+        return;
+      }
+      if (loanToDelete.created_at && loanToDelete.created_at <= latestPaymentPaidDate) {
+        toast({
+          variant: "destructive",
+          title: "Lỗi",
+          description: "Không thể xóa do đã đóng lãi qua ngày này"
+        });
+        return;
+      }
       await deleteCreditAmountHistory(loanToDelete.id);
       
       // Cập nhật danh sách sau khi xóa

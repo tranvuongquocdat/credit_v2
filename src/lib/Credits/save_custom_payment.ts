@@ -1,6 +1,6 @@
 import { supabase } from '../supabase';
 import { recordDailyPayments } from './record_daily_payments';
-import { getExpectedMoney } from './create_principal_payment_history';
+import { getExpectedMoney } from './get_expected_money';
 
 /**
  * Lưu thanh toán tùy biến với logic ghi lịch sử hàng ngày

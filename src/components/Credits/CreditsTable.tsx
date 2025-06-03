@@ -31,7 +31,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { reopenContract } from '@/lib/Credits/reopen_contract';
 import { getCreditPaymentHistory } from '@/lib/Credits/payment_history';
 import { calculateDebtToLatestPaidPeriod } from '@/lib/Credits/calculate_remaining_debt';
-import { getExpectedMoney } from '@/lib/Credits/create_principal_payment_history';
+import { getExpectedMoney } from '@/lib/Credits/get_expected_money';
 import { calculateActualLoanAmount } from '@/lib/Credits/calculate_actual_loan_amount';
 
 interface StatusMapType {

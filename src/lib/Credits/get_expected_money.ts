@@ -14,6 +14,7 @@ export async function getExpectedMoney(creditId: string) {
         .select('*')
         .eq('credit_id', creditId)
         .in('transaction_type', ['principal_repayment', 'additional_loan'])
+        .eq('is_deleted', false)
         .order('effective_date', { ascending: true });
 
     if (error) throw error;

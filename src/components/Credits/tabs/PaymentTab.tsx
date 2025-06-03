@@ -6,7 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { CreditWithCustomer, CreditStatus } from '@/models/credit';
 import { CreditPaymentPeriod } from '@/models/credit-payment';
 import { toast } from '@/components/ui/use-toast';
-import { getExpectedMoney } from '@/lib/Credits/create_principal_payment_history';
+import { getExpectedMoney } from '@/lib/Credits/get_expected_money';
 import { supabase } from '@/lib/supabase';
 import { convertFromHistoryToTimeArrayWithStatus } from '@/lib/Credits/convert_from_history_to_time_array';
 import { getCreditPaymentHistory } from '@/lib/Credits/payment_history';
@@ -143,7 +143,6 @@ export function PaymentTab({
             }, 0);
           }
           
-          console.log(`Period ${periodNumber}: ${start_date} → ${end_date} (${isChecked ? 'checked' : 'unchecked'}), Expected: ${Math.round(expectedAmount)}, Actual: ${Math.round(actualAmount)}`);
           
           const newPeriod: CreditPaymentPeriod = {
             id: isChecked ? `db-${periodNumber}` : `generated-${periodNumber}`,

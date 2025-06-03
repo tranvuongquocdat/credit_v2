@@ -22,7 +22,7 @@ import { getCreditById } from '@/lib/credit';
 import { getPrincipalChangesForCredit } from '@/lib/credit-principal-changes';
 import { CreditAmountHistory, CreditTransactionType, getCreditAmountHistory } from '@/lib/credit-amount-history';
 import { calculateDaysBetween, formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
-import { getExpectedMoney } from '@/lib/Credits/create_principal_payment_history';
+import { getExpectedMoney } from '@/lib/Credits/get_expected_money';
 import { calculateDebtToLatestPaidPeriod } from '@/lib/Credits/calculate_remaining_debt';
 import { getCreditPaymentHistory } from '@/lib/Credits/payment_history';
 import { calculateActualLoanAmount } from '@/lib/Credits/calculate_actual_loan_amount';

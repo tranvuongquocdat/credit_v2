@@ -35,7 +35,7 @@ export async function addExtension(extension: Extension): Promise<Extension> {
     // Lấy thông tin hợp đồng để tính toán ngày kết thúc cũ
     const { data: creditData, error: creditError } = await supabase
       .from('credits')
-      .select('loan_date, loan_period')
+      .select('loan_date')
       .eq('id', extension.credit_id)
       .single();
 
@@ -51,13 +51,14 @@ export async function addExtension(extension: Extension): Promise<Extension> {
     // Thêm vào bảng extensions
     // Lưu ý: from_date và to_date sẽ được tự động điền bởi trigger
     const { data, error } = await supabase
-      .from('credit_extension_histories')
+      .from('credit_history')
       .insert({
         credit_id: extension.credit_id,
-        days: extension.days,
+        description: extension.notes || null,
+        effective_date: extension.from_date,
+        transaction_type: 'contract_extension',
         notes: extension.notes || null,
         // Add temporary values that will be overwritten by the database trigger
-        from_date: creditData.loan_date,
       })
       .select()
       .single();

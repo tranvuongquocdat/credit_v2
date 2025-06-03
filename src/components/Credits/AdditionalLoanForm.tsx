@@ -5,6 +5,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { toast } from '@/components/ui/use-toast';
 import { getCreditPaymentPeriods } from '@/lib/credit-payment';
 import { getCreditById } from '@/lib/credit';
+import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_date';
 
 interface AdditionalLoanFormProps {
   onSubmit: (data: {
@@ -40,54 +41,17 @@ export function AdditionalLoanForm({ onSubmit, creditId, disabled = false }: Add
   };
 
   useEffect(() => {
-    async function fetchData() {
+    async function fetchLatestPaymentPaidDate() {
       if (!creditId) return;
       
       setIsLoading(true);
       try {
-        // Fetch credit info to get the loan_date
-        const { data: creditData, error: creditError } = await getCreditById(creditId);
-        
-        if (creditError) {
-          console.error('Error fetching credit info:', creditError);
-          return;
-        }
-        
-        // Set minimum date as loan start date
-        const loanStartDate = creditData?.loan_date ? new Date(creditData.loan_date) : new Date();
-        
-        // Fetch payment periods to get the most recent period
-        const { data, error } = await getCreditPaymentPeriods(creditId);
-        
-        if (error) {
-          console.error('Error fetching payment periods:', error);
-          return;
-        }
-        
-        if (data && data.length > 0) {
-          // Sort by end_date to find the most recent period
-          const sortedPeriods = [...data].sort((a, b) => 
-            new Date(b.end_date).getTime() - new Date(a.end_date).getTime()
-          );
-          
-          // Get the most recent period
-          const lastPeriod = sortedPeriods[0];
-          
-          // Set the loan date to the day after the end_date of the most recent period
-          if (lastPeriod.end_date) {
-            const nextDay = addDays(new Date(lastPeriod.end_date), 1);
-            
-            // The date should be the maximum of loan start date and the day after the last period
-            const finalDate = max([loanStartDate, nextDay]);
-            
-            setLoanDate(format(finalDate, 'yyyy-MM-dd'));
-            setMinDate(format(finalDate, 'yyyy-MM-dd'));
-          } else {
-            setMinDate(format(loanStartDate, 'yyyy-MM-dd'));
-          }
+        const latestPaymentPaidDate = await getLatestPaymentPaidDate(creditId);
+        console.log('Latest payment paid date:', latestPaymentPaidDate);
+        if (latestPaymentPaidDate) {
+          setMinDate(latestPaymentPaidDate);
         } else {
-          // If no payment periods, use loan start date
-          setMinDate(format(loanStartDate, 'yyyy-MM-dd'));
+          setMinDate(format(new Date(), 'yyyy-MM-dd'));
         }
       } catch (err) {
         console.error('Error in fetchData:', err);
@@ -96,7 +60,7 @@ export function AdditionalLoanForm({ onSubmit, creditId, disabled = false }: Add
       }
     }
     
-    fetchData();
+    fetchLatestPaymentPaidDate();
   }, [creditId]);
 
   const handleDateChange = (date: string) => {
@@ -131,7 +95,7 @@ export function AdditionalLoanForm({ onSubmit, creditId, disabled = false }: Add
     }
 
     // Validate date is not before min date
-    if (new Date(loanDate) < new Date(minDate)) {
+    if (new Date(loanDate) <= new Date(minDate)) {
       toast({
         variant: "destructive",
         title: "Lỗi",

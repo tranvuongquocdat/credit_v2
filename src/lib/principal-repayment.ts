@@ -37,7 +37,7 @@ export async function getPrincipalRepayments(creditId: string): Promise<Principa
       credit_id: record.credit_id,
       amount: record.debit_amount || 0, // Trả bớt gốc là credit_amount
       note: record.description || undefined,
-      created_at: record.created_at
+      created_at: record.effective_date || ''
     }));
     
     return principalRepayments;

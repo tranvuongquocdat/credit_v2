@@ -1,6 +1,6 @@
 import { getCreditPaymentHistory } from './payment_history';
 import { convertFromHistoryToTimeArrayWithStatus } from './convert_from_history_to_time_array';
-import { getExpectedMoney } from './create_principal_payment_history';
+import { getExpectedMoney } from './get_expected_money';
 import { supabase } from '../supabase';
 
 /**
