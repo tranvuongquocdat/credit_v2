@@ -4,6 +4,7 @@ import { CreditStatus } from '@/models/credit';
 import { useStore } from '@/contexts/StoreContext';
 import { getExpectedMoney } from '@/lib/Credits/get_expected_money';
 import { calculateDebtToLatestPaidPeriod } from '@/lib/Credits/calculate_remaining_debt';
+import { calculateActualLoanAmount } from '@/lib/Credits/calculate_actual_loan_amount';
 
 // Định nghĩa interface cho dữ liệu tài chính của cửa hàng
 export interface StoreFinancialData {
@@ -18,51 +19,68 @@ export interface StoreFinancialData {
 export function useCreditsSummary() {
   const [financialData, setFinancialData] = useState<StoreFinancialData | null>(null);
   const [loading, setLoading] = useState(true);
-  const { currentStore } = useStore();
+  const { currentStore, loading: storeLoading } = useStore();
+
   
   const fetchFinancialData = async () => {
     try {
+      // Don't fetch if store is still loading or no store is selected
+      if (storeLoading || !currentStore?.id) {
+        return;
+      }
       setLoading(true);
       
       // 1. Lấy thông tin cơ bản từ store
-      const storeId = currentStore?.id || '1';
+      const storeId = currentStore?.id;
       const { data: storeData } = await supabase
         .from('stores')
         .select('investment, cash_fund')
         .eq('id', storeId)
         .single();
       
-      // 2. Lấy tổng tiền cho vay (tổng loan_amount của các hợp đồng đang vay)
+      // Lấy danh sách hợp đồng ON_TIME
       const { data: activeCreditsData, error: activeCreditsError } = await supabase
         .from('credits')
         .select('id, loan_amount')
-        .in('status', [CreditStatus.ON_TIME, CreditStatus.OVERDUE, CreditStatus.LATE_INTEREST, CreditStatus.BAD_DEBT]);
+        .eq('store_id', storeId)
+        .eq('status', CreditStatus.ON_TIME);
       
       if (activeCreditsError) {
         console.error('Lỗi khi lấy dữ liệu hợp đồng đang hoạt động:', activeCreditsError);
       }
       
-      // Tính tổng tiền cho vay
-      const totalLoan = activeCreditsData?.reduce((sum, credit) => sum + (credit.loan_amount || 0), 0) || 0;
-      
-      // 3. Tính tổng tiền nợ cũ bằng calculateDebtToLatestPaidPeriod
+      // Tính toán các thông số tài chính trong cùng một vòng lặp
+      let totalLoan = 0;
       let oldDebt = 0;
+      let profit = 0;
       
       if (activeCreditsData && activeCreditsData.length > 0) {
-        console.log(`Calculating total debt for ${activeCreditsData.length} active credits`);
+        console.log(`Calculating financials for ${activeCreditsData.length} active credits`);
         
         for (const credit of activeCreditsData) {
           try {
+            // Tính loan amount
+            const loanAmount = await calculateActualLoanAmount(credit.id);
+            totalLoan += loanAmount;
+            
+            // Tính old debt
             const creditDebt = await calculateDebtToLatestPaidPeriod(credit.id);
             oldDebt += creditDebt;
             
-            console.log(`Credit ${credit.id}: ${Math.round(creditDebt)} VNĐ debt`);
+            // Tính expected profit
+            const dailyAmounts = await getExpectedMoney(credit.id);
+            const totalExpected = dailyAmounts.reduce((sum, amount) => sum + amount, 0);
+            profit += totalExpected;
+            
+            console.log(`Credit ${credit.id}: Loan=${Math.round(loanAmount)}, Debt=${Math.round(creditDebt)}, Expected=${Math.round(totalExpected)} VNĐ`);
           } catch (error) {
-            console.error(`Error calculating debt for credit ${credit.id}:`, error);
+            console.error(`Error calculating financials for credit ${credit.id}:`, error);
           }
         }
         
+        console.log(`Total loan: ${Math.round(totalLoan)} VNĐ`);
         console.log(`Total old debt: ${Math.round(oldDebt)} VNĐ`);
+        console.log(`Total expected profit: ${Math.round(profit)} VNĐ`);
       }
       
       // 4. Tính lãi phí đã thu = tổng credit_amount của các bản ghi payment có is_deleted = false
@@ -79,36 +97,6 @@ export function useCreditsSummary() {
       } else if (paymentHistory) {
         collectedInterest = paymentHistory.reduce((sum, record) => sum + (record.credit_amount || 0), 0);
         console.log(`Collected interest from ${paymentHistory.length} payment records: ${Math.round(collectedInterest)} VNĐ`);
-      }
-      
-      // 5. Tính lãi phí dự kiến = tổng getExpectedMoney của các hợp đồng ON_TIME
-      let profit = 0;
-      
-      // Lấy danh sách hợp đồng ON_TIME
-      const { data: onTimeCredits, error: onTimeCreditsError } = await supabase
-        .from('credits')
-        .select('id')
-        .eq('status', CreditStatus.ON_TIME);
-      
-      if (onTimeCreditsError) {
-        console.error('Lỗi khi lấy dữ liệu hợp đồng ON_TIME:', onTimeCreditsError);
-      } else if (onTimeCredits && onTimeCredits.length > 0) {
-        console.log(`Calculating expected profit for ${onTimeCredits.length} ON_TIME credits`);
-        
-        // Tính tổng getExpectedMoney cho tất cả hợp đồng ON_TIME
-        for (const credit of onTimeCredits) {
-          try {
-            const dailyAmounts = await getExpectedMoney(credit.id);
-            const totalExpected = dailyAmounts.reduce((sum, amount) => sum + amount, 0);
-            profit += totalExpected;
-            
-            console.log(`Credit ${credit.id}: ${Math.round(totalExpected)} VNĐ expected`);
-          } catch (error) {
-            console.error(`Error calculating expected money for credit ${credit.id}:`, error);
-          }
-        }
-        
-        console.log(`Total expected profit: ${Math.round(profit)} VNĐ`);
       }
       
       // 6. Tổng hợp dữ liệu

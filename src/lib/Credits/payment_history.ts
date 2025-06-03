@@ -12,7 +12,7 @@ export interface PaymentHistoryRecord {
   description: string | null;
   period_number?: number | null;
   created_at: string;
-  updated_at?: string;
+  updated_at?: string | null;
   is_deleted?: boolean;
 }
 
@@ -37,7 +37,6 @@ export async function getCreditPaymentHistory(
     query = query.eq('is_deleted', false);
   }
   const { data, error } = await query.order('effective_date', { ascending: true });
-  console.log(data)
   if (error) {
     console.error('Error fetching payment history:', error);
     throw new Error(`Failed to fetch payment history: ${error.message}`);

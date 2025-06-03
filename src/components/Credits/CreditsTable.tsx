@@ -12,27 +12,22 @@ import {
   DropdownMenu, 
   DropdownMenuContent, 
   DropdownMenuItem, 
-  DropdownMenuSeparator, 
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
-import { cn } from '@/lib/utils';
 import { CreditWithCustomer, CreditStatus } from '@/models/credit';
-import { FileEditIcon, MoreVertical, Trash2Icon, CalendarIcon, ClockIcon, DollarSignIcon, UnlockIcon } from 'lucide-react';
+import { MoreVertical, DollarSignIcon, UnlockIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
-import { getInterestDisplayString, calculateDailyRateForCredit } from '@/lib/interest-calculator';
+import { getInterestDisplayString } from '@/lib/interest-calculator';
 import { useState, useEffect, useCallback } from 'react';
-import { getCreditPaymentPeriods } from '@/lib/credit-payment';
-import { CreditPaymentPeriod } from '@/models/credit-payment';
-import { supabase } from '@/lib/supabase';
-import { recordContractReopening } from '@/lib/credit-amount-history';
-import { updateCredit } from '@/lib/credit';
-import { useToast } from '@/components/ui/use-toast';
 import { reopenContract } from '@/lib/Credits/reopen_contract';
 import { getCreditPaymentHistory } from '@/lib/Credits/payment_history';
 import { calculateDebtToLatestPaidPeriod } from '@/lib/Credits/calculate_remaining_debt';
 import { getExpectedMoney } from '@/lib/Credits/get_expected_money';
 import { calculateActualLoanAmount } from '@/lib/Credits/calculate_actual_loan_amount';
+import { useToast } from '../ui/use-toast';
+import { CreditFinancialDetail } from '@/hooks/useCreditCalculation';
+import { getCreditPaymentPeriods } from '@/lib/credit-payment';
 
 interface StatusMapType {
   [key: string]: { 
@@ -44,6 +39,7 @@ interface StatusMapType {
 interface CreditsTableProps {
   credits: CreditWithCustomer[];
   statusMap: StatusMapType;
+  calculatedDetails?: Record<string, CreditFinancialDetail>;
   onView: (id: string) => void;
   onEdit: (id: string) => void;
   onDelete: (credit: CreditWithCustomer) => void;
@@ -80,7 +76,8 @@ interface ActualLoanAmountInfo {
 
 export function CreditsTable({ 
   credits, 
-  statusMap, 
+  statusMap,
+  calculatedDetails,
   onView, 
   onEdit, 
   onDelete, 
@@ -264,6 +261,52 @@ export function CreditsTable({
 
   // Tải dữ liệu thanh toán cho tất cả các credit - CẬP NHẬT LOGGING
   useEffect(() => {
+    if (calculatedDetails && Object.keys(calculatedDetails).length > 0) {
+      // Use provided calculated data
+      const newPaymentInfo: Record<string, CreditPaymentInfo> = {};
+      const newNextPaymentInfo: Record<string, NextPaymentInfo> = {};
+      const newInterestTodayInfo: Record<string, InterestTodayInfo> = {};
+      const newHasPaidPaymentPeriodsInfo: Record<string, boolean> = {};
+      const newActualLoanAmountInfo: Record<string, ActualLoanAmountInfo> = {};
+      
+      Object.values(calculatedDetails).forEach(detail => {
+        newPaymentInfo[detail.creditId] = {
+          paidInterest: detail.paidInterest,
+          oldDebt: detail.oldDebt,
+          loading: false
+        };
+        
+        newNextPaymentInfo[detail.creditId] = {
+          nextDate: null,
+          isCompleted: false,
+          loading: false
+        };
+        
+        newInterestTodayInfo[detail.creditId] = {
+          interestToday: detail.interestToday,
+          loading: false
+        };
+        
+        newHasPaidPaymentPeriodsInfo[detail.creditId] = false;
+        
+        newActualLoanAmountInfo[detail.creditId] = {
+          actualAmount: detail.actualLoanAmount,
+          loading: false
+        };
+      });
+      
+      setPaymentInfo(newPaymentInfo);
+      setNextPaymentInfo(newNextPaymentInfo);
+      setInterestTodayInfo(newInterestTodayInfo);
+      setHasPaidPaymentPeriods(newHasPaidPaymentPeriodsInfo);
+      setActualLoanAmounts(newActualLoanAmountInfo);
+      
+      console.log('CreditsTable: Using calculated data from hook');
+      return;
+    }
+    
+    // Fallback: Calculate if no data provided (existing logic)
+    console.log('CreditsTable: Fallback to individual calculations');
     // Khởi tạo trạng thái loading cho tất cả credit
     const initialLoadingState: Record<string, CreditPaymentInfo> = {};
     const initialNextPaymentState: Record<string, NextPaymentInfo> = {};

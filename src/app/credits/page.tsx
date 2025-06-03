@@ -3,16 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Layout } from '@/components/Layout';
-import { Button } from '@/components/ui/button';
-import { 
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter
-} from '@/components/ui/dialog';
 import { 
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle 
 } from '@/components/ui/alert-dialog';
-import { cn } from '@/lib/utils';
-import { ChevronLeft } from 'lucide-react';
+
 import { toast } from '@/components/ui/use-toast';
 
 // Import custom components
@@ -26,13 +21,11 @@ import { CreditEditModal } from '@/components/Credits/CreditEditModal';
 
 // Import custom hooks
 import { useCredits } from '@/hooks/useCredits';
-import { useStore } from '@/contexts/StoreContext';
-import { useCreditsSummary } from '@/hooks/useCreditsSummary';
 
 // Import types and API functions
 import { CreditStatus, CreditWithCustomer } from '@/models/credit';
-import { supabase } from '@/lib/supabase';
-import { StoreFinancialData } from '@/lib/store';
+import { useCreditCalculations } from '@/hooks/useCreditCalculation';
+
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -58,8 +51,6 @@ export default function CreditsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  // Lấy thông tin store từ context
-  const { currentStore } = useStore();
   
   // Use our custom hook for credits data and operations
   const { 
@@ -78,8 +69,7 @@ export default function CreditsPage() {
   } = useCredits();
   
   // Lấy dữ liệu tài chính tổng hợp
-  const { data: financialSummary, refresh: refreshFinancial } = useCreditsSummary();
-  
+  const { summary: financialSummary, details: creditDetails, refresh: refreshFinancial } = useCreditCalculations();
   // State for dialogs
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -192,14 +182,6 @@ export default function CreditsPage() {
     setSelectedCredit(null);
   };
   
-  // Handle updating credit status
-  const handleUpdateStatus = (status: CreditStatus) => {
-    if (!selectedCredit) return;
-    
-    // Cập nhật trạng thái
-    updateCreditStatus(selectedCredit.id, status);
-    handleCloseStatusDialog();
-  };
   
   // Handle opening delete dialog
   const handleOpenDeleteDialog = (credit: CreditWithCustomer) => {
@@ -223,7 +205,7 @@ export default function CreditsPage() {
         // Hiển thị thông báo lỗi
         toast({
           title: 'Lỗi',
-          description: result.error.message || 'Không thể xóa hợp đồng',
+          description: result.error ? String(result.error) : 'Không thể xóa hợp đồng',
           variant: 'destructive',
         });
         return;
@@ -301,6 +283,7 @@ export default function CreditsPage() {
         <CreditsTable
           credits={credits}
           statusMap={statusMap}
+          calculatedDetails={creditDetails}
           onView={handleViewCreditDetail}
           onEdit={handleEditCredit}
           onDelete={handleOpenDeleteDialog}
