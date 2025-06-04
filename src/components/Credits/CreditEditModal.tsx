@@ -575,6 +575,7 @@ export function CreditEditModal({
                   required
                   className="w-32"
                   placeholder="0"
+                  min={0}
                 />
                 <div className="flex flex-wrap gap-4 items-center">
                   {interestType === 'daily' && (
@@ -691,6 +692,7 @@ export function CreditEditModal({
                 onChange={(e) => setLoanPeriod(e.target.value)}
                 required
                 placeholder="0"
+                min={0}
               />
             </div>
             
@@ -709,6 +711,7 @@ export function CreditEditModal({
                   required
                   className="w-32"
                   placeholder="0"
+                  min={0}
                 />
                 <div className="text-sm text-gray-600">
                   {(interestType === 'daily') && 
@@ -734,23 +737,6 @@ export function CreditEditModal({
               />
             </div>
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="status" className="text-right">
-                Trạng thái
-              </Label>
-              <select 
-                className="border rounded-md p-2 w-full"
-                value={status}
-                onChange={(e) => setStatus(e.target.value as CreditStatus)}
-              >
-                <option value={CreditStatus.ON_TIME}>Đúng hẹn</option>
-                <option value={CreditStatus.OVERDUE}>Quá hạn</option>
-                <option value={CreditStatus.LATE_INTEREST}>Chậm lãi</option>
-                <option value={CreditStatus.BAD_DEBT}>Nợ xấu</option>
-                <option value={CreditStatus.CLOSED}>Đã đóng</option>
-              </select>
-            </div>
-            
             <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-start">
               <Label htmlFor="notes" className="text-right mt-2">Ghi chú</Label>
               <Textarea 
@@ -759,20 +745,6 @@ export function CreditEditModal({
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
               />
-            </div>
-            
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <div></div>
-              <div className="flex items-center">
-                <input 
-                  type="checkbox" 
-                  id="advancePayment" 
-                  checked={advancePayment}
-                  onChange={(e) => setAdvancePayment(e.target.checked)}
-                  className="mr-2"
-                />
-                <label htmlFor="advancePayment">Thu lãi trước</label>
-              </div>
             </div>
             
             {error && (

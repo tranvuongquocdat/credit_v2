@@ -9,7 +9,6 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { CreditStatus } from '@/models/credit';
 import { PlusIcon } from 'lucide-react';
 
 interface StatusMapType {
@@ -59,10 +58,14 @@ export function SearchFilters({
   };
 
   const handleStatusChange = (value: string) => {
-    setFilters(prev => ({
-      ...prev,
+    const newFilters = {
+      ...filters,
       status: value === 'all' ? '' : value
-    }));
+    };
+    
+    setFilters(newFilters);
+    
+    onSearch(newFilters);
   };
 
   const handleSearch = () => {

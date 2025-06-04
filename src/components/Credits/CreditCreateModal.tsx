@@ -632,6 +632,7 @@ export function CreditCreateModal({
                 required
                 className="w-32"
                 placeholder="0"
+                min={0}
               />
               <div className="flex flex-wrap gap-4 items-center">
                 {interestType === 'daily' && (

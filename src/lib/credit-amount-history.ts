@@ -103,10 +103,9 @@ export async function recordPrincipalRepayment(
       .insert({
         credit_id: creditId,
         transaction_type: CreditTransactionType.PRINCIPAL_REPAYMENT,
-        debit_amount: repaymentAmount, // Negative for principal repayment
+        credit_amount: repaymentAmount, // Negative for principal repayment
         principal_change_description: notes,
         effective_date: transactionDate,
-        created_at: new Date(transactionDate).toISOString(),
       })
       .select()
       .single();
@@ -128,45 +127,14 @@ export async function recordAdditionalLoan(
   notes?: string
 ) {
   try {
-    // First, get the current loan amount
-    // const { data: creditData, error: creditError } = await supabase
-    //   .from('credits')
-    //   .select('loan_amount')
-    //   .eq('id', creditId)
-    //   .single();
-
-    // if (creditError) {
-    //   throw creditError;
-    // }
-
-    // if (!creditData) {
-    //   throw new Error('Credit not found');
-    // }
-
-    // const previousLoanAmount = creditData.loan_amount;
-    // const newLoanAmount = previousLoanAmount + additionalAmount;
-
-    // // Begin transaction
-    // // 1. Update the credit with the new loan amount
-    // const { error: updateError } = await supabase
-    //   .from('credits')
-    //   .update({ loan_amount: newLoanAmount })
-    //   .eq('id', creditId);
-
-    // if (updateError) {
-    //   throw updateError;
-    // }
-
-    // 2. Insert the history record with new schema format
     const { data, error } = await supabase
       .from('credit_history')
       .insert({
         credit_id: creditId,
         transaction_type: CreditTransactionType.ADDITIONAL_LOAN,
-        credit_amount: additionalAmount,
+        debit_amount: additionalAmount,
         principal_change_description: notes || "Vay thêm",
         effective_date: transactionDate,
-        created_at: new Date(transactionDate).toISOString(),
       })
       .select()
       .single();

@@ -45,16 +45,16 @@ export function PaymentHistoryModal({
   const [paymentPeriods, setPaymentPeriods] = useState<CreditPaymentPeriod[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabId>('payment'); // Tab mặc định là "Đóng lãi phí"
-  const [showPaymentForm, setShowPaymentForm] = useState(false); // Hiển thị form đóng lãi phí
-  const [refreshRepayments, setRefreshRepayments] = useState(0); // Counter để refresh danh sách trả bớt gốc
-  const [refreshAdditionalLoans, setRefreshAdditionalLoans] = useState(0); // Counter để refresh danh sách vay thêm
+  const [activeTab, setActiveTab] = useState<TabId>('payment');
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [refreshRepayments, setRefreshRepayments] = useState(0);
+  const [refreshAdditionalLoans, setRefreshAdditionalLoans] = useState(0);
   const [principalChanges, setPrincipalChanges] = useState<PrincipalChange[]>([]);
   const [creditHistory, setCreditHistory] = useState<CreditAmountHistory[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   
-  // State để track việc có thay đổi dữ liệu hay không
-  const [hasDataChanged, setHasDataChanged] = useState(false);
+  // Thay đổi từ boolean sang counter
+  const [dataChangeCounter, setDataChangeCounter] = useState(0);
   
   // State cho modal nhập tiền khách trả
   const [showPaymentInput, setShowPaymentInput] = useState(false);
@@ -228,7 +228,7 @@ export function PaymentHistoryModal({
   // Calculate total amounts with useMemo
   const totalAmount = useMemo(() => credit?.loan_amount || 0, [credit?.loan_amount]);
   
-  // useEffect để load payment history
+  // useEffect để load payment history - sử dụng counter
   useEffect(() => {
     async function loadPaymentHistory() {
       if (!credit?.id) {
@@ -239,17 +239,11 @@ export function PaymentHistoryModal({
       setLoadingPaymentHistory(true);
       try {
         const history = await getCreditPaymentHistory(credit.id);
-        // Filter chỉ lấy payment records chưa bị xóa
         const paymentRecords = history.filter(record => 
           record.transaction_type === 'payment' && 
           record.is_deleted === false
         );
         setPaymentHistory(paymentRecords);
-        
-        console.log('Payment history loaded:', {
-          total: history.length,
-          payments: paymentRecords.length
-        });
       } catch (error) {
         console.error('Error loading payment history:', error);
         setPaymentHistory([]);
@@ -259,9 +253,9 @@ export function PaymentHistoryModal({
     }
 
     loadPaymentHistory();
-  }, [credit?.id, hasDataChanged]); // Reload khi có data change
+  }, [credit?.id, dataChangeCounter]); // Sử dụng counter
   
-  // useEffect đơn giản để tính tổng lãi phí và nợ cũ
+  // useEffect đơn giản để tính tổng lãi phí và nợ cũ - sử dụng counter
   useEffect(() => {
     async function calculateFinancials() {
       if (!credit?.id) {
@@ -272,19 +266,12 @@ export function PaymentHistoryModal({
 
       setLoadingFinancials(true);
       try {
-        // 1. Gọi getExpectedMoney và tính tổng
         const dailyAmounts = await getExpectedMoney(credit.id);
         const total = dailyAmounts.reduce((sum, amount) => sum + amount, 0);
         setTotalExpectedInterest(Math.round(total));
 
-        // 2. Gọi calculateDebtToLatestPaidPeriod
         const debt = await calculateDebtToLatestPaidPeriod(credit.id);
         setRemainingDebt(debt);
-
-        console.log('Financials calculated:', {
-          totalExpected: Math.round(total),
-          debt: debt
-        });
       } catch (error) {
         console.error('Error calculating financials:', error);
         setTotalExpectedInterest(0);
@@ -295,9 +282,9 @@ export function PaymentHistoryModal({
     }
 
     calculateFinancials();
-  }, [credit?.id, hasDataChanged]);
+  }, [credit?.id, dataChangeCounter]); // Sử dụng counter
 
-  // useEffect để tính actual loan amount
+  // useEffect để tính actual loan amount - sử dụng counter
   useEffect(() => {
     async function loadActualLoanAmount() {
       if (!credit?.id) {
@@ -309,17 +296,16 @@ export function PaymentHistoryModal({
       try {
         const amount = await calculateActualLoanAmount(credit.id);
         setActualLoanAmount(amount);
-        console.log('Actual loan amount calculated:', amount);
       } catch (error) {
         console.error('Error calculating actual loan amount:', error);
-        setActualLoanAmount(credit.loan_amount || 0); // Fallback to original amount
+        setActualLoanAmount(credit.loan_amount || 0);
       } finally {
         setLoadingActualAmount(false);
       }
     }
 
     loadActualLoanAmount();
-  }, [credit?.id, hasDataChanged]); // Reload khi có data change
+  }, [credit?.id, dataChangeCounter]); // Sử dụng counter
 
   // Sử dụng giá trị đơn giản
   const totalExpected = totalExpectedInterest;
@@ -339,7 +325,7 @@ export function PaymentHistoryModal({
   const historyTotals = calculateHistoryTotals();
   
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(hasDataChanged)}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(dataChangeCounter > 0)}>
       <DialogContent 
         className="sm:max-w-[800px] md:max-w-[900px] max-h-[90vh] overflow-y-auto" 
       >
@@ -445,7 +431,6 @@ export function PaymentHistoryModal({
             <PaymentTab
               credit={credit}
               paymentPeriods={paymentPeriods}
-              combinedPaymentPeriods={[]}
               loading={loading}
               error={error}
               showPaymentForm={showPaymentForm}
@@ -453,12 +438,9 @@ export function PaymentHistoryModal({
               formatCurrency={formatCurrency}
               formatDate={formatDate}
               calculateDaysBetween={calculateDaysBetween}
-              principalChanges={principalChanges}
               onDataChange={() => {
-                // Mark that data has changed
-                setHasDataChanged(true);
+                setDataChangeCounter(prev => prev + 1);
                 
-                // Reload payment periods data
                 if (credit?.id) {
                   setLoading(true);
                   getCreditPaymentPeriods(credit.id).then(({ data, error }) => {
@@ -472,7 +454,6 @@ export function PaymentHistoryModal({
                   });
                 }
                 
-                // Reload credit info to get updated debt_amount
                 reloadCreditInfo();
               }}
             />
@@ -483,9 +464,10 @@ export function PaymentHistoryModal({
               credit={credit}
               refreshRepayments={refreshRepayments}
               setRefreshRepayments={setRefreshRepayments}
+              key={refreshRepayments}
               onDataChange={() => {
-                // Mark that data has changed
-                setHasDataChanged(true);
+                setDataChangeCounter(prev => prev + 1);
+                setRefreshRepayments(prev => prev + 1);
                 reloadCreditInfo();
               }}
             />
@@ -496,8 +478,7 @@ export function PaymentHistoryModal({
               credit={credit}
               key={refreshAdditionalLoans}
               onDataChange={() => {
-                // Mark that data has changed
-                setHasDataChanged(true);
+                setDataChangeCounter(prev => prev + 1);
                 setRefreshAdditionalLoans(prev => prev + 1);
                 reloadCreditInfo();
               }}
@@ -508,15 +489,14 @@ export function PaymentHistoryModal({
             <ExtensionTab 
               credit={credit} 
               onDataChange={() => {
-                // Mark that data has changed
-                setHasDataChanged(true);
+                setDataChangeCounter(prev => prev + 1);
                 reloadCreditInfo();
               }}
             />
           )}
           
           {activeTab === 'close' && (
-            <CloseTab credit={credit} onClose={() => onClose(hasDataChanged)} />
+            <CloseTab credit={credit} onClose={() => onClose(dataChangeCounter > 0)} />
           )}
           
           {activeTab === 'documents' && (

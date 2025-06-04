@@ -32,11 +32,14 @@ export function AdditionalLoanTab({ credit, onDataChange }: AdditionalLoanTabPro
       <AdditionalLoanForm 
         creditId={credit?.id || ''}
         disabled={isClosed}
+        onSuccess={refreshData}
         onSubmit={async (data) => {
           try {
             if (!credit?.id || isSubmitting || isClosed) return;
             
             setIsSubmitting(true);
+            
+            console.log('🟡 Starting additional loan submission...');
             
             // Import dynamically to prevent duplicate imports
             const { recordAdditionalLoan } = await import('@/lib/credit-amount-history');
@@ -49,12 +52,20 @@ export function AdditionalLoanTab({ credit, onDataChange }: AdditionalLoanTabPro
               data.notes
             );
             
+            console.log('🟢 Database operation completed:', { historyData, error });
+            
             if (error) {
               throw error;
             }
             
+            // THÊM DELAY để đảm bảo database đã commit
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            console.log('🔵 Calling refreshData...');
             // Trigger refresh with new function
             refreshData();
+            
+            console.log('✅ All operations completed');
             
             // Hiển thị thông báo thành công
             toast({
@@ -62,7 +73,7 @@ export function AdditionalLoanTab({ credit, onDataChange }: AdditionalLoanTabPro
               description: "Đã cập nhật khoản vay thêm thành công",
             });
           } catch (err) {
-            console.error('Error adding additional loan:', err);
+            console.error('❌ Error adding additional loan:', err);
             toast({
               variant: "destructive",
               title: "Lỗi",

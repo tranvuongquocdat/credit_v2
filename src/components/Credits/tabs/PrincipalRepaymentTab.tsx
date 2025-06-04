@@ -41,6 +41,7 @@ export function PrincipalRepaymentTab({
       <PrincipalRepaymentForm 
         creditId={credit?.id || ''}
         disabled={isClosed}
+        onSuccess={refreshData}
         onSubmit={async (data) => {
           try {
             if (!credit?.id || isSubmitting || isClosed) return;
@@ -61,9 +62,6 @@ export function PrincipalRepaymentTab({
             if (error) {
               throw error;
             }
-            
-            // Refresh danh sách
-            refreshData();
             
             // Hiển thị thông báo thành công
             toast({

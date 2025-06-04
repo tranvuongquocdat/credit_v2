@@ -35,7 +35,7 @@ export async function getPrincipalRepayments(creditId: string): Promise<Principa
     const principalRepayments: PrincipalRepayment[] = (data || []).map(record => ({
       id: record.id,
       credit_id: record.credit_id,
-      amount: record.debit_amount || 0, // Trả bớt gốc là credit_amount
+      amount: record.credit_amount || 0, // Trả bớt gốc là credit_amount
       note: record.description || undefined,
       created_at: record.effective_date || ''
     }));
@@ -126,7 +126,7 @@ export async function deleteCreditAmountHistory(id: string): Promise<void> {
     // Get the record details first to restore the loan amount later
     const { data: record, error: fetchError } = await supabase
       .from('credit_history')
-      .select('*')
+      .select('id')
       .eq('id', id)
       .eq('transaction_type', 'principal_repayment')
       .eq('is_deleted', false)
@@ -137,22 +137,6 @@ export async function deleteCreditAmountHistory(id: string): Promise<void> {
       throw new Error(`Error fetching repayment record: ${fetchError.message}`);
     }
     
-    // Need to get the current loan amount
-    const { data: creditData, error: creditError } = await supabase
-      .from('credits')
-      .select('loan_amount')
-      .eq('id', record.credit_id)
-      .single();
-      
-    if (creditError) {
-      console.error('Error fetching credit:', creditError);
-      throw new Error(`Error fetching credit: ${creditError.message}`);
-    }
-    
-    // Restore the loan amount by adding back the repayment amount
-    const repaymentAmount = record.credit_amount || 0;
-    const restoredAmount = (creditData?.loan_amount || 0) + repaymentAmount; // Cộng lại vì đang hủy trả bớt
-    
     // Đánh dấu is_deleted = true thay vì xóa hẳn
     const { error: deleteError } = await supabase
       .from('credit_history')
@@ -162,17 +146,6 @@ export async function deleteCreditAmountHistory(id: string): Promise<void> {
     if (deleteError) {
       console.error('Error deleting principal repayment:', deleteError);
       throw new Error(`Error deleting principal repayment: ${deleteError.message}`);
-    }
-    
-    // Update credit with restored loan amount
-    const { error: updateError } = await supabase
-      .from('credits')
-      .update({ loan_amount: restoredAmount })
-      .eq('id', record.credit_id);
-      
-    if (updateError) {
-      console.error('Error restoring loan amount:', updateError);
-      throw new Error(`Error restoring loan amount: ${updateError.message}`);
     }
   } catch (error) {
     console.error('Failed to delete principal repayment:', error);

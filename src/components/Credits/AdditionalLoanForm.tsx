@@ -3,9 +3,9 @@ import { format, addDays, max, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
 import { toast } from '@/components/ui/use-toast';
-import { getCreditPaymentPeriods } from '@/lib/credit-payment';
 import { getCreditById } from '@/lib/credit';
 import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_date';
+import { CreditWithCustomer } from '@/models/credit';
 
 interface AdditionalLoanFormProps {
   onSubmit: (data: {
@@ -15,15 +15,18 @@ interface AdditionalLoanFormProps {
   }) => void;
   creditId: string;
   disabled?: boolean;
+  onSuccess?: () => void;
 }
 
-export function AdditionalLoanForm({ onSubmit, creditId, disabled = false }: AdditionalLoanFormProps) {
+export function AdditionalLoanForm({ onSubmit, creditId, disabled = false, onSuccess }: AdditionalLoanFormProps) {
   const [loanDate, setLoanDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [amount, setAmount] = useState<number>(0);
   const [formattedAmount, setFormattedAmount] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [minDate, setMinDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [minDate, setMinDate] = useState<string | null>(null);
+  const [maxDate, setMaxDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [creditData, setCreditData] = useState<CreditWithCustomer | null>(null);
 
   // Format number with thousand separators
   const formatNumber = (value: string | number): string => {
@@ -47,11 +50,12 @@ export function AdditionalLoanForm({ onSubmit, creditId, disabled = false }: Add
       setIsLoading(true);
       try {
         const latestPaymentPaidDate = await getLatestPaymentPaidDate(creditId);
-        console.log('Latest payment paid date:', latestPaymentPaidDate);
+        const { data: creditData } = await getCreditById(creditId);
+        setCreditData(creditData);
+        const endDate = creditData ? addDays(new Date(creditData.loan_date), creditData.loan_period - 1) : new Date();
+        setMaxDate(format(endDate, 'yyyy-MM-dd'));
         if (latestPaymentPaidDate) {
           setMinDate(latestPaymentPaidDate);
-        } else {
-          setMinDate(format(new Date(), 'yyyy-MM-dd'));
         }
       } catch (err) {
         console.error('Error in fetchData:', err);
@@ -64,21 +68,7 @@ export function AdditionalLoanForm({ onSubmit, creditId, disabled = false }: Add
   }, [creditId]);
 
   const handleDateChange = (date: string) => {
-    // Only set the date if it's not before the minimum date
-    const selectedDate = new Date(date);
-    const minimum = new Date(minDate);
-    
-    if (selectedDate >= minimum) {
-      setLoanDate(date);
-    } else {
-      // If the date is before the minimum, show a warning and set to minimum
-      toast({
-        variant: "destructive",
-        title: "Cảnh báo",
-        description: "Đã chọn ngày tối thiểu được phép"
-      });
-      setLoanDate(minDate);
-    }
+    setLoanDate(date);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -94,16 +84,38 @@ export function AdditionalLoanForm({ onSubmit, creditId, disabled = false }: Add
       return;
     }
 
+    if (!minDate) {
+      // Kiểm tra xem ngày vay thêm có trước ngày bắt đầu vay không
+      if (creditData?.loan_date && new Date(loanDate) < new Date(creditData.loan_date)) {
+        toast({
+          variant: "destructive",
+          title: "Lỗi",
+          description: "Ngày vay thêm không thể trước ngày bắt đầu vay"
+        });
+        return;
+      }
+    }
+
     // Validate date is not before min date
-    if (new Date(loanDate) <= new Date(minDate)) {
+    if (minDate && new Date(loanDate) <= new Date(minDate)) {
       toast({
         variant: "destructive",
         title: "Lỗi",
-        description: "Ngày vay thêm không thể trước ngày bắt đầu vay hoặc trước kỳ đóng lãi gần nhất"
+        description: `Ngày vay thêm không thể trước ngày bắt đầu vay hoặc trước kỳ đóng lãi gần nhất ${minDate}`
       });
       return;
     }
 
+    // Validate date is not after max date
+    if (new Date(loanDate) > new Date(maxDate)) {
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: `Ngày vay thêm không thể sau ngày kết thúc hợp đồng`
+      });
+      return;
+    }
+    
     onSubmit({
       loanDate,
       amount,

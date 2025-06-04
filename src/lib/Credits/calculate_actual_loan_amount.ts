@@ -42,10 +42,10 @@ export async function calculateActualLoanAmount(creditId: string): Promise<numbe
       historyData.forEach(record => {
         if (record.transaction_type === 'additional_loan') {
           // Vay thêm: cộng vào số tiền
-          actualAmount += (record.credit_amount || 0);
+          actualAmount += (record.debit_amount || 0);
         } else if (record.transaction_type === 'principal_repayment') {
           // Trả bớt gốc: trừ khỏi số tiền
-          actualAmount -= (record.debit_amount || 0);
+          actualAmount -= (record.credit_amount || 0);
         }
       });
     }

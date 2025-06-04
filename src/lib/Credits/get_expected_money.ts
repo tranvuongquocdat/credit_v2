@@ -40,8 +40,8 @@ export async function getExpectedMoney(creditId: string) {
             new Date(new Date(credit.loan_date).getTime() + credit.loan_period * 24 * 60 * 60 * 1000).toISOString(),
             principalPaymentHistory[i].effective_date!,
             principalPaymentHistory[i].transaction_type === 'additional_loan' 
-                ? principalPaymentHistory[i].credit_amount! 
-                : -principalPaymentHistory[i].debit_amount!,
+                ? principalPaymentHistory[i].debit_amount! 
+                : -principalPaymentHistory[i].credit_amount!,
         );
 
         // Cộng dồn từng phần tử tương ứng vào mảng tích lũy

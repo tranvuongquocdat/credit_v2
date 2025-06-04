@@ -7,6 +7,7 @@ import { getCreditPaymentPeriods } from '@/lib/credit-payment';
 import { getCreditById } from '@/lib/credit';
 import { calculateActualLoanAmount } from '@/lib/Credits/calculate_actual_loan_amount';
 import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_date';
+import { CreditWithCustomer } from '@/models/credit';
 
 interface PrincipalRepaymentFormProps {
   onSubmit: (data: {
@@ -16,17 +17,21 @@ interface PrincipalRepaymentFormProps {
   }) => void;
   creditId: string;
   disabled?: boolean;
+  onSuccess?: () => void;
 }
 
-export function PrincipalRepaymentForm({ onSubmit, creditId, disabled = false }: PrincipalRepaymentFormProps) {
+export function PrincipalRepaymentForm({ onSubmit, creditId, disabled = false, onSuccess }: PrincipalRepaymentFormProps) {
   const [repaymentDate, setRepaymentDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [amount, setAmount] = useState<number>(0);
   const [formattedAmount, setFormattedAmount] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [minDateStr, setMinDateStr] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [minDateStr, setMinDateStr] = useState<string | null>(null);
+  const [maxDateStr, setMaxDateStr] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [actualLoanAmount, setActualLoanAmount] = useState<number>(0);
   const [loadingActualAmount, setLoadingActualAmount] = useState<boolean>(false);
+  const [creditData, setCreditData] = useState<CreditWithCustomer | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
   // Format number with thousand separators
   const formatNumber = (value: string | number): string => {
@@ -57,24 +62,20 @@ export function PrincipalRepaymentForm({ onSubmit, creditId, disabled = false }:
       try {
         const actualAmount = await calculateActualLoanAmount(creditId);
         setActualLoanAmount(actualAmount);
-        console.log('Actual loan amount for repayment validation:', actualAmount);
+        const { data: creditData } = await getCreditById(creditId);
+        setCreditData(creditData);
+        const endDate = creditData ? addDays(new Date(creditData.loan_date), creditData.loan_period - 1) : new Date();
+        setMaxDateStr(format(endDate, 'yyyy-MM-dd'));
       } catch (error) {
         console.error('Error loading actual loan amount:', error);
-        // Fallback to original loan amount if available
-        try {
-          const { data: creditData } = await getCreditById(creditId);
-          setActualLoanAmount(creditData?.loan_amount || 0);
-        } catch (fallbackError) {
-          console.error('Error loading fallback loan amount:', fallbackError);
-          setActualLoanAmount(0);
-        }
+        setActualLoanAmount(0);
       } finally {
         setLoadingActualAmount(false);
       }
     }
 
     loadActualLoanAmount();
-  }, [creditId]);
+  }, [creditId, refreshTrigger]);
 
   useEffect(() => {
     async function fetchLatestPaymentPaidDate() {
@@ -86,8 +87,6 @@ export function PrincipalRepaymentForm({ onSubmit, creditId, disabled = false }:
         console.log('Latest payment paid date:', latestPaymentPaidDate);
         if (latestPaymentPaidDate) {
           setMinDateStr(latestPaymentPaidDate);
-        } else {
-          setMinDateStr(format(new Date(), 'yyyy-MM-dd'));
         }
       } catch (err) {
         console.error('Error in fetchData:', err);
@@ -97,24 +96,10 @@ export function PrincipalRepaymentForm({ onSubmit, creditId, disabled = false }:
     }
     
     fetchLatestPaymentPaidDate();
-  }, [creditId]);
+  }, [creditId, refreshTrigger]);
 
   const handleDateChange = (date: string) => {
-    // Only set the date if it's not before the minimum date
-    const selectedDate = new Date(date);
-    const minimum = new Date(minDateStr);
-    
-    if (selectedDate >= minimum) {
-      setRepaymentDate(date);
-    } else {
-      // If the date is before the minimum, show a warning and set to minimum
-      toast({
-        variant: "destructive",
-        title: "Cảnh báo",
-        description: "Đã chọn ngày tối thiểu được phép"
-      });
-      setRepaymentDate(minDateStr);
-    }
+    setRepaymentDate(date);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -129,17 +114,37 @@ export function PrincipalRepaymentForm({ onSubmit, creditId, disabled = false }:
       });
       return;
     }
-
+    
+    if (!minDateStr) {
+      // Kiểm tra xem ngày trả gôc có trước ngầy bắt đầu vay không
+      if (creditData?.loan_date && new Date(repaymentDate) < new Date(creditData.loan_date)) {
+        toast({
+          variant: "destructive",
+          title: "Lỗi",
+          description: "Ngày trả gốc không thể trước ngày bắt đầu vay"
+        });
+        return;
+      }
+    }
     // Validate date is not before min date
-    if (new Date(repaymentDate) <= new Date(minDateStr)) {
+    if (minDateStr && new Date(repaymentDate) <= new Date(minDateStr)) {
       toast({
         variant: "destructive",
         title: "Lỗi",
-        description: "Ngày trả bớt gốc không thể trước ngày bắt đầu vay hoặc trước kỳ đóng lãi gần nhất"
+        description: `Ngày trả bớt gốc không thể trước ngày bắt đầu vay hoặc trước kỳ đóng lãi gần nhất ${minDateStr}`
       });
       return;
     }
 
+    // If repayment date is after contract's end date, show a warning
+    if (new Date(repaymentDate) > new Date(maxDateStr)) {
+      toast({
+        variant: "destructive",
+        title: "Cảnh báo",
+        description: "Ngày trả bớt gốc không thể sau ngày kết thúc hợp đồng"
+      });
+      return;
+    }
     // Validate amount does not exceed actual loan amount
     if (amount > actualLoanAmount) {
       toast({
@@ -155,6 +160,15 @@ export function PrincipalRepaymentForm({ onSubmit, creditId, disabled = false }:
       amount,
       notes
     });
+    
+    // Reset form after successful submission
+    setAmount(0);
+    setFormattedAmount('');
+    setNotes('');
+    setRepaymentDate(format(new Date(), 'yyyy-MM-dd'));
+    
+    onSuccess?.();
+    setRefreshTrigger(prevTrigger => prevTrigger + 1);
   };
 
   return (

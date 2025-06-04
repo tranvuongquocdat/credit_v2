@@ -25,7 +25,7 @@ export async function getAdditionalLoans(creditId: string): Promise<AdditionalLo
     const additionalLoans: AdditionalLoan[] = (data || []).map(record => ({
       id: record.id,
       credit_id: record.credit_id,
-      amount: record.credit_amount || 0, // For additional loan, money goes out as debit
+      amount: record.debit_amount || 0, // For additional loan, money goes out as debit
       note: record.description || undefined,
       created_at: record.effective_date || '' 
     }));
@@ -114,7 +114,7 @@ export async function deleteCreditAmountHistory(id: string): Promise<void> {
     // Get the record details first to restore the loan amount later
     const { data: record, error: fetchError } = await supabase
       .from('credit_history')
-      .select('*')
+      .select('id')
       .eq('id', id)
       .single();
       
@@ -122,23 +122,7 @@ export async function deleteCreditAmountHistory(id: string): Promise<void> {
       console.error('Error fetching loan record:', fetchError);
       throw new Error(`Error fetching loan record: ${fetchError.message}`);
     }
-    // Need to get the current loan amount
-    const { data: creditData, error: creditError } = await supabase
-      .from('credits')
-      .select('loan_amount')
-      .eq('id', record.credit_id)
-      .single();
-      
-    if (creditError) {
-      console.error('Error fetching credit:', creditError);
-      throw new Error(`Error fetching credit: ${creditError.message}`);
-    }
-    
-    // Restore the loan amount by subtracting the additional loan amount
-    const additionalAmount = record.debit_amount || 0;
-    const restoredAmount = Math.max(0, (creditData?.loan_amount || 0) - additionalAmount);
-    
-    
+
     // Delete the history record by setting is_deleted = true
     const { error: deleteError } = await supabase
     .from('credit_history')
@@ -150,16 +134,6 @@ export async function deleteCreditAmountHistory(id: string): Promise<void> {
       throw new Error(`Error deleting additional loan: ${deleteError.message}`);
     }
 
-    // Update credit with restored loan amount
-    const { error: updateError } = await supabase
-      .from('credits')
-      .update({ loan_amount: restoredAmount })
-      .eq('id', record.credit_id);
-      
-    if (updateError) {
-      console.error('Error restoring loan amount:', updateError);
-      throw new Error(`Error restoring loan amount: ${updateError.message}`);
-    }
   } catch (error) {
     console.error('Failed to delete additional loan:', error);
     throw error;

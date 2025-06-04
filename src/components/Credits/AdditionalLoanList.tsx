@@ -81,19 +81,12 @@ export function AdditionalLoanList({
       // tìm ra ngày hiệu lực của lịch sử này và so sánh với ngày cuối cùng đóng lãi để 
       // quyết định xem phần trả bớt gốc này có được xóa hay không
       const latestPaymentPaidDate = await getLatestPaymentPaidDate(creditId);
-      if (!latestPaymentPaidDate) {
+      
+      if (latestPaymentPaidDate && loanToDelete.created_at && loanToDelete.created_at <= latestPaymentPaidDate) {
         toast({
           variant: "destructive",
           title: "Lỗi",
-          description: "Không thể xác định ngày đóng lãi gần nhất"
-        });
-        return;
-      }
-      if (loanToDelete.created_at && loanToDelete.created_at <= latestPaymentPaidDate) {
-        toast({
-          variant: "destructive",
-          title: "Lỗi",
-          description: "Không thể xóa do đã đóng lãi qua ngày này"
+          description: `Không thể xóa do đã đóng lãi đến ngày ${formatDate(latestPaymentPaidDate)}`
         });
         return;
       }
