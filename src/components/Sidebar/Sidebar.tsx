@@ -89,7 +89,7 @@ const sidebarItems: SidebarItem[] = [
     icon: <FiDollarSign size={20} />,
     submenu: [
       { title: 'Hoạt động thu', path: '/income', icon: <FiDollarSign size={18} /> },
-      { title: 'Hoạt động chi', path: '/capital', icon: <FiDollarSign size={18} /> },
+      { title: 'Hoạt động chi', path: '/outgoing', icon: <FiDollarSign size={18} /> },
     ],
     redColor: true,
   },
