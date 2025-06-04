@@ -66,7 +66,7 @@ export async function calculateDebtToLatestPaidPeriod(creditId: string): Promise
     // truy vấn lịch sử thanh toán nợ
     const { data: debtHistory, error: debtHistoryError } = await supabase
       .from('credit_history')
-      .select('effective_date, credit_amount')
+      .select('effective_date, credit_amount, debit_amount')
       .eq('credit_id', creditId)
       .eq('transaction_type', 'debt_payment')
       .eq('is_deleted', false)
@@ -75,7 +75,7 @@ export async function calculateDebtToLatestPaidPeriod(creditId: string): Promise
     if (debtHistoryError) {
       throw new Error('Error fetching debt history');
     }
-    const totalDebtPayment = debtHistory.reduce((sum, record) => sum + (record.credit_amount || 0), 0);
+    const totalDebtPayment = debtHistory.reduce((sum, record) => sum + (record.credit_amount || 0) - (record.debit_amount || 0), 0);
     return debt - totalDebtPayment;
   } catch (error) {
     console.error('Error calculating debt to latest paid period:', error);
