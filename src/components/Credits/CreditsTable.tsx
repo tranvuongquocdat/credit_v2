@@ -28,6 +28,7 @@ import { calculateActualLoanAmount } from '@/lib/Credits/calculate_actual_loan_a
 import { useToast } from '../ui/use-toast';
 import { CreditFinancialDetail } from '@/hooks/useCreditCalculation';
 import { getCreditPaymentPeriods } from '@/lib/credit-payment';
+import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_date';
 
 interface StatusMapType {
   [key: string]: { 
@@ -151,8 +152,8 @@ export function CreditsTable({
   // Hàm tính toán ngày phải đóng lãi phí tiếp theo
   const calculateNextPaymentDate = useCallback(async (creditId: string, credit: CreditWithCustomer): Promise<NextPaymentInfo> => {
     try {
-      // Truy vấn các kỳ thanh toán từ cơ sở dữ liệu
-      const { data } = await getCreditPaymentPeriods(creditId);
+      // Lấy ngày thanh toán gần nhất từ hàm getLatestPaymentPaidDate
+      const latestPaymentDate = await getLatestPaymentPaidDate(creditId);
       
       // Lấy ngày bắt đầu khoản vay
       const loanStartDate = new Date(credit.loan_date);
@@ -160,14 +161,13 @@ export function CreditsTable({
       // Tính ngày kết thúc hợp đồng
       const loanEndDate = new Date(loanStartDate);
       let loanPeriodDays = credit.loan_period;
-      
       loanEndDate.setDate(loanStartDate.getDate() + loanPeriodDays - 1);
       
       // Lấy kỳ lãi (số ngày)
       const interestPeriod = credit.interest_period || 30; // Mặc định là 30 ngày
       
-      // Nếu không có dữ liệu về các kỳ thanh toán
-      if (!data || data.length === 0) {
+      // Nếu không có thanh toán nào trước đây
+      if (!latestPaymentDate) {
         // Tính ngày kết thúc của kỳ đầu tiên
         const firstPeriodEndDate = new Date(loanStartDate);
         firstPeriodEndDate.setDate(loanStartDate.getDate() + interestPeriod - 1);
@@ -180,30 +180,17 @@ export function CreditsTable({
         return { nextDate: firstPeriodEndDate.toISOString(), isCompleted: false, loading: false };
       }
       
-      // Nếu có dữ liệu về các kỳ thanh toán, tìm kỳ cuối cùng đã thanh toán
-      // Sắp xếp các kỳ theo số thứ tự
-      const sortedPeriods = [...data].sort((a, b) => a.period_number - b.period_number);
+      // Nếu có thanh toán trước đây, tính kỳ tiếp theo
+      const lastPaymentDate = new Date(latestPaymentDate);
+      const nextPaymentDate = new Date(lastPaymentDate);
+      nextPaymentDate.setDate(lastPaymentDate.getDate() + interestPeriod);
       
-      // Lấy kỳ cuối cùng (có period_number lớn nhất)
-      const lastPeriod = sortedPeriods[sortedPeriods.length - 1];
-      
-      // Nếu tất cả các kỳ đã thanh toán đủ, tính kỳ tiếp theo
-      if (lastPeriod && lastPeriod.end_date) {
-        const lastPeriodEndDate = new Date(lastPeriod.end_date);
-        const nextPeriodEndDate = new Date(lastPeriodEndDate);
-        nextPeriodEndDate.setDate(lastPeriodEndDate.getDate() + interestPeriod);
-        
-        // Nếu ngày kết thúc kỳ tiếp theo vượt quá ngày kết thúc hợp đồng
-        if (nextPeriodEndDate > loanEndDate) {
-          console.log('nextPeriodEndDate', nextPeriodEndDate);
-          console.log('loanEndDate', loanEndDate);
-          return { nextDate: null, isCompleted: true, loading: false };
-        }
-        
-        return { nextDate: nextPeriodEndDate.toISOString(), isCompleted: false, loading: false };
+      // Kiểm tra xem ngày thanh toán tiếp theo có vượt quá ngày kết thúc hợp đồng không
+      if (nextPaymentDate > loanEndDate) {
+        return { nextDate: null, isCompleted: true, loading: false };
       }
       
-      return { nextDate: null, isCompleted: false, loading: false };
+      return { nextDate: nextPaymentDate.toISOString(), isCompleted: false, loading: false };
     } catch (error) {
       console.error(`Error calculating next payment date for credit ${creditId}:`, error);
       return { nextDate: null, isCompleted: false, loading: false };

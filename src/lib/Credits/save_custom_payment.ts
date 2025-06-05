@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import { recordDailyPayments } from './record_daily_payments';
+import { recordDailyPayments, recordDailyPaymentsWithCustomAmount } from './record_daily_payments';
 import { getExpectedMoney } from './get_expected_money';
 
 /**
@@ -15,34 +15,11 @@ export async function saveCustomPayment(
     endDate: string;
     days: number;
     interestAmount: number;
-    otherAmount: number;
     totalAmount: number;
   }
 ): Promise<void> {
   try {
-    // 1. Ghi lịch sử payment hàng ngày với date_status
     await recordDailyPayments(creditId, paymentData.startDate, paymentData.endDate);
-
-    // 2. Nếu có tiền khác, ghi thêm 1 bản ghi riêng
-    if (paymentData.otherAmount > 0) {
-      const { error: otherError } = await supabase
-        .from('credit_history')
-        .insert({
-          credit_id: creditId,
-          transaction_type: 'payment',
-          effective_date: paymentData.endDate, // Ghi vào ngày cuối
-          date_status: null,
-          credit_amount: paymentData.otherAmount,
-          debit_amount: 0,
-          description: `Tiền khác khi đóng lãi phí tùy biến (${paymentData.startDate} → ${paymentData.endDate})`,
-          is_created_from_contract_closure: false
-        });
-
-      if (otherError) {
-        throw new Error(`Lỗi khi ghi tiền khác: ${otherError.message}`);
-      }
-    }
-
     console.log(`✅ Successfully saved custom payment for ${creditId} from ${paymentData.startDate} to ${paymentData.endDate}`);
   } catch (error) {
     console.error('Error saving custom payment:', error);
@@ -109,39 +86,29 @@ export async function calculateCustomPeriodInterest(
   }
 }
 
-/**
- * Tìm ngày kết thúc của kỳ thanh toán cuối cùng đã thanh toán
- * @param creditId - ID của hợp đồng credit
- * @returns Promise<string | undefined> - Ngày kết thúc kỳ cuối hoặc undefined
- */
-export async function getLastPaidPeriodEndDate(creditId: string): Promise<string | undefined> {
-  try {
-    // Tìm các bản ghi payment đã thanh toán từ credit_history
-    const { data: paymentHistory, error } = await supabase
-      .from('credit_history')
-      .select('effective_date, date_status')
-      .eq('credit_id', creditId)
-      .eq('transaction_type', 'payment')
-      .eq('is_deleted', false)
-      .order('effective_date', { ascending: false });
-
-    if (error) {
-      console.error('Error fetching payment history:', error);
-      return undefined;
-    }
-
-    if (!paymentHistory || paymentHistory.length === 0) {
-      return undefined;
-    }
-
-    // Tìm ngày có date_status = 'end' hoặc 'only' gần nhất
-    const lastEndDate = paymentHistory.find(p => 
-      p.date_status === 'end' || p.date_status === 'only'
-    );
-
-    return lastEndDate?.effective_date?.split('T')[0];
-  } catch (err) {
-    console.error('Error getting last paid period end date:', err);
-    return undefined;
+// Add new function for custom amount
+export async function saveCustomPaymentWithAmount(
+  creditId: string,
+  paymentData: {
+    startDate: string;
+    endDate: string;
+    days: number;
+    interestAmount: number;
+    totalAmount: number;
   }
-} 
+): Promise<void> {
+  try {
+    // Use custom amount instead of auto-calculation from getExpectedMoney
+    await recordDailyPaymentsWithCustomAmount(
+      creditId, 
+      paymentData.startDate, 
+      paymentData.endDate,
+      paymentData.interestAmount
+    );
+    
+    console.log(`✅ Successfully saved custom payment with amount ${paymentData.interestAmount} for ${creditId} from ${paymentData.startDate} to ${paymentData.endDate}`);
+  } catch (error) {
+    console.error('Error saving custom payment with amount:', error);
+    throw error;
+  }
+}

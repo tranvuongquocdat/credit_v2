@@ -6,7 +6,7 @@ export async function getLatestPaymentPaidDate(creditId: string) {
     // tìm theo id trước
     const { data: credit, error: creditError } = await supabase
         .from('credits')
-        .select('id, loan_date')
+        .select('id')
         .eq('id', creditId)
         .single();
     if (creditError) {

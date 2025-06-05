@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
-import { format, addDays, differenceInDays, parseISO } from 'date-fns';
-import { vi } from 'date-fns/locale';
+import { format, addDays, differenceInDays } from 'date-fns';
+import { toast } from '@/components/ui/use-toast';
 
 interface PaymentFormProps {
   onClose: () => void;
@@ -19,7 +19,6 @@ interface PaymentFormProps {
     endDate: string;
     days: number;
     interestAmount: number;
-    otherAmount: number;
     totalAmount: number;
   }) => void;
   // Thêm các thông tin về kỳ hạn từ credit
@@ -27,7 +26,7 @@ interface PaymentFormProps {
   loanPeriod?: number;
   interestPeriod?: number;
   // Thêm thông tin về kỳ thanh toán cuối cùng
-  lastPaymentEndDate?: string;
+  lastPaymentEndDate?: string | null;
   // Thêm prop disabled
   disabled?: boolean;
 }
@@ -82,9 +81,6 @@ export function PaymentForm({
   const [interestAmount, setInterestAmount] = useState(0);
   const [formattedInterestAmount, setFormattedInterestAmount] = useState('0');
   
-  const [otherAmount, setOtherAmount] = useState('0');
-  const [formattedOtherAmount, setFormattedOtherAmount] = useState('0');
-
   // State để track việc đang tính toán
   const [isCalculating, setIsCalculating] = useState(false);
 
@@ -131,16 +127,10 @@ export function PaymentForm({
       setDays(newDays);
     }
   };
-  
-  // Handle other amount change
-  const handleOtherAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value.replace(/\./g, '');
-    setOtherAmount(rawValue);
-    setFormattedOtherAmount(formatNumber(rawValue));
-  };
+
   
   // Tính tổng tiền
-  const totalAmount = interestAmount + Number(otherAmount);
+  const totalAmount = interestAmount;
   
   // Tính ngày đóng tiếp theo dựa trên kỳ hạn
   const nextPaymentDate = (() => {
@@ -173,15 +163,36 @@ export function PaymentForm({
     }
   })();
   
-  // Xử lý nộp form
+  // Add validation function
+  const isEndDateValid = (end: Date): boolean => {
+    if (!loanDate || !loanPeriod) return true;
+    
+    const loanStartDate = new Date(loanDate);
+    const contractEndDate = new Date(loanStartDate);
+    contractEndDate.setDate(loanStartDate.getDate() + loanPeriod - 1);
+    
+    return end <= contractEndDate;
+  };
+
+  // Update handleSubmit to include validation
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    const end = new Date(endDate);
+    if (!isEndDateValid(end)) {
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: "Ngày kết thúc không được vượt quá ngày kết thúc hợp đồng"
+      });
+      return;
+    }
+
     onSubmit({
       startDate,
       endDate,
       days: Number(days),
       interestAmount: interestAmount,
-      otherAmount: Number(otherAmount),
       totalAmount
     });
   };
@@ -190,6 +201,15 @@ export function PaymentForm({
   const formattedStartDate = format(new Date(startDate), 'dd/MM/yyyy');
   const formattedEndDate = format(new Date(endDate), 'dd/MM/yyyy');
   
+  // Simple handler for manual editing
+  const handleInterestAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/[^0-9]/g, '');
+    const numericValue = parseInt(value) || 0;
+    
+    setInterestAmount(numericValue);
+    setFormattedInterestAmount(formatNumber(value));
+  };
+
   return (
     <div className="border rounded-md p-4 bg-white">
       <h3 className="font-medium mb-4">Đóng lãi phí tùy biến theo ngày</h3>
@@ -234,9 +254,9 @@ export function PaymentForm({
             <div className="relative">
               <Input 
                 value={formattedInterestAmount} 
-                className="w-48 bg-gray-50"
+                onChange={handleInterestAmountChange}
+                className="w-48"
                 type="text"
-                readOnly={true}
                 disabled={disabled}
               />
               {isCalculating && (
@@ -245,20 +265,7 @@ export function PaymentForm({
                 </div>
               )}
             </div>
-            <span className="text-gray-500 text-sm">VNĐ (Tự động tính: {days} ngày × lãi 1 ngày)</span>
-          </div>
-          
-          <div className="text-right pr-2">Tiền khác :</div>
-          <div className="flex items-center gap-3">
-            <Input 
-              value={formattedOtherAmount} 
-              onChange={handleOtherAmountChange}
-              className="w-48"
-              inputMode="numeric"
-              type="text"
-              disabled={disabled}
-            />
-            <span className="text-gray-500 text-sm">VNĐ (Chi phí khác nếu có)</span>
+            <span className="text-gray-500 text-sm">VNĐ (Tự động tính khi thay đổi số ngày)</span>
           </div>
           
           <div className="text-right pr-2">Tổng tiền lãi phí :</div>

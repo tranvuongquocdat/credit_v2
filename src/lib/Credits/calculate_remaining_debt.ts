@@ -15,7 +15,7 @@ export async function calculateDebtToLatestPaidPeriod(creditId: string): Promise
     // lấy ra ngày bắt đầu hợp đồng
     const { data: credit, error: creditError } = await supabase
       .from('credits')
-      .select('loan_date')
+      .select('loan_date, status')
       .eq('id', creditId)
       .single();
 
@@ -23,6 +23,11 @@ export async function calculateDebtToLatestPaidPeriod(creditId: string): Promise
       throw new Error('Error fetching credit');
     }
 
+    // need review
+    if (credit.status == 'closed') {
+      return 0
+    }
+    
     const startDate = credit.loan_date;
 
     // truy vấn lịch sử thanh toán lãi ( transaction_type = 'payment' và is_deleted = false)

@@ -4,7 +4,7 @@ import { Credit } from "@/models/credit";
 
 // Hàm trả về mảng số tiền từng ngày trong chu kì của 1 hợp đồng credit 
 // Đây sẽ là số tiền expected cho từng kì lãi phải trả
-export async function getExpectedMoney(creditId: string) {
+export async function getExpectedMoney(creditId: string, countUntilToday: boolean = false) {
     // Lấy ra tất cả các lần vay thêm / trả bớt gốc của hợp đồng qua history
     // filter theo transaction_type là ADDITIONAL_LOAN hoặc PRINCIPAL_REPAYMENT
     // và credit_id trùng với creditId

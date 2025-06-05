@@ -3,9 +3,7 @@
 import { useEffect, useState } from 'react';
 import { CreditStatus, CreditWithCustomer } from '@/models/credit';
 import { Button } from '@/components/ui/button';
-import { calculateDailyRateForCredit, calculateInterestAmount } from '@/lib/interest-calculator';
 import { formatCurrency } from '@/lib/utils';
-import { getCreditPaymentPeriods } from '@/lib/credit-payment';
 import { updateCredit } from '@/lib/credit';
 import { useToast } from '@/components/ui/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -14,6 +12,7 @@ import { calculateDebtToLatestPaidPeriod } from '@/lib/Credits/calculate_remaini
 import { calculateCloseContractInterest } from '@/lib/Credits/calculate_close_contract_interest';
 import { getUnpaidStartDate } from '@/lib/Credits/get_unpaid_start_date';
 import { recordDailyPayments } from '@/lib/Credits/record_daily_payments';
+import { calculateActualLoanAmount } from '@/lib/Credits/calculate_actual_loan_amount';
 
 interface CloseTabProps {
   credit: CreditWithCustomer;
@@ -27,8 +26,8 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [loanAmount, setLoanAmount] = useState(0);
   
-  const loanAmount = credit?.loan_amount || 0;
   const isClosed = credit?.status === CreditStatus.CLOSED || credit?.status === CreditStatus.DELETED;
   
   const handleCloseCredit = async (creditId: string) => {
@@ -180,6 +179,19 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
     
     fetchCalculatedAmounts();
   }, [credit?.id, credit?.debt_amount]);
+
+  useEffect(() => {
+    async function fetchLoanAmount() {
+      try {
+        const amount = await calculateActualLoanAmount(credit.id);
+        setLoanAmount(amount);
+      } catch (error) {
+        console.error('Error calculating loan amount:', error);
+      }
+    }
+    
+    fetchLoanAmount();
+  }, [credit.id]);
   
   return (
     <div className="p-4">
@@ -197,16 +209,6 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
           <div className="flex items-center justify-center p-4 mb-4 bg-orange-50 border border-orange-200 rounded">
             <div className="h-4 w-4 rounded-full border-2 border-t-transparent border-orange-600 animate-spin mr-2"></div>
             <span className="text-orange-700">Đang xử lý đóng hợp đồng...</span>
-          </div>
-        )}
-
-        {!isCalculating && (
-          <div className="mb-4 p-3 bg-gray-50 border rounded">
-            <p className="text-sm text-gray-600">
-              <strong>Logic xử lý:</strong> {remainingAmount <= 0 
-                ? "Không còn lãi phí → Chỉ đóng hợp đồng" 
-                : "Còn lãi phí → Tạo lịch sử thanh toán từng ngày với date_status phù hợp"}
-            </p>
           </div>
         )}
 
