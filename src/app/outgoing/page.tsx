@@ -126,6 +126,7 @@ type TransactionFormData = {
   receiver: string; // Tên người nhận tiền (hiển thị)
   customer_id: string; // ID của khách hàng (lưu vào DB)
   amount: number;
+  formattedAmount: string; // Số tiền đã định dạng
   transaction_type: string;
   description: string;
 };
@@ -199,6 +200,7 @@ export default function OutgoingPage() {
     receiver: '',
     customer_id: '',
     amount: 0,
+    formattedAmount: '',
     transaction_type: TRANSACTION_TYPES.EXPENSE_OTHER,
     description: '',
   });
@@ -355,12 +357,36 @@ export default function OutgoingPage() {
     setCurrentPage(1);
   };
 
+  // Format number with thousand separators
+  const formatNumber = (value: string | number): string => {
+    // Convert to number and back to string to remove non-numeric characters
+    const numericValue = value.toString().replace(/[^0-9]/g, '');
+    // Format with thousand separators
+    return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+  
+  // Handle amount change
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value.replace(/\./g, '');
+    setFormData(prev => ({
+      ...prev,
+      amount: Number(rawValue),
+      formattedAmount: formatNumber(rawValue)
+    }));
+  };
+
   // Form change handler
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    
+    if (name === 'amount') {
+      handleAmountChange(e as React.ChangeEvent<HTMLInputElement>);
+      return;
+    }
+    
     setFormData(prev => ({
       ...prev,
-      [name]: name === 'amount' ? parseInt(value, 10) || 0 : value
+      [name]: value
     }));
   };
 
@@ -439,18 +465,7 @@ export default function OutgoingPage() {
       fetchTransactions();
       
       // Reset form data
-      setFormData({
-        receiver: '',
-        customer_id: '',
-        amount: 0,
-        transaction_type: TRANSACTION_TYPES.EXPENSE_OTHER,
-        description: '',
-      });
-      setNewCustomerName('');
-      setNewCustomerPhone('');
-      setNewCustomerAddress('');
-      setNewCustomerIdNumber('');
-      setCustomerType('existing');
+      resetFormData();
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -526,6 +541,7 @@ export default function OutgoingPage() {
       receiver: customerName,
       customer_id: record.customer_id || '',
       amount: record.debit_amount || 0,
+      formattedAmount: formatNumber(record.debit_amount || 0),
       transaction_type: record.transaction_type || TRANSACTION_TYPES.EXPENSE_OTHER,
       description: record.description || '',
     });
@@ -601,6 +617,23 @@ export default function OutgoingPage() {
     return transactions.reduce((acc, record) => {
       return acc + (record.debit_amount || 0);
     }, 0);
+  };
+
+  // Reset form data
+  const resetFormData = () => {
+    setFormData({
+      receiver: '',
+      customer_id: '',
+      amount: 0,
+      formattedAmount: '',
+      transaction_type: TRANSACTION_TYPES.EXPENSE_OTHER,
+      description: '',
+    });
+    setNewCustomerName('');
+    setNewCustomerPhone('');
+    setNewCustomerAddress('');
+    setNewCustomerIdNumber('');
+    setCustomerType('existing');
   };
 
   return (
@@ -685,6 +718,7 @@ export default function OutgoingPage() {
                     receiver: '',
                     customer_id: '',
                     amount: 0,
+                    formattedAmount: '',
                     transaction_type: TRANSACTION_TYPES.EXPENSE_OTHER,
                     description: '',
                   });
@@ -970,10 +1004,12 @@ export default function OutgoingPage() {
                 <Input
                   id="amount"
                   name="amount"
-                  type="number"
+                  type="text"
                   className="col-span-3"
-                  value={formData.amount}
-                  onChange={handleFormChange}
+                  value={formData.formattedAmount}
+                  onChange={handleAmountChange}
+                  inputMode="numeric"
+                  placeholder="0"
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">

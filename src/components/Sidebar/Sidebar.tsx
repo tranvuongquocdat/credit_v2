@@ -91,7 +91,7 @@ const sidebarItems: SidebarItem[] = [
       { title: 'Hoạt động thu', path: '/income', icon: <FiDollarSign size={18} /> },
       { title: 'Hoạt động chi', path: '/outgoing', icon: <FiDollarSign size={18} /> },
     ],
-    redColor: true,
+    // redColor: true,
   },
   { 
     title: 'Nhân viên', 
