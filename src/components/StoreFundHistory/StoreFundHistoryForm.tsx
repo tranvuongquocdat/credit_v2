@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { StoreFundHistory, StoreFundHistoryFormData, TransactionType } from '@/models/storeFundHistory';
 import { useStore } from '@/contexts/StoreContext';
 import { RefreshCw } from 'lucide-react';
+import { MoneyInput } from '@/components/ui/money-input';
 
 // UI Components
 import { Button } from "@/components/ui/button";
@@ -154,21 +155,18 @@ export function StoreFundHistoryForm({
 
       {/* Fund Amount */}
       <div>
-        <label htmlFor="fund_amount" className="block text-sm font-medium text-gray-700 mb-1">
-          Số tiền <span className="text-red-500">*</span>
-        </label>
-        <Input
+        <MoneyInput
           id="fund_amount"
-          type="text"
-          inputMode="numeric"
-          value={formattedAmount}
-          onChange={handleFundAmountChange}
-          className={errors.fund_amount ? 'border-red-500' : ''}
+          label="Số tiền"
+          required
+          value={formData.fund_amount}
+          onChange={(e) => {
+            const numericValue = parseInt(e.target.value) || 0;
+            handleChange('fund_amount', numericValue);
+          }}
+          error={errors.fund_amount}
           disabled={isSubmitting}
         />
-        {errors.fund_amount && (
-          <p className="text-sm text-red-500 mt-1">{errors.fund_amount}</p>
-        )}
         {formData.transaction_type === TransactionType.WITHDRAWAL && currentStore?.cash_fund !== undefined && (
           <p className="text-xs text-gray-500 mt-1">
             Quỹ tiền mặt hiện tại: {formatCurrency(currentStore.cash_fund)}

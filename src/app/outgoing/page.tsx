@@ -67,6 +67,7 @@ import {
 } from "@/components/ui/table";
 
 import { Badge } from "@/components/ui/badge";
+import { MoneyInput } from "@/components/ui/money-input";
 
 // Define transaction types
 const TRANSACTION_TYPES = {
@@ -1001,16 +1002,22 @@ export default function OutgoingPage() {
                 <Label htmlFor="amount" className="text-right">
                   Số tiền
                 </Label>
-                <Input
-                  id="amount"
-                  name="amount"
-                  type="text"
-                  className="col-span-3"
-                  value={formData.formattedAmount}
-                  onChange={handleAmountChange}
-                  inputMode="numeric"
-                  placeholder="0"
-                />
+                <div className="col-span-3">
+                  <MoneyInput
+                    id="amount"
+                    name="amount"
+                    value={formData.amount}
+                    onChange={(e) => {
+                      const numericValue = parseInt(e.target.value) || 0;
+                      setFormData(prev => ({
+                        ...prev,
+                        amount: numericValue,
+                        formattedAmount: formatNumber(numericValue)
+                      }));
+                    }}
+                    placeholder="0"
+                  />
+                </div>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="transaction_type" className="text-right">
