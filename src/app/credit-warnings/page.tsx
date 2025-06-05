@@ -5,23 +5,9 @@ import { useStore } from "@/contexts/StoreContext";
 import { CreditWithCustomer, CreditStatus } from "@/models/credit";
 import { getCredits } from "@/lib/credit";
 import { CreditWarningsTable } from "@/components/Credits/CreditWarningsTable";
-import { AlertTriangleIcon, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { toast } from '@/components/ui/use-toast';
 import { Layout } from "@/components/Layout";
-import { 
-  getCreditPaymentPeriods, 
-  createPaymentPeriod, 
-  savePaymentWithOtherAmount
-} from "@/lib/credit-payment";
-import { differenceInDays, addDays, parseISO } from 'date-fns';
-import { CreditPaymentPeriod } from "@/models/credit-payment";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle,
-  DialogFooter
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PaymentHistoryModal } from "@/components/Credits/PaymentHistoryModal";
@@ -32,13 +18,6 @@ export default function CreditWarningPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [customerNameFilter, setCustomerNameFilter] = useState("");
   const { currentStore } = useStore();
-  const [processingPayment, setProcessingPayment] = useState(false);
-  const [paymentConfirmOpen, setPaymentConfirmOpen] = useState(false);
-  const [selectedPayment, setSelectedPayment] = useState<{
-    credit: CreditWithCustomer;
-    amount: number;
-    periods: number;
-  } | null>(null);
   
   // State for payment history modal
   const [isPaymentHistoryModalOpen, setIsPaymentHistoryModalOpen] = useState(false);

@@ -1,20 +1,15 @@
 import { InstallmentWithCustomer } from "@/models/installment";
 import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
 import { InstallmentAmountHistory } from "@/lib/installmentAmountHistory";
+import { getinstallmentPaymentHistory } from "./Installments/payment_history";
 
 /**
  * Tính tổng số tiền đã đóng dựa trên lịch sử giao dịch
  */
-export const calculateTotalPaidFromHistory = (amountHistory: InstallmentAmountHistory[]): number => {
-  if (!amountHistory || amountHistory.length === 0) return 0;
-
-  return amountHistory.reduce((total: number, history: InstallmentAmountHistory) => {
-    if (history.transactionType === 'payment' || 
-        history.transactionType === 'payment_cancel' ||
-        history.transactionType === 'debt_payment') {
-      return total + (history.creditAmount || 0) - (history.debitAmount || 0);
-    }
-    return total;
+export const calculateTotalPaidFromHistory = async (installmentId: string): Promise<number> => {
+  const history = await getinstallmentPaymentHistory(installmentId);
+  return history.reduce((total: number, record) => {
+    return total + (record.credit_amount || 0) - (record.debit_amount || 0);
   }, 0);
 };
 

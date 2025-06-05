@@ -71,7 +71,6 @@ export default function CreditsPage() {
   // Lấy dữ liệu tài chính tổng hợp
   const { summary: financialSummary, details: creditDetails, refresh: refreshFinancial } = useCreditCalculations();
   // State for dialogs
-  const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedCredit, setSelectedCredit] = useState<CreditWithCustomer | null>(null);
   
@@ -144,7 +143,6 @@ export default function CreditsPage() {
     } else {
       // Trường hợp bình thường: mở dialog chọn trạng thái
       setSelectedCredit(credit);
-      setIsStatusDialogOpen(true);
     }
   };
   
@@ -152,7 +150,7 @@ export default function CreditsPage() {
   const reopenContract = async (credit: CreditWithCustomer) => {
     try {
       // Ghi lại lịch sử mở lại hợp đồng với số tiền đóng hợp đồng gần nhất
-      const { recordContractReopening } = await import('@/lib/credit-amount-history');
+      const { recordContractReopening } = await import('@/lib/Credits/credit-amount-history');
       const result = await recordContractReopening(
         credit.id,
         new Date().toISOString(),
@@ -175,13 +173,6 @@ export default function CreditsPage() {
       });
     }
   };
-  
-  // Handle closing status dialog
-  const handleCloseStatusDialog = () => {
-    setIsStatusDialogOpen(false);
-    setSelectedCredit(null);
-  };
-  
   
   // Handle opening delete dialog
   const handleOpenDeleteDialog = (credit: CreditWithCustomer) => {

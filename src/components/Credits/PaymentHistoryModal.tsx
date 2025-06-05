@@ -1,26 +1,18 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { format } from 'date-fns';
-import { vi } from 'date-fns/locale';
 import { 
   Dialog, 
   DialogContent, 
   DialogHeader, 
   DialogTitle 
 } from '@/components/ui/dialog';
-import { CreditWithCustomer, InterestType, Credit } from '@/models/credit';
-import { CreditPaymentPeriod } from '@/models/credit-payment';
-import { getCreditPaymentPeriods, savePaymentWithOtherAmount } from '@/lib/credit-payment';
+import { CreditWithCustomer } from '@/models/credit';
 import { getInterestDisplayString, calculateInterestAmount as calculateInterestForPeriod, calculateInterestWithPrincipalChanges, PrincipalChange, calculateDailyRateForCredit } from '@/lib/interest-calculator';
-import { addPrincipalRepayment, updateCreditPrincipal } from '@/lib/principal-repayment';
-import { addAdditionalLoan, updateCreditWithAdditionalLoan } from '@/lib/additional-loan';
-import { addExtension, updateCreditEndDate } from '@/lib/extension';
 import { CreditActionTabs, DEFAULT_CREDIT_TABS, TabId } from './CreditActionTabs';
 import { AdditionalLoanTab, BadCreditTab, CloseTab, DocumentsTab, ExtensionTab, PaymentTab, PrincipalRepaymentTab } from './tabs';
 import { getCreditById } from '@/lib/credit';
-import { getPrincipalChangesForCredit } from '@/lib/credit-principal-changes';
-import { CreditAmountHistory, CreditTransactionType, getCreditAmountHistory } from '@/lib/credit-amount-history';
+import { CreditAmountHistory, CreditTransactionType, getCreditAmountHistory } from '@/lib/Credits/credit-amount-history';
 import { calculateDaysBetween, formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
 import { getExpectedMoney } from '@/lib/Credits/get_expected_money';
 import { calculateDebtToLatestPaidPeriod } from '@/lib/Credits/calculate_remaining_debt';
@@ -42,25 +34,16 @@ export function PaymentHistoryModal({
   // Properly declare the variables to fix TypeScript errors
   const [credit, setCredit] = useState<CreditWithCustomer>(initialCredit);
   const creditId = credit?.id || '';
-  const [paymentPeriods, setPaymentPeriods] = useState<CreditPaymentPeriod[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('payment');
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [refreshRepayments, setRefreshRepayments] = useState(0);
   const [refreshAdditionalLoans, setRefreshAdditionalLoans] = useState(0);
-  const [principalChanges, setPrincipalChanges] = useState<PrincipalChange[]>([]);
   const [creditHistory, setCreditHistory] = useState<CreditAmountHistory[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   
   // Thay đổi từ boolean sang counter
   const [dataChangeCounter, setDataChangeCounter] = useState(0);
-  
-  // State cho modal nhập tiền khách trả
-  const [showPaymentInput, setShowPaymentInput] = useState(false);
-  const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
-  const [paymentAmount, setPaymentAmount] = useState<number>(0);
-  const [otherAmount, setOtherAmount] = useState<number>(0);
   
   // State đơn giản cho tổng lãi phí và nợ cũ
   const [totalExpectedInterest, setTotalExpectedInterest] = useState<number>(0);
@@ -175,59 +158,6 @@ export function PaymentHistoryModal({
     };
   };
 
-  useEffect(() => {
-    async function loadPaymentPeriods() {
-      if (!credit?.id) return;
-      
-      setLoading(true);
-      setError(null);
-      
-      try {
-        const { data, error } = await getCreditPaymentPeriods(credit.id);
-        
-        if (error) {
-          throw error;
-        }
-        
-        setPaymentPeriods(data || []);
-      } catch (err) {
-        console.error('Error loading payment periods:', err);
-        setError('Không thể tải dữ liệu thanh toán');
-      } finally {
-        setLoading(false);
-      }
-    }
-    
-    if (isOpen) {
-      loadPaymentPeriods();
-    }
-  }, [isOpen, credit?.id]);
-  
-  // Fetch principal changes when credit changes
-  useEffect(() => {
-    async function fetchPrincipalChanges() {
-      if (!credit?.id) return;
-      
-      try {
-        const { data, error } = await getPrincipalChangesForCredit(credit.id);
-        
-        if (error) {
-          console.error('Error fetching principal changes:', error);
-          return;
-        }
-        
-        setPrincipalChanges(data || []);
-      } catch (err) {
-        console.error('Error in fetchPrincipalChanges:', err);
-      }
-    }
-    
-    fetchPrincipalChanges();
-  }, [credit?.id, refreshRepayments, refreshAdditionalLoans]);
-  
-  // Calculate total amounts with useMemo
-  const totalAmount = useMemo(() => credit?.loan_amount || 0, [credit?.loan_amount]);
-  
   // useEffect để load payment history - sử dụng counter
   useEffect(() => {
     async function loadPaymentHistory() {
@@ -430,8 +360,6 @@ export function PaymentHistoryModal({
           {activeTab === 'payment' && (
             <PaymentTab
               credit={credit}
-              paymentPeriods={paymentPeriods}
-              loading={loading}
               error={error}
               showPaymentForm={showPaymentForm}
               setShowPaymentForm={setShowPaymentForm}
@@ -439,21 +367,7 @@ export function PaymentHistoryModal({
               formatDate={formatDate}
               calculateDaysBetween={calculateDaysBetween}
               onDataChange={() => {
-                setDataChangeCounter(prev => prev + 1);
-                
-                if (credit?.id) {
-                  setLoading(true);
-                  getCreditPaymentPeriods(credit.id).then(({ data, error }) => {
-                    setLoading(false);
-                    if (error) {
-                      setError('Không thể tải lại dữ liệu thanh toán');
-                      return;
-                    }
-                    
-                    setPaymentPeriods(data || []);
-                  });
-                }
-                
+                setDataChangeCounter(prev => prev + 1);                
                 reloadCreditInfo();
               }}
             />

@@ -42,7 +42,7 @@ export function AdditionalLoanTab({ credit, onDataChange }: AdditionalLoanTabPro
             console.log('🟡 Starting additional loan submission...');
             
             // Import dynamically to prevent duplicate imports
-            const { recordAdditionalLoan } = await import('@/lib/credit-amount-history');
+            const { recordAdditionalLoan } = await import('@/lib/Credits/credit-amount-history');
             
             // Sử dụng API mới để ghi lại khoản vay thêm vào credit_history
             const { data: historyData, error } = await recordAdditionalLoan(

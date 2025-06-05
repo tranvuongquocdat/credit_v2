@@ -1,6 +1,6 @@
 import { DatePicker } from "@/components/ui/date-picker";
 import { Checkbox } from "@/components/ui/checkbox";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatDate } from "@/lib/utils";
 import { InstallmentWithCustomer, InstallmentStatus } from "@/models/installment";
 import { format } from "date-fns";
 import React from "react";
@@ -91,31 +91,10 @@ export const PaymentTab: React.FC<PaymentTabProps> = ({
                 const isEditing = selectedPeriodId === period.id;
                 const isDateEditing = selectedDatePeriodId === period.id;
 
-                // Calculate date range using endDate when available
-                const dateRange = period.endDate
-                  ? `${period.dueDate} → ${period.endDate}`
-                  : (() => {
-                      let periodDays = installment.payment_period || 30;
-                      if (index === calculateCombinedPaymentPeriods.length - 1) {
-                        const totalDays = installment.duration || 0;
-                        const startDate = new Date(installment.start_date);
-                        const currentDate = new Date(period.dueDate.split('/').reverse().join('-'));
-                        const daysElapsed = Math.ceil((currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-                        const remainingDays = totalDays - daysElapsed;
-                        if (remainingDays > 0 && remainingDays < periodDays) {
-                          periodDays = remainingDays + 1;
-                        }
-                      }
-                      const startDate = period.dueDate ? new Date(period.dueDate.split("/").reverse().join("-")) : new Date();
-                      const endDate = new Date(startDate);
-                      endDate.setDate(endDate.getDate() + (periodDays - 1));
-                      return `${period.dueDate} → ${format(endDate, "dd/MM/yyyy")}`;
-                    })();
-
                 return (
                   <tr key={period.id} className="hover:bg-gray-50">
                     <td className="px-2 py-2 text-center border">{period.periodNumber}</td>
-                    <td className="px-2 py-2 text-center border">{dateRange}</td>
+                    <td className="px-2 py-2 text-center border">{formatDate(period.dueDate)} → {formatDate(period.endDate || null)}</td>
                     <td className="px-2 py-2 text-center border">
                       {isDateEditing && selectedDatePeriodId === period.id ? (
                         <DatePicker
@@ -138,7 +117,7 @@ export const PaymentTab: React.FC<PaymentTabProps> = ({
                         >
                           {index === findOldestUnpaidPeriodIndex && tempEditedDate 
                             ? format(new Date(tempEditedDate), "dd/MM/yyyy")
-                            : period.paymentStartDate || format(new Date(), "dd/MM/yyyy")}
+                            : format(period.paymentStartDate ? new Date(period.paymentStartDate) : new Date(), "dd/MM/yyyy")}
                         </span>
                       )}
                     </td>

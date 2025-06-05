@@ -1,6 +1,5 @@
 import { supabase } from '@/lib/supabase';
 import { AdditionalLoan } from '@/models/additional-loan';
-import { CreditTransactionType } from './credit-amount-history';
 
 /**
  * Lấy danh sách các khoản vay thêm theo credit_id

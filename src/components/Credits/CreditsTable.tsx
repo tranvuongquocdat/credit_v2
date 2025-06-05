@@ -27,7 +27,6 @@ import { getExpectedMoney } from '@/lib/Credits/get_expected_money';
 import { calculateActualLoanAmount } from '@/lib/Credits/calculate_actual_loan_amount';
 import { useToast } from '../ui/use-toast';
 import { CreditFinancialDetail } from '@/hooks/useCreditCalculation';
-import { getCreditPaymentPeriods } from '@/lib/credit-payment';
 import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_date';
 
 interface StatusMapType {

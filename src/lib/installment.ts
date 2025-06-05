@@ -3,6 +3,7 @@ import { CreateInstallmentParams, Installment, InstallmentFilters, InstallmentSt
 import { Customer } from '@/models/customer';
 import { format, addDays } from 'date-fns';
 import { formatCurrency } from '@/lib/utils';
+import { calculateDebtToLatestPaidPeriod } from './Installments/calculate_remaining_debt';
 
 // Get all installments with pagination and filters
 export async function getInstallments(
@@ -65,14 +66,14 @@ export async function getInstallments(
     }
     
     // Transform data to match UI requirements
-    const installments = (data || []).map(item => {
+    const installmentPromises = (data || []).map(async (item: any) => {
       // Ensure values are not null
       const downPayment = item.down_payment || 0;
       const installmentAmount = item.installment_amount || 0;
       const loanPeriod = item.loan_period || 0;
       const paymentPeriod = item.payment_period || 30;
       const loanDate = item.loan_date || new Date().toISOString();
-      const debtAmount = item.debt_amount || 0;
+      const debtAmount = await calculateDebtToLatestPaidPeriod(item.id) || 0;
       
       // Convert customer data to Customer type or undefined
       const customerData = item.customer ? {
@@ -106,7 +107,9 @@ export async function getInstallments(
         debt_amount: debtAmount,
         customer: customerData
       };
-    }) as InstallmentWithCustomer[];
+    });
+    
+    const installments = await Promise.all(installmentPromises);
     
     // Calculate total pages
     const totalPages = Math.ceil((count || 0) / pageSize);
@@ -233,8 +236,6 @@ export async function getInstallmentById(id: string) {
 // Create a new installment
 export async function createInstallment(installment: CreateInstallmentParams) {
   try {
-    // Import recordContractCreation and updateStoreCashFund
-    const { recordContractCreation } = await import('./installmentAmountHistory');
     
     // Get employee info to find store_id
     let storeId = '1'; // Default store_id
@@ -568,8 +569,9 @@ export async function deleteInstallment(id: string) {
   try {
     // Check if installment has any payment periods
     const { data: paymentPeriods, error: paymentError } = await supabase
-      .from('installment_payment_period')
+      .from('installment_history')
       .select('id')
+      .eq('is_deleted', false)
       .eq('installment_id', id)
       .limit(1);
     

@@ -16,7 +16,7 @@ import { AdditionalLoan } from '@/models/additional-loan';
 import { 
   getAdditionalLoans, 
   deleteCreditAmountHistory 
-} from '@/lib/additional-loan';
+} from '@/lib/Credits/additional-loan';
 import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_date';
 import { toast } from '../ui/use-toast';
 

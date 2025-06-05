@@ -253,8 +253,10 @@ export async function deleteCredit(id: string) {
   try {
     // Kiểm tra xem hợp đồng có kỳ thanh toán nào không
     const { data: paymentPeriods, error: paymentError } = await supabase
-      .from('credit_payment_periods')
+      .from('credit_history')
       .select('id')
+      .eq('transaction_type', 'payment')
+      .eq('is_deleted', false)
       .eq('credit_id', id)
       .limit(1);
     
@@ -278,7 +280,7 @@ export async function deleteCredit(id: string) {
     if (creditError) throw creditError;
     
     // Ghi lịch sử xóa hợp đồng
-    const { recordContractDeletion } = await import('@/lib/credit-amount-history');
+    const { recordContractDeletion } = await import('@/lib/Credits/credit-amount-history');
     await recordContractDeletion(
       id,
       creditData.loan_amount,

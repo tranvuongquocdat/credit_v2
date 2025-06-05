@@ -12,15 +12,13 @@ import { convertFromHistoryToTimeArrayWithStatus } from '@/lib/Credits/convert_f
 import { getCreditPaymentHistory } from '@/lib/Credits/payment_history';
 import { PaymentForm } from '../PaymentForm';
 import { 
-  saveCustomPayment, 
   calculateCustomPeriodInterest, 
 } from '@/lib/Credits/save_custom_payment';
 import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_date';
 
 type PaymentTabProps = {
   credit: CreditWithCustomer | null;
-  paymentPeriods: CreditPaymentPeriod[];
-  loading: boolean;
+  loading?: boolean;
   error: string | null;
   showPaymentForm: boolean;
   setShowPaymentForm: (show: boolean) => void;
@@ -599,7 +597,7 @@ export function PaymentTab({
       {isGenerating && (
         <div className="flex items-center justify-center p-4 mb-4 bg-blue-50 border border-blue-200 rounded">
           <div className="h-4 w-4 rounded-full border-2 border-t-transparent border-blue-600 animate-spin mr-2"></div>
-          <span className="text-blue-700">Đang tạo các kỳ thanh toán từ getExpectedMoney...</span>
+          <span className="text-blue-700">Đang tải...</span>
         </div>
       )}
       

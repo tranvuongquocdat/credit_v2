@@ -25,6 +25,7 @@ export interface InstallmentPaymentPeriod {
   dueDate: string;            // Ngày dự kiến đóng tiền (format for display)
   endDate?: string;           // Ngày kết thúc kỳ (format for display)
   paymentStartDate?: string;       // Ngày thực tế đã đóng (format for display)
+  transactionDate?: string;       // Ngày thực tế đã đóng (format for display)
   expectedAmount: number;
   actualAmount?: number;
   notes?: string;

@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-import { format, addDays, max, parseISO } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
 import { toast } from '@/components/ui/use-toast';
-import { getCreditPaymentPeriods } from '@/lib/credit-payment';
 import { getCreditById } from '@/lib/credit';
 import { calculateActualLoanAmount } from '@/lib/Credits/calculate_actual_loan_amount';
 import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_date';

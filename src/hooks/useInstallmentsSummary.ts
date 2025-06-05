@@ -3,8 +3,8 @@ import { supabase } from '@/lib/supabase';
 import { InstallmentStatus } from '@/models/installment';
 import { StoreFinancialData, getStoreFinancialData } from '@/lib/store';
 import { useStore } from '@/contexts/StoreContext';
-import { getInstallmentAmountHistory } from '@/lib/installmentAmountHistory';
-import { calculateTotalPaidFromHistory } from '@/lib/installmentCalculations';
+import { getinstallmentPaymentHistory } from '@/lib/Installments/payment_history';
+import { calculateDebtToLatestPaidPeriod } from '@/lib/Installments/calculate_remaining_debt';
 
 export function useInstallmentsSummary() {
   const [data, setData] = useState<StoreFinancialData | null>(null);
@@ -27,10 +27,8 @@ export function useInstallmentsSummary() {
       // First, get the store financial data for cash_fund
       const storeFinancialData = await getStoreFinancialData(currentStore.id);
       
-
-      
       // Lấy tất cả hợp đồng chưa bị xóa, chưa đóng và thuộc cửa hàng hiện tại
-      let query = supabase
+      const { data: activeInstallments, error: installmentsError } = await supabase
         .from('installments_by_store')
         .select(`
           id,
@@ -43,8 +41,6 @@ export function useInstallmentsSummary() {
         `)
         .eq('status', InstallmentStatus.ON_TIME)
         .eq('store_id', currentStore.id);
-      
-      const { data: activeInstallments, error: installmentsError } = await query;
       
       if (installmentsError) {
         throw installmentsError;
@@ -62,42 +58,59 @@ export function useInstallmentsSummary() {
       let expectedProfit = 0; // Lãi phí dự kiến
       let collectedProfit = 0; // Lãi phí đã thu
       
+      console.time('Calculate all installments');
       
-      if (activeInstallments) {
-        // Tính tiền nợ cũ và lãi phí đã thu
-        for (const installment of activeInstallments) {
-          // Skip if installment.id is null
-          if (!installment.id) continue;
-          
-          // Lấy lịch sử giao dịch của hợp đồng này
-          const { data: amountHistory, error: historyError } = await getInstallmentAmountHistory(installment.id);
-          
-          if (historyError) {
-            console.error(`Error loading history for installment ${installment.id}:`, historyError);
-            continue;
+      // Xử lý song song tất cả installments
+      const results = await Promise.all(
+        activeInstallments.map(async (installment) => {
+          try {
+            // Skip if installment.id is null
+            if (!installment.id) return null;
+            
+            const paymentHistory = await getinstallmentPaymentHistory(installment.id);
+            const totalPaidFromHistory = paymentHistory.reduce((sum, record) => sum + (record.credit_amount || 0), 0);
+            
+            // Tính nợ cũ
+            const oldDebt = await calculateDebtToLatestPaidPeriod(installment.id);
+            
+            // Tính lãi phí đã thu: totalPaidFromHistory - down_payment (nếu dương)
+            const profitCollected = Math.max(0, totalPaidFromHistory - (installment.down_payment || 0));
+            
+            // Tính tổng tiền cho vay (tiền giao khách): down_payment - totalPaidFromHistory (nếu dương)
+            const loanAmount = Math.max(0, (installment.down_payment || 0) - totalPaidFromHistory);
+            
+            // Lãi phí dự kiến = installment_amount - down_payment
+            const expectedProfitAmount = installment.status === InstallmentStatus.ON_TIME 
+              ? (installment.installment_amount || 0) - (installment.down_payment || 0)
+              : 0;
+            
+            return {
+              oldDebt,
+              profitCollected,
+              loanAmount,
+              expectedProfitAmount
+            };
+          } catch (error) {
+            console.error(`Error calculating for installment ${installment.id}:`, error);
+            return null;
           }
-          
-          // Tính tổng tiền đã đóng từ lịch sử (payment, cancel_payment, debt_payment)
-          const totalPaidFromHistory = calculateTotalPaidFromHistory(amountHistory || []);
-          
-          // Tính nợ cũ
-          totalOldDebt += 0 - (installment.debt_amount || 0);
-          
-          // Tính lãi phí đã thu: totalPaidFromHistory - down_payment (nếu dương)
-          const profitCollected = Math.max(0, totalPaidFromHistory - (installment.down_payment || 0));
-          collectedProfit += profitCollected;
-          
-          // Tính tổng tiền cho vay (tiền giao khách): down_payment - totalPaidFromHistory (nếu dương)
-          const loanAmount = Math.max(0, (installment.down_payment || 0) - totalPaidFromHistory);
-          totalLoan += loanAmount;
-          
-          // Lãi phí dự kiến = installment_amount - down_payment
-          if(installment.status === InstallmentStatus.ON_TIME){
-            expectedProfit += (installment.installment_amount || 0) - (installment.down_payment || 0);
-          }
+        })
+      );
+      
+      console.timeEnd('Calculate all installments');
+      
+      // Aggregate results
+      results.forEach(result => {
+        if (result) {
+          totalOldDebt += result.oldDebt;
+          collectedProfit += result.profitCollected;
+          totalLoan += result.loanAmount;
+          expectedProfit += result.expectedProfitAmount;
         }
-      }
+      });
+      
       console.log("Collected Profit", collectedProfit);
+      
       const summaryData: StoreFinancialData = {
         // Use the cash_fund from the store financial data
         totalFund: storeFinancialData.availableFund || 0,

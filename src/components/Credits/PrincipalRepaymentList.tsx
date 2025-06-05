@@ -16,7 +16,7 @@ import { PrincipalRepayment } from '@/models/principal-repayment';
 import { 
   getPrincipalRepayments, 
   deleteCreditAmountHistory 
-} from '@/lib/principal-repayment';
+} from '@/lib/Credits/principal-repayment';
 import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_date';
 import { toast } from '../ui/use-toast';
 

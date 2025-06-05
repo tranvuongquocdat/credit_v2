@@ -49,7 +49,7 @@ export function PrincipalRepaymentTab({
             setIsSubmitting(true);
             
             // Import dynamically to prevent duplicate imports
-            const { recordPrincipalRepayment } = await import('@/lib/credit-amount-history');
+            const { recordPrincipalRepayment } = await import('@/lib/Credits/credit-amount-history');
             
             // Sử dụng API mới để ghi lại khoản trả bớt gốc vào credit_history
             const { data: historyData, error } = await recordPrincipalRepayment(

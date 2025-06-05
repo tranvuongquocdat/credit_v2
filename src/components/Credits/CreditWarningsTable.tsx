@@ -4,7 +4,6 @@ import { formatCurrency } from "@/lib/utils";
 import Spinner from "@/components/ui/spinner";
 import { useEffect, useState } from "react";
 import { CreditPaymentPeriod } from "@/models/credit-payment";
-import { getCreditPaymentPeriods } from "@/lib/credit-payment";
 import { AlertTriangleIcon, DollarSignIcon } from "lucide-react";
 import { useStore } from "@/contexts/StoreContext";
 import { useRouter } from "next/navigation";

@@ -15,7 +15,7 @@ export enum TransactionType {
 
 // DB model - map trực tiếp với database
 export interface InstallmentAmountHistoryDB {
-  id: number;
+  id: string | number;
   installment_id: string;
   created_at?: string | null;
   employee_id: string | null;
@@ -23,6 +23,8 @@ export interface InstallmentAmountHistoryDB {
   credit_amount: number | null;
   description: string | null;
   transaction_type: string;
+  is_deleted: boolean | null;
+  updated_at: string | null;
 }
 
 // UI model - cho front-end
@@ -35,6 +37,8 @@ export interface InstallmentAmountHistory {
   creditAmount: number;
   description: string;
   transactionType: TransactionType;
+  updated_at?: string | null;
+  is_deleted?: boolean | null;
 }
 
 /**
@@ -124,7 +128,7 @@ export async function recordDebtPayment(installmentId: string, employeeId: strin
     employeeId,
     debitAmount: amount,
     description: 'Thanh toán nợ',
-    transactionType: TransactionType.PAYMENT
+    transactionType: TransactionType.DEBT_PAYMENT
   });
 }
 
@@ -293,6 +297,8 @@ function transformHistory(item: InstallmentAmountHistoryDB): InstallmentAmountHi
     debitAmount: item.debit_amount || 0,
     creditAmount: item.credit_amount || 0,
     description: item.description || '',
-    transactionType: item.transaction_type as TransactionType
+    transactionType: item.transaction_type as TransactionType,
+    is_deleted: item.is_deleted || false,
+    updated_at: item.updated_at || null
   };
 } 
