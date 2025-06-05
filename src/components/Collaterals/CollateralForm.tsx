@@ -146,6 +146,31 @@ export function CollateralForm({
 
   // Handle collateral template selection
   const handleCollateralTemplateChange = (collateralId: string) => {
+    if (collateralId === "none") {
+      setSelectedCollateralTemplate(null);
+      // Reset form to defaults when no template selected
+      setFormData(prev => ({
+        ...prev,
+        category: CollateralCategory.PAWN,
+        name: '',
+        default_amount: 0,
+        interest_per_day: 3,
+        interest_type: InterestType.PER_MILLION,
+        interest_period: 10,
+        prepay_interest: false,
+        liquidation_after: 5
+      }));
+      
+      setCollateralDetails({
+        attr_01_value: '',
+        attr_02_value: '',
+        attr_03_value: '',
+        attr_04_value: '',
+        attr_05_value: ''
+      });
+      return;
+    }
+    
     const selected = availableCollaterals.find(c => c.id === collateralId);
     if (selected) {
       setSelectedCollateralTemplate(selected);
@@ -163,28 +188,6 @@ export function CollateralForm({
       }));
       
       // Reset collateral details when changing template
-      setCollateralDetails({
-        attr_01_value: '',
-        attr_02_value: '',
-        attr_03_value: '',
-        attr_04_value: '',
-        attr_05_value: ''
-      });
-    } else {
-      setSelectedCollateralTemplate(null);
-      // Reset form to defaults when no template selected
-      setFormData(prev => ({
-        ...prev,
-        category: CollateralCategory.PAWN,
-        name: '',
-        default_amount: 0,
-        interest_per_day: 3,
-        interest_type: InterestType.PER_MILLION,
-        interest_period: 10,
-        prepay_interest: false,
-        liquidation_after: 5
-      }));
-      
       setCollateralDetails({
         attr_01_value: '',
         attr_02_value: '',
@@ -391,16 +394,16 @@ export function CollateralForm({
           {/* Chọn template tài sản (chỉ hiển thị khi tạo mới) */}
           {!collateral && (
             <div className="border-b pb-4 mb-4">
-              <Label htmlFor="collateral_template">Chọn loại tài sản thế chấp</Label>
+              <Label htmlFor="collateral_template" className="mb-2 block">Chọn loại tài sản thế chấp</Label>
               <Select 
-                value={selectedCollateralTemplate?.id || ''} 
+                value={selectedCollateralTemplate?.id || 'none'} 
                 onValueChange={handleCollateralTemplateChange}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Chọn loại tài sản để tự động điền thông tin" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Không chọn template</SelectItem>
+                  <SelectItem value="none">Không chọn template</SelectItem>
                   {availableCollaterals.map((template) => (
                     <SelectItem key={template.id} value={template.id}>
                       {template.name} ({template.code}) - {template.interest_per_day}{template.interest_type === 'per_million' ? 'k/1tr' : 'đ'}/{template.interest_period} ngày
@@ -429,7 +432,7 @@ export function CollateralForm({
           {/* Lĩnh vực */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="category">Lĩnh vực *</Label>
+              <Label htmlFor="category" className="mb-2 block">Lĩnh vực *</Label>
               <Select 
                 value={formData.category} 
                 onValueChange={(value) => setFormData(prev => ({ ...prev, category: value as any }))}
@@ -446,7 +449,7 @@ export function CollateralForm({
 
             {/* Trạng thái */}
             <div>
-              <Label htmlFor="status">Trạng thái</Label>
+              <Label htmlFor="status" className="mb-2 block">Trạng thái</Label>
               <Select 
                 value={formData.status} 
                 onValueChange={(value) => setFormData(prev => ({ ...prev, status: value as any }))}
@@ -465,7 +468,7 @@ export function CollateralForm({
           {/* Tên hàng hóa và Mã hàng */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="name">Tên hàng hóa *</Label>
+              <Label htmlFor="name" className="mb-2 block">Tên hàng hóa *</Label>
               <Input
                 id="name"
                 value={formData.name}
@@ -480,7 +483,7 @@ export function CollateralForm({
               )}
             </div>
             <div>
-              <Label htmlFor="code">Mã hàng *</Label>
+              <Label htmlFor="code" className="mb-2 block">Mã hàng *</Label>
               <Input
                 id="code"
                 value={formData.code}
@@ -497,7 +500,7 @@ export function CollateralForm({
             {/* Số tiền cầm */}
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
-                <Label htmlFor="default_amount">Số tiền cầm *</Label>
+                <Label htmlFor="default_amount" className="mb-2 block">Số tiền cầm *</Label>
                 <Input
                   id="default_amount"
                   type="number"
@@ -525,7 +528,7 @@ export function CollateralForm({
             {/* Lãi phí ngày và loại */}
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
-                <Label htmlFor="interest_per_day">Lãi phí ngày *</Label>
+                <Label htmlFor="interest_per_day" className="mb-2 block">Lãi phí ngày *</Label>
                 <Input
                   id="interest_per_day"
                   type="number"
@@ -542,7 +545,7 @@ export function CollateralForm({
                 )}
               </div>
               <div>
-                <Label>Loại lãi phí</Label>
+                <Label className="mb-2 block">Loại lãi phí</Label>
                 <RadioGroup 
                   value={formData.interest_type} 
                   onValueChange={(value) => setFormData(prev => ({ ...prev, interest_type: value as any }))}
@@ -566,7 +569,7 @@ export function CollateralForm({
             {/* Kỳ lãi phí và Thanh lý sau */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="interest_period">Kỳ lãi phí *</Label>
+                <Label htmlFor="interest_period" className="mb-2 block">Kỳ lãi phí *</Label>
                 <Input
                   id="interest_period"
                   type="number"
@@ -584,7 +587,7 @@ export function CollateralForm({
                 )}
               </div>
               <div>
-                <Label htmlFor="liquidation_after">Thanh lý sau</Label>
+                <Label htmlFor="liquidation_after" className="mb-2 block">Thanh lý sau</Label>
                 <Input
                   id="liquidation_after"
                   type="number"
@@ -690,7 +693,7 @@ export function CollateralForm({
               
               <div className="space-y-3">
                 <div>
-                  <Label htmlFor="attr_01">Thuộc tính 01</Label>
+                  <Label htmlFor="attr_01" className="mb-2 block">Thuộc tính 01</Label>
                   <Input
                     id="attr_01"
                     value={formData.attr_01}
@@ -699,7 +702,7 @@ export function CollateralForm({
                   />
                 </div>
                 <div>
-                  <Label htmlFor="attr_02">Thuộc tính 02</Label>
+                  <Label htmlFor="attr_02" className="mb-2 block">Thuộc tính 02</Label>
                   <Input
                     id="attr_02"
                     value={formData.attr_02}
@@ -708,7 +711,7 @@ export function CollateralForm({
                   />
                 </div>
                 <div>
-                  <Label htmlFor="attr_03">Thuộc tính 03</Label>
+                  <Label htmlFor="attr_03" className="mb-2 block">Thuộc tính 03</Label>
                   <Input
                     id="attr_03"
                     value={formData.attr_03}
@@ -717,7 +720,7 @@ export function CollateralForm({
                   />
                 </div>
                 <div>
-                  <Label htmlFor="attr_04">Thuộc tính 04</Label>
+                  <Label htmlFor="attr_04" className="mb-2 block">Thuộc tính 04</Label>
                   <Input
                     id="attr_04"
                     value={formData.attr_04}
@@ -726,7 +729,7 @@ export function CollateralForm({
                   />
                 </div>
                 <div>
-                  <Label htmlFor="attr_05">Thuộc tính 05</Label>
+                  <Label htmlFor="attr_05" className="mb-2 block">Thuộc tính 05</Label>
                   <Input
                     id="attr_05"
                     value={formData.attr_05}

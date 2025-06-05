@@ -185,7 +185,14 @@ export function CollateralsPage({ storeId }: CollateralsPageProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
-        <Button onClick={handleAdd} className="bg-blue-600 hover:bg-blue-700">
+        <Button 
+          onClick={(e) => {
+            e.preventDefault();
+            handleAdd();
+          }} 
+          className="bg-blue-600 hover:bg-blue-700"
+          type="button"
+        >
           <Plus className="h-4 w-4 mr-2" />
           Thêm mới
         </Button>
