@@ -3,18 +3,21 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 import Spinner from "@/components/ui/spinner";
 import { useEffect, useState } from "react";
-import { CreditPaymentPeriod } from "@/models/credit-payment";
 import { AlertTriangleIcon, DollarSignIcon } from "lucide-react";
 import { useStore } from "@/contexts/StoreContext";
 import { useRouter } from "next/navigation";
+import { getCreditPaymentHistory } from "@/lib/Credits/payment_history";
+import { getExpectedMoney } from "@/lib/Credits/get_expected_money";
+import { calculateDebtToLatestPaidPeriod } from "@/lib/Credits/calculate_remaining_debt";
 
 // Extended interface with warning-specific fields
 interface CreditWarning extends CreditWithCustomer {
-  payments?: CreditPaymentPeriod[];
-  latestPeriod?: CreditPaymentPeriod;
   latePeriods: number;
   totalDueAmount: number;
-  buttonValues: number[];
+  oldDebt: number;
+  interestAmount: number;
+  daysPastDue: number;
+  reason: string;
 }
 
 interface CreditWarningsTableProps {
@@ -67,178 +70,136 @@ export function CreditWarningsTable({
           credits;
         
         const warningResults: CreditWarning[] = [];
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
         
         // Process each credit
         for (const credit of filteredCredits) {
-          // Skip closed or deleted contracts
-          if (credit.status === CreditStatus.CLOSED || 
-              credit.status === CreditStatus.DELETED) {
-            continue;
-          }
-          
-          // Get payment periods for this credit
-          const { data, error } = await getCreditPaymentPeriods(credit.id);
-          
-          if (error) {
-            console.error(`Error loading payment data for credit ${credit.id}:`, error);
-            continue;
-          }
-          
-          // Check if there are no payment periods recorded
-          if (!data || data.length === 0) {
-            // For contracts with no payment records, check if they're past due based on start date
-            const loanDate = new Date(credit.loan_date);
-            // Reset time part of loanDate to 00:00:00
-            loanDate.setHours(0, 0, 0, 0);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            
-            // Get interest period (default to 10 if not set)
-            const interestPeriod = credit.interest_period || 10;
-            
-            // If the loan date is in the future, skip this contract
-            if (loanDate > today) {
+          try {
+            // Skip closed or deleted contracts
+            if (credit.status === CreditStatus.CLOSED || 
+                credit.status === CreditStatus.DELETED) {
               continue;
             }
             
-            // Calculate days since loan date to today
-            const daysSinceStart = Math.floor((today.getTime() - loanDate.getTime()) / (1000 * 60 * 60 * 24) + 1);
+            // Calculate contract dates
+            const loanDate = new Date(credit.loan_date);
+            loanDate.setHours(0, 0, 0, 0);
+            const contractEndDate = new Date(loanDate);
+            contractEndDate.setDate(loanDate.getDate() + credit.loan_period - 1);
+            contractEndDate.setHours(0, 0, 0, 0);
+
+            // Check if contract is overdue (today > contract end date)
+            const isContractOverdue = today > contractEndDate;
+
+            // Get payment history for this credit
+            const paymentHistory = await getCreditPaymentHistory(credit.id);
             
-            // If at least one interest period has passed
-            if (daysSinceStart >= interestPeriod) {
-              // Calculate number of late periods
-              const latePeriods = Math.floor(daysSinceStart / interestPeriod);
+            // Get expected money (daily amounts)
+            const dailyAmounts = await getExpectedMoney(credit.id);
+            
+            // Calculate old debt using existing function
+            const oldDebt = await calculateDebtToLatestPaidPeriod(credit.id);
+
+            let interestAmount = 0;
+            let daysPastDue = 0;
+            let latePeriods = 0;
+            let reason = '';
+
+            // Get interest period (default to 10 days for credits)
+            const interestPeriod = credit.interest_period || 10;
+
+            if (!paymentHistory || paymentHistory.length === 0) {
+              // No payment history - calculate from loan start to today
+              const daysSinceLoan = Math.floor((today.getTime() - loanDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
               
-              // Calculate interest per period based on loan amount and interest value
-              let interestPerPeriod = 0;
-              
-              // Using different calculation based on interest_ui_type and interest_notation
-              if (credit.interest_ui_type === 'daily' && credit.interest_notation === 'k_per_million') {
-                // daily interest in k per million
-                interestPerPeriod = (credit.loan_amount / 1000000) * credit.interest_value * interestPeriod;
-              } else if (credit.interest_ui_type === 'monthly_30' || credit.interest_ui_type === 'monthly_custom') {
-                // monthly interest in percentage
-                interestPerPeriod = (credit.loan_amount * credit.interest_value / 100) * (interestPeriod / 30);
-              } else if (credit.interest_ui_type === 'weekly_percent') {
-                // weekly interest in percentage
-                interestPerPeriod = (credit.loan_amount * credit.interest_value / 100) * (interestPeriod / 7);
-              } else if (credit.interest_ui_type === 'weekly_k') {
-                // fixed weekly amount in k
-                interestPerPeriod = credit.interest_value * 1000 * (interestPeriod / 7);
+              if (daysSinceLoan > 0) {
+                // Calculate total interest owed from start to today
+                interestAmount = dailyAmounts.slice(0, daysSinceLoan).reduce((sum, amount) => sum + amount, 0);
+                
+                // Calculate late periods up to today or contract end date (whichever is earlier)
+                const endDateForCalculation = isContractOverdue ? contractEndDate : today;
+                const daysForPeriodCalculation = Math.floor((endDateForCalculation.getTime() - loanDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                
+                if (daysForPeriodCalculation > 0) {
+                  latePeriods = Math.floor(daysForPeriodCalculation / interestPeriod);
+                  
+                  if (latePeriods > 0) {
+                    reason = `Chậm ${latePeriods} kỳ`;
+                  }
+                  
+                  // Add overdue days if contract has ended
+                  if (isContractOverdue) {
+                    const contractOverdueDays = Math.floor((today.getTime() - contractEndDate.getTime()) / (1000 * 60 * 60 * 24));
+                    if (contractOverdueDays > 0) {
+                      reason += reason ? ` + Quá hạn ${contractOverdueDays} ngày` : `Quá hạn ${contractOverdueDays} ngày`;
+                    }
+                  }
+                }
               }
+            } else {
+              // Has payment history - find latest payment date
+              const sortedPayments = [...paymentHistory].sort((a, b) => 
+                new Date(b.effective_date || '').getTime() - new Date(a.effective_date || '').getTime()
+              );
               
-              // Calculate button values for quick payment
-              const buttonValues: number[] = [];
-              let periodAmount = 0;
+              const latestPayment = sortedPayments[0];
+              const latestPaymentDate = new Date(latestPayment.effective_date || loanDate);
+              latestPaymentDate.setHours(0, 0, 0, 0);
+
+              // Calculate days since latest payment to today or contract end date (whichever is earlier)
+              const endDateForCalculation = isContractOverdue ? contractEndDate : today;
+              const daysSinceLastPayment = Math.floor((endDateForCalculation.getTime() - latestPaymentDate.getTime()) / (1000 * 60 * 60 * 24));
               
-              for (let i = 0; i < latePeriods; i++) {
-                periodAmount += interestPerPeriod;
-                buttonValues.push(periodAmount);
+              if (daysSinceLastPayment > 0) {
+                // Calculate late periods from last payment
+                latePeriods = Math.floor(daysSinceLastPayment / interestPeriod);
+                
+                // Calculate interest from day after last payment to today
+                const dayAfterLastPayment = new Date(latestPaymentDate);
+                dayAfterLastPayment.setDate(latestPaymentDate.getDate() + 1);
+                const daysToCalculate = Math.floor((today.getTime() - dayAfterLastPayment.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                
+                if (daysToCalculate > 0 && dailyAmounts.length > 0) {
+                  // Use last day's interest rate for calculation beyond contract period
+                  const dailyRate = dailyAmounts[dailyAmounts.length - 1] || 0;
+                  interestAmount = dailyRate * daysToCalculate;
+                }
+                
+                if (latePeriods > 0) {
+                  reason = `Chậm ${latePeriods} kỳ`;
+                }
+                
+                // Add overdue days if contract has ended
+                if (isContractOverdue) {
+                  const contractOverdueDays = Math.floor((today.getTime() - contractEndDate.getTime()) / (1000 * 60 * 60 * 24));
+                  if (contractOverdueDays > 0) {
+                    reason += reason ? ` + Quá hạn ${contractOverdueDays} ngày` : `Quá hạn ${contractOverdueDays} ngày`;
+                  }
+                }
               }
-              
-              // Add to warnings - using contract start date
+            }
+
+            // Only add to warnings if there's actually an overdue situation
+            if (daysPastDue > 0 || oldDebt > 0 || interestAmount > 0) {
               warningResults.push({
                 ...credit,
-                payments: [],
                 latePeriods,
-                buttonValues,
-                totalDueAmount: 0 // No old debt for new contracts
+                totalDueAmount: oldDebt + interestAmount,
+                oldDebt,
+                interestAmount,
+                daysPastDue,
+                reason: reason || 'Cần kiểm tra'
               });
             }
-            
-            // Skip to next credit
-            continue;
-          }
-          
-          // Process credits that have payment periods
-          // Find the latest period (highest period number)
-          const sortedData = [...data].sort((a, b) => b.period_number - a.period_number);
-          const latestPeriod = sortedData[0];
-          
-          // Parse the end date (format could be YYYY-MM-DD or DD/MM/YYYY)
-          let endDate: Date;
-          if (latestPeriod.end_date.includes('-')) {
-            // Parse YYYY-MM-DD format
-            endDate = new Date(latestPeriod.end_date);
-          } else if (latestPeriod.end_date.includes('/')) {
-            // Parse DD/MM/YYYY format
-            const [day, month, year] = latestPeriod.end_date.split('/').map(Number);
-            endDate = new Date(year, month - 1, day);
-          } else {
-            // Fallback to today
-            endDate = new Date();
-          }
-          
-          // Check if this period is overdue
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          
-          if (endDate < today) {
-            // Calculate the day after the end date
-            const nextDay = new Date(endDate);
-            nextDay.setDate(endDate.getDate() + 1);
-            
-            // Calculate days between next day and today
-            const daysDifference = Math.floor((today.getTime() - nextDay.getTime()) / (1000 * 60 * 60 * 24) + 1);
-            
-            // Get interest period (default to 10 if not set)
-            const interestPeriod = credit.interest_period || 10;
-            
-            // Calculate interest per period based on loan amount and interest value
-            let interestPerPeriod = 0;
-            
-            // Using different calculation based on interest_ui_type and interest_notation
-            if (credit.interest_ui_type === 'daily' && credit.interest_notation === 'k_per_million') {
-              // daily interest in k per million
-              interestPerPeriod = (credit.loan_amount / 1000000) * credit.interest_value * interestPeriod;
-            } else if (credit.interest_ui_type === 'monthly_30' || credit.interest_ui_type === 'monthly_custom') {
-              // monthly interest in percentage
-              interestPerPeriod = (credit.loan_amount * credit.interest_value / 100) * (interestPeriod / 30);
-            } else if (credit.interest_ui_type === 'weekly_percent') {
-              // weekly interest in percentage
-              interestPerPeriod = (credit.loan_amount * credit.interest_value / 100) * (interestPeriod / 7);
-            } else if (credit.interest_ui_type === 'weekly_k') {
-              // fixed weekly amount in k
-              interestPerPeriod = credit.interest_value * 1000 * (interestPeriod / 7);
-            }
-            
-            // Calculate number of late periods
-            const latePeriods = Math.ceil(daysDifference / interestPeriod);
-            
-            // Calculate button values for quick payment
-            const buttonValues: number[] = [];
-            let periodAmount = 0;
-            
-            for (let i = 0; i < latePeriods; i++) {
-              periodAmount += interestPerPeriod;
-              buttonValues.push(periodAmount);
-            }
-            
-            // Calculate total due amount from previous periods
-            let totalDueAmount = 0;
-            
-            data.forEach(period => {
-              const expectedAmount = period.expected_amount || 0;
-              const actualAmount = period.actual_amount || 0;
-              const difference = expectedAmount - actualAmount;
-              
-              // Only add positive differences (where expected > actual)
-              if (difference > 0) {
-                totalDueAmount += difference;
-              }
-            });
-            
-            // Add to warnings
-            warningResults.push({
-              ...credit,
-              payments: data,
-              latestPeriod,
-              latePeriods,
-              buttonValues,
-              totalDueAmount
-            });
+
+          } catch (error) {
+            console.error(`Error processing credit ${credit.id}:`, error);
           }
         }
+        
+        // Sort by total due amount (highest first)
+        warningResults.sort((a, b) => b.totalDueAmount - a.totalDueAmount);
         
         setWarnings(warningResults);
       } catch (err) {
@@ -283,75 +244,60 @@ export function CreditWarningsTable({
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Tiền gốc</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Tiền lãi phí</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-32">Lý do</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm">
-              <div className="flex flex-col">
-                
-              </div>
-            </th>
+            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm">Thao tác</th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {warnings.map((warning, index) => {
-            // Tính tổng số tiền cần thanh toán - lấy phần tử cuối cùng trong mảng buttonValues
-            const totalAmountToDisplay = warning.buttonValues.length > 0 
-              ? warning.buttonValues[warning.buttonValues.length - 1] 
-              : 0;
-            
-
-            return (
-              <tr key={warning.id} className="hover:bg-gray-50 transition-colors text-sm">
-                <td className="py-3 px-3 border-r border-gray-200 text-center">{index + 1}</td>
-                <td className="py-3 px-3 border-r border-gray-200 font-medium text-center">
-                  {warning.contract_code}
-                </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  <span 
-                    className="text-blue-600 cursor-pointer hover:underline"
-                    onClick={() => handleCustomerClick(warning)}
-                  >
-                    {warning.customer?.name || "N/A"}
-                  </span>
-                </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  {warning.customer?.phone || ""}
-                </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  {warning.address || ""}
-                </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  {warning.payments && warning.payments.length > 0 
-                    ? formatCurrency(warning.totalDueAmount)
-                    : formatCurrency(0)
-                  }
-                </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  {formatCurrency(warning.loan_amount || 0)}
-                </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  {formatCurrency(totalAmountToDisplay)}
-                </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  <span className="text-red-600 font-medium">
-                    Chậm {warning.latePeriods} kỳ !
-                  </span>
-                </td>
-                <td className="py-3 px-3 text-center">
-                  <div className="flex flex-wrap justify-center gap-1">
-                  {onShowPaymentHistory && (
-                      <Button 
-                        variant="ghost" 
-                        className="h-8 w-8 p-0" 
-                        onClick={() => onShowPaymentHistory(warning)}
-                        title="Lịch sử thanh toán"
-                      >
-                        <DollarSignIcon className="h-4 w-4 text-gray-500" />
-                      </Button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
+          {warnings.map((warning, index) => (
+            <tr key={warning.id} className="hover:bg-gray-50 transition-colors text-sm">
+              <td className="py-3 px-3 border-r border-gray-200 text-center">{index + 1}</td>
+              <td className="py-3 px-3 border-r border-gray-200 font-medium text-center">
+                {warning.contract_code}
+              </td>
+              <td className="py-3 px-3 border-r border-gray-200 text-center">
+                <span 
+                  className="text-blue-600 cursor-pointer hover:underline"
+                  onClick={() => handleCustomerClick(warning)}
+                >
+                  {warning.customer?.name || "N/A"}
+                </span>
+              </td>
+              <td className="py-3 px-3 border-r border-gray-200 text-center">
+                {warning.customer?.phone || ""}
+              </td>
+              <td className="py-3 px-3 border-r border-gray-200 text-center">
+                {warning.address || ""}
+              </td>
+              <td className="py-3 px-3 border-r border-gray-200 text-center">
+                {formatCurrency(warning.oldDebt)}
+              </td>
+              <td className="py-3 px-3 border-r border-gray-200 text-center">
+                {formatCurrency(warning.loan_amount || 0)}
+              </td>
+              <td className="py-3 px-3 border-r border-gray-200 text-center">
+                {formatCurrency(warning.interestAmount)}
+              </td>
+              <td className="py-3 px-3 border-r border-gray-200 text-center">
+                <span className="text-red-600 font-medium">
+                  {warning.reason}
+                </span>
+              </td>
+              <td className="py-3 px-3 text-center">
+                <div className="flex flex-wrap justify-center gap-1">
+                {onShowPaymentHistory && (
+                    <Button 
+                      variant="ghost" 
+                      className="h-8 w-8 p-0" 
+                      onClick={() => onShowPaymentHistory(warning)}
+                      title="Lịch sử thanh toán"
+                    >
+                      <DollarSignIcon className="h-4 w-4 text-gray-500" />
+                    </Button>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>

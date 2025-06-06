@@ -251,7 +251,7 @@ export function PawnCreateModal({
     
     try {
       if (!currentStore?.id) {
-        throw new Error('Không thể xác định cửa hàng hiện tại');
+        throw new Error('Vui lòng chọn chi nhánh trước khi tạo hợp đồng');
       }
       
       // Validate required fields
@@ -282,6 +282,11 @@ export function PawnCreateModal({
         throw new Error('Kỳ lãi phí phải lớn hơn 0');
       }
       
+      // Validate interest value
+      if (!interestValue || interestValue === '0' || interestValue.trim() === '') {
+        throw new Error('Vui lòng nhập lãi phí khác 0');
+      }
+      
       // Always check store fund - this is critical for cash flow management
       const fundData = await getStoreFinancialData(currentStore!.id);
       
@@ -290,8 +295,7 @@ export function PawnCreateModal({
       }
       
       if (fundData.availableFund < loanAmountValue) {
-        setFundError(`Số tiền vay (${formatNumber(loanAmountValue)}đ) lớn hơn quỹ tiền mặt hiện có (${formatNumber(fundData.availableFund)}đ)`);
-        throw new Error('Số tiền vay vượt quá quỹ tiền mặt hiện có');
+        throw new Error(`Quỹ tiền mặt không đủ. Hiện có ${Math.floor(fundData.availableFund).toLocaleString()} VND.`);
       }
       
       let finalCustomerId = selectedCustomerId;
@@ -397,9 +401,6 @@ export function PawnCreateModal({
       if (!data) {
         throw new Error('Không thể tạo hợp đồng cầm đồ');
       }
-      
-      // Note: Cash fund will be automatically updated by database trigger
-      // No need to manually call updateStoreCashFundOnly here
       
       // Show success message
       toast({

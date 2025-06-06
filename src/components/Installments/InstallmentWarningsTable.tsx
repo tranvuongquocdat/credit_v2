@@ -9,6 +9,8 @@ import { AlertTriangleIcon } from "lucide-react";
 import { useStore } from "@/contexts/StoreContext";
 import { useRouter } from "next/navigation";
 import { calculateRemainingToPay } from "@/lib/installmentCalculations";
+import { getLatestPaymentPaidDate } from '@/lib/Installments/get_latest_payment_paid_date';
+import { getinstallmentPaymentHistory } from "@/lib/Installments/payment_history";
 
 // Extended interface with warning-specific fields
 interface InstallmentWarning extends InstallmentWithCustomer {
@@ -61,155 +63,70 @@ export function InstallmentWarningsTable({
       setLoadingPayments(true);
       
       try {
-        // Filter installments by current store if available
-        const filteredInstallments = currentStore ? 
-          installments.filter(installment => installment.store_id === currentStore.id) : 
-          installments;
         
         const warningResults: InstallmentWarning[] = [];
-        
         // Process each installment
-        for (const installment of filteredInstallments) {
-          // Skip closed or deleted contracts
-          if (installment.status === InstallmentStatus.CLOSED || 
-              installment.status === InstallmentStatus.DELETED) {
-            continue;
-          }
-          
-          // Get payment periods for this installment
-          const { data, error } = await getInstallmentPaymentPeriods(installment.id);
-          
-          if (error) {
-            console.error(`Error loading payment data for installment ${installment.id}:`, error);
-            continue;
-          }
-          
-          // Check if there are no payment periods recorded
-          if (!data || data.length === 0) {
-            // For contracts with no payment records, check if they're past due based on start date
+        for (const installment of installments) {
+          try {
+            // Sử dụng getLatestPaymentPaidDate thay vì getInstallmentPaymentPeriods
+            const latestPaymentDate = await getLatestPaymentPaidDate(installment.id);
+            
+            // Tính tổng số tiền đã thanh toán từ history
+            const paymentHistory = await getinstallmentPaymentHistory(installment.id);
+            const totalPaid = paymentHistory.reduce((acc, curr) => acc + (curr.credit_amount || 0), 0);
+            
+            // Tính số tiền còn phải trả
+            const remainingAmount = Math.max(0, (installment.installment_amount || 0) - totalPaid);
+            
+            // Kiểm tra xem có quá hạn không
             const startDate = new Date(installment.start_date);
-            const endDate = new Date(installment.start_date);
-            endDate.setDate(endDate.getDate() + installment.duration - 1);
-            // Reset time part of startDate to 00:00:00
             startDate.setHours(0, 0, 0, 0);
-            endDate.setHours(0, 0, 0, 0);
+            const contractEndDate = new Date(startDate);
+            contractEndDate.setDate(startDate.getDate() + installment.duration - 1);
+            contractEndDate.setHours(0, 0, 0, 0);
+            
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             
-            // Get payment period (default to 10 if not set)
-            const paymentPeriod = installment.payment_period || 10;
+            // Use the earlier date between contract end date and today
+            const effectiveDate = today > contractEndDate ? contractEndDate : today;
             
-            // If the start date is in the future, skip this contract
-            if (startDate > today) {
-              continue;
+            // Nếu có thanh toán gần nhất, tính từ ngày đó
+            let checkDate = startDate;
+            checkDate.setDate(checkDate.getDate() - 1);
+            if (latestPaymentDate) {
+              checkDate = new Date(latestPaymentDate);
             }
+            checkDate.setHours(0, 0, 0, 0);
             
-            // Calculate days since start date to today if end date is in the future else calculate days since start date to end date
-            const daysSinceStart = endDate > today ? Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24) + 1) : Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24) + 1);
-            // If at least one payment period has passed
-            if (daysSinceStart >= paymentPeriod) {
-              // Calculate number of late periods
-              const latePeriods = Math.ceil(daysSinceStart / paymentPeriod);
+            // Kiểm tra xem có quá hạn hay không
+            const paymentPeriod = installment.payment_period || 10;
+            const daysSinceLastPayment = Math.floor((effectiveDate.getTime() - checkDate.getTime()) / (1000 * 60 * 60 * 24));
+            
+            if (daysSinceLastPayment >= paymentPeriod && remainingAmount > 0) {
+              const latePeriods = Math.floor(daysSinceLastPayment / paymentPeriod);
               
-              // Calculate amount per period
-              const amountPerPeriod = installment.installment_amount ? installment.installment_amount / (installment.duration) * paymentPeriod : 0;
-              
-              // Set total due amount to 0 for installments with no payment records in the database
-              // Old debt (nợ cũ) only comes from payment periods in the database
-              const totalDueAmount = 0;
-              var periodAmount = 0;
+              // Tạo button values
               const buttonValues: number[] = [];
-              for (let i = 0; i < latePeriods; i++) {
-                periodAmount += amountPerPeriod;
-                buttonValues.push(periodAmount)
+              const amountPerPeriod = remainingAmount / Math.ceil(daysSinceLastPayment / paymentPeriod);
+              
+              for (let i = 1; i <= Math.min(latePeriods, 10); i++) {
+                buttonValues.push(amountPerPeriod * i);
               }
-              // Add to warnings - using a dummy "first period" based on contract start date
+              
+              // Add to warnings
               warningResults.push({
                 ...installment,
                 payments: [],
                 latePeriods,
                 buttonValues,
-                totalDueAmount
+                totalDueAmount: installment.debt_amount || 0 // Sử dụng debt_amount từ installment
               });
             }
             
-            // Skip to next installment
+          } catch (error) {
+            console.error(`Error processing installment ${installment.id}:`, error);
             continue;
-          }
-          
-          // Process installments that have payment periods
-          // Find the latest period (highest period number)
-          const latestPeriod = [...data].sort((a, b) => b.periodNumber - a.periodNumber)[0];
-          const sum = data.reduce((acc, curr) => acc + (curr.expectedAmount || 0), 0);
-          // Parse the end date (format DD/MM/YYYY)
-          let endDate: Date;
-          if (latestPeriod.endDate && latestPeriod.endDate.includes('/')) {
-            const [day, month, year] = latestPeriod.endDate.split('/').map(Number);
-            endDate = new Date(year, month - 1, day);
-          } else {
-            // Fallback to due date
-            const [day, month, year] = latestPeriod.dueDate.split('/').map(Number);
-            endDate = new Date(year, month - 1, day);
-          }
-          
-          // Check if this period is overdue
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          
-          if (endDate < today) {
-            // Calculate the day after the end date
-            // Compare with contract end date too
-            const nextDay = new Date(endDate);
-            nextDay.setDate(endDate.getDate() + 1);
-            const contractEndDate = new Date(installment.start_date);
-            contractEndDate.setDate(contractEndDate.getDate() + installment.duration - 1);
-            contractEndDate.setHours(0, 0, 0, 0);
-            const selectedDate = today > contractEndDate ? contractEndDate : today;
-            // Calculate days between next day and today or end date if today exceeds end date
-            const daysDifference =  Math.floor((selectedDate.getTime() - nextDay.getTime()) / (1000 * 60 * 60 * 24) + 1) 
-            
-            // Get  payment period (default to 10 if not set)
-            const paymentPeriod = installment.payment_period || 10;
-            const remainingToPay = calculateRemainingToPay(installment, sum);
-            // Tính tổng số kỳ chậm thanh toán
-            const latePeriods = Math.floor(daysDifference / paymentPeriod);
-            // Check phần dư
-            const daysInLastPeriod = daysDifference % paymentPeriod;
-            var buttonValues = []
-            var periodAmount = 0;
-            for (let i = 0; i < latePeriods; i++) {
-              periodAmount += remainingToPay / daysDifference * paymentPeriod;
-              buttonValues.push(periodAmount)
-            }
-            // Ngày dư => Kì cuối
-            if (daysInLastPeriod > 0) {
-              periodAmount += remainingToPay / daysDifference * daysInLastPeriod;
-              buttonValues.push(periodAmount)
-            }
-
-            let totalDueAmount = 0;
-              
-            data.forEach(period => {
-              const expectedAmount = period.expectedAmount || 0;
-              const actualAmount = period.actualAmount || 0;
-              const difference = expectedAmount - actualAmount;
-              
-              // Only add positive differences (where expected > actual)
-              if (difference > 0) {
-                totalDueAmount += difference;
-              }
-            });
-              
-            //   // Add to warnings
-              warningResults.push({
-                ...installment,
-                payments: data,
-                latestPeriod,
-                latePeriods: Math.ceil(daysDifference / paymentPeriod),
-                buttonValues,
-                totalDueAmount
-              });
-            // }
           }
         }
         

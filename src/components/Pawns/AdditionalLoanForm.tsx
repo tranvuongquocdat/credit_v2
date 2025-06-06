@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { format, addDays, max } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
 import { toast } from '@/components/ui/use-toast';
-import { getPawnPaymentPeriods } from '@/lib/pawn-payment';
 import { getPawnById } from '@/lib/pawn';
+import { getLatestPaymentPaidDate } from '@/lib/Pawns/get_latest_payment_paid_date';
+import { PawnWithCustomerAndCollateral } from '@/models/pawn';
 
 interface AdditionalLoanFormProps {
   onSubmit: (data: {
@@ -14,21 +15,22 @@ interface AdditionalLoanFormProps {
   }) => void;
   pawnId: string;
   disabled?: boolean;
+  onSuccess?: () => void;
 }
 
-export function AdditionalLoanForm({ onSubmit, pawnId, disabled = false }: AdditionalLoanFormProps) {
+export function AdditionalLoanForm({ onSubmit, pawnId, disabled = false, onSuccess }: AdditionalLoanFormProps) {
   const [loanDate, setLoanDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [amount, setAmount] = useState<number>(0);
   const [formattedAmount, setFormattedAmount] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [minDate, setMinDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [minDate, setMinDate] = useState<string | null>(null);
+  const [maxDate, setMaxDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [pawnData, setPawnData] = useState<PawnWithCustomerAndCollateral | null>(null);
 
   // Format number with thousand separators
   const formatNumber = (value: string | number): string => {
-    // Convert to number and back to string to remove non-numeric characters
     const numericValue = value.toString().replace(/[^0-9]/g, '');
-    // Format with thousand separators
     return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   };
 
@@ -40,54 +42,18 @@ export function AdditionalLoanForm({ onSubmit, pawnId, disabled = false }: Addit
   };
 
   useEffect(() => {
-    async function fetchData() {
+    async function fetchLatestPaymentPaidDate() {
       if (!pawnId) return;
       
       setIsLoading(true);
       try {
-        // Fetch pawn info to get the loan_date
-        const { data: pawnData, error: pawnError } = await getPawnById(pawnId);
-        
-        if (pawnError) {
-          console.error('Error fetching pawn info:', pawnError);
-          return;
-        }
-        
-        // Set minimum date as loan start date
-        const loanStartDate = pawnData?.loan_date ? new Date(pawnData.loan_date) : new Date();
-        
-        // Fetch payment periods to get the most recent period
-        const { data, error } = await getPawnPaymentPeriods(pawnId);
-        
-        if (error) {
-          console.error('Error fetching payment periods:', error);
-          return;
-        }
-        
-        if (data && data.length > 0) {
-          // Sort by end_date to find the most recent period
-          const sortedPeriods = [...data].sort((a, b) => 
-            new Date(b.end_date).getTime() - new Date(a.end_date).getTime()
-          );
-          
-          // Get the most recent period
-          const lastPeriod = sortedPeriods[0];
-          
-          // Set the loan date to the day after the end_date of the most recent period
-          if (lastPeriod.end_date) {
-            const nextDay = addDays(new Date(lastPeriod.end_date), 1);
-            
-            // The date should be the maximum of loan start date and the day after the last period
-            const finalDate = max([loanStartDate, nextDay]);
-            
-            setLoanDate(format(finalDate, 'yyyy-MM-dd'));
-            setMinDate(format(finalDate, 'yyyy-MM-dd'));
-          } else {
-            setMinDate(format(loanStartDate, 'yyyy-MM-dd'));
-          }
-        } else {
-          // If no payment periods, use loan start date
-          setMinDate(format(loanStartDate, 'yyyy-MM-dd'));
+        const latestPaymentPaidDate = await getLatestPaymentPaidDate(pawnId);
+        const { data: pawnData } = await getPawnById(pawnId);
+        setPawnData(pawnData);
+        const endDate = pawnData ? addDays(new Date(pawnData.loan_date), (pawnData.loan_period || 30) - 1) : new Date();
+        setMaxDate(format(endDate, 'yyyy-MM-dd'));
+        if (latestPaymentPaidDate) {
+          setMinDate(latestPaymentPaidDate);
         }
       } catch (err) {
         console.error('Error in fetchData:', err);
@@ -96,25 +62,11 @@ export function AdditionalLoanForm({ onSubmit, pawnId, disabled = false }: Addit
       }
     }
     
-    fetchData();
+    fetchLatestPaymentPaidDate();
   }, [pawnId]);
 
   const handleDateChange = (date: string) => {
-    // Only set the date if it's not before the minimum date
-    const selectedDate = new Date(date);
-    const minimum = new Date(minDate);
-    
-    if (selectedDate >= minimum) {
-      setLoanDate(date);
-    } else {
-      // If the date is before the minimum, show a warning and set to minimum
-      toast({
-        variant: "destructive",
-        title: "Cảnh báo",
-        description: "Đã chọn ngày tối thiểu được phép"
-      });
-      setLoanDate(minDate);
-    }
+    setLoanDate(date);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -130,21 +82,51 @@ export function AdditionalLoanForm({ onSubmit, pawnId, disabled = false }: Addit
       return;
     }
 
+    if (!minDate) {
+      // Kiểm tra xem ngày vay thêm có trước ngày bắt đầu cầm không
+      if (pawnData?.loan_date && new Date(loanDate) < new Date(pawnData.loan_date)) {
+        toast({
+          variant: "destructive",
+          title: "Lỗi",
+          description: "Ngày vay thêm không thể trước ngày bắt đầu cầm"
+        });
+        return;
+      }
+    }
+
     // Validate date is not before min date
-    if (new Date(loanDate) < new Date(minDate)) {
+    if (minDate && new Date(loanDate) <= new Date(minDate)) {
       toast({
         variant: "destructive",
         title: "Lỗi",
-        description: "Ngày vay thêm không thể trước ngày bắt đầu cầm hoặc trước kỳ đóng lãi gần nhất"
+        description: `Ngày vay thêm không thể trước ngày bắt đầu cầm hoặc trước kỳ đóng lãi gần nhất ${minDate}`
       });
       return;
     }
 
+    // Validate date is not after max date
+    if (new Date(loanDate) > new Date(maxDate)) {
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: `Ngày vay thêm không thể sau ngày kết thúc hợp đồng`
+      });
+      return;
+    }
+    
     onSubmit({
       loanDate,
       amount,
       notes
     });
+    
+    // Reset form after successful submission
+    setAmount(0);
+    setFormattedAmount('');
+    setNotes('');
+    setLoanDate(format(new Date(), 'yyyy-MM-dd'));
+    
+    onSuccess?.();
   };
 
   return (

@@ -13,33 +13,24 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from '@/components/ui/use-toast';
-import { 
-  getPawnAmountHistoryRecords, 
-  deletePawnAmountHistory
-} from '@/lib/pawn-amount-history';
+import { getPawnAdditionalLoans, deletePawnAmountHistory } from '@/lib/Pawns/additional-loan';
+import { getLatestPaymentPaidDate } from '@/lib/Pawns/get_latest_payment_paid_date';
+import { PawnAdditionalLoan } from '@/models/additional-loan';
 
 interface AdditionalLoanListProps {
   pawnId: string;
   onDeleted?: () => void;
 }
 
-interface PawnAmountHistoryRecord {
-  id: string;
-  pawn_id: string;
-  amount: number;
-  note: string | null;
-  created_at: string;
-}
-
 export function AdditionalLoanList({ 
   pawnId,
   onDeleted
 }: AdditionalLoanListProps) {
-  const [loans, setLoans] = useState<PawnAmountHistoryRecord[]>([]);
+  const [loans, setLoans] = useState<PawnAdditionalLoan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [loanToDelete, setLoanToDelete] = useState<PawnAmountHistoryRecord | null>(null);
+  const [loanToDelete, setLoanToDelete] = useState<PawnAdditionalLoan | null>(null);
 
   // Format tiền Việt Nam
   const formatCurrency = (amount: number): string => {
@@ -64,18 +55,8 @@ export function AdditionalLoanList({
     const fetchLoans = async () => {
       try {
         setLoading(true);
-        const { data, error } = await getPawnAmountHistoryRecords(pawnId);
-        
-        if (error) {
-          throw error;
-        }
-        
-        // Lọc chỉ lấy các giao dịch vay thêm (amount > 0)
-        const additionalLoans = data?.filter(
-          item => item.amount > 0
-        ) || [];
-        
-        setLoans(additionalLoans);
+        const data = await getPawnAdditionalLoans(pawnId);
+        setLoans(data);
         setError(null);
       } catch (err) {
         console.error('Error fetching additional loans:', err);
@@ -93,11 +74,22 @@ export function AdditionalLoanList({
     if (!loanToDelete?.id) return;
     
     try {
-      const { error } = await deletePawnAmountHistory(loanToDelete.id);
+      // Tìm ra ngày hiệu lực của lịch sử này và so sánh với ngày cuối cùng đóng lãi để 
+      // quyết định xem phần vay thêm này có được xóa hay không
+      const latestPaymentPaidDate = await getLatestPaymentPaidDate(pawnId);
       
-      if (error) {
-        throw error;
+      if (latestPaymentPaidDate && loanToDelete.created_at && loanToDelete.created_at <= latestPaymentPaidDate) {
+        toast({
+          variant: "destructive",
+          title: "Lỗi",
+          description: `Không thể xóa do đã đóng lãi đến ngày ${formatDate(latestPaymentPaidDate)}`
+        });
+        setDeleteDialogOpen(false);
+        setLoanToDelete(null);
+        return;
       }
+      
+      await deletePawnAmountHistory(loanToDelete.id);
       
       // Cập nhật danh sách sau khi xóa
       setLoans(loans.filter(r => r.id !== loanToDelete.id));
@@ -124,7 +116,7 @@ export function AdditionalLoanList({
   };
   
   // Hiển thị dialog xác nhận xóa
-  const confirmDelete = (loan: PawnAmountHistoryRecord) => {
+  const confirmDelete = (loan: PawnAdditionalLoan) => {
     setLoanToDelete(loan);
     setDeleteDialogOpen(true);
   };
@@ -137,7 +129,7 @@ export function AdditionalLoanList({
           <path d="M21 12H3"/>
           <path d="M21 19H3"/>
         </svg>
-        <span className="font-medium ml-2">Danh sách vay thêm</span>
+        <span className="font-medium ml-2">Danh sách tiền gốc</span>
       </div>
       
       <div className="overflow-auto mt-2">
@@ -176,7 +168,7 @@ export function AdditionalLoanList({
                 <tr key={loan.id} className="hover:bg-gray-50">
                   <td className="px-2 py-2 text-center border">{index + 1}</td>
                   <td className="px-2 py-2 text-center border">
-                    {formatDate(loan.created_at)}
+                    {formatDate(loan.created_at || '')}
                   </td>
                   <td className="px-2 py-2 text-left border">
                     {loan.note || 'Vay thêm'}
@@ -207,11 +199,12 @@ export function AdditionalLoanList({
           <AlertDialogHeader>
             <AlertDialogTitle>Xác nhận xóa</AlertDialogTitle>
             <AlertDialogDescription>
-              Bạn có chắc chắn muốn xóa khoản vay thêm này không? Hành động này không thể hoàn tác.
+              Bạn có chắc chắn muốn xóa khoản vay thêm này không?
+              Thao tác này không thể hoàn tác.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogCancel>Hủy bỏ</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
               Xóa
             </AlertDialogAction>

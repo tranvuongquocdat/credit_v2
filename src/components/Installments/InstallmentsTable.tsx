@@ -42,19 +42,6 @@ import {
 import { supabase } from "@/lib/supabase";
 import { getinstallmentPaymentHistory } from "@/lib/Installments/payment_history";
 
-// Định nghĩa cấu trúc dữ liệu mở rộng bao gồm thông tin kỳ thanh toán
-interface InstallmentWithPayments extends InstallmentWithCustomer {
-  payments?: InstallmentPaymentPeriod[];
-  totalPaid?: number;
-  oldDebt?: number;
-  remainingToPay?: number;
-  overdueDays?: number;  // Number of days overdue for display
-  isDueToday?: boolean;  // Flag for payments due today
-  nextPaymentDate?: string | null; // Next payment date
-  payment_due_date?: string | null;  // Payment due date from DB
-  statusInfo?: { label: string; color: string }; // Status info for display
-}
-
 // Define status info interface
 interface StatusInfo {
   label: string;
@@ -226,7 +213,7 @@ export function InstallmentsTable({
               installment.status !== InstallmentStatus.FINISHED) {
             if (today > dueDateObj) {
               // Nếu ngày hiện tại > ngày đóng tiền => Quá hạn
-              installment.status = InstallmentStatus.OVERDUE;
+              installment.status = InstallmentStatus.LATE_INTEREST;
             } else if (isSameDay(today, dueDateObj)) {
               // Nếu là ngày hôm nay => Đến hạn hôm nay
               installment.status = InstallmentStatus.ON_TIME;
@@ -442,7 +429,7 @@ export function InstallmentsTable({
                     try {
                       const startDate = new Date(installment.start_date);
                       const endDate = new Date(startDate);
-                      endDate.setDate(startDate.getDate() + installment.duration);
+                      endDate.setDate(startDate.getDate() + installment.duration - 1);
                       
                       // Format dates in Vietnamese format
                       const formatDate = (date: Date) => {

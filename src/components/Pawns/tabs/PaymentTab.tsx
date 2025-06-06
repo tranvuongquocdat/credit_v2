@@ -7,15 +7,17 @@ import { PawnPaymentForm } from '../PawnPaymentForm';
 import { PawnWithCustomerAndCollateral, PawnStatus } from '@/models/pawn';
 import { PawnPaymentPeriod } from '@/models/pawn-payment';
 import { toast } from '@/components/ui/use-toast';
-import { PrincipalChange, calculateInterestWithPrincipalChanges, calculatePawnInterestAmount } from '@/lib/interest-calculator';
-import { getPrincipalChangesForPawn } from '@/lib/pawn-principal-changes';
-import { parseFormattedNumber } from '@/lib/utils';
-import { formatNumberInput } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
+import { getPawnPaymentHistory } from '@/lib/Pawns/payment_history';
+import { 
+  calculateCustomPeriodInterest, 
+} from '@/lib/Pawns/save_custom_payment';
+import { getLatestPaymentPaidDate } from '@/lib/Pawns/get_latest_payment_paid_date';
+import { getExpectedMoney } from '@/lib/Pawns/get_expected_money';
+import { convertFromHistoryToTimeArrayWithStatus } from '@/lib/Pawns/convert_from_history_to_time_array';
 
 type PaymentTabProps = {
   pawn: PawnWithCustomerAndCollateral | null;
-  paymentPeriods: PawnPaymentPeriod[];
-  combinedPaymentPeriods: PawnPaymentPeriod[];
   loading: boolean;
   error: string | null;
   showPaymentForm: boolean;
@@ -24,13 +26,20 @@ type PaymentTabProps = {
   formatDate: (date: string) => string;
   calculateDaysBetween: (start: Date, end: Date) => number;
   onDataChange?: () => void;
-  principalChanges?: PrincipalChange[];
+};
+
+// Helper function to format number with thousand separators for input
+const formatNumberInput = (num: number): string => {
+  return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+};
+
+// Helper function to parse formatted number back to number
+const parseFormattedNumber = (str: string): number => {
+  return parseInt(str.replace(/\./g, "")) || 0;
 };
 
 export function PaymentTab({
   pawn,
-  paymentPeriods,
-  combinedPaymentPeriods,
   loading,
   error,
   showPaymentForm,
@@ -38,184 +47,136 @@ export function PaymentTab({
   formatCurrency,
   formatDate,
   calculateDaysBetween,
-  onDataChange,
-  principalChanges = [] // Default to empty array
+  onDataChange
 }: PaymentTabProps) {
-  // State for inline payment editing
-  const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
-  const [paymentAmount, setPaymentAmount] = useState<number>(0);
-  const [localPrincipalChanges, setLocalPrincipalChanges] = useState<PrincipalChange[]>(principalChanges);
   // Add loading state for checkbox operations
   const [loadingPeriods, setLoadingPeriods] = useState<Record<string, boolean>>({});
-  const [isProcessingCheckbox, setIsProcessingCheckbox] = useState<boolean>(false);
+  const [isProcessingCheckbox, setIsProcessingCheckbox] = useState(false);
+  
+  // State for generated periods from getExpectedMoney
+  const [generatedPeriods, setGeneratedPeriods] = useState<PawnPaymentPeriod[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  // Load principal changes if not provided
+  // Generate periods using convertFromHistoryToTimeArrayWithStatus + getExpectedMoney
   useEffect(() => {
-    if (principalChanges && principalChanges.length > 0) {
-      setLocalPrincipalChanges(principalChanges);
-      return;
-    }
-
-    async function loadPrincipalChanges() {
+    async function generatePeriodsFromExpectedMoney() {
       if (!pawn?.id) return;
 
+      setIsGenerating(true);
       try {
-        const { data, error } = await getPrincipalChangesForPawn(pawn.id);
+        console.log('🔄 Generating pawn periods using convertFromHistoryToTimeArrayWithStatus + getExpectedMoney');
         
-        if (error) {
-          console.error('Error loading principal changes:', error);
-          return;
-        }
+        // 1. Get payment history from database - filter out deleted records
+        const allPaymentHistory = await getPawnPaymentHistory(pawn.id);
+        const paymentHistory = allPaymentHistory.filter(record => !record.is_deleted);
+        console.log('Payment history from DB:', paymentHistory.length, 'active records (', allPaymentHistory.length, 'total)');
         
-        console.log('Loaded pawn principal changes:', data);
-        console.log('Pawn:', pawn);
+        // 2. Get daily interest amounts using getExpectedMoney
+        const dailyAmounts = await getExpectedMoney(pawn.id);
+        console.log('Daily amounts from getExpectedMoney:', dailyAmounts.length, 'days');
         
-        setLocalPrincipalChanges(data || []);
-      } catch (err) {
-        console.error('Error fetching principal changes:', err);
-      }
-    }
-
-    loadPrincipalChanges();
-  }, [pawn?.id, principalChanges]);
-
-  // Calculate interest with principal changes
-  const calculateInterestForPeriod = (startDate: string, endDate: string): number => {
-    if (!pawn) return 0;
-    
-    try {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      
-      // Convert pawn to credit-like object for interest calculation
-      const creditLikeObject = {
-        ...pawn,
-        status: pawn.status || 'active', // Map pawn status to credit status
-        interest_type: pawn.interest_type || 'percentage',
-        interest_value: pawn.interest_value || 0,
-        interest_period: pawn.interest_period || 30,
-        interest_ui_type: pawn.interest_ui_type || 'monthly_30'
-      };
-      
-      // Debug logging
-      console.log('Calculating interest for period:', { 
-        startDate, 
-        endDate, 
-        loanAmount: pawn.loan_amount,
-        principalChanges: localPrincipalChanges 
-      });
-      console.log('Principal changes with dates:', localPrincipalChanges.map(c => ({
-        date: c.date,
-        previousAmount: c.previousAmount,
-        newAmount: c.newAmount,
-        isBeforePeriod: new Date(c.date) < start
-      })));
-      
-      let result = 0;
-      
-      if (localPrincipalChanges && localPrincipalChanges.length > 0) {
-        result = calculateInterestWithPrincipalChanges(
-          creditLikeObject as any, // Type assertion needed due to status type mismatch
-          start,
-          end,
-          localPrincipalChanges
+        // 3. Calculate loan end date
+        const loanStartDate = pawn.loan_date;
+        const startDate = new Date(loanStartDate);
+        const endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + dailyAmounts.length - 1);
+        const loanEndDate = endDate.toISOString().split('T')[0];
+        
+        console.log('Loan period:', loanStartDate, '→', loanEndDate);
+        
+        // 4. Use convertFromHistoryToTimeArrayWithStatus to get periods and statuses
+        const interestPeriod = pawn.interest_period || 30;
+        const { periods: timePeriods, statuses } = convertFromHistoryToTimeArrayWithStatus(
+          loanStartDate,
+          loanEndDate,
+          interestPeriod,
+          paymentHistory,
+          paymentHistory
         );
-      } else {
-        // Fallback to simple calculation
-        const days = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-        result = calculatePawnInterestAmount(pawn, days);
-      }
-      
-      console.log('Interest calculation result:', result);
-      
-      // Ensure result is not 0 or negative
-      if (result <= 0) {
-        console.warn('Interest calculation returned 0 or negative, using fallback calculation');
-        const days = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-        result = calculatePawnInterestAmount(pawn, days);
-      }
-      
-      return result;
-    } catch (err) {
-      console.error('Error calculating interest with principal changes:', err);
-      // Fallback to simple calculation
-      try {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        const days = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-        return calculatePawnInterestAmount(pawn, days);
-      } catch (fallbackErr) {
-        console.error('Fallback interest calculation also failed:', fallbackErr);
-        return 0;
-      }
-    }
-  };
-
-  // Start editing a payment
-  const startEditing = (period: PawnPaymentPeriod) => {
-    // Don't edit periods that are already paid (checked)
-    if (period.actual_amount >= period.expected_amount) return;
-    
-    setEditingPeriodId(period.id || `temp-${period.period_number}`);
-    setPaymentAmount(period.actual_amount || period.expected_amount || 0);
-  };
-  
-  // Stop editing and cancel
-  const cancelEditing = () => {
-    setEditingPeriodId(null);
-  };
-  
-  // Handle saving payment
-  const savePayment = async (period: PawnPaymentPeriod) => {
-    console.log('Saving payment for period:', period);
-    if (!pawn?.id) return;
-    
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      console.log(today);
-      const isCalculatedPeriod = !period.id || period.id.startsWith('calculated-') || period.id.startsWith('estimated-');
-      console.log(paymentAmount);
-      
-      // Import dynamically to prevent import cycle
-      const { savePawnPayment, updatePawnPaymentPeriod } = await import('@/lib/pawn-payment');
-      
-      if (isCalculatedPeriod) {
-        // For calculated periods, create new payment period
-        await savePawnPayment(
-          pawn.id,
-          period,
-          paymentAmount,
-          true
-        );
-      } else if (period.id) {
-        // For existing periods, update the payment
-        await updatePawnPaymentPeriod(period.id as string, {
-          actual_amount: paymentAmount,
-          payment_date: new Date().toISOString(),
-          notes: "Thanh toán lãi phí"
+        
+        console.log('Generated time periods:', timePeriods.length, 'periods');
+        console.log('Statuses:', statuses);
+        
+        // 5. Calculate expected amount for each period using getExpectedMoney
+        const allPeriods: PawnPaymentPeriod[] = [];
+        const loanStart = new Date(loanStartDate);
+        
+        timePeriods.forEach((timePeriod, index) => {
+          const [start_date, end_date] = timePeriod;
+          const isChecked = statuses[index];
+          const periodNumber = index + 1;
+          
+          // Calculate start and end day indices relative to loan start
+          const periodStartDate = new Date(start_date);
+          const periodEndDate = new Date(end_date);
+          
+          const startDayIndex = Math.floor((periodStartDate.getTime() - loanStart.getTime()) / (1000 * 60 * 60 * 24));
+          const endDayIndex = Math.floor((periodEndDate.getTime() - loanStart.getTime()) / (1000 * 60 * 60 * 24));
+          
+          // Calculate expected amount by summing daily amounts from getExpectedMoney
+          let expectedAmount = 0;
+          for (let dayIndex = startDayIndex; dayIndex <= endDayIndex && dayIndex < dailyAmounts.length; dayIndex++) {
+            if (dayIndex >= 0) {
+              expectedAmount += dailyAmounts[dayIndex];
+            }
+          }
+          
+          // Calculate actual amount based on payment history
+          let actualAmount = 0;
+          if (isChecked) {
+            const periodPayments = paymentHistory.filter(payment => {
+              const paymentDate = payment.effective_date?.split('T')[0] || '';
+              const startDate = start_date.split('T')[0];
+              const endDate = end_date.split('T')[0];
+              
+              return paymentDate >= startDate && paymentDate <= endDate;
+            });
+            
+            actualAmount = periodPayments.reduce((sum, payment) => {
+              return sum + (payment.credit_amount || 0) - (payment.debit_amount || 0);
+            }, 0);
+          }
+          
+          const newPeriod: PawnPaymentPeriod = {
+            id: isChecked ? `db-${periodNumber}` : `generated-${periodNumber}`,
+            pawn_id: pawn.id,
+            period_number: periodNumber,
+            start_date: periodStartDate.toISOString(),
+            end_date: periodEndDate.toISOString(),
+            expected_amount: Math.round(expectedAmount),
+            actual_amount: Math.round(actualAmount),
+            payment_date: isChecked ? end_date : null,
+            notes: null,
+            other_amount: 0
+          };
+          
+          allPeriods.push(newPeriod);
         });
-      }
-      
-      // Clear editing state
-      setEditingPeriodId(null);
-      
-      // Reload the data to reflect changes
-      if (onDataChange) {
-        onDataChange();
-      }
+        
+        setGeneratedPeriods(allPeriods);
+        console.log('✅ Generated', allPeriods.length, 'pawn periods using convertFromHistoryToTimeArrayWithStatus + getExpectedMoney');
+        
     } catch (error) {
-      console.error('Error saving payment:', error);
+        console.error('Error generating pawn periods:', error);
       toast({
         variant: "destructive",
         title: "Lỗi",
-        description: "Có lỗi xảy ra khi lưu thanh toán. Vui lòng thử lại."
-      });
+          description: "Có lỗi xảy ra khi tạo các kỳ thanh toán"
+        });
+      } finally {
+        setIsGenerating(false);
+      }
     }
-  };
-  
-  // Handler for checkbox change
+    
+    generatePeriodsFromExpectedMoney();
+  }, [pawn?.id, onDataChange]);
+
+  // Use generated periods for display
+  const periodsToDisplay = generatedPeriods;
+
+  // Updated checkbox handler - simplified for pawns (only one period at a time)
   const handleCheckboxChange = async (period: PawnPaymentPeriod, checked: boolean, index: number) => {
-    if (!pawn?.id || isProcessingCheckbox) return; // Prevent concurrent operations
+    if (!pawn?.id || isProcessingCheckbox) return;
     
     // Set global loading state
     setIsProcessingCheckbox(true);
@@ -225,145 +186,157 @@ export function PaymentTab({
     setLoadingPeriods(prev => ({ ...prev, [periodId]: true }));
     
     try {
-      // Import the new API function
-      const { markPawnPaymentPeriods } = await import('@/lib/pawn-payment-api');
-      
       if (checked) {
-        // Find all unchecked periods from the oldest up to this one
-        const periodsToCheck = [];
+        // For pawns, only check the current period (no previous periods logic)
+        console.log('Inserting daily payment records for period:', period.period_number);
         
-        // Go through all periods up to the current one (inclusive)
-        for (let i = 0; i <= index; i++) {
-          const p = combinedPaymentPeriods[i];
-          // Only include periods that don't have any payment in DB yet
-          if (p.id.startsWith('calculated-') || p.id.startsWith('temp-') || p.id.startsWith('estimated-')) {
-            periodsToCheck.push(p);
-          }
-        }
+        // Calculate all days in this period
+        const startDate = new Date(period.start_date);
+        const endDate = new Date(period.end_date);
+        const totalDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
         
-        // If no periods to check, exit early
-        if (periodsToCheck.length === 0) {
-          setLoadingPeriods(prev => ({ ...prev, [periodId]: false }));
-          return;
-        }
+        console.log(`Period ${period.period_number}: ${totalDays} days from ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`);
         
-        // Use the new API to mark periods
-        const result = await markPawnPaymentPeriods(pawn.id, periodsToCheck, 'mark');
+        // Use expected amount for checkbox payment (equal distribution)
+        const totalAmount = period.expected_amount || 0;
+        const dailyAmount = Math.floor(totalAmount / totalDays);
+        const lastDayAdjustment = totalAmount - (dailyAmount * totalDays);
         
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to mark pawn payment periods');
-        }
+        console.log(`Expected distribution: ${totalDays} days, ${dailyAmount} per day, last day adjustment: ${lastDayAdjustment}`);
         
-        // Check if any periods had issues
-        const hasErrors = result.processed_periods?.some(p => p.status === 'error');
-        const alreadyPaidCount = result.processed_periods?.filter(p => p.status === 'already_paid').length || 0;
-        const autoCreatedCount = result.processed_periods?.filter(p => p.status === 'auto_created').length || 0;
-        const autoUpdatedCount = result.processed_periods?.filter(p => p.status === 'auto_updated').length || 0;
+        // Prepare daily records to insert
+        const dailyRecords = [];
+        
+        for (let dayOffset = 0; dayOffset < totalDays; dayOffset++) {
+          const currentDate = new Date(startDate);
+          currentDate.setDate(startDate.getDate() + dayOffset);
           
-        if (hasErrors) {
-          const errorPeriods = result.processed_periods?.filter(p => p.status === 'error') || [];
-          console.error('Some periods had errors:', errorPeriods);
-          toast({
-            variant: "destructive",
-            title: "Một số kỳ gặp lỗi",
-            description: `${errorPeriods.length} kỳ không thể xử lý. Vui lòng thử lại.`
-          });
-        }
-        
-        // Show success message with auto-fill info
-        let description = 'Đã đánh dấu các kỳ là đã thanh toán';
-        const additionalInfo = [];
-        
-        if (alreadyPaidCount > 0) {
-          additionalInfo.push(`${alreadyPaidCount} kỳ đã được thanh toán trước đó`);
-        }
-        if (autoCreatedCount > 0) {
-          additionalInfo.push(`${autoCreatedCount} kỳ được tạo tự động`);
-        }
-        if (autoUpdatedCount > 0) {
-          additionalInfo.push(`${autoUpdatedCount} kỳ được cập nhật tự động`);
+          // Determine date_status
+          let dateStatus: string | null = null; // Default for middle days
+          if (totalDays === 1) {
+            dateStatus = 'only';
+          } else if (dayOffset === 0) {
+            dateStatus = 'start';
+          } else if (dayOffset === totalDays - 1) {
+            dateStatus = 'end';
           }
+          
+          // Calculate amount for this day
+          let dayAmount = dailyAmount;
+          if (dayOffset === totalDays - 1) {
+            // Last day gets the adjustment
+            dayAmount = dailyAmount + lastDayAdjustment;
+          }
+          
+          const dailyRecord = {
+            pawn_id: pawn.id,
+            transaction_type: 'payment' as const,
+            effective_date: currentDate.toISOString(),
+            date_status: dateStatus,
+            credit_amount: dayAmount,
+            debit_amount: 0,
+            description: `Thanh toán ngày ${dayOffset + 1}/${totalDays} của kỳ ${period.period_number}`,
+            is_deleted: false
+          };
+          
+          dailyRecords.push(dailyRecord);
+        }
         
-        if (additionalInfo.length > 0) {
-          description += ` (${additionalInfo.join(', ')})`;
+        // Insert daily records into pawn_history
+        const { data, error } = await supabase
+          .from('pawn_history')
+          .insert(dailyRecords)
+          .select();
+        
+        if (error) {
+          throw new Error(error.message);
+        }
+        
+        console.log('Inserted', dailyRecords.length, 'daily payment records for period', period.period_number);
+        
+        // Update loan_period by adding the number of days in this period
+        const periodDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        const currentLoanPeriod = pawn.loan_period || 0;
+        const newLoanPeriod = currentLoanPeriod + periodDays;
+        
+        console.log(`Updating loan_period: ${currentLoanPeriod} + ${periodDays} = ${newLoanPeriod}`);
+        
+        const { error: updateError } = await supabase
+          .from('pawns')
+          .update({ loan_period: newLoanPeriod })
+          .eq('id', pawn.id);
+        
+        if (updateError) {
+          console.error('Error updating loan_period:', updateError);
+          // Don't throw error, just log it since payment was already recorded
         }
         
         toast({
           title: 'Thành công',
-          description,
+          description: `Đã thanh toán kỳ ${period.period_number}`,
         });
-        
-        // Trigger data change
-        if (onDataChange) onDataChange();
         
       } else {
-        // Find all checked periods from this one to the newest for unmarking
-        const periodsToUncheck = [];
+        // Uncheck: Mark daily records for this period as deleted (soft delete)
+        console.log('Marking daily payment records as deleted for period:', period.period_number);
         
-        // Check if any later periods have been paid (validation)
-        const laterPeriods = combinedPaymentPeriods.slice(index + 1);
-        const anyLaterPeriodPaid = laterPeriods.some(
-          (p: PawnPaymentPeriod) => p && p.id && !p.id.startsWith('calculated-') && !p.id.startsWith('temp-') && !p.id.startsWith('estimated-')
-        );
-
-        if (anyLaterPeriodPaid) {
-          toast({
-            variant: "destructive",
-            title: "Lỗi",
-            description: "Không thể bỏ đánh dấu kỳ này vì có kỳ sau đã được thanh toán.",
-          });
-          setLoadingPeriods(prev => ({ ...prev, [periodId]: false }));
-          return;
+        const startDate = period.start_date.split('T')[0];
+        const endDate = period.end_date.split('T')[0];
+        
+        console.log('Deleting records between:', startDate, 'and', endDate);
+        
+        // Update records to is_deleted = true
+        const { data, error } = await supabase
+          .from('pawn_history')
+          .update({is_deleted: true})
+          .eq('pawn_id', pawn.id)
+          .eq('transaction_type', 'payment')
+          .eq('is_deleted', false)
+          .gte('effective_date', startDate)
+          .lte('effective_date', endDate + 'T23:59:59Z')
+          .select();
+        
+        if (error) {
+          console.error('Update error:', error);
+          throw new Error(error.message);
         }
         
-        // Go through all periods from the current one to the end
-        for (let i = combinedPaymentPeriods.length - 1; i >= index; i--) {
-          const p = combinedPaymentPeriods[i];
-          // Include all periods that are in DB
-          if (p.id && !p.id.startsWith('calculated-') && !p.id.startsWith('temp-') && !p.id.startsWith('estimated-')) {
-            periodsToUncheck.push(p);
-          }
+        console.log('Updated records:', data);
+        console.log('Number of records updated:', data?.length || 0);
+        
+        // Update loan_period by subtracting the number of days in this period
+        const startDateObj = new Date(period.start_date);
+        const endDateObj = new Date(period.end_date);
+        const periodDays = Math.floor((endDateObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        const currentLoanPeriod = pawn.loan_period || 0;
+        const newLoanPeriod = Math.max(0, currentLoanPeriod - periodDays); // Ensure it doesn't go below 0
+        
+        console.log(`Updating loan_period: ${currentLoanPeriod} - ${periodDays} = ${newLoanPeriod}`);
+        
+        const { error: updateError } = await supabase
+          .from('pawns')
+          .update({ loan_period: newLoanPeriod })
+          .eq('id', pawn.id);
+        
+        if (updateError) {
+          console.error('Error updating loan_period:', updateError);
+          // Don't throw error, just log it since payment deletion was already recorded
         }
         
-        // If no periods to uncheck, exit early
-        if (periodsToUncheck.length === 0) {
-          setLoadingPeriods(prev => ({ ...prev, [periodId]: false }));
-          return;
-        }
-        
-        // Use the new API to unmark periods
-        const result = await markPawnPaymentPeriods(pawn.id, periodsToUncheck, 'unmark');
-        
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to unmark pawn payment periods');
-        }
-        
-        // Check for validation errors
-        const cannotUnmarkCount = result.processed_periods?.filter(p => 
-          p.status === 'cannot_unmark_has_later_payments'
-        ).length || 0;
-        
-        if (cannotUnmarkCount > 0) {
-          toast({
-            variant: "destructive",
-            title: "Không thể bỏ đánh dấu",
-            description: `${cannotUnmarkCount} kỳ không thể bỏ đánh dấu vì có kỳ sau đã được thanh toán.`
-          });
-        } else {
         toast({
           title: 'Thành công',
-            description: 'Đã đánh dấu các kỳ là chưa thanh toán',
+          description: `Đã bỏ thanh toán kỳ ${period.period_number}`,
         });
         }
         
-        // Trigger data change
+      // Trigger data change to regenerate periods
         if (onDataChange) onDataChange();
-      }
+      
     } catch (error) {
-      console.error('Error changing pawn payment status:', error);
+      console.error('Error handling daily payment records:', error);
       toast({
         title: 'Lỗi',
-        description: error instanceof Error ? error.message : 'Không thể thay đổi trạng thái thanh toán',
+        description: error instanceof Error ? error.message : 'Không thể xử lý bản ghi thanh toán hàng ngày',
         variant: 'destructive'
       });
     } finally {
@@ -372,107 +345,132 @@ export function PaymentTab({
     }
   };
 
+  // Calculate interest for custom period - RETURN PROMISE
+  const calculateInterestForCustomPeriod = async (startDate: string, endDate: string): Promise<number> => {
+    if (!pawn?.id) return 0;
+    
+    try {
+      const result = await calculateCustomPeriodInterest(pawn.id, startDate, endDate);
+      console.log(`Calculated interest for ${startDate} → ${endDate}:`, result);
+      return result;
+    } catch (err) {
+      console.error('Error calculating interest:', err);
+      return 0;
+    }
+  };
+
+  // Handle custom payment submit
+  const handleCustomPaymentSubmit = async (data: {
+    startDate: string;
+    endDate: string;
+    days: number;
+    interestAmount: number;
+    totalAmount: number;
+    otherAmount?: number;
+  }) => {
+    if (!pawn?.id) return;
+
+    try {
+      // Import the new function
+      const { saveCustomPaymentWithAmount } = await import('@/lib/Pawns/save_custom_payment');
+      
+      await saveCustomPaymentWithAmount(pawn.id, data);
+
+      toast({
+        title: "Thành công",
+        description: `Đã ghi lịch sử đóng lãi phí tùy biến ${formatCurrency(data.interestAmount)} thành công`,
+      });
+
+      setShowPaymentForm(false);
+      if (onDataChange) onDataChange();
+    } catch (error) {
+      console.error('Error submitting custom payment:', error);
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: error instanceof Error ? error.message : "Có lỗi xảy ra khi ghi lịch sử thanh toán"
+      });
+    }
+  };
+
+  // State to store last payment end date
+  const [lastPaymentEndDate, setLastPaymentEndDate] = useState<string | null>(null);
+
+  // Load last payment end date when component mounts
+  useEffect(() => {
+    async function loadLastPaymentEndDate() {
+      if (!pawn?.id) return;
+      
+      try {
+        const endDate = await getLatestPaymentPaidDate(pawn.id);
+        setLastPaymentEndDate(endDate);
+      } catch (err) {
+        console.error('Error loading last payment end date:', err);
+      }
+    }
+    
+    loadLastPaymentEndDate();
+  }, [pawn?.id, onDataChange]); // Reload when data changes
+
   return (
-    <div>
-      {/* Loading indicator when processing checkbox */}
+    <div className="relative">
+      {/* Processing overlay */}
       {isProcessingCheckbox && (
-        <div className="flex items-center justify-center p-4 mb-4 bg-orange-50 border border-orange-200 rounded">
-          <div className="h-4 w-4 rounded-full border-2 border-t-transparent border-orange-600 animate-spin mr-2"></div>
-          <span className="text-orange-700">Đang xử lý thanh toán...</span>
+        <div className="absolute inset-0 bg-white bg-opacity-70 z-10 flex items-center justify-center">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 shadow-lg">
+            <div className="flex items-center">
+              <div className="h-6 w-6 rounded-full border-2 border-t-transparent border-blue-600 animate-spin mr-3"></div>
+              <span className="text-blue-700 font-medium">Đang xử lý thanh toán...</span>
+            </div>
+          </div>
         </div>
       )}
       
-      {/* Link mở form đóng lãi phí */}
+      {/* Loading indicators */}
+      {isGenerating && (
+        <div className="flex items-center justify-center p-4 mb-4 bg-blue-50 border border-blue-200 rounded">
+          <div className="h-4 w-4 rounded-full border-2 border-t-transparent border-blue-600 animate-spin mr-2"></div>
+          <span className="text-blue-700">Đang tải...</span>
+        </div>
+      )}
+      
+      {/* Link to open payment form */}
       <div className="flex items-center mb-2 ml-1">
         <ChevronDown className="h-4 w-4 text-blue-600" />
         <a 
           href="#" 
           onClick={(e) => {
             e.preventDefault();
+            if (!isProcessingCheckbox) {
             setShowPaymentForm(!showPaymentForm);
+            }
           }}
-          className="text-blue-600 hover:underline ml-1"
+          className={`text-blue-600 hover:underline ml-1 ${isProcessingCheckbox ? 'pointer-events-none opacity-50' : ''}`}
         >
           Đóng lãi phí tùy biến theo ngày
         </a>
       </div>
 
-      {/* Form đóng lãi phí */}
+      {/* Custom payment form */}
       {showPaymentForm && pawn && (
-        <div className="border p-4 rounded mb-4">
+        <div className="mb-4">
           <PawnPaymentForm 
             isOpen={true}
             onClose={() => setShowPaymentForm(false)}
             pawn={pawn}
             selectedPeriods={[]}
-            disabled={pawn.status === PawnStatus.CLOSED || pawn.status === PawnStatus.DELETED}
-            onSuccess={async (data) => {
-              try {
-                console.log('Payment data submitted:', data);
-                
-                // Calculate interest considering principal changes
-                const interestAmount = calculateInterestForPeriod(
-                  data.startDate,
-                  data.endDate
-                );
-                
-                // Import the function dynamically to prevent import cycle
-                const { saveCustomPaymentWithOtherAmount } = await import('@/lib/pawn-payment');
-                
-                await saveCustomPaymentWithOtherAmount(
-                  pawn.id,
-                  {
-                    period_number: combinedPaymentPeriods.filter(p => p.actual_amount >= p.expected_amount).length + 1, // Custom payment
-                    start_date: data.startDate,
-                    end_date: data.endDate,
-                    expected_amount: interestAmount,
-                    other_amount: data.otherAmount,
-                    actual_amount: data.totalAmount
-                  },
-                  interestAmount,
-                  data.otherAmount,
-                  true // isCalculatedPeriod
-                );
-                
-                toast({
-                  title: "Thành công",
-                  description: "Đã cập nhật khoản thanh toán thành công",
-                });
-                
-                setShowPaymentForm(false);
-                if (onDataChange) onDataChange();
-              } catch (err) {
-                console.error('Error submitting payment:', err);
-                toast({
-                  variant: "destructive",
-                  title: "Lỗi",
-                  description: "Có lỗi xảy ra khi lưu thanh toán. Vui lòng thử lại sau."
-                });
-              }
-            }}
-            // Truyền thêm các thông tin về kỳ hạn
-            loanDate={pawn.loan_date}
-            loanPeriod={pawn.loan_period}
-            interestPeriod={pawn.interest_period}
-            // Truyền thông tin về kỳ thanh toán cuối cùng ĐÃ THANH TOÁN
-            lastPaymentEndDate={(() => {
-              // Tìm kỳ cuối cùng đã thanh toán
-              const paidPeriods = combinedPaymentPeriods.filter(
-                p => p.actual_amount >= p.expected_amount
-              );
-              
-              // Nếu có kỳ đã thanh toán, trả về ngày kết thúc của kỳ cuối cùng
-              if (paidPeriods.length > 0) {
-                return paidPeriods[paidPeriods.length - 1].end_date;
-              }
-              
-              // Nếu không có kỳ nào đã thanh toán, trả về undefined để sử dụng loan_date
-              return undefined;
-            })()}
+            disabled={pawn?.status === PawnStatus.CLOSED || pawn?.status === PawnStatus.DELETED || isProcessingCheckbox}
+            onSuccess={handleCustomPaymentSubmit}
+            interestCalculator={calculateInterestForCustomPeriod}
+            loanDate={pawn?.loan_date}
+            loanPeriod={pawn?.loan_period}
+            interestPeriod={pawn?.interest_period}
+            lastPaymentEndDate={lastPaymentEndDate || undefined}
           />
         </div>
       )}
 
+      {/* Payment periods table */}
       <div className="overflow-auto mt-2" style={{ maxHeight: '400px' }}>
         <table className="w-full border-collapse">
           <thead className="bg-gray-50 sticky top-0">
@@ -500,33 +498,28 @@ export function PaymentTab({
                   {error}
                 </td>
               </tr>
-            ) : combinedPaymentPeriods.length === 0 ? (
+          ) : periodsToDisplay.length === 0 ? (
               <tr>
                 <td colSpan={8} className="py-4 text-center text-gray-500">
-                  Chưa có dữ liệu thanh toán
+                Đang tạo dữ liệu từ lịch sử thanh toán...
                 </td>
               </tr>
             ) : (
-              // Display combined calculated and actual data from database
-              combinedPaymentPeriods.map((period, index) => {
+            // Display generated periods with editable functionality
+            periodsToDisplay.map((period, index) => {
                 const expected = period.expected_amount || 0;
-                // For actual amount display:
-                // - If it's an estimated/calculated period (not in DB yet), show 0 or expected_amount as placeholder
-                // - If it's a real period from DB, show the actual_amount from database (never override this!)
-                const actual = (period.id && !period.id.startsWith('calculated-') && !period.id.startsWith('estimated-') && !period.id.startsWith('temp-')) 
-                  ? (period.actual_amount || 0) // Real period from DB - use actual_amount as is
-                  : period.expected_amount + (period.other_amount || 0); // Estimated period - show the sum of expected_amount and other_amount calculated from interest calculator
+              const actual = period.actual_amount || period.expected_amount;
                 const other = period.other_amount || 0;
-                const total = expected + other; // Total interest = expected + other
-                const isPaid = period.id && !period.id.startsWith('calculated-') && !period.id.startsWith('estimated-') && !period.id.startsWith('temp-') && (period.actual_amount >= period.expected_amount);
-                const isPartiallyPaid = period.actual_amount > 0 && period.actual_amount < period.expected_amount;
-                const isEditing = editingPeriodId === period.id || editingPeriodId === `temp-${period.period_number}`;
+              const total = expected + other;
+              
+              // Updated logic to determine if period has payments in DB
+              const hasPayments = Boolean(period.id && period.id.startsWith('db-') && actual > 0);
                 const periodId = period.id || `temp-${period.period_number}`;
                 const isLoading = loadingPeriods[periodId];
                 const isDisabled = pawn?.status === PawnStatus.CLOSED || pawn?.status === PawnStatus.DELETED;
 
             return (
-                  <tr key={periodId} className="hover:bg-gray-50">
+                <tr key={period.id} className="hover:bg-gray-50">
                     <td className="px-2 py-2 text-center border">{period.period_number}</td>
                     <td className="px-2 py-2 text-center border">
                       {formatDate(period.start_date)} 
@@ -538,42 +531,18 @@ export function PaymentTab({
                         calculateDaysBetween(new Date(period.start_date), new Date(period.end_date)) : 0
                       }
                     </td>
-                    <td className="px-2 py-2 text-right border">{formatCurrency(expected)}</td>
+                  <td className="px-2 py-2 text-right border">
+                    {formatCurrency(expected)}
+                  </td>
                     <td className="px-2 py-2 text-right border">{formatCurrency(other)}</td>
                     <td className="px-2 py-2 text-right border">{formatCurrency(total)}</td>
                     <td className="px-2 py-2 text-right border">
-                      {isEditing ? (
-                        <div className="flex items-center justify-end space-x-1">
-                          <input
-                            type="text"
-                            className="border rounded w-24 px-1 py-0.5 text-right text-sm"
-                            value={formatNumberInput(paymentAmount)}
-                            onChange={(e) => setPaymentAmount(parseFormattedNumber(e.target.value))}
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                savePayment(period);
-                              } else if (e.key === 'Escape') {
-                                cancelEditing();
-                              }
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                          <button 
-                            className="text-xs bg-blue-500 text-white px-1 rounded"
-                            onClick={() => savePayment(period)}
-                          >
-                            OK
-                          </button>
-                        </div>
-                      ) : (
                         <span 
-                          className={`${!isPaid && !isDisabled ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
-                          onClick={!isPaid && !isDisabled ? () => startEditing(period) : undefined}
+                        className={`${!hasPayments && !isDisabled && !isProcessingCheckbox ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
+                        onClick={!hasPayments && !isDisabled && !isProcessingCheckbox ? () => handleCheckboxChange(period, true, index) : undefined}
                         >
-                          {formatCurrency(actual).replace('₫', '')}
+                        {formatCurrency(actual)}
                         </span>
-                      )}
                     </td>
                     <td className="px-2 py-2 text-center border">
                       {isLoading ? (
@@ -582,7 +551,7 @@ export function PaymentTab({
                         </div>
                       ) : (
                         <Checkbox 
-                          checked={isPaid || isPartiallyPaid} 
+                          checked={hasPayments} 
                           onCheckedChange={(checked) => handleCheckboxChange(period, !!checked, index)}
                           disabled={isDisabled || isProcessingCheckbox}
                         />

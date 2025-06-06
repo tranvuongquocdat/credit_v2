@@ -13,33 +13,24 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from '@/components/ui/use-toast';
-import { 
-  getPawnAmountHistoryRecords, 
-  deletePawnAmountHistory
-} from '@/lib/pawn-amount-history';
+import { getPawnPrincipalRepayments, deletePawnAmountHistory } from '@/lib/Pawns/principal-repayment';
+import { getLatestPaymentPaidDate } from '@/lib/Pawns/get_latest_payment_paid_date';
+import { PawnPrincipalRepayment } from '@/models/principal-repayment';
 
 interface PrincipalRepaymentListProps {
   pawnId: string;
   onDeleted?: () => void;
 }
 
-interface PawnAmountHistoryRecord {
-  id: string;
-  pawn_id: string;
-  amount: number;
-  note: string | null;
-  created_at: string;
-}
-
 export function PrincipalRepaymentList({ 
   pawnId,
   onDeleted
 }: PrincipalRepaymentListProps) {
-  const [repayments, setRepayments] = useState<PawnAmountHistoryRecord[]>([]);
+  const [repayments, setRepayments] = useState<PawnPrincipalRepayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [repaymentToDelete, setRepaymentToDelete] = useState<PawnAmountHistoryRecord | null>(null);
+  const [repaymentToDelete, setRepaymentToDelete] = useState<PawnPrincipalRepayment | null>(null);
 
   // Format tiền Việt Nam
   const formatCurrency = (amount: number): string => {
@@ -64,18 +55,8 @@ export function PrincipalRepaymentList({
     const fetchRepayments = async () => {
       try {
         setLoading(true);
-        const { data, error } = await getPawnAmountHistoryRecords(pawnId);
-        
-        if (error) {
-          throw error;
-        }
-        
-        // Lọc chỉ lấy các giao dịch trả bớt gốc (amount < 0)
-        const principalRepayments = data?.filter(
-          item => item.amount < 0
-        ) || [];
-        
-        setRepayments(principalRepayments);
+        const data = await getPawnPrincipalRepayments(pawnId);
+        setRepayments(data);
         setError(null);
       } catch (err) {
         console.error('Error fetching principal repayments:', err);
@@ -93,11 +74,22 @@ export function PrincipalRepaymentList({
     if (!repaymentToDelete?.id) return;
     
     try {
-      const { error } = await deletePawnAmountHistory(repaymentToDelete.id);
+      // Tìm ra ngày hiệu lực của lịch sử này và so sánh với ngày cuối cùng đóng lãi để 
+      // quyết định xem phần trả bớt gốc này có được xóa hay không
+      const latestPaymentPaidDate = await getLatestPaymentPaidDate(pawnId);
       
-      if (error) {
-        throw error;
+      if (latestPaymentPaidDate && repaymentToDelete.created_at && repaymentToDelete.created_at <= latestPaymentPaidDate) {
+        toast({
+          variant: "destructive",
+          title: "Lỗi",
+          description: `Không thể xóa do đã đóng lãi đến ngày ${formatDate(latestPaymentPaidDate)}`
+        });
+        setDeleteDialogOpen(false);
+        setRepaymentToDelete(null);
+        return;
       }
+      
+      await deletePawnAmountHistory(repaymentToDelete.id!);
       
       // Cập nhật danh sách sau khi xóa
       setRepayments(repayments.filter(r => r.id !== repaymentToDelete.id));
@@ -124,7 +116,8 @@ export function PrincipalRepaymentList({
   };
   
   // Hiển thị dialog xác nhận xóa
-  const confirmDelete = (repayment: PawnAmountHistoryRecord) => {
+  const confirmDelete = (repayment: PawnPrincipalRepayment) => {
+    if (!repayment.id) return; // Don't allow delete if no ID
     setRepaymentToDelete(repayment);
     setDeleteDialogOpen(true);
   };
@@ -173,10 +166,10 @@ export function PrincipalRepaymentList({
             ) : (
               // Hiển thị danh sách các khoản trả bớt gốc
               repayments.map((repayment, index) => (
-                <tr key={repayment.id} className="hover:bg-gray-50">
+                <tr key={repayment.id || `repayment-${index}`} className="hover:bg-gray-50">
                   <td className="px-2 py-2 text-center border">{index + 1}</td>
                   <td className="px-2 py-2 text-center border">
-                    {formatDate(repayment.created_at)}
+                    {formatDate(repayment.created_at || '')}
                   </td>
                   <td className="px-2 py-2 text-left border">
                     {repayment.note || 'Trả bớt gốc'}
@@ -185,14 +178,16 @@ export function PrincipalRepaymentList({
                     {formatCurrency(Math.abs(repayment.amount))}
                   </td>
                   <td className="px-2 py-2 text-center border">
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => confirmDelete(repayment)}
-                      className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {repayment.id && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => confirmDelete(repayment)}
+                        className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))
@@ -207,11 +202,12 @@ export function PrincipalRepaymentList({
           <AlertDialogHeader>
             <AlertDialogTitle>Xác nhận xóa</AlertDialogTitle>
             <AlertDialogDescription>
-              Bạn có chắc chắn muốn xóa khoản trả bớt gốc này không? Hành động này không thể hoàn tác.
+              Bạn có chắc chắn muốn xóa khoản trả bớt gốc này không?
+              Thao tác này không thể hoàn tác.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogCancel>Hủy bỏ</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
               Xóa
             </AlertDialogAction>

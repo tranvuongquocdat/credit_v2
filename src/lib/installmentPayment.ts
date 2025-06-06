@@ -802,11 +802,11 @@ export async function bulkSaveInstallmentPayments(
 export async function hasInstallmentAnyPayments(installmentId: string) {
   try {
     const { data, error, count } = await supabase
-      .from('installment_payment_period')
+      .from('installment_history')
       .select('id', { count: 'exact' })
       .eq('installment_id', installmentId)
-      .not('actual_amount', 'is', null)
-      .gt('actual_amount', 0);
+      .eq('transaction_type', 'payment')
+      .eq('is_deleted', false)
     
     if (error) throw error;
     
@@ -831,54 +831,17 @@ export async function countOverdueInstallments(storeId?: string) {
     // Get the current date in ISO format
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const todayISO = format(today, 'yyyy-MM-dd');
     
-    // First get installments that are not closed or deleted
-    const installmentQuery = supabase
-      .from('installments_by_store')
-      .select('id')
-      .not('status', 'eq', 'closed')
-      .not('status', 'eq', 'deleted');
-    
-    // Add store filter if provided
-    if (storeId) {
-      installmentQuery.eq('store_id', storeId);
-    }
-    
-    const { data: installmentData, error: installmentError } = await installmentQuery;
-    
-    if (installmentError) throw installmentError;
-    
-    if (!installmentData || installmentData.length === 0) {
-      return { count: 0, error: null };
-    }
-    
-    // Get all installment IDs and filter out any null values
-    const installmentIds = installmentData
-      .map(i => i.id)
-      .filter((id): id is string => id !== null);
-    
-    // Find periods that are overdue
-    const { data: periodData, error: periodError, count } = await supabase
-      .from('installment_payment_period')
-      .select('installment_id', { count: 'exact' })
-      .in('installment_id', installmentIds)
-      .lt('date', todayISO) // date is before today
-      .or('payment_start_date.is.null, actual_amount.is.null') // Either no payment date or no payment amount
-    
-    if (periodError) throw periodError;
-    
-    // Count unique installment IDs with overdue periods
-    const uniqueInstallments = new Set();
-    
-    if (periodData) {
-      periodData.forEach(period => {
-        uniqueInstallments.add(period.installment_id);
-      });
-    }
+    const { data, error } = await supabase
+      .from('installments')
+      .select('id, payment_due_date')
+      .eq('store_id', storeId || '')
+      .lte('payment_due_date', today.toISOString())
+      .eq('is_deleted', false)
+      .eq('status', 'on_time');
     
     return {
-      count: uniqueInstallments.size,
+      count: data?.length || 0,
       error: null
     };
   } catch (error) {

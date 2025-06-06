@@ -29,7 +29,7 @@ export interface PawnHistoryRecord {
   debit_amount?: number;
   credit_amount?: number;
   transaction_date: string;
-  notes?: string;
+  description?: string;
   employee_id?: string;
   created_by?: string;
   created_at: string;
@@ -46,60 +46,18 @@ export async function recordPrincipalRepayment(
   notes?: string
 ) {
   try {
-    // First, get the current loan amount
-    const { data: pawnData, error: pawnError } = await supabase
-      .from('pawns')
-      .select('loan_amount')
-      .eq('id', pawnId)
-      .single();
 
-    if (pawnError) {
-      throw pawnError;
-    }
-
-    if (!pawnData) {
-      throw new Error('Pawn not found');
-    }
-
-    const previousLoanAmount = pawnData.loan_amount;
-    const newLoanAmount = previousLoanAmount - repaymentAmount;
-
-    if (newLoanAmount < 0) {
-      throw new Error('Repayment amount cannot exceed the loan amount');
-    }
-
-    // Begin transaction
-    // 1. Update the pawn with the new loan amount
-    const { error: updateError } = await supabase
-      .from('pawns')
-      .update({ loan_amount: newLoanAmount })
-      .eq('id', pawnId);
-
-    if (updateError) {
-      throw updateError;
-    }
-
-    // 2. Insert the history record with new schema format (trigger will handle pawn_history)
     const { data, error } = await supabase
-      .from('pawn_amount_history')
+      .from('pawn_history')
       .insert({
         pawn_id: pawnId,
-        amount: -repaymentAmount, // Negative for principal repayment
-        note: notes,
-        created_at: new Date(transactionDate).toISOString(),
+        transaction_type: PawnTransactionType.PRINCIPAL_REPAYMENT,
+        credit_amount: repaymentAmount, // Negative for principal repayment
+        principal_change_description: notes,
+        effective_date: transactionDate,
       })
       .select()
       .single();
-
-    if (error) {
-      // If there's an error, try to rollback the pawn update
-      await supabase
-        .from('pawns')
-        .update({ loan_amount: previousLoanAmount })
-        .eq('id', pawnId);
-      
-      throw error;
-    }
 
     return { data, error: null };
   } catch (error) {
@@ -118,54 +76,19 @@ export async function recordAdditionalLoan(
   notes?: string
 ) {
   try {
-    // First, get the current loan amount
-    const { data: pawnData, error: pawnError } = await supabase
-      .from('pawns')
-      .select('loan_amount')
-      .eq('id', pawnId)
-      .single();
-
-    if (pawnError) {
-      throw pawnError;
-    }
-
-    if (!pawnData) {
-      throw new Error('Pawn not found');
-    }
-
-    const previousLoanAmount = pawnData.loan_amount;
-    const newLoanAmount = previousLoanAmount + additionalAmount;
-
-    // Begin transaction
-    // 1. Update the pawn with the new loan amount
-    const { error: updateError } = await supabase
-      .from('pawns')
-      .update({ loan_amount: newLoanAmount })
-      .eq('id', pawnId);
-
-    if (updateError) {
-      throw updateError;
-    }
-
-    // 2. Insert the history record with new schema format (trigger will handle pawn_history)
     const { data, error } = await supabase
-      .from('pawn_amount_history')
+      .from('pawn_history')
       .insert({
         pawn_id: pawnId,
-        amount: additionalAmount, // Positive for additional loan
-        note: notes || "Vay thêm",
-        created_at: new Date(transactionDate).toISOString(),
+        transaction_type: PawnTransactionType.ADDITIONAL_LOAN,
+        debit_amount: additionalAmount,
+        principal_change_description: notes,
+        effective_date: transactionDate,
       })
       .select()
       .single();
 
     if (error) {
-      // If there's an error, try to rollback the pawn update
-      await supabase
-        .from('pawns')
-        .update({ loan_amount: previousLoanAmount })
-        .eq('id', pawnId);
-      
       throw error;
     }
 

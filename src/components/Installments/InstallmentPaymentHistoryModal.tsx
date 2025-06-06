@@ -15,8 +15,8 @@ import {
   InstallmentStatus,
 } from "@/models/installment";
 import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
-import { getInstallmentPaymentPeriods, resetInstallmentDebtAmount, updateInstallmentDebtAmount } from "@/lib/installmentPayment";
-import { getInstallmentById } from "@/lib/installment";
+import { resetInstallmentDebtAmount } from "@/lib/installmentPayment";
+import { getInstallmentById, updateInstallmentPaymentDueDate } from "@/lib/installment";
 import { formatCurrency, formatDate, formatNumberWithCommas, parseFormattedNumber } from "@/lib/utils";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -39,7 +39,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { PaymentTab } from "./tabs/PaymentTab";
-import { calculateDaysBetween,  } from "@/lib/utils";
 import { 
   calculateTotalPaidFromHistory as calcTotalPaidFromHistory,
   calculateRemainingToPay,
@@ -51,6 +50,7 @@ import { getinstallmentPaymentHistory } from "@/lib/Installments/payment_history
 import { getExpectedMoney } from "@/lib/Installments/get_expected_money";
 import { convertFromHistoryToTimeArrayWithStatus } from "@/lib/Installments/convert_from_history_to_time_array";
 import { fillRemainingPeriods } from "@/lib/Installments/fill_remaining_periods";
+import { getLatestPaymentPaidDate } from "@/lib/Installments/get_latest_payment_paid_date";
 // Define the tabs for this modal
 export type TabId =
   | "payment"
@@ -158,12 +158,12 @@ export function InstallmentPaymentHistoryModal({
     format(new Date(), "yyyy-MM-dd"),
   );
   const [rotationLoanAmount, setRotationLoanAmount] =
-    useState<string>("1,000,000");
+    useState<string>(initialInstallment?.installment_amount?.toString() || "");
   const [rotationDownPayment, setRotationDownPayment] =
-    useState<string>("800.000");
-  const [rotationDuration, setRotationDuration] = useState<string>("10");
+    useState<string>(initialInstallment?.amount_given?.toString() || "");
+  const [rotationDuration, setRotationDuration] = useState<string>(initialInstallment?.duration?.toString() || "");
   const [rotationPaymentPeriod, setRotationPaymentPeriod] =
-    useState<string>("6");
+    useState<string>(initialInstallment?.payment_period?.toString() || "");
 
   // State cho lịch sử giao dịch
   const [amountHistory, setAmountHistory] = useState<
@@ -195,6 +195,12 @@ export function InstallmentPaymentHistoryModal({
 
   // Add state for total paid amount
   const [totalPaidAmount, setTotalPaidAmount] = useState<number>(0);
+
+  // State lưu số tiền đã đóng ( tính theo kỳ )
+  const [totalPaidAmountByPeriod, setTotalPaidAmountByPeriod] = useState<number>(0);
+
+  // Add state for debt amount
+  const [debtAmount, setDebtAmount] = useState<number>(initialInstallment?.debt_amount || 0);
 
   // Pre-load các modules cần thiết để tránh lag khi sử dụng dynamic imports
   useEffect(() => {
@@ -368,6 +374,7 @@ export function InstallmentPaymentHistoryModal({
     const currentSessionId = modalSessionId.current;
 
     try {
+      // Get full installment data including debt_amount
       const { data, error } = await getInstallmentById(installment.id);
 
       // Kiểm tra nếu session vẫn là session hiện tại
@@ -378,7 +385,29 @@ export function InstallmentPaymentHistoryModal({
       }
 
       if (data) {
+        // Ensure we explicitly update the debt_amount
+        console.log('Reloaded installment data with debt_amount:', data.debt_amount);
         setInstallment(data);
+        
+        // Update debt amount state
+        setDebtAmount(data.debt_amount || 0);
+        
+        // Force reload total paid amount
+        const total = await calcTotalPaidFromHistory(data.id);
+        setTotalPaidAmount(total);
+        
+        // Reload total paid by period
+        const latestPaymentPaidDate = await getLatestPaymentPaidDate(data.id);
+        if (latestPaymentPaidDate) {
+          const latestPaidDate = new Date(latestPaymentPaidDate);
+          const startDate = new Date(data.start_date); 
+          const daysFromLatestPaymentPaidDate = Math.floor((latestPaidDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+          const totalPaidByPeriod = daysFromLatestPaymentPaidDate * (data?.installment_amount || 0) / data?.duration;
+          setTotalPaidAmountByPeriod(totalPaidByPeriod);
+        } else {
+          setTotalPaidAmountByPeriod(0);
+        }
+        
         // Tải lại dữ liệu kỳ thanh toán khi thông tin hợp đồng thay đổi
         generatePeriodsFromExpectedMoney(data.id, currentSessionId);
       }
@@ -433,6 +462,14 @@ export function InstallmentPaymentHistoryModal({
       try {
         const total = await calcTotalPaidFromHistory(installment.id);
         setTotalPaidAmount(total);
+        const latestPaymentPaidDate = await getLatestPaymentPaidDate(installment.id);
+        if (latestPaymentPaidDate) {
+          const latestPaidDate = new Date(latestPaymentPaidDate);
+          const startDate = new Date(installment.start_date); 
+          const daysFromLatestPaymentPaidDate = Math.floor((latestPaidDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+          const totalPaidByPeriod = daysFromLatestPaymentPaidDate * (installment?.installment_amount || 0) / installment?.duration;
+          setTotalPaidAmountByPeriod(totalPaidByPeriod);
+        }
       } catch (err) {
         console.error("Error calculating total paid amount:", err);
       }
@@ -613,8 +650,23 @@ export function InstallmentPaymentHistoryModal({
           if (error) {
             throw new Error(error.message);
           }
-          
-          console.log('Inserted', dailyRecords.length, 'daily payment records for period', periodToCheck.periodNumber);
+
+          // update payment_due_date
+          // first, get the latest payment record
+          const latestPaidDate = await getLatestPaymentPaidDate(installment.id);
+          if (latestPaidDate) {
+            const latestPaidDateObj = new Date(latestPaidDate);
+            // nếu ngày đóng cuối cùng đã là ngày kết thúc hợp đồng, set payment_due_date về null
+            const endDate = new Date(installment.loan_date || '');
+            endDate.setDate(endDate.getDate() + (installment.loan_period || 0) - 1);
+            if (latestPaidDateObj.getTime() >= endDate.getTime()) {
+              await updateInstallmentPaymentDueDate(installment.id, null);
+            } else {
+              const newDueDate = new Date(latestPaidDateObj);
+              newDueDate.setDate(newDueDate.getDate() + installment.payment_period);
+              await updateInstallmentPaymentDueDate(installment.id, newDueDate.toISOString());
+            }
+          }
         }
         
         toast({
@@ -705,11 +757,14 @@ export function InstallmentPaymentHistoryModal({
           
           console.log('Alternative update result:', altData);
         }
+
+        // update payment_due_date
+        await updateInstallmentPaymentDueDate(installment.id, endDateStr);
         
-          toast({
+        toast({
           title: 'Thành công',
           description: `Đã đánh dấu xóa ${data?.length || 0} bản ghi thanh toán cho kỳ ${period.periodNumber}`,
-          });
+        });
       }
       
       // Clear temp edited values
@@ -719,13 +774,13 @@ export function InstallmentPaymentHistoryModal({
       // Refresh data after successful operation
       if (installment?.id) {
         // Regenerate periods with new data
-        const currentSessionId = modalSessionId.current;
-        await generatePeriodsFromExpectedMoney(installment.id, currentSessionId);
+        // const currentSessionId = modalSessionId.current;
+        // await generatePeriodsFromExpectedMoney(installment.id, currentSessionId);
         
-        // Refresh amount history
+        // // Refresh amount history
         await loadTransactionHistory();
         
-        // Refresh installment info
+        // // Refresh installment info
         await reloadInstallmentInfo();
         
         // Call callback to update summary immediately
@@ -809,8 +864,8 @@ export function InstallmentPaymentHistoryModal({
   const calculateCustomerReceiveAmount = (): number => {
     const downPayment = parseFormattedNumber(rotationDownPayment);
     console.log("downPayment", rotationDownPayment);
-    const amountToPay = Math.max(0, calculateRemainingPeriods() * (installment?.installment_amount || 0) / Math.ceil((installment?.duration || 0) / (installment?.payment_period || 1)));
-    const remainingDebt = 0 - (installment.debt_amount || 0);
+    const amountToPay = Math.max(0, calculateRemainingToPay(installment, totalPaidAmount));
+    const remainingDebt = 0 - (debtAmount || 0);
 
     // Customer receives: downPayment - remainingDebt
     return downPayment - amountToPay - remainingDebt;
@@ -820,11 +875,11 @@ export function InstallmentPaymentHistoryModal({
   const handleRotationLoanAmountChange = (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
-    const value = e.target.value.replace(/,/g, "");
+    const value = e.target.value.replace(/\./g, "");
     const numberValue = parseInt(value, 10);
 
     if (!isNaN(numberValue)) {
-      setRotationLoanAmount(formatNumberWithCommas(numberValue));
+      setRotationLoanAmount(formatNumberWithDot(numberValue));
     } else if (value === "") {
       setRotationLoanAmount("");
     }
@@ -859,8 +914,8 @@ export function InstallmentPaymentHistoryModal({
       );
 
       // Ghi lại lịch sử thanh toán nợ (nếu có)
-      if (installment?.debt_amount) {
-        await recordDebtPayment(installment.id, installment.employee_id, installment.debt_amount);
+      if (debtAmount) {
+        await recordDebtPayment(installment.id, installment.employee_id, debtAmount);
       }
 
       // Reset debt amount to 0
@@ -966,10 +1021,10 @@ export function InstallmentPaymentHistoryModal({
       
       
       // Ghi lại lịch sử thanh toán nợ (nếu có)
-      if (installment?.debt_amount) {
-        await recordDebtPayment(installment.id, installment.employee_id, installment.debt_amount);
+      if (debtAmount) {
+        await recordDebtPayment(installment.id, installment.employee_id, debtAmount);
       }
-
+      
       // Reset debt amount to 0
       await resetInstallmentDebtAmount(installment.id);
 
@@ -1091,10 +1146,10 @@ export function InstallmentPaymentHistoryModal({
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-1 px-2 border font-bold">{installment?.debt_amount && installment?.debt_amount > 0 ? "Tiền thừa" : "Nợ cũ"}</td>
+                    <td className="py-1 px-2 border font-bold">{debtAmount && debtAmount > 0 ? "Tiền thừa" : "Nợ cũ"}</td>
                     <td className="py-1 px-2 text-right border text-red-600" colSpan={2}>
                       {formatCurrency(
-                        Math.abs(installment?.debt_amount || 0),
+                        Math.abs(debtAmount || 0),
                       )}
                     </td>
                   </tr>
@@ -1230,24 +1285,16 @@ export function InstallmentPaymentHistoryModal({
                       </td>
                     </tr>
                     <tr>
-                      <td className="px-4 py-2 border">Đã đóng được</td>
+                      <td className="px-4 py-2 border">Đã đóng (kỳ)</td>
                       <td className="px-4 py-2 text-right border text-green-600">
-                        {formatCurrency(totalPaidAmount)}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="px-4 py-2 border">Còn phải đóng</td>
-                      <td className="px-4 py-2 text-right border text-red-600">
-                        {formatCurrency(
-                          Math.max(0, calculateRemainingPeriods() * (installment?.installment_amount || 0) / Math.ceil((installment?.duration || 0) / (installment?.payment_period || 1))),
-                        )}
+                        {formatCurrency(totalPaidAmountByPeriod)}
                       </td>
                     </tr>
                     <tr>
                       <td className="px-4 py-2 border font-bold">Nợ cũ</td>
                       <td className="px-4 py-2 text-right border text-red-600" colSpan={2}>
                         {formatCurrency(
-                          (installment?.debt_amount || 0),
+                          (0 - (debtAmount || 0)),
                         )}
                       </td>
                     </tr>
@@ -1258,10 +1305,7 @@ export function InstallmentPaymentHistoryModal({
                       </td>
                       <td className="px-4 py-3 text-right border font-bold text-red-700 text-lg">
                         {formatCurrency(
-                          Math.max(
-                            0,
-                            calculateRemainingToPay(installment, totalPaidAmount)
-                          ),
+                          (installment?.installment_amount || 0)   - totalPaidAmountByPeriod - (debtAmount || 0)
                         )}
                       </td>
                     </tr>
@@ -1479,7 +1523,7 @@ export function InstallmentPaymentHistoryModal({
                                 id: `${history.id}-cancel`,
                                 createdAt: history.updated_at || '',
                                 transactionType: 'payment_cancel',
-                                debitAmount: history.creditAmount || 0, // Số tiền ghi nợ của bản ghi gốc
+                                debitAmount: history.creditAmount || 0,
                                 creditAmount: 0,
                                 description: `Hủy đóng lãi phí - ${history.description || ''}`,
                                 isCancel: true
@@ -1487,12 +1531,11 @@ export function InstallmentPaymentHistoryModal({
                             }
                           });
 
-                          // Nếu có updated_at và là payment, thêm bản ghi hủy
-
                           // Sắp xếp theo thời gian
                           expandedHistory.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
-                          return expandedHistory.map((record, index) => (
+                          // Render table rows
+                          const tableRows = expandedHistory.map((record, index) => (
                             <tr key={record.id} className={record.transactionType === 'payment_cancel' ? 'bg-red-50' : ''}>
                               <td className="px-4 py-3 text-sm text-gray-700 text-center">
                                 {index + 1}
@@ -1518,65 +1561,51 @@ export function InstallmentPaymentHistoryModal({
                               </td>
                             </tr>
                           ));
+
+                          // Calculate totals from expanded history
+                          const totalDebit = expandedHistory.reduce((sum, h) => sum + h.debitAmount, 0);
+                          const totalCredit = expandedHistory.reduce((sum, h) => sum + h.creditAmount, 0);
+                          const balance = totalCredit - totalDebit;
+
+                          // Return both table rows and summary rows
+                          return [
+                            ...tableRows,
+                            <tr key="total-row" className="bg-amber-50">
+                              <td
+                                colSpan={3}
+                                className="px-4 py-2 text-sm font-medium text-right"
+                              >
+                                Tổng Tiền
+                              </td>
+                              <td className="px-4 py-2 text-sm font-medium text-right text-red-600">
+                                {formatCurrency(totalDebit)}
+                              </td>
+                              <td className="px-4 py-2 text-sm font-medium text-right text-green-600">
+                                {formatCurrency(totalCredit)}
+                              </td>
+                              <td></td>
+                            </tr>,
+                            <tr key="balance-row" className="bg-amber-100">
+                              <td
+                                colSpan={3}
+                                className="px-4 py-2 text-sm font-medium text-right"
+                              >
+                                Chênh lệch
+                              </td>
+                              <td
+                                colSpan={2}
+                                className="px-4 py-2 text-sm font-medium text-right"
+                              >
+                                <span
+                                  className={balance >= 0 ? "text-green-600" : "text-red-600"}
+                                >
+                                  {formatCurrency(balance)}
+                                </span>
+                              </td>
+                              <td></td>
+                            </tr>
+                          ];
                         })()}
-                        <tr className="bg-amber-50">
-                          <td
-                            colSpan={3}
-                            className="px-4 py-2 text-sm font-medium text-right"
-                          >
-                            Tổng Tiền
-                          </td>
-                          <td className="px-4 py-2 text-sm font-medium text-right text-red-600">
-                            {formatCurrency(
-                              amountHistory.reduce(
-                                (sum, h) => sum + h.debitAmount,
-                                0,
-                              ),
-                            )}
-                          </td>
-                          <td className="px-4 py-2 text-sm font-medium text-right text-green-600">
-                            {formatCurrency(
-                              amountHistory.reduce(
-                                (sum, h) => sum + h.creditAmount,
-                                0,
-                              ),
-                            )}
-                          </td>
-                          <td></td>
-                        </tr>
-                        <tr className="bg-amber-100">
-                          <td
-                            colSpan={3}
-                            className="px-4 py-2 text-sm font-medium text-right"
-                          >
-                            Chênh lệch
-                          </td>
-                          <td
-                            colSpan={2}
-                            className="px-4 py-2 text-sm font-medium text-right"
-                          >
-                            <span
-                              className={
-                                amountHistory.reduce(
-                                  (sum, h) =>
-                                    sum + h.creditAmount - h.debitAmount,
-                                  0,
-                                ) >= 0
-                                  ? "text-green-600"
-                                  : "text-red-600"
-                              }
-                            >
-                              {formatCurrency(
-                                amountHistory.reduce(
-                                  (sum, h) =>
-                                    sum + h.creditAmount - h.debitAmount,
-                                  0,
-                                ),
-                              )}
-                            </span>
-                          </td>
-                          <td></td>
-                        </tr>
                       </tbody>
                     </table>
                   )}
@@ -1719,7 +1748,7 @@ export function InstallmentPaymentHistoryModal({
                       - {formatCurrency(
                         Math.max(0, calculateRemainingToPay(installment, totalPaidAmount)),
                         )} {" "}
-                      - {formatCurrency(0 - (installment.debt_amount || 0))}
+                      - {formatCurrency(0 - (debtAmount || 0))}
                       = {formatCurrency(calculateCustomerReceiveAmount())}
                     </div>
                   </div>

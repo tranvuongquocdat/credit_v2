@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react';
+'use client';
+
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -10,7 +12,6 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { PlusIcon } from 'lucide-react';
-import { useStore } from '@/contexts/StoreContext';
 
 interface StatusMapType {
   [key: string]: { 
@@ -24,46 +25,31 @@ interface SearchFiltersProps {
   onSearch: (filters: SearchFilters) => void;
   onReset: () => void;
   onCreateNew: () => void;
-  onExportExcel: () => void;
+  onExportExcel?: () => void;
 }
 
 export interface SearchFilters {
-  contract_code: string;
-  customer_name: string;
-  start_date: string;
-  end_date: string;
-  duration?: number;
+  contractCode: string;
+  customerName: string;
+  startDate: string;
+  endDate: string;
   status: string;
-  store_id?: string;
 }
 
-export function SearchFilters({ 
-  statusMap, 
-  onSearch, 
-  onReset, 
-  onCreateNew, 
-  onExportExcel 
+export function SearchFilters({
+  statusMap,
+  onSearch,
+  onReset,
+  onCreateNew,
+  onExportExcel
 }: SearchFiltersProps) {
-  // Get store context
-  const { currentStore, stores, setCurrentStore } = useStore();
-  
   const [filters, setFilters] = useState<SearchFilters>({
-    contract_code: '',
-    customer_name: '',
-    start_date: '',
-    end_date: '',
-    duration: undefined,
-    status: 'on_time',
-    store_id: currentStore?.id
+    contractCode: '',
+    customerName: '',
+    startDate: '',
+    endDate: '',
+    status: 'on_time'
   });
-  
-  // Update store_id when currentStore changes
-  useEffect(() => {
-    setFilters(prev => ({
-      ...prev,
-      store_id: currentStore?.id
-    }));
-  }, [currentStore]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
@@ -83,22 +69,6 @@ export function SearchFilters({
     
     onSearch(newFilters);
   };
-  
-  const handleDurationChange = (value: string) => {
-    setFilters(prev => ({
-      ...prev,
-      duration: value === 'all' ? undefined : parseInt(value)
-    }));
-  };
-  
-  const handleStoreChange = (value: string) => {
-    // Find the store object from the stores array
-    const selectedStore = stores.find(store => store.id === value);
-    if (selectedStore) {
-      // Update the store in context
-      setCurrentStore(selectedStore);
-    }
-  };
 
   const handleSearch = () => {
     onSearch(filters);
@@ -106,30 +76,28 @@ export function SearchFilters({
 
   const handleReset = () => {
     setFilters({
-      contract_code: '',
-      customer_name: '',
-      start_date: '',
-      end_date: '',
-      duration: undefined,
-      status: 'on_time',
-      store_id: currentStore?.id
+      contractCode: '',
+      customerName: '',
+      startDate: '',
+      endDate: '',
+      status: 'on_time'
     });
     onReset();
   };
 
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
         <div>
-          <label htmlFor="contract_code" className="block text-sm font-medium text-gray-700 mb-1">
-            Mã HĐ
+          <label htmlFor="contractCode" className="block text-sm font-medium text-gray-700 mb-1">
+            Mã HD
           </label>
           <div className="relative">
             <Input
-              id="contract_code"
+              id="contractCode"
               placeholder="Nhập mã hợp đồng"
               className="w-full pr-8"
-              value={filters.contract_code}
+              value={filters.contractCode}
               onChange={handleInputChange}
             />
             <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400">
@@ -141,15 +109,15 @@ export function SearchFilters({
         </div>
         
         <div>
-          <label htmlFor="customer_name" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="customerName" className="block text-sm font-medium text-gray-700 mb-1">
             Tên khách hàng
           </label>
           <div className="relative">
             <Input
-              id="customer_name"
+              id="customerName"
               placeholder="Nhập tên khách hàng"
               className="w-full pr-8"
-              value={filters.customer_name}
+              value={filters.customerName}
               onChange={handleInputChange}
             />
             <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400">
@@ -161,53 +129,33 @@ export function SearchFilters({
         </div>
         
         <div>
-          <label htmlFor="start_date" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-1">
             Từ ngày
           </label>
           <DatePicker
-            id="start_date"
-            value={filters.start_date}
+            id="startDate"
+            value={filters.startDate}
             onChange={(value) => handleInputChange({
-              target: { id: 'start_date', value }
+              target: { id: 'startDate', value }
             } as React.ChangeEvent<HTMLInputElement>)}
             className="w-full"
           />
         </div>
         
         <div>
-          <label htmlFor="end_date" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 mb-1">
             Đến ngày
           </label>
           <DatePicker
-            id="end_date"
-            value={filters.end_date}
+            id="endDate"
+            value={filters.endDate}
             onChange={(value) => handleInputChange({
-              target: { id: 'end_date', value }
+              target: { id: 'endDate', value }
             } as React.ChangeEvent<HTMLInputElement>)}
             className="w-full"
           />
         </div>
         
-        <div>
-          <label htmlFor="duration" className="block text-sm font-medium text-gray-700 mb-1">
-            Thời gian vay
-          </label>
-          <Select onValueChange={handleDurationChange} value={filters.duration?.toString() || 'all'}>
-            <SelectTrigger id="duration" className="w-full">
-              <SelectValue placeholder="Tất cả" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả</SelectItem>
-              <SelectItem value="7">7 ngày</SelectItem>
-              <SelectItem value="14">14 ngày</SelectItem>
-              <SelectItem value="30">30 ngày</SelectItem>
-              <SelectItem value="60">60 ngày</SelectItem>
-              <SelectItem value="90">90 ngày</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      
-
         <div>
           <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
             Trạng thái hợp đồng
@@ -236,17 +184,19 @@ export function SearchFilters({
             <PlusIcon className="mr-1 h-3.5 w-3.5" />
             Thêm mới
           </Button>
-          <Button 
-            variant="outline" 
-            size="sm"
-            className="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
-            onClick={onExportExcel}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Xuất Excel
-          </Button>
+          {onExportExcel && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+              onClick={onExportExcel}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Xuất Excel
+            </Button>
+          )}
         </div>
         
         <div className="flex gap-2">
@@ -269,4 +219,4 @@ export function SearchFilters({
       </div>
     </>
   );
-}
+} 

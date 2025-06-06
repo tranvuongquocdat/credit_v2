@@ -5,3 +5,12 @@ export interface PrincipalRepayment {
   note?: string;
   created_at?: string;
 }
+
+export interface PawnPrincipalRepayment {
+  id?: string;
+  pawn_id: string;
+  amount: number;
+  note?: string;
+  created_at?: string;
+}
+

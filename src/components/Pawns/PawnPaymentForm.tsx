@@ -20,7 +20,7 @@ interface PawnPaymentFormProps {
     otherAmount: number;
     totalAmount: number;
   }) => void;
-  interestCalculator?: (startDate: string, endDate: string) => number;
+  interestCalculator?: (startDate: string, endDate: string) => Promise<number>;
   loanDate?: string;
   loanPeriod?: number;
   interestPeriod?: number;
@@ -77,6 +77,9 @@ export function PawnPaymentForm({
   const [otherAmount, setOtherAmount] = useState('0');
   const [formattedOtherAmount, setFormattedOtherAmount] = useState('0');
 
+  // State để track việc đang tính toán
+  const [isCalculating, setIsCalculating] = useState(false);
+
   // Recalculate end date when days change
   useEffect(() => {
     const start = new Date(startDate);
@@ -84,18 +87,33 @@ export function PawnPaymentForm({
     setEndDate(format(end, 'yyyy-MM-dd'));
   }, [days, startDate]);
   
-  // Recalculate interest when dates change
+  // Recalculate interest when dates change - XỬ LÝ ASYNC ĐÚNG CÁCH
   useEffect(() => {
-    try {
-      if (interestCalculator && startDate && endDate) {
-        // Calculate interest using the provided calculator
-        const calculatedInterest = interestCalculator(startDate, endDate);
+    async function calculateInterest() {
+      if (!interestCalculator || !startDate || !endDate) {
+        setInterestAmount('0');
+        setFormattedInterestAmount('0');
+        return;
+      }
+
+      setIsCalculating(true);
+      try {
+        console.log(`Calculating pawn interest for ${startDate} → ${endDate}`);
+        const calculatedInterest = await interestCalculator(startDate, endDate);
+        console.log('Calculated pawn interest result:', calculatedInterest);
+        
         setInterestAmount(calculatedInterest.toString());
         setFormattedInterestAmount(formatNumber(calculatedInterest));
+      } catch (err) {
+        console.error('Error calculating pawn interest:', err);
+        setInterestAmount('0');
+        setFormattedInterestAmount('0');
+      } finally {
+        setIsCalculating(false);
+      }
     }
-    } catch (err) {
-      console.error('Error calculating interest:', err);
-    }
+    
+    calculateInterest();
   }, [startDate, endDate, interestCalculator]);
   
   // Handle days change
@@ -213,30 +231,23 @@ export function PawnPaymentForm({
 
           <div className="text-right pr-2">Tiền lãi phí :</div>
           <div className="flex items-center gap-3">
+            <div className="relative">
               <Input
-              value={formattedInterestAmount} 
-              onChange={handleInterestAmountChange}
-              className="w-48"
-              inputMode="numeric"
-              type="text"
-              readOnly={!!interestCalculator}
-              disabled={disabled}
-            />
-            <span className="text-gray-500 text-sm">VNĐ (Tiền lãi suất phải trả)</span>
+                value={formattedInterestAmount} 
+                onChange={handleInterestAmountChange}
+                className="w-48"
+                inputMode="numeric"
+                type="text"
+                disabled={disabled}
+              />
+              {isCalculating && (
+                <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                  <div className="h-4 w-4 rounded-full border-2 border-t-transparent border-blue-600 animate-spin"></div>
+                </div>
+              )}
             </div>
-
-          <div className="text-right pr-2">Tiền khác :</div>
-          <div className="flex items-center gap-3">
-              <Input
-              value={formattedOtherAmount} 
-              onChange={handleOtherAmountChange}
-              className="w-48"
-              inputMode="numeric"
-              type="text"
-              disabled={disabled}
-            />
-            <span className="text-gray-500 text-sm">VNĐ (Chi phí khác nếu có)</span>
-            </div>
+            <span className="text-gray-500 text-sm">VNĐ (Tự động tính khi thay đổi số ngày)</span>
+          </div>
 
           <div className="text-right pr-2">Tổng tiền lãi phí :</div>
           <div className="text-red-600 font-bold">
@@ -245,10 +256,14 @@ export function PawnPaymentForm({
 
           <div></div>
           <div className="mt-3">
-            <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={disabled}>
-              Đóng lãi
+            <Button 
+              type="submit" 
+              className="bg-blue-600 hover:bg-blue-700" 
+              disabled={disabled || isCalculating}
+            >
+              {isCalculating ? 'Đang tính...' : 'Đóng lãi'}
             </Button>
-            </div>
+          </div>
         </div>
       </form>
     </div>

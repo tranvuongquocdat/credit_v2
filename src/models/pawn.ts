@@ -89,4 +89,13 @@ export interface PawnWithCustomerAndCollateral extends Pawn {
     id_number?: string | null;
   };
   collateral_asset?: Collateral | null;
+}
+
+// Thông tin hợp đồng với dữ liệu khách hàng
+export interface PawnWithCustomer extends Pawn {
+  customer: {
+    name: string;
+    phone?: string | null;
+    id_number?: string | null;
+  };
 } 

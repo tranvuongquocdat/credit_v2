@@ -28,7 +28,24 @@ export async function getInstallments(
     }
     
     if (filters?.customer_name) {
-      query = query.textSearch('customer.name', filters.customer_name);
+      // First apply other filters, then we'll fetch customer IDs manually and apply a second filter
+      const queryWithoutCustomerFilter = query;
+      
+      // Get all customer IDs whose names match the filter
+      const { data: matchingCustomers } = await supabase
+        .from('customers')
+        .select('id')
+        .ilike('name', `%${filters.customer_name}%`);
+      
+      if (matchingCustomers && matchingCustomers.length > 0) {
+        // Extract customer IDs
+        const customerIds = matchingCustomers.map(c => c.id);
+        // Apply in filter to original query
+        query = queryWithoutCustomerFilter.in('customer_id', customerIds);
+      } else {
+        // No matching customers, return empty result
+        query = queryWithoutCustomerFilter.eq('id', '00000000-0000-0000-0000-000000000000'); // Non-existent ID
+      }
     }
     
     if (filters?.start_date) {
@@ -131,15 +148,6 @@ export async function getInstallments(
   }
 }
 
-// Helper function to calculate interest rate from down_payment and installment_amount
-function calculateInterestRate(downPayment: number, installmentAmount: number, loanPeriod: number): number {
-  // Công thức: (installmentAmount - downPayment) / downPayment * 100%
-  // Ví dụ: khách đưa 10,000,000 VND, phải trả lại 12,000,000 VND
-  // Lãi suất = ((12,000,000 - 10,000,000) / 10,000,000) * 100% = 20%
-  const rate = Math.round(((installmentAmount - downPayment) / downPayment) * 100 * 100) / 100;
-  return isNaN(rate) || !isFinite(rate) ? 0 : rate;
-}
-
 // Helper function to calculate due date
 function calculateDueDate(loanDate: string, loanPeriod: number): string {
   try {
@@ -211,7 +219,7 @@ export async function getInstallmentById(id: string) {
       installment_amount: installmentAmount,
       loan_period: loanPeriod,
       loan_date: loanDate,
-      debt_amount: data.debt_amount || 0,
+      debt_amount: data.id ? await calculateDebtToLatestPaidPeriod(data.id) || 0 : 0,
       
       store_id: data.store_id || '',
       created_at: data.created_at || undefined,
@@ -650,7 +658,7 @@ export async function hardDeleteInstallment(id: string) {
 }
 
 // Update installment payment due date
-export async function updateInstallmentPaymentDueDate(id: string, paymentDueDate: string) {
+export async function updateInstallmentPaymentDueDate(id: string, paymentDueDate: string | null) {
   try {
     const { data, error } = await supabase
       .from('installments')
