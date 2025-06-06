@@ -20,6 +20,7 @@ import {
   DialogTitle, 
   DialogFooter 
 } from '@/components/ui/dialog';
+import { MoneyInput } from '@/components/ui/money-input';
 import { CollateralInsert, CollateralUpdate, Collateral, CollateralCategory, CollateralStatus, InterestType } from '@/models/collateral';
 import { createCollateral, updateCollateral, checkCollateralCodeExists } from '@/lib/collateral';
 import { useToast } from '@/components/ui/use-toast';
@@ -324,10 +325,9 @@ export function CollateralForm({
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <Label htmlFor="default_amount" className="mb-2 block">Số tiền cầm *</Label>
-                <Input
+                <MoneyInput
                   id="default_amount"
-                  type="number"
-                  value={formData.default_amount}
+                  value={formData.default_amount.toString()}
                   onChange={(e) => setFormData(prev => ({ ...prev, default_amount: Number(e.target.value) }))}
                   placeholder="Nhập số tiền"
                 />
