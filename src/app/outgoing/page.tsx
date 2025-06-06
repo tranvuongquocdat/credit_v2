@@ -6,7 +6,7 @@ import { useStore } from '@/contexts/StoreContext';
 import { Plus, Pencil, Trash2, RefreshCw, MoreVertical, FilterIcon, CalendarIcon, Printer } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
+import { getCurrentUser } from '@/lib/auth';
 
 // Shadcn UI components
 import { Button } from "@/components/ui/button";
@@ -137,6 +137,7 @@ type Transaction = {
   id: string;
   created_at: string;
   employee_id: string | null;
+  employee_name: string | null; // Add employee name field
   update_at: string | null;
   customer_id: string | null;
   customer_name?: string; // Thêm trường này để lưu tên khách hàng
@@ -159,12 +160,14 @@ type Customer = {
 export default function OutgoingPage() {
   // Get current store from context
   const { currentStore } = useStore();
-  const router = useRouter();
+  
+  // Current user state
+  const [currentUser, setCurrentUser] = useState<{ id: string, username: string | null } | null>(null);
 
   // Helper function to handle error messages
-  const getErrorMessage = (error: any): string => {
+  const getErrorMessage = (error: unknown): string => {
     if (typeof error === 'object' && error !== null) {
-      return error.message || String(error);
+      return (error as Error).message || String(error);
     }
     return String(error);
   };
@@ -172,7 +175,7 @@ export default function OutgoingPage() {
   // State for pagination and search
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(10);
-  const [totalRecords, setTotalRecords] = useState(0);
+  const [/* totalRecords - needed for API pagination */, setTotalRecords] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
   // State for filters
@@ -193,7 +196,7 @@ export default function OutgoingPage() {
   
   // State for customers
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
+  const [/* isLoadingCustomers - used for loading state */, setIsLoadingCustomers] = useState(false);
   const [customerType, setCustomerType] = useState<'new' | 'existing'>('existing');
   
   // Form state
@@ -223,10 +226,29 @@ export default function OutgoingPage() {
     if (!dateString) return '';
     try {
       return format(new Date(dateString), 'HH:mm dd/MM/yyyy');
-    } catch (e) {
+    } catch {
       return dateString;
     }
   };
+
+  // Load current user
+  useEffect(() => {
+    const loadCurrentUser = async () => {
+      try {
+        const user = await getCurrentUser();
+        if (user && user.id) {
+          setCurrentUser({
+            id: user.id,
+            username: user.username as string | null
+          });
+        }
+      } catch (err) {
+        console.error('Error loading current user:', err);
+      }
+    };
+    
+    loadCurrentUser();
+  }, []);
 
   // Load customers
   useEffect(() => {
@@ -252,7 +274,7 @@ export default function OutgoingPage() {
     loadCustomers();
   }, []);
 
-  // Load transactions with customer names
+  // Load transactions with customer names and employee names
   const fetchTransactions = async () => {
     if (!currentStore?.id) return;
 
@@ -298,36 +320,62 @@ export default function OutgoingPage() {
 
       if (fetchError) throw fetchError;
       
-      // Get customer information for all transactions
-      const transactionsWithCustomerInfo = await Promise.all(
+      // Get employee and customer information for all transactions
+      const transactionsWithInfo = await Promise.all(
         (transactionData || []).map(async (transaction) => {
-          if (!transaction.customer_id) return { ...transaction, customer_name: '-' };
+          // Start with an object containing transaction data
+          const enhancedTransaction: Partial<Transaction> = { ...transaction };
           
-          // Find customer in our loaded customers list
-          const customer = customers.find(c => c.id === transaction.customer_id);
-          if (customer) {
-            return { ...transaction, customer_name: customer.name };
+          // Get customer information if needed
+          if (transaction.customer_id) {
+            // Find customer in our loaded customers list
+            const customer = customers.find(c => c.id === transaction.customer_id);
+            if (customer) {
+              enhancedTransaction.customer_name = customer.name;
+            } else {
+              // If not found in our list, try to fetch from DB
+              try {
+                const { data: customerData } = await supabase
+                  .from('customers')
+                  .select('name')
+                  .eq('id', transaction.customer_id)
+                  .single();
+                  
+                enhancedTransaction.customer_name = customerData?.name || transaction.customer_id;
+              } catch {
+                enhancedTransaction.customer_name = transaction.customer_id;
+              }
+            }
+          } else {
+            enhancedTransaction.customer_name = '-';
           }
           
-          // If not found in our list, try to fetch from DB
-          try {
-            const { data: customerData } = await supabase
-              .from('customers')
-              .select('name')
-              .eq('id', transaction.customer_id)
-              .single();
-              
-            return { 
-              ...transaction, 
-              customer_name: customerData?.name || transaction.customer_id 
-            };
-          } catch (err) {
-            return { ...transaction, customer_name: transaction.customer_id };
+          // Get employee information if available
+          if (transaction.employee_name) {
+            // If employee_name is already set (from the foreign key), use it directly
+            enhancedTransaction.employee_name = transaction.employee_name;
+          } else if (transaction.employee_id) {
+            // If we only have employee_id, fetch the username from profiles
+            try {
+              const { data: profileData } = await supabase
+                .from('profiles')
+                .select('username')
+                .eq('id', transaction.employee_id)
+                .single();
+                
+              enhancedTransaction.employee_name = profileData?.username || transaction.employee_id;
+            } catch {
+              enhancedTransaction.employee_name = transaction.employee_id;
+            }
+          } else {
+            enhancedTransaction.employee_name = '-';
           }
+          
+          return enhancedTransaction as Transaction;
         })
       );
 
-      setTransactions(transactionsWithCustomerInfo as Transaction[]);
+      setTransactions(transactionsWithInfo);
       setTotalRecords(count || 0);
       setTotalPages(count ? Math.ceil(count / pageSize) : 0);
     } catch (err) {
@@ -446,15 +494,24 @@ export default function OutgoingPage() {
         throw new Error('Vui lòng chọn khách hàng');
       }
 
+      // Ensure store_id is a string (not undefined)
+      const storeId = currentStore?.id || '';
+      
       const newTransaction = {
         transaction_type: formData.transaction_type,
         description: formData.description,
         debit_amount: formData.amount,
         credit_amount: 0,
-        employee_id: null, // Sẽ được điền bởi RLS nếu cần
-        store_id: currentStore?.id,
-        customer_id: finalCustomerId, // Sử dụng customer_id đã chọn hoặc mới tạo
+        employee_id: currentUser?.id || null,
+        employee_name: currentUser?.username || null,
+        store_id: storeId,
+        customer_id: finalCustomerId,
       };
+
+      // Only insert if we have a valid store ID
+      if (!storeId) {
+        throw new Error('Store ID is required');
+      }
 
       const { error: createError } = await supabase
         .from('transactions')
@@ -487,6 +544,7 @@ export default function OutgoingPage() {
         credit_amount: 0,
         update_at: new Date().toISOString(),
         customer_id: formData.customer_id || null, // Sử dụng customer_id đã chọn
+        // Don't update employee_id or employee_name when editing
       };
 
       const { error: updateError } = await supabase
@@ -566,7 +624,7 @@ export default function OutgoingPage() {
     const pageNumbers = [];
     const maxPagesToShow = 5;
     let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
-    let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+    const endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
 
     if (endPage - startPage + 1 < maxPagesToShow) {
       startPage = Math.max(1, endPage - maxPagesToShow + 1);
@@ -700,7 +758,7 @@ export default function OutgoingPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tất cả</SelectItem>
-                  {Object.entries(TRANSACTION_TYPES).map(([key, value]) => (
+                  {Object.entries(TRANSACTION_TYPES).map(([, value]) => (
                     <SelectItem key={value} value={value}>
                       {transactionTypeMap[value as keyof typeof transactionTypeMap]?.label || value}
                     </SelectItem>
@@ -796,7 +854,7 @@ export default function OutgoingPage() {
                         {formatDate(record.created_at)}
                       </TableCell>
                       <TableCell className="py-3 px-3 border-b border-r border-gray-200">
-                        {record.employee_id || '-'}
+                        {record.employee_name || '-'}
                       </TableCell>
                       <TableCell className="py-3 px-3 border-b border-r border-gray-200">
                         {record.customer_name || record.customer_id || '-'}
@@ -1032,7 +1090,7 @@ export default function OutgoingPage() {
                     <SelectValue placeholder="Chọn loại phiếu" />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(TRANSACTION_TYPES).map(([key, value]) => (
+                    {Object.entries(TRANSACTION_TYPES).map(([, value]) => (
                       <SelectItem key={value} value={value}>
                         {transactionTypeMap[value as keyof typeof transactionTypeMap]?.label || value}
                       </SelectItem>

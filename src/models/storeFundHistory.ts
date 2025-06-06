@@ -5,6 +5,7 @@ export interface StoreFundHistory {
   transaction_type: string | null;
   note: string | null;
   created_at: string | null;
+  name: string | null;
 }
 
 export interface StoreFundHistoryFormData {
@@ -13,6 +14,7 @@ export interface StoreFundHistoryFormData {
   transaction_type: string;
   created_at: string;
   note?: string | null;
+  name?: string | null;
 }
 
 export enum TransactionType {

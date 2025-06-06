@@ -34,27 +34,15 @@ export function StoreFundHistoryForm({
 }: StoreFundHistoryFormProps) {
   const { currentStore } = useStore();
   
-  // Format number with thousand separators
-  const formatNumber = (value: string | number): string => {
-    // Convert to number and back to string to remove non-numeric characters
-    const numericValue = value.toString().replace(/[^0-9]/g, '');
-    // Format with thousand separators
-    return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  };
-  
   // Form state
   const [formData, setFormData] = useState<StoreFundHistoryFormData>({
     store_id: initialData?.store_id || currentStore?.id || '',
     fund_amount: initialData?.fund_amount || 0,
     transaction_type: initialData?.transaction_type || TransactionType.DEPOSIT,
     created_at: initialData?.created_at || new Date().toISOString(),
-    note: initialData?.note || ''
+    note: initialData?.note || '',
+    name: initialData?.name || ''
   });
-  
-  // Formatted fund amount for display
-  const [formattedAmount, setFormattedAmount] = useState<string>(
-    formatNumber(initialData?.fund_amount || 0)
-  );
 
   // Form validation
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -65,7 +53,7 @@ export function StoreFundHistoryForm({
   };
 
   // Handle form field changes
-  const handleChange = (field: keyof StoreFundHistoryFormData, value: any) => {
+  const handleChange = (field: keyof StoreFundHistoryFormData, value: string | number | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     
     // Clear error for this field
@@ -76,18 +64,6 @@ export function StoreFundHistoryForm({
         return newErrors;
       });
     }
-  };
-  
-  // Handle fund amount change with formatting
-  const handleFundAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value.replace(/\./g, '');
-    const numericValue = parseInt(rawValue) || 0;
-    
-    // Update the raw value in form data
-    handleChange('fund_amount', numericValue);
-    
-    // Update the formatted display value
-    setFormattedAmount(formatNumber(rawValue));
   };
 
   // Handle form submission
@@ -151,6 +127,20 @@ export function StoreFundHistoryForm({
         {errors.transaction_type && (
           <p className="text-sm text-red-500 mt-1">{errors.transaction_type}</p>
         )}
+      </div>
+
+      {/* Customer Name */}
+      <div>
+        <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+          Tên KH
+        </label>
+        <Input
+          id="name"
+          placeholder="Nhập tên khách hàng"
+          value={formData.name || ''}
+          onChange={(e) => handleChange('name', e.target.value)}
+          disabled={isSubmitting}
+        />
       </div>
 
       {/* Fund Amount */}

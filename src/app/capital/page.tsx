@@ -9,11 +9,11 @@ import { useStore } from '@/contexts/StoreContext';
 import { Plus, Pencil, Trash2, RefreshCw, MoreVertical, FilterIcon, CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { FinancialSummary } from '@/components/common/FinancialSummary';
+import { getCurrentUser } from '@/lib/auth';
 
 // Shadcn UI components
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -73,13 +73,16 @@ export default function CapitalPage() {
   // Get current store from context
   const { currentStore } = useStore();
   
+  // Current user state
+  const [currentUser, setCurrentUser] = useState<{ id: string, username: string | null } | null>(null);
+  
   // Reference to FinancialSummary for manual refresh
   const [financialSummaryKey, setFinancialSummaryKey] = useState(0);
   
   // Helper function to handle error messages
-  const getErrorMessage = (error: any): string => {
+  const getErrorMessage = (error: unknown): string => {
     if (typeof error === 'object' && error !== null) {
-      return error.message || String(error);
+      return (error as Error).message || String(error);
     }
     return String(error);
   };
@@ -117,7 +120,7 @@ export default function CapitalPage() {
     if (!dateString) return '';
     try {
       return format(new Date(dateString), 'dd/MM/yyyy HH:mm');
-    } catch (e) {
+    } catch {
       return dateString;
     }
   };
@@ -153,6 +156,25 @@ export default function CapitalPage() {
     }
   };
 
+  // Load current user
+  useEffect(() => {
+    const loadCurrentUser = async () => {
+      try {
+        const user = await getCurrentUser();
+        if (user && user.id) {
+          setCurrentUser({
+            id: user.id,
+            username: user.username as string | null
+          });
+        }
+      } catch (err) {
+        console.error('Error loading current user:', err);
+      }
+    };
+    
+    loadCurrentUser();
+  }, []);
+
   // Effect to load fund history when component mounts and when filters change
   useEffect(() => {
     if (currentStore?.id) {
@@ -179,9 +201,10 @@ export default function CapitalPage() {
     setIsSubmitting(true);
     
     try {
-      const { data: newRecord, error } = await createStoreFundHistory({
+      const { error } = await createStoreFundHistory({
         ...data,
-        store_id: currentStore?.id || ''
+        store_id: currentStore?.id || '',
+        name: data.name || currentUser?.username || null // Set employee name from current user if not specified
       });
       
       if (error) {
@@ -210,7 +233,8 @@ export default function CapitalPage() {
         selectedRecord.id, 
         {
           ...data,
-          store_id: currentStore?.id || ''
+          store_id: currentStore?.id || '',
+          name: data.name || currentUser?.username || null // Set employee name from current user if not specified
         }, 
         selectedRecord.fund_amount,
         selectedRecord.transaction_type || ''
@@ -510,6 +534,7 @@ export default function CapitalPage() {
                   <TableRow>
                     <TableHead className="py-2 px-3 text-left font-medium w-12 border-b border-r border-gray-200">#</TableHead>
                     <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Thời gian</TableHead>
+                    <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Tên KH</TableHead>
                     <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Loại giao dịch</TableHead>
                     <TableHead className="py-2 px-3 text-right font-medium border-b border-r border-gray-200">Số tiền</TableHead>
                     <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Ghi chú</TableHead>
@@ -524,6 +549,9 @@ export default function CapitalPage() {
                       </TableCell>
                       <TableCell className="py-3 px-3 border-b border-r border-gray-200">
                         {formatDate(record.created_at)}
+                      </TableCell>
+                      <TableCell className="py-3 px-3 border-b border-r border-gray-200">
+                        {record.name || '-'}
                       </TableCell>
                       <TableCell className="py-3 px-3 border-b border-r border-gray-200">
                         <Badge 

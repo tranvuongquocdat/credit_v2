@@ -81,7 +81,8 @@ export async function createStoreFundHistory(data: StoreFundHistoryFormData) {
         fund_amount: data.fund_amount,
         transaction_type: data.transaction_type,
         note: data.note || null,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        name: data.name || null
       })
       .select()
       .single();
@@ -133,7 +134,8 @@ export async function updateStoreFundHistory(id: string, newData: StoreFundHisto
       .update({
         fund_amount: newData.fund_amount,
         transaction_type: newData.transaction_type,
-        note: newData.note || null
+        note: newData.note || null,
+        name: newData.name || null
       })
       .eq('id', id)
       .select()
@@ -229,7 +231,8 @@ export async function recordInstallmentPaymentFundTransaction(
   amount: number,
   isAddingFunds: boolean,
   installmentId: string,
-  periodNumber: number
+  periodNumber: number,
+  customerName?: string
 ) {
   try {
     const transactionType = isAddingFunds ? 'interest' : 'withdrawal';
@@ -241,7 +244,8 @@ export async function recordInstallmentPaymentFundTransaction(
       fund_amount: Math.abs(amount), // Always store as positive
       transaction_type: transactionType,
       created_at: new Date().toISOString(),
-      note: `${operation} tiền kỳ ${periodNumber} cho HĐ trả góp ${installmentId}`
+      note: `${operation} tiền kỳ ${periodNumber} cho HĐ trả góp ${installmentId}`,
+      name: customerName || null
     };
     
     // Create transaction record
@@ -252,7 +256,8 @@ export async function recordInstallmentPaymentFundTransaction(
         fund_amount: historyData.fund_amount,
         transaction_type: historyData.transaction_type,
         note: historyData.note,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        name: historyData.name
       })
       .select()
       .single();
@@ -293,7 +298,8 @@ export async function recordNewInstallmentFundTransaction(
       fund_amount: Math.abs(amount), // Always store as positive
       transaction_type: 'withdrawal',
       created_at: new Date().toISOString(),
-      note: `Tiền giao khách ${customerName} (ID: ${customerId}) cho HĐ trả góp ${installmentId}`
+      note: `Tiền giao khách ${customerName} (ID: ${customerId}) cho HĐ trả góp ${installmentId}`,
+      name: customerName
     };
     
     // Create transaction record
@@ -304,7 +310,8 @@ export async function recordNewInstallmentFundTransaction(
         fund_amount: historyData.fund_amount,
         transaction_type: historyData.transaction_type,
         note: historyData.note,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        name: historyData.name
       })
       .select()
       .single();
