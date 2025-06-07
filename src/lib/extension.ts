@@ -57,7 +57,6 @@ export async function addExtension(extension: Extension): Promise<Extension> {
         description: extension.notes || null,
         effective_date: extension.from_date,
         transaction_type: 'contract_extension',
-        notes: extension.notes || null,
         // Add temporary values that will be overwritten by the database trigger
       })
       .select()

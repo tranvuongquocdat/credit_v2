@@ -507,10 +507,10 @@ export function PaymentHistoryModal({
                                   )}
                                 </td>
                                 <td className="px-4 py-3 text-sm text-gray-700 text-right text-red-600">
-                                  {record.debit_amount > 0 ? formatCurrency(record.debit_amount) : ""}
+                                  {formatCurrency(record.debit_amount)}
                                 </td>
                                 <td className="px-4 py-3 text-sm text-gray-700 text-right text-green-600">
-                                  {record.credit_amount > 0 ? formatCurrency(record.credit_amount) : ""}
+                                  {formatCurrency(record.credit_amount)}
                                 </td>
                                 <td className="px-4 py-3 text-sm text-gray-700">{record.description}</td>
                               </tr>
