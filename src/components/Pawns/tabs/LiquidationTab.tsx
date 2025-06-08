@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PawnStatus, PawnWithCustomerAndCollateral } from '@/models/pawn';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { updatePawn } from '@/lib/pawn';
 import { useToast } from '@/components/ui/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { calculateActualLoanAmount } from '@/lib/Pawns/calculate_actual_loan_amount';
 
 interface LiquidationTabProps {
   pawn: PawnWithCustomerAndCollateral;
@@ -20,6 +21,7 @@ export function LiquidationTab({ pawn, onClose }: LiquidationTabProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [actualLoanAmount, setActualLoanAmount] = useState(0);
   const [liquidationData, setLiquidationData] = useState({
     liquidation_amount: 0,
     liquidation_date: new Date().toISOString().split('T')[0],
@@ -31,7 +33,7 @@ export function LiquidationTab({ pawn, onClose }: LiquidationTabProps) {
     try {
       // Update pawn status to liquidated
       const { error } = await updatePawn(pawn.id, {
-        status: PawnStatus.LIQUIDATED,
+        status: PawnStatus.CLOSED,
         notes: `Thanh lý ngày ${liquidationData.liquidation_date}. Số tiền thu được: ${formatCurrency(liquidationData.liquidation_amount)}. ${liquidationData.liquidation_notes}`
       });
 
@@ -56,12 +58,27 @@ export function LiquidationTab({ pawn, onClose }: LiquidationTabProps) {
   };
 
   const calculateLoss = () => {
-    return Math.max(0, pawn.loan_amount - liquidationData.liquidation_amount);
+    return Math.max(0, actualLoanAmount - liquidationData.liquidation_amount);
   };
 
   const calculateProfit = () => {
-    return Math.max(0, liquidationData.liquidation_amount - pawn.loan_amount);
+    return Math.max(0, liquidationData.liquidation_amount - actualLoanAmount);
   };
+
+  // Load actual loan amount on component mount
+  useEffect(() => {
+    const loadActualAmount = async () => {
+      try {
+        const amount = await calculateActualLoanAmount(pawn.id);
+        setActualLoanAmount(amount);
+      } catch (error) {
+        console.error('Error loading actual loan amount:', error);
+        setActualLoanAmount(pawn.loan_amount);
+      }
+    };
+    
+    loadActualAmount();
+  }, [pawn.id, pawn.loan_amount]);
 
   return (
     <div className="p-6 space-y-6">
@@ -89,11 +106,16 @@ export function LiquidationTab({ pawn, onClose }: LiquidationTabProps) {
                 </div>
                 <div className="flex justify-between">
                   <span>Tài sản:</span>
-                  <span className="font-medium">{pawn.collateral_detail || 'N/A'}</span>
+                  <span className="font-medium">
+                    {pawn.collateral_asset?.name || 
+                     (pawn.collateral_detail && typeof pawn.collateral_detail === 'object' 
+                       ? pawn.collateral_detail.name 
+                       : pawn.collateral_detail) || 'N/A'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Số tiền gốc:</span>
-                  <span className="font-medium text-red-600">{formatCurrency(pawn.loan_amount)}</span>
+                  <span className="font-medium text-red-600">{formatCurrency(actualLoanAmount || pawn.loan_amount)}</span>
                 </div>
               </div>
             </div>
@@ -155,7 +177,7 @@ export function LiquidationTab({ pawn, onClose }: LiquidationTabProps) {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span>Số tiền gốc:</span>
-                  <span className="font-medium">{formatCurrency(pawn.loan_amount)}</span>
+                  <span className="font-medium">{formatCurrency(actualLoanAmount || pawn.loan_amount)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Số tiền thu được:</span>
@@ -221,7 +243,7 @@ export function LiquidationTab({ pawn, onClose }: LiquidationTabProps) {
               <div className="text-sm space-y-1">
                 <div className="flex justify-between">
                   <span>Số tiền gốc:</span>
-                  <span className="font-medium">{formatCurrency(pawn.loan_amount)}</span>
+                  <span className="font-medium">{formatCurrency(actualLoanAmount || pawn.loan_amount)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Số tiền thu được:</span>

@@ -47,7 +47,8 @@ export function PawnCreateModal({
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [collateralId, setCollateralId] = useState('');
-  const [collateralDetail, setCollateralDetail] = useState('');
+  const [collateralName, setCollateralName] = useState('');
+  const [collateralAttributes, setCollateralAttributes] = useState<Record<string, string>>({});
   const [loanAmount, setLoanAmount] = useState<string>('');
   const [formattedLoanAmount, setFormattedLoanAmount] = useState<string>('');
   const [interestType, setInterestType] = useState<string>('daily');
@@ -221,6 +222,9 @@ export function PawnCreateModal({
     if (selected) {
       setSelectedCollateral(selected);
       
+      // Reset collateral attributes when changing collateral type
+      setCollateralAttributes({});
+      
       // Optionally pre-fill loan amount based on collateral default value
       if (selected.default_amount) {
         const defaultAmount = selected.default_amount.toString();
@@ -229,7 +233,16 @@ export function PawnCreateModal({
       }
     } else {
       setSelectedCollateral(null);
+      setCollateralAttributes({});
     }
+  };
+
+  // Handle collateral attribute change
+  const handleCollateralAttributeChange = (attrKey: string, value: string) => {
+    setCollateralAttributes(prev => ({
+      ...prev,
+      [attrKey]: value
+    }));
   };
   
   // Auto-generate contract code when modal opens
@@ -261,6 +274,10 @@ export function PawnCreateModal({
       
       if (!collateralId) {
         throw new Error('Vui lòng chọn tài sản thế chấp');
+      }
+      
+      if (!collateralName.trim()) {
+        throw new Error('Vui lòng nhập tên tài sản');
       }
       
       if (!interestValue) {
@@ -369,6 +386,12 @@ export function PawnCreateModal({
         return periodNum; // already in days
       };
       
+      // Prepare collateral detail as JSON
+      const collateralDetailJson = {
+        name: collateralName,
+        attributes: collateralAttributes
+      };
+
       // Prepare pawn data
       const pawnData: CreatePawnParams = {
         customer_id: finalCustomerId,
@@ -377,7 +400,7 @@ export function PawnCreateModal({
         phone,
         address,
         collateral_id: collateralId,
-        collateral_detail: collateralDetail,
+        collateral_detail: collateralDetailJson,
         loan_amount: loanAmountValue,
         interest_type: backendInterestType,
         interest_value: actualInterestValue,
@@ -567,14 +590,16 @@ export function PawnCreateModal({
             </select>
           </div>
           
-          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-start">
-            <Label htmlFor="collateralDetail" className="text-right mt-2">Chi tiết tài sản</Label>
-            <Textarea 
-              id="collateralDetail"
-              value={collateralDetail}
-              onChange={(e) => setCollateralDetail(e.target.value)}
-              rows={3}
-              placeholder="Biển số, màu sắc, số khung, số máy, đặc điểm nhận dạng..."
+          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
+            <Label htmlFor="collateralName" className="text-right">
+              Tên tài sản <span className="text-red-500">*</span>
+            </Label>
+            <Input 
+              id="collateralName"
+              value={collateralName}
+              onChange={(e) => setCollateralName(e.target.value)}
+              placeholder="Ví dụ: Xe máy Honda Wave, Nhẫn vàng 18k..."
+              required
             />
           </div>
           
@@ -585,13 +610,35 @@ export function PawnCreateModal({
                 <div><span className="font-medium">Loại:</span> {selectedCollateral.category}</div>
                 <div><span className="font-medium">Mã:</span> {selectedCollateral.code}</div>
                 <div><span className="font-medium">Giá trị mặc định:</span> {formatNumber(selectedCollateral.default_amount || 0)}đ</div>
-                {selectedCollateral.attr_01 && (
-                  <div><span className="font-medium">{selectedCollateral.attr_01}:</span> {selectedCollateral.attr_01}</div>
-                )}
-                {selectedCollateral.attr_02 && (
-                  <div><span className="font-medium">{selectedCollateral.attr_02}:</span> {selectedCollateral.attr_02}</div>
-                )}
               </div>
+            </div>
+          )}
+
+          {/* Dynamic collateral attributes based on selected collateral */}
+          {selectedCollateral && (
+            <div className="space-y-4">
+              {/* Render dynamic attribute inputs */}
+              {[
+                { key: 'attr_01', label: selectedCollateral.attr_01 },
+                { key: 'attr_02', label: selectedCollateral.attr_02 },
+                { key: 'attr_03', label: selectedCollateral.attr_03 },
+                { key: 'attr_04', label: selectedCollateral.attr_04 },
+                { key: 'attr_05', label: selectedCollateral.attr_05 }
+              ].map(({ key, label }) => {
+                if (!label) return null;
+                
+                return (
+                  <div key={key} className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
+                    <Label htmlFor={key} className="text-right">{label}</Label>
+                    <Input 
+                      id={key}
+                      value={collateralAttributes[key] || ''}
+                      onChange={(e) => handleCollateralAttributeChange(key, e.target.value)}
+                      placeholder={`Nhập ${label.toLowerCase()}`}
+                    />
+                  </div>
+                );
+              })}
             </div>
           )}
           

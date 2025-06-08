@@ -16,6 +16,7 @@ import { AdditionalLoanTab, BadPawnTab, RedeemTab, DocumentsTab, ExtensionTab, P
 import { getPawnById } from '@/lib/pawn';
 import { PawnHistoryRecord, PawnTransactionType, getPawnAmountHistory } from '@/lib/pawn-amount-history';
 import { formatCurrency, calculateDaysBetween, formatDate, formatDateTime } from '@/lib/utils';
+import { calculateActualLoanAmount } from '@/lib/Pawns/calculate_actual_loan_amount';
 
 interface PawnHistoryModalProps {
   isOpen: boolean;
@@ -37,6 +38,7 @@ export function PawnHistoryModal({
   const [pawnHistory, setPawnHistory] = useState<PawnHistoryRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+  const [actualLoanAmount, setActualLoanAmount] = useState<number>(0);
   
   // State to track if data has changed
   const [hasDataChanged, setHasDataChanged] = useState(false);
@@ -45,6 +47,8 @@ export function PawnHistoryModal({
   useEffect(() => {
     if (isOpen && pawn?.id && !initialLoadComplete) {
       setInitialLoadComplete(true);
+      // Load actual loan amount
+      loadActualLoanAmount();
     }
     
     // Reset when modal closes
@@ -53,6 +57,19 @@ export function PawnHistoryModal({
       setError(null);
     }
   }, [isOpen, pawn?.id, initialLoadComplete]);
+
+  // Load actual loan amount
+  const loadActualLoanAmount = async () => {
+    if (!pawn?.id) return;
+    
+    try {
+      const amount = await calculateActualLoanAmount(pawn.id);
+      setActualLoanAmount(amount);
+    } catch (error) {
+      console.error('Error loading actual loan amount:', error);
+      setActualLoanAmount(pawn.loan_amount || 0);
+    }
+  };
 
   // Refresh data after any changes
   const handleDataChange = async () => {
@@ -71,6 +88,9 @@ export function PawnHistoryModal({
       
       // Mark that data has changed
       setHasDataChanged(true);
+      
+      // Reload actual loan amount
+      await loadActualLoanAmount();
     } catch (err) {
       console.error('Error refreshing data:', err);
     }
@@ -385,7 +405,7 @@ export function PawnHistoryModal({
                 <tbody>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Tiền cầm</td>
-                    <td className="py-1 px-2 text-right border" colSpan={2}>{formatCurrency(currentPawn?.loan_amount || 0)}</td>
+                    <td className="py-1 px-2 text-right border" colSpan={2}>{formatCurrency(actualLoanAmount || currentPawn?.loan_amount || 0)}</td>
                   </tr>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Lãi phí</td>
@@ -406,7 +426,7 @@ export function PawnHistoryModal({
                 <tbody>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Trạng thái</td>
-                    <td className="py-1 px-2 text-right border">Đang cầm</td>
+                    <td className="py-1 px-2 text-right border">{currentPawn?.status || '-'}</td>
                   </tr>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Mã hợp đồng</td>
@@ -414,7 +434,12 @@ export function PawnHistoryModal({
                   </tr>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Tài sản</td>
-                    <td className="py-1 px-2 text-right border">{currentPawn?.collateral_asset?.name || '-'}</td>
+                    <td className="py-1 px-2 text-right border">
+                      {currentPawn?.collateral_asset?.name || 
+                       (currentPawn?.collateral_detail && typeof currentPawn.collateral_detail === 'object' 
+                         ? currentPawn.collateral_detail.name 
+                         : currentPawn?.collateral_detail) || '-'}
+                    </td>
                   </tr>
                 </tbody>
               </table>

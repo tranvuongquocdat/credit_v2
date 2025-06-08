@@ -21,10 +21,11 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
-import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { reopenContract } from '@/lib/Pawns/reopen_contract';
 import { useToast } from '@/components/ui/use-toast';
+import { calculateMultiplePawnStatus, PawnStatusResult } from '@/lib/Pawns/calculate_pawn_status';
+import { calculateActualLoanAmount } from '@/lib/Pawns/calculate_actual_loan_amount';
 
 interface StatusMapType {
   [key: string]: { 
@@ -63,6 +64,12 @@ export function PawnTable({
   // State để lưu trữ thông tin có kỳ thanh toán đã được thanh toán hay không cho mỗi pawn
   const [hasPaidPaymentPeriods, setHasPaidPaymentPeriods] = useState<Record<string, boolean>>({});
   
+  // State để lưu trữ status tính toán cho mỗi pawn
+  const [pawnStatuses, setPawnStatuses] = useState<Record<string, PawnStatusResult>>({});
+  
+  // State để lưu trữ số tiền thực tế cho mỗi pawn
+  const [actualLoanAmounts, setActualLoanAmounts] = useState<Record<string, number>>({});
+  
   // Hàm kiểm tra xem pawn có kỳ thanh toán nào đã được thanh toán không
   const checkHasPaidPaymentPeriods = useCallback(async (pawnId: string): Promise<boolean> => {
     try {
@@ -88,28 +95,58 @@ export function PawnTable({
     }
   }, []);
   
-  // Load thông tin về payment periods đã thanh toán khi pawns thay đổi
+  // Load thông tin về payment periods đã thanh toán và status khi pawns thay đổi
   useEffect(() => {
-    const loadPaidPaymentPeriodsInfo = async () => {
-      const newHasPaidPaymentPeriodsInfo: Record<string, boolean> = {};
+    const loadPawnInfo = async () => {
+      if (pawns.length === 0) return;
       
-      const results = await Promise.all(
+      // Load payment periods info
+      const newHasPaidPaymentPeriodsInfo: Record<string, boolean> = {};
+      const paymentResults = await Promise.all(
         pawns.map(async (pawn) => {
           const hasPaidPayments = await checkHasPaidPaymentPeriods(pawn.id);
           return { pawnId: pawn.id, hasPaidPayments };
         })
       );
       
-      results.forEach(({ pawnId, hasPaidPayments }) => {
+      paymentResults.forEach(({ pawnId, hasPaidPayments }) => {
         newHasPaidPaymentPeriodsInfo[pawnId] = hasPaidPayments;
       });
       
       setHasPaidPaymentPeriods(newHasPaidPaymentPeriodsInfo);
+      
+      // Load pawn statuses and actual loan amounts
+      try {
+        const pawnIds = pawns.map(pawn => pawn.id);
+        
+        // Calculate statuses
+        const statuses = await calculateMultiplePawnStatus(pawnIds);
+        setPawnStatuses(statuses);
+        
+        // Calculate actual loan amounts
+        const actualAmounts: Record<string, number> = {};
+        const amountPromises = pawnIds.map(async (pawnId) => {
+          try {
+            const amount = await calculateActualLoanAmount(pawnId);
+            return { pawnId, amount };
+          } catch (error) {
+            console.error(`Error calculating actual loan amount for pawn ${pawnId}:`, error);
+            return { pawnId, amount: 0 };
+          }
+        });
+        
+        const amountResults = await Promise.all(amountPromises);
+        amountResults.forEach(({ pawnId, amount }) => {
+          actualAmounts[pawnId] = amount;
+        });
+        
+        setActualLoanAmounts(actualAmounts);
+      } catch (error) {
+        console.error('Error calculating pawn data:', error);
+      }
     };
     
-    if (pawns.length > 0) {
-      loadPaidPaymentPeriodsInfo();
-    }
+    loadPawnInfo();
   }, [pawns, checkHasPaidPaymentPeriods]);
 
   const handleSort = (field: string) => {
@@ -171,62 +208,52 @@ export function PawnTable({
   };
 
   const getStatusBadge = (pawn: PawnWithCustomerAndCollateral) => {
-    // Determine status based on maturity date and current status
-    if (pawn.status === PawnStatus.CLOSED) {
+    // Sử dụng status đã tính toán từ calculatePawnStatus
+    const calculatedStatus = pawnStatuses[pawn.id];
+    
+    if (!calculatedStatus) {
+      // Fallback nếu chưa tính được status
       return (
         <Badge className="bg-gray-100 text-gray-800 border-gray-200">
-          Đã đóng
+          Đang tải...
         </Badge>
       );
     }
     
-    if (pawn.status === PawnStatus.DELETED) {
-      return (
-        <Badge className="bg-gray-100 text-gray-800 border-gray-200">
-          Đã xóa
-        </Badge>
-      );
+    // Áp dụng màu sắc dựa trên statusCode
+    switch (calculatedStatus.statusCode) {
+      case 'CLOSED':
+        return (
+          <Badge className="bg-gray-100 text-gray-800 border-gray-200">
+            {calculatedStatus.status}
+          </Badge>
+        );
+      case 'DELETED':
+        return (
+          <Badge className="bg-gray-100 text-gray-800 border-gray-200">
+            {calculatedStatus.status}
+          </Badge>
+        );
+      case 'OVERDUE':
+        return (
+          <Badge className="bg-red-100 text-red-800 border-red-200">
+            {calculatedStatus.status}
+          </Badge>
+        );
+      case 'LATE_INTEREST':
+        return (
+          <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
+            {calculatedStatus.status}
+          </Badge>
+        );
+      case 'ACTIVE':
+      default:
+        return (
+          <Badge className="bg-green-100 text-green-800 border-green-200">
+            {calculatedStatus.status}
+          </Badge>
+        );
     }
-
-    const daysRemaining = calculateDaysRemaining(pawn.loan_date, pawn.loan_period);
-    
-    if (daysRemaining < 0) {
-      return (
-        <Badge className="bg-red-100 text-red-800 border-red-200">
-          Quá hạn
-        </Badge>
-      );
-    }
-    
-    if (daysRemaining === 0) {
-      return (
-        <Badge className="bg-amber-100 text-amber-800 border-amber-200">
-          Hôm nay
-        </Badge>
-      );
-    }
-    
-    if (daysRemaining === 1) {
-      return (
-        <Badge className="bg-blue-100 text-blue-800 border-blue-200">
-          Ngày mai
-        </Badge>
-      );
-    }
-    
-    if (daysRemaining <= 7) {
-      return (
-        <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
-          Sắp đáo hạn
-        </Badge>
-      );
-    }
-    
-    return (
-      <Badge className="bg-green-100 text-green-800 border-green-200">
-        Đang vay
-      </Badge>
-    );
   };
 
   const calculateMaturityDate = (loanDate: string, loanPeriod: number) => {
@@ -366,11 +393,14 @@ export function PawnTable({
                 </TableCell>
                 <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
                   <div className="max-w-xs truncate">
-                    {pawn.collateral_asset?.name || pawn.collateral_detail || 'N/A'}
+                    {pawn.collateral_asset?.name || 
+                     (pawn.collateral_detail && typeof pawn.collateral_detail === 'object' 
+                       ? pawn.collateral_detail.name 
+                       : pawn.collateral_detail) || 'N/A'}
                   </div>
                 </TableCell>
                 <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
-                  {formatCurrency(pawn.loan_amount)}
+                  {formatCurrency(actualLoanAmounts[pawn.id] ?? pawn.loan_amount)}
                 </TableCell>
                 <TableCell className="py-3 px-3 text-gray-600 text-center border-b border-r border-gray-200">
                   {format(new Date(pawn.loan_date), 'dd/MM/yyyy', { locale: vi })}
@@ -384,7 +414,8 @@ export function PawnTable({
                     isNearMaturity ? 'text-yellow-600' : 
                     'text-green-600'
                   }`}>
-                    {isOverdue ? `Quá ${Math.abs(daysRemaining)} ngày` : `${daysRemaining} ngày`}
+                    {pawnStatuses[pawn.id]?.description || 
+                     (isOverdue ? `Quá ${Math.abs(daysRemaining)} ngày` : `${daysRemaining} ngày`)}
                   </div>
                 </TableCell>
                 <TableCell className="py-3 px-3 border-b border-r border-gray-200">

@@ -24,9 +24,9 @@ export async function calculateDebtToLatestPaidPeriod(installmentId: string): Pr
     }
 
     // need review
-    if (installment.status == 'closed') {
-      return 0
-    }
+    // if (installment.status == 'closed') {
+    //   return 0
+    // }
     
     const startDate = installment.loan_date;
 

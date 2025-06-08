@@ -102,7 +102,7 @@ export function useInstallmentsSummary() {
       // Aggregate results
       results.forEach(result => {
         if (result) {
-          totalOldDebt += result.oldDebt;
+          totalOldDebt += 0 - result.oldDebt;
           collectedProfit += result.profitCollected;
           totalLoan += result.loanAmount;
           expectedProfit += result.expectedProfitAmount;

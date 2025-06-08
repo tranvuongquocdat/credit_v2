@@ -52,8 +52,16 @@ export function AdditionalLoanForm({ onSubmit, pawnId, disabled = false, onSucce
         setPawnData(pawnData);
         const endDate = pawnData ? addDays(new Date(pawnData.loan_date), (pawnData.loan_period || 30) - 1) : new Date();
         setMaxDate(format(endDate, 'yyyy-MM-dd'));
+        
+        // Set initial loan date based on latest payment or pawn start date
         if (latestPaymentPaidDate) {
           setMinDate(latestPaymentPaidDate);
+          // Set loan date to the day after the latest payment date
+          const nextDay = addDays(new Date(latestPaymentPaidDate), 1);
+          setLoanDate(format(nextDay, 'yyyy-MM-dd'));
+        } else if (pawnData?.loan_date) {
+          // If no payment exists, set to pawn start date
+          setLoanDate(pawnData.loan_date);
         }
       } catch (err) {
         console.error('Error in fetchData:', err);

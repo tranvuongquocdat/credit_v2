@@ -46,7 +46,12 @@ export function DocumentsTab({ pawn }: DocumentsTabProps) {
               </div>
               <div className="flex justify-between">
                 <span>Tài sản:</span>
-                <span className="font-medium">{pawn.collateral_detail || 'N/A'}</span>
+                <span className="font-medium">
+                  {pawn.collateral_asset?.name || 
+                   (pawn.collateral_detail && typeof pawn.collateral_detail === 'object' 
+                     ? pawn.collateral_detail.name 
+                     : pawn.collateral_detail) || 'N/A'}
+                </span>
               </div>
             </div>
           </div>

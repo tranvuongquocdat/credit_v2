@@ -5,14 +5,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Edit2Icon, MoreVerticalIcon, TrashIcon, AlertTriangleIcon, CalendarIcon, ClockIcon, FileTextIcon, DollarSignIcon, UnlockIcon, CalendarDaysIcon } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import Spinner from "@/components/ui/spinner";
 import { useEffect, useState, useCallback } from "react";
-import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
 import { updateInstallmentStatus } from "@/lib/installmentPayment";
 import { updateInstallmentPaymentDueDate } from "@/lib/installment";
 import {
@@ -41,6 +39,7 @@ import {
 } from "@/lib/installmentCalculations";
 import { supabase } from "@/lib/supabase";
 import { getinstallmentPaymentHistory } from "@/lib/Installments/payment_history";
+import { calculateMultipleInstallmentStatus, InstallmentStatusResult } from "@/lib/Installments/calculate_installment_status";
 
 // Define status info interface
 interface StatusInfo {
@@ -87,6 +86,9 @@ export function InstallmentsTable({
   // State để lưu trữ thông tin có kỳ thanh toán đã được thanh toán hay không cho mỗi installment
   const [hasPaidPaymentPeriods, setHasPaidPaymentPeriods] = useState<Record<string, boolean>>({});
   
+  // State cho calculated status
+  const [calculatedStatuses, setCalculatedStatuses] = useState<Record<string, InstallmentStatusResult>>({});
+  
   // State for unlock confirmation dialog
   const [unlockConfirmOpen, setUnlockConfirmOpen] = useState(false);
   const [installmentToUnlock, setInstallmentToUnlock] = useState<InstallmentWithStatusInfo | null>(null);
@@ -129,6 +131,11 @@ export function InstallmentsTable({
     setLoadingPayments(true);
     
     try {
+      // Calculate statuses for all installments in parallel
+      const installmentIds = installments.map(installment => installment.id);
+      const statusResults = await calculateMultipleInstallmentStatus(installmentIds);
+      setCalculatedStatuses(statusResults);
+      
       // Tạo bản sao dữ liệu ban đầu
       const enhancedInstallments: InstallmentWithStatusInfo[] = [...installments];
 
@@ -245,10 +252,49 @@ export function InstallmentsTable({
       
       // Cập nhật statusInfo sau khi cập nhật status
       for (const installment of enhancedInstallments) {
-        const statusInfo = statusMap[installment.status] || {
-          label: "Không xác định",
-          color: "bg-gray-100 text-gray-800",
-        };
+        // Use calculated status if available, otherwise fallback to statusMap
+        const calculatedStatus = calculatedStatuses[installment.id];
+        let statusInfo: StatusInfo;
+        
+        if (calculatedStatus) {
+          // Map calculated status to color and use calculated status text
+          let color: string;
+          switch (calculatedStatus.statusCode) {
+            case 'CLOSED':
+              color = "bg-blue-100 text-blue-800 border-blue-200";
+              break;
+            case 'DELETED':
+              color = "bg-gray-100 text-gray-800 border-gray-200";
+              break;
+            case 'FINISHED':
+              color = "bg-emerald-100 text-emerald-800 border-emerald-200";
+              break;
+            case 'BAD_DEBT':
+              color = "bg-purple-100 text-purple-800 border-purple-200";
+              break;
+            case 'OVERDUE':
+              color = "bg-red-100 text-red-800 border-red-200";
+              break;
+            case 'LATE_INTEREST':
+              color = "bg-yellow-100 text-yellow-800 border-yellow-200";
+              break;
+            case 'ACTIVE':
+            default:
+              color = "bg-green-100 text-green-800 border-green-200";
+              break;
+          }
+          statusInfo = {
+            label: calculatedStatus.status,
+            color: color
+          };
+        } else {
+          // Fallback to original logic
+          statusInfo = statusMap[installment.status] || {
+            label: "Không xác định",
+            color: "bg-gray-100 text-gray-800",
+          };
+        }
+        
         installment.statusInfo = statusInfo;
       }
       

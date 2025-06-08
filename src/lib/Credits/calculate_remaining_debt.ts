@@ -23,10 +23,6 @@ export async function calculateDebtToLatestPaidPeriod(creditId: string): Promise
       throw new Error('Error fetching credit');
     }
 
-    // need review
-    if (credit.status == 'closed') {
-      return 0
-    }
     
     const startDate = credit.loan_date;
 

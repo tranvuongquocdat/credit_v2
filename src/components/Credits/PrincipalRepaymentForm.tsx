@@ -84,8 +84,16 @@ export function PrincipalRepaymentForm({ onSubmit, creditId, disabled = false, o
       try {
         const latestPaymentPaidDate = await getLatestPaymentPaidDate(creditId);
         console.log('Latest payment paid date:', latestPaymentPaidDate);
+        
+        // Set initial repayment date based on latest payment or credit start date
         if (latestPaymentPaidDate) {
           setMinDateStr(latestPaymentPaidDate);
+          // Set repayment date to the day after the latest payment date
+          const nextDay = addDays(new Date(latestPaymentPaidDate), 1);
+          setRepaymentDate(format(nextDay, 'yyyy-MM-dd'));
+        } else if (creditData?.loan_date) {
+          // If no payment exists, set to credit start date
+          setRepaymentDate(creditData.loan_date);
         }
       } catch (err) {
         console.error('Error in fetchData:', err);

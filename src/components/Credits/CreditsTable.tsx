@@ -28,6 +28,7 @@ import { calculateActualLoanAmount } from '@/lib/Credits/calculate_actual_loan_a
 import { useToast } from '../ui/use-toast';
 import { CreditFinancialDetail } from '@/hooks/useCreditCalculation';
 import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_date';
+import { calculateMultipleCreditStatus, CreditStatusResult } from '@/lib/Credits/calculate_credit_status';
 
 interface StatusMapType {
   [key: string]: { 
@@ -99,6 +100,9 @@ export function CreditsTable({
   
   // State cho actual loan amount
   const [actualLoanAmounts, setActualLoanAmounts] = useState<Record<string, ActualLoanAmountInfo>>({});
+  
+  // State cho calculated status
+  const [calculatedStatuses, setCalculatedStatuses] = useState<Record<string, CreditStatusResult>>({});
   
   // Toast hook
   const { toast } = useToast();
@@ -319,6 +323,10 @@ export function CreditsTable({
       try {
         console.time('Load all credit data');
         
+        // Calculate statuses for all credits in parallel
+        const creditIds = credits.map(credit => credit.id);
+        const statusResults = await calculateMultipleCreditStatus(creditIds);
+        
         // Process all credits in parallel using Promise.all
         const results = await Promise.all(
           credits.map(async (credit) => {
@@ -368,6 +376,7 @@ export function CreditsTable({
         setInterestTodayInfo(newInterestTodayInfo);
         setHasPaidPaymentPeriods(newHasPaidPaymentPeriodsInfo);
         setActualLoanAmounts(newActualLoanAmountInfo);
+        setCalculatedStatuses(statusResults);
       } catch (error) {
         console.error('Error loading credit data:', error);
       }
@@ -490,7 +499,29 @@ export function CreditsTable({
                     <Badge
                       variant="outline"
                       className={(() => {
-                        // Determine status based on next payment date, similar to InstallmentsTable
+                        // Use calculated status if available
+                        const calculatedStatus = calculatedStatuses[credit.id];
+                        if (calculatedStatus) {
+                          switch (calculatedStatus.statusCode) {
+                            case 'CLOSED':
+                              return "bg-blue-100 text-blue-800 border-blue-200";
+                            case 'DELETED':
+                              return "bg-gray-100 text-gray-800 border-gray-200";
+                            case 'FINISHED':
+                              return "bg-emerald-100 text-emerald-800 border-emerald-200";
+                            case 'BAD_DEBT':
+                              return "bg-purple-100 text-purple-800 border-purple-200";
+                            case 'OVERDUE':
+                              return "bg-red-100 text-red-800 border-red-200";
+                            case 'LATE_INTEREST':
+                              return "bg-yellow-100 text-yellow-800 border-yellow-200";
+                            case 'ACTIVE':
+                            default:
+                              return "bg-green-100 text-green-800 border-green-200";
+                          }
+                        }
+                        
+                        // Fallback to original logic
                         if (credit.status === 'closed' || credit.status === 'deleted') {
                           return statusMap[credit.status]?.color || "bg-gray-100 text-gray-800";
                         }
@@ -532,7 +563,13 @@ export function CreditsTable({
                       })()}
                     >
                       {(() => {
-                        // Determine status label based on next payment date
+                        // Use calculated status if available
+                        const calculatedStatus = calculatedStatuses[credit.id];
+                        if (calculatedStatus) {
+                          return calculatedStatus.status;
+                        }
+                        
+                        // Fallback to original logic
                         if (credit.status === 'closed') {
                           return "Đã đóng";
                         }

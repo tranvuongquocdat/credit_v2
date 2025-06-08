@@ -13,6 +13,7 @@ import { processPawnRedemption } from '@/lib/Pawns/process_redeem';
 import { calculateDebtToLatestPaidPeriod } from '@/lib/Pawns/calculate_remaining_debt';
 import { recordDailyPayments } from '@/lib/Pawns/record_daily_payments';
 import { getUnpaidStartDate } from '@/lib/Pawns/get_unpaid_start_date';
+import { calculateActualLoanAmount } from '@/lib/Pawns/calculate_actual_loan_amount';
 
 interface RedeemTabProps {
   pawn: PawnWithCustomerAndCollateral;
@@ -26,17 +27,18 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [isRedeeming, setIsRedeeming] = useState(false);
+  const [actualLoanAmount, setActualLoanAmount] = useState(0);
+  const [payDebt, setPayDebt] = useState(true); // Track whether to pay debt or not
   
   const isClosed = pawn?.status === PawnStatus.CLOSED || pawn?.status === PawnStatus.DELETED;
-  const loanAmount = pawn?.loan_amount || 0;
 
-  const handleRedeemPawn = async (pawnId: string) => {
-    console.log('Redeeming pawn:', pawnId);
+  const handleRedeemPawn = async (pawnId: string, shouldPayDebt: boolean = true) => {
+    console.log('Redeeming pawn:', pawnId, 'Pay debt:', shouldPayDebt);
     
     setIsRedeeming(true);
     
     try {
-      const contractRedeemAmount = loanAmount; // Tiền gốc
+      const contractRedeemAmount = actualLoanAmount; // Tiền gốc thực tế
       
       // Case 1: Nếu tiền lãi phí <= 0, chỉ cần chuyển trạng thái sang CLOSED
       if (remainingAmount <= 0) {
@@ -50,7 +52,7 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
             transaction_type: 'contract_close',
             credit_amount: contractRedeemAmount + remainingAmount,
             debit_amount: 0,
-            description: `Chuộc đồ (gốc: ${formatCurrency(loanAmount)} + lãi: ${formatCurrency(remainingAmount)})`,
+            description: `Chuộc đồ (gốc: ${formatCurrency(actualLoanAmount)} + lãi: ${formatCurrency(remainingAmount)})`,
             is_created_from_contract_closure: true
 
           } as any);
@@ -80,13 +82,13 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
             transaction_type: 'contract_close',
             credit_amount: contractRedeemAmount,
             debit_amount: 0,
-            description: `Chuộc đồ (gốc: ${formatCurrency(loanAmount)} + lãi: ${formatCurrency(remainingAmount)})`,
+            description: `Chuộc đồ (gốc: ${formatCurrency(actualLoanAmount)} + lãi: ${formatCurrency(remainingAmount)})`,
             is_created_from_contract_closure: true
           } as any);
       }
 
-      // Ghi lịch sử thanh toán nợ cũ nếu có
-      if (oldDebt !== 0) {
+      // Ghi lịch sử thanh toán nợ cũ nếu có và được chọn thanh toán
+      if (oldDebt !== 0 && shouldPayDebt) {
         await supabase
           .from('pawn_history')
           .insert({
@@ -103,7 +105,7 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
 
       // Update pawn status to closed
       const { error: updateError } = await updatePawn(pawnId, { 
-        status: PawnStatus.CLOSED,
+        status: PawnStatus.CLOSED
       });
 
       if (updateError) {
@@ -113,7 +115,9 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
       // Show success toast
       toast({
         title: "Thành công",
-        description: "Đã chuộc đồ thành công",
+        description: shouldPayDebt 
+          ? "Đã chuộc đồ và thanh toán nợ thành công"
+          : "Đã chuộc đồ thành công (giữ nguyên nợ cũ)",
       });
 
       // Close the modal
@@ -141,6 +145,10 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
       setIsCalculating(true);
       
       try {
+        // Tính số tiền vay thực tế
+        const actualAmount = await calculateActualLoanAmount(pawn.id);
+        setActualLoanAmount(actualAmount);
+        
         const today = new Date().toISOString().split('T')[0];
         const interestAmount = await calculateCloseContractInterest(pawn.id, today);
         setRemainingAmount(interestAmount);
@@ -151,6 +159,7 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
         
       } catch (error) {
         console.error('Error calculating amounts:', error);
+        setActualLoanAmount(pawn?.loan_amount || 0);
         setRemainingAmount(0);
         setOldDebt(0);
         
@@ -165,7 +174,7 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
     }
     
     fetchCalculatedAmounts();
-  }, [pawn?.id, pawn?.loan_amount]);
+  }, [pawn?.id]);
 
   return (
     <div className="p-4">
@@ -194,7 +203,7 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
                   Tiền vay gốc
                 </td>
                 <td className="px-4 py-2 text-right font-medium border">
-                  {formatCurrency(loanAmount)}
+                  {formatCurrency(actualLoanAmount)}
                 </td>
               </tr>
               <tr className="bg-gray-50">
@@ -225,22 +234,22 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
                   ) : (
                     remainingAmount >= 0 
                     ? formatCurrency(remainingAmount)
-                    : <span className="text-green-600">{formatCurrency((remainingAmount))}</span>
+                    : <span className="text-red-600">{formatCurrency((remainingAmount))}</span>
                   )}
                 </td>
               </tr>
-              <tr className="bg-green-50">
-                <td className="px-4 py-3 font-medium border text-green-700">
+              <tr className="bg-red-50">
+                <td className="px-4 py-3 font-medium border text-red-700">
                   Tổng cần thanh toán để chuộc đồ
                 </td>
-                <td className="px-4 py-3 text-right border font-bold text-green-700 text-lg">
+                <td className="px-4 py-3 text-right border font-bold text-red-700 text-lg">
                   {isCalculating ? (
                     <div className="flex items-center justify-end">
                       <div className="h-4 w-4 rounded-full border-2 border-green-400 border-t-transparent animate-spin mr-2"></div>
                       <span className="text-green-500">Đang tính...</span>
                     </div>
                   ) : (
-                    formatCurrency(loanAmount + oldDebt + remainingAmount)
+                    formatCurrency(actualLoanAmount + oldDebt + remainingAmount)
                   )}
                 </td>
               </tr>
@@ -249,16 +258,39 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
             </div>
 
         <div className="mt-6 flex justify-center">
-          <Button 
-            onClick={() => setShowConfirm(true)} 
-            className="bg-green-600 hover:bg-green-700 text-white px-8"
-            disabled={isClosed || isCalculating || isRedeeming}
-          >
-            {isRedeeming ? "Đang chuộc đồ..." :
-             isCalculating ? "Đang tính toán..." :
-             pawn?.status === PawnStatus.DELETED ? "Hợp đồng đã xóa" : 
-             pawn?.status === PawnStatus.CLOSED ? "Đã chuộc đồ" : "Chuộc đồ"}
+          {/* Show single button if no old debt or contract is already closed */}
+          {(oldDebt === 0 || isClosed) ? (
+            <Button 
+              onClick={() => { setPayDebt(true); setShowConfirm(true); }} 
+              className="bg-green-600 hover:bg-green-700 text-white px-8"
+              disabled={isClosed || isCalculating || isRedeeming}
+            >
+              {isRedeeming ? "Đang chuộc đồ..." :
+               isCalculating ? "Đang tính toán..." :
+               pawn?.status === PawnStatus.DELETED ? "Hợp đồng đã xóa" : 
+               pawn?.status === PawnStatus.CLOSED ? "Đã chuộc đồ" : "Chuộc đồ"}
             </Button>
+          ) : (
+            /* Show two buttons if there's old debt */
+            <div className="flex gap-4">
+              <Button 
+                onClick={() => { setPayDebt(true); setShowConfirm(true); }} 
+                className="bg-green-600 hover:bg-green-700 text-white px-6"
+                disabled={isCalculating || isRedeeming}
+              >
+                {isRedeeming && payDebt ? "Đang chuộc đồ..." :
+                 isCalculating ? "Đang tính toán..." : "Chuộc đồ và trả nợ"}
+              </Button>
+              <Button 
+                onClick={() => { setPayDebt(false); setShowConfirm(true); }} 
+                className="bg-orange-600 hover:bg-orange-700 text-white px-6"
+                disabled={isCalculating || isRedeeming}
+              >
+                {isRedeeming && !payDebt ? "Đang chuộc đồ..." :
+                 isCalculating ? "Đang tính toán..." : "Chuộc đồ và không trả nợ"}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -277,6 +309,13 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
                   ? "Chỉ cần chuộc đồ (không còn lãi phí)" 
                   : `Sẽ tạo lịch sử thanh toán cho lãi phí ${formatCurrency(remainingAmount)} và xử lý chuộc đồ`}
               </p>
+              {oldDebt !== 0 && (
+                <p className="text-sm mt-2">
+                  <strong>Nợ cũ:</strong> {payDebt 
+                    ? `Sẽ thanh toán nợ cũ ${formatCurrency(Math.abs(oldDebt))}` 
+                    : `Sẽ giữ nguyên nợ cũ ${formatCurrency(Math.abs(oldDebt))}`}
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter>
@@ -285,7 +324,7 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
             </Button>
             <Button 
               className="bg-green-600 text-white" 
-              onClick={() => { setShowConfirm(false); handleRedeemPawn(pawn.id); }}
+              onClick={() => { setShowConfirm(false); handleRedeemPawn(pawn.id, payDebt); }}
               disabled={isRedeeming}
             >
               {isRedeeming ? "Đang xử lý..." : "Xác nhận"}

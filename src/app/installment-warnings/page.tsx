@@ -43,9 +43,17 @@ export default function InstallmentWarningsPage() {
       return installments;
     }
     
-    return installments.filter(installment => 
-      installment.customer?.name?.toLowerCase().includes(customerNameFilter.toLowerCase())
-    );
+    console.log('Filtering with customerNameFilter:', customerNameFilter);
+    
+    return installments.filter(installment => {
+      const customerName = installment.customer?.name?.toLowerCase() || '';
+      const filterText = customerNameFilter.toLowerCase();
+      const shouldInclude = customerName.includes(filterText);
+      
+      console.log(`Contract ${installment.contract_code}: customerName="${customerName}", filter="${filterText}", include=${shouldInclude}`);
+      
+      return shouldInclude;
+    });
   }, [installments, customerNameFilter]);
   
   // Load installments khi page load hoặc store thay đổi
@@ -137,53 +145,112 @@ export default function InstallmentWarningsPage() {
         nextStartDate = new Date(installment.start_date);
       }
       
-      // 3. Tính toán số kỳ cần đóng dựa vào amount
-      const paymentPeriod = installment.payment_period || 10;
-      const amountPerPeriod = installment.installment_amount 
-        ? installment.installment_amount / (installment.duration / paymentPeriod)
-        : amount; // fallback
+      // 3. Sử dụng getExpectedMoney và convertFromHistoryToTimeArrayWithStatus để có được periods chính xác
+      const { getExpectedMoney } = await import('@/lib/Installments/get_expected_money');
+      const { convertFromHistoryToTimeArrayWithStatus } = await import('@/lib/Installments/convert_from_history_to_time_array');
+      const { getinstallmentPaymentHistory } = await import('@/lib/Installments/payment_history');
       
-      const numberOfPeriods = Math.round(amount / amountPerPeriod);
+      // Lấy daily amounts và payment history
+      const dailyAmounts = await getExpectedMoney(installment.id);
+      const paymentHistory = await getinstallmentPaymentHistory(installment.id);
       
-      console.log(`Processing ${numberOfPeriods} periods, ${paymentPeriod} days each`);
+      // Tính loan end date
+      const loanStart = new Date(installment.start_date);
+      const loanEnd = new Date(loanStart);
+      loanEnd.setDate(loanStart.getDate() + dailyAmounts.length - 1);
+      const loanEndDate = loanEnd.toISOString().split('T')[0];
       
-      // 4. Tạo records cho từng kỳ
+      // Lấy periods chính xác
+      const { periods: timePeriods, statuses } = convertFromHistoryToTimeArrayWithStatus(
+        installment.start_date,
+        loanEndDate,
+        installment.payment_period || 10,
+        paymentHistory,
+        paymentHistory
+      );
+      
+      // Tìm các kỳ chưa thanh toán để thanh toán
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const unpaidPeriods = [];
+      for (let i = 0; i < timePeriods.length; i++) {
+        const [startDate, endDate] = timePeriods[i];
+        const periodEndDate = new Date(endDate);
+        periodEndDate.setHours(0, 0, 0, 0);
+        
+        if (periodEndDate <= today && !statuses[i]) {
+          unpaidPeriods.push({
+            index: i,
+            startDate,
+            endDate,
+            startDayIndex: Math.floor((new Date(startDate).getTime() - loanStart.getTime()) / (1000 * 60 * 60 * 24)),
+            endDayIndex: Math.floor((new Date(endDate).getTime() - loanStart.getTime()) / (1000 * 60 * 60 * 24))
+          });
+        }
+      }
+      
+      // Tính tổng số tiền expected cho các kỳ chưa thanh toán
+      let totalExpectedAmount = 0;
+      for (const period of unpaidPeriods) {
+        for (let dayIndex = period.startDayIndex; dayIndex <= period.endDayIndex && dayIndex < dailyAmounts.length; dayIndex++) {
+          if (dayIndex >= 0) {
+            totalExpectedAmount += dailyAmounts[dayIndex];
+          }
+        }
+      }
+      
+      // Tính số kỳ cần thanh toán dựa vào amount
+      const numberOfPeriods = Math.min(
+        Math.round(amount / (totalExpectedAmount / unpaidPeriods.length)),
+        unpaidPeriods.length
+      );
+      
+      console.log(`Processing ${numberOfPeriods} periods out of ${unpaidPeriods.length} unpaid periods`);
+      
+      // 4. Tạo records cho từng kỳ sử dụng periods chính xác
       const allDailyRecords = [];
       
       for (let periodIndex = 0; periodIndex < numberOfPeriods; periodIndex++) {
-        // Tính ngày bắt đầu và kết thúc của kỳ này
-        const periodStartDate = new Date(nextStartDate);
-        periodStartDate.setDate(nextStartDate.getDate() + (periodIndex * paymentPeriod));
+        const period = unpaidPeriods[periodIndex];
+        const periodStartDate = new Date(period.startDate);
+        const periodEndDate = new Date(period.endDate);
         
-        const periodEndDate = new Date(periodStartDate);
-        periodEndDate.setDate(periodStartDate.getDate() + paymentPeriod - 1);
+        // Tính số tiền cho kỳ này từ daily amounts
+        let periodAmount = 0;
+        for (let dayIndex = period.startDayIndex; dayIndex <= period.endDayIndex && dayIndex < dailyAmounts.length; dayIndex++) {
+          if (dayIndex >= 0) {
+            periodAmount += dailyAmounts[dayIndex];
+          }
+        }
+        periodAmount = Math.round(periodAmount);
         
-        // Tính số tiền cho kỳ này
-        const periodAmount = Math.round(amountPerPeriod);
-        const dailyAmount = Math.floor(periodAmount / paymentPeriod);
-        const lastDayAdjustment = periodAmount - (dailyAmount * paymentPeriod);
+        // Tính số ngày thực tế của kỳ này
+        const actualPeriodDays = Math.floor((periodEndDate.getTime() - periodStartDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        const dailyAmount = Math.floor(periodAmount / actualPeriodDays);
+        const lastDayAdjustment = periodAmount - (dailyAmount * actualPeriodDays);
         
-        console.log(`Period ${periodIndex + 1}: ${periodStartDate.toISOString().split('T')[0]} to ${periodEndDate.toISOString().split('T')[0]}, amount: ${periodAmount}`);
+        console.log(`Period ${periodIndex + 1}: ${periodStartDate.toISOString().split('T')[0]} to ${periodEndDate.toISOString().split('T')[0]}, ${actualPeriodDays} days, amount: ${periodAmount}`);
         
         // 5. Tạo daily records cho kỳ này
-        for (let dayOffset = 0; dayOffset < paymentPeriod; dayOffset++) {
+        for (let dayOffset = 0; dayOffset < actualPeriodDays; dayOffset++) {
           const currentDate = new Date(periodStartDate);
           currentDate.setDate(periodStartDate.getDate() + dayOffset);
           
           // Determine date_status cho từng ngày trong kỳ
           let dateStatus: string | null = null;
-          if (paymentPeriod === 1) {
+          if (actualPeriodDays === 1) {
             dateStatus = 'only';
           } else if (dayOffset === 0) {
             dateStatus = 'start';
-          } else if (dayOffset === paymentPeriod - 1) {
+          } else if (dayOffset === actualPeriodDays - 1) {
             dateStatus = 'end';
           }
           // Các ngày giữa để null
           
           // Calculate amount for this day
           let dayAmount = dailyAmount;
-          if (dayOffset === paymentPeriod - 1) {
+          if (dayOffset === actualPeriodDays - 1) {
             // Last day gets the adjustment
             dayAmount = dailyAmount + lastDayAdjustment;
           }
@@ -195,7 +262,7 @@ export default function InstallmentWarningsPage() {
             date_status: dateStatus,
             credit_amount: dayAmount,
             debit_amount: 0,
-            description: `Thanh toán nhanh kỳ ${periodIndex + 1}/${numberOfPeriods}, ngày ${dayOffset + 1}/${paymentPeriod}`,
+            description: `Thanh toán nhanh kỳ ${periodIndex + 1}/${numberOfPeriods}, ngày ${dayOffset + 1}/${actualPeriodDays}`,
             employee_id: installment.employee_id,
             is_deleted: false,
             transaction_date: new Date().toISOString()
@@ -230,7 +297,7 @@ export default function InstallmentWarningsPage() {
           await updateInstallmentPaymentDueDate(installment.id, null);
         } else {
           const newDueDate = new Date(newLatestPaidDateObj);
-          newDueDate.setDate(newDueDate.getDate() + installment.payment_period);
+          newDueDate.setDate(newDueDate.getDate() + (installment.payment_period || 10));
           await updateInstallmentPaymentDueDate(installment.id, newDueDate.toISOString());
         }
       }

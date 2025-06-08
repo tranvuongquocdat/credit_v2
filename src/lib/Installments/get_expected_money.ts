@@ -12,6 +12,5 @@ export async function getExpectedMoney(installmentId: string) {
     if (installmentError) throw installmentError;
     // fill mảng với tiền gốc
     let result = Array(installment.loan_period).fill(installment.installment_amount / installment.loan_period);
-    console.log(result);
     return result;
 }

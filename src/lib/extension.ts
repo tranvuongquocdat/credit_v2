@@ -35,7 +35,7 @@ export async function addExtension(extension: Extension): Promise<Extension> {
     // Lấy thông tin hợp đồng để tính toán ngày kết thúc cũ
     const { data: creditData, error: creditError } = await supabase
       .from('credits')
-      .select('loan_date')
+      .select('loan_date, loan_period')
       .eq('id', extension.credit_id)
       .single();
 
@@ -49,25 +49,52 @@ export async function addExtension(extension: Extension): Promise<Extension> {
     }
 
     // Thêm vào bảng extensions
-    // Lưu ý: from_date và to_date sẽ được tự động điền bởi trigger
+    const { data: extensionData, error: extensionError } = await supabase
+      .from('credit_extension_histories')
+      .insert({
+        credit_id: extension.credit_id,
+        days: extension.days,
+        from_date: extension.from_date!,
+        notes: extension.notes || null,
+      })
+      .select()
+      .single();
+
+    if (extensionError) {
+      console.error('Error adding extension:', extensionError);
+      throw new Error(`Error adding extension: ${extensionError.message}`);
+    }
+
+    // update loan_period
+    const { error: updateError } = await supabase
+      .from('credits')
+      .update({
+        loan_period: creditData.loan_period + extension.days,
+      })
+      .eq('id', extension.credit_id);
+
+    if (updateError) {
+      console.error('Error updating loan period:', updateError);
+      throw new Error(`Error updating loan period: ${updateError.message}`);
+    }
+
     const { data, error } = await supabase
       .from('credit_history')
       .insert({
         credit_id: extension.credit_id,
         description: extension.notes || null,
-        effective_date: extension.from_date,
+        effective_date: extension.from_date!,
         transaction_type: 'contract_extension',
-        // Add temporary values that will be overwritten by the database trigger
       })
       .select()
       .single();
 
     if (error) {
-      console.error('Error adding extension:', error);
-      throw new Error(`Error adding extension: ${error.message}`);
+      console.error('Error adding credit history:', error);
+      throw new Error(`Error adding credit history: ${error.message}`);
     }
 
-    return data;
+    return extensionData;
   } catch (error) {
     console.error('Failed to add extension:', error);
     throw error;

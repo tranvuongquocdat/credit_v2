@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PawnWithCustomerAndCollateral, PawnStatus } from '@/models/pawn';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { formatCurrency } from '@/lib/utils';
 import { useToast } from '@/components/ui/use-toast';
+import { calculateActualLoanAmount } from '@/lib/Pawns/calculate_actual_loan_amount';
 
 interface ExtensionTabProps {
   pawn: PawnWithCustomerAndCollateral;
@@ -17,12 +18,28 @@ interface ExtensionTabProps {
 export function ExtensionTab({ pawn, onDataChange }: ExtensionTabProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [actualLoanAmount, setActualLoanAmount] = useState(0);
   const [extensionData, setExtensionData] = useState({
     extension_days: 30,
     extension_fee: 0,
     date: new Date().toISOString().split('T')[0],
     notes: ''
   });
+
+  // Load actual loan amount on component mount
+  useEffect(() => {
+    const loadActualAmount = async () => {
+      try {
+        const amount = await calculateActualLoanAmount(pawn.id);
+        setActualLoanAmount(amount);
+      } catch (error) {
+        console.error('Error loading actual loan amount:', error);
+        setActualLoanAmount(pawn.loan_amount);
+      }
+    };
+    
+    loadActualAmount();
+  }, [pawn.id, pawn.loan_amount]);
 
   const handleExtension = async () => {
     if (extensionData.extension_days <= 0) {
@@ -108,7 +125,7 @@ export function ExtensionTab({ pawn, onDataChange }: ExtensionTabProps) {
                 </div>
                 <div className="flex justify-between">
                   <span>Số tiền gốc:</span>
-                  <span className="font-medium text-orange-600">{formatCurrency(pawn.loan_amount)}</span>
+                  <span className="font-medium text-orange-600">{formatCurrency(actualLoanAmount || pawn.loan_amount)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Ngày cầm:</span>

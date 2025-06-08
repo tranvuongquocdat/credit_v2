@@ -88,8 +88,16 @@ export function PrincipalRepaymentForm({ onSubmit, pawnId, disabled = false, onS
       try {
         const latestPaymentPaidDate = await getLatestPaymentPaidDate(pawnId);
         console.log('Latest payment paid date:', latestPaymentPaidDate);
+        
+        // Set initial repayment date based on latest payment or pawn start date
         if (latestPaymentPaidDate) {
           setMinDateStr(latestPaymentPaidDate);
+          // Set repayment date to the day after the latest payment date
+          const nextDay = addDays(new Date(latestPaymentPaidDate), 1);
+          setRepaymentDate(format(nextDay, 'yyyy-MM-dd'));
+        } else if (pawnData?.loan_date) {
+          // If no payment exists, set to pawn start date
+          setRepaymentDate(pawnData.loan_date);
         }
       } catch (err) {
         console.error('Error fetching latest payment date:', err);

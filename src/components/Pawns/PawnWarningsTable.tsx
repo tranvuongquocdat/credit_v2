@@ -10,6 +10,7 @@ import { formatCurrency } from '@/lib/utils';
 import { getPawnPaymentHistory } from '@/lib/Pawns/payment_history';
 import { getExpectedMoney } from '@/lib/Pawns/get_expected_money';
 import { calculateDebtToLatestPaidPeriod } from '@/lib/Pawns/calculate_remaining_debt';
+import { calculateActualLoanAmount } from '@/lib/Pawns/calculate_actual_loan_amount';
 
 interface PawnWarning extends PawnWithCustomerAndCollateral {
   latePeriods: number;
@@ -18,6 +19,7 @@ interface PawnWarning extends PawnWithCustomerAndCollateral {
   interestAmount: number;
   daysPastDue: number;
   reason: string;
+  actualLoanAmount: number;
 }
 
 interface PawnWarningsTableProps {
@@ -76,6 +78,9 @@ export function PawnWarningsTable({
             
             // Calculate old debt using existing function
             const oldDebt = await calculateDebtToLatestPaidPeriod(pawn.id);
+            
+            // Calculate actual loan amount
+            const actualLoanAmount = await calculateActualLoanAmount(pawn.id);
 
             let interestAmount = 0;
             let daysPastDue = 0;
@@ -168,7 +173,8 @@ export function PawnWarningsTable({
                 oldDebt,
                 interestAmount,
                 daysPastDue: 0, // Not used in new logic
-                reason: reason || 'Cần kiểm tra'
+                reason: reason || 'Cần kiểm tra',
+                actualLoanAmount
               });
             }
 
@@ -220,7 +226,7 @@ export function PawnWarningsTable({
               Tổng nợ: {formatCurrency(warnings.reduce((sum, w) => sum + w.totalDueAmount, 0))}
             </span>
             <span className="text-blue-600 font-medium">
-              Tổng gốc: {formatCurrency(warnings.reduce((sum, w) => sum + w.loan_amount, 0))}
+              Tổng gốc: {formatCurrency(warnings.reduce((sum, w) => sum + w.actualLoanAmount, 0))}
             </span>
           </div>
         </div>
@@ -266,7 +272,10 @@ export function PawnWarningsTable({
                 {warning.collateral_asset?.code || 'N/A'}
               </td>
               <td className="py-3 px-3 border-r border-gray-200 text-center">
-                {warning.collateral_asset?.name || warning.collateral_detail || 'N/A'}
+                {warning.collateral_asset?.name || 
+                 (warning.collateral_detail && typeof warning.collateral_detail === 'object' 
+                   ? warning.collateral_detail.name 
+                   : warning.collateral_detail) || 'N/A'}
               </td>
               <td className="py-3 px-3 border-r border-gray-200 text-center text-red-600">
                 {formatCurrency(warning.oldDebt)}
@@ -275,10 +284,10 @@ export function PawnWarningsTable({
                 {formatCurrency(warning.interestAmount)}
               </td>
               <td className="py-3 px-3 border-r border-gray-200 text-center text-red-600">
-                {formatCurrency(warning.loan_amount)}
+                {formatCurrency(warning.actualLoanAmount)}
               </td>
               <td className="py-3 px-3 border-r border-gray-200 text-center text-red-600 font-medium">
-                {formatCurrency(warning.totalDueAmount + warning.loan_amount)}
+                {formatCurrency(warning.totalDueAmount + warning.actualLoanAmount)}
               </td>
               <td className="py-3 px-3 border-r border-gray-200 text-center">
                 <span className="text-red-600 font-medium">{warning.reason}</span>

@@ -182,6 +182,7 @@ export function InstallmentPaymentHistoryModal({
 
   // Confirmation dialog state
   const [isCloseContractConfirmOpen, setIsCloseContractConfirmOpen] = useState(false);
+  const [payDebt, setPayDebt] = useState(true); // Track whether to pay debt or not
 
   // State for temporary edited values
   const [tempEditedDate, setTempEditedDate] = useState<string | null>(null);
@@ -1000,7 +1001,8 @@ export function InstallmentPaymentHistoryModal({
   };
 
   // Handler for closing the installment - show confirmation first
-  const showCloseInstallmentConfirmation = () => {
+  const showCloseInstallmentConfirmation = (shouldPayDebt: boolean = true) => {
+    setPayDebt(shouldPayDebt);
     setIsCloseContractConfirmOpen(true);
   };
 
@@ -1020,13 +1022,15 @@ export function InstallmentPaymentHistoryModal({
       const remainingAmount = calculateRemainingToPay(installment, totalPaidAmount);
       
       
-      // Ghi lại lịch sử thanh toán nợ (nếu có)
-      if (debtAmount) {
+      // Ghi lại lịch sử thanh toán nợ (nếu có và được chọn thanh toán)
+      if (debtAmount && payDebt) {
         await recordDebtPayment(installment.id, installment.employee_id, debtAmount);
       }
       
-      // Reset debt amount to 0
-      await resetInstallmentDebtAmount(installment.id);
+      // Reset debt amount to 0 only if paying debt
+      if (payDebt) {
+        await resetInstallmentDebtAmount(installment.id);
+      }
 
       // Update installment status to closed
       await updateInstallmentStatus(installment.id, InstallmentStatus.CLOSED);
@@ -1071,7 +1075,9 @@ export function InstallmentPaymentHistoryModal({
 
       toast({
         title: "Thành công",
-        description: "Hợp đồng đã được đóng thành công!",
+        description: payDebt 
+          ? "Hợp đồng đã được đóng và thanh toán nợ thành công!"
+          : "Hợp đồng đã được đóng thành công (giữ nguyên nợ cũ)!",
       });
     } catch (error) {
       console.error("Error closing installment:", error);
@@ -1314,13 +1320,33 @@ export function InstallmentPaymentHistoryModal({
               </div>
 
               <div className="mt-6 flex justify-center">
-                <Button
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-8"
-                  onClick={showCloseInstallmentConfirmation}
-                  disabled={installment?.status === InstallmentStatus.CLOSED || installment?.status === InstallmentStatus.DELETED}
-                >
-                  Đóng HĐ
-                </Button>
+                {/* Show single button if no old debt or contract is already closed */}
+                {(debtAmount === 0 || installment?.status === InstallmentStatus.CLOSED || installment?.status === InstallmentStatus.DELETED) ? (
+                  <Button
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-8"
+                    onClick={() => showCloseInstallmentConfirmation(true)}
+                    disabled={installment?.status === InstallmentStatus.CLOSED || installment?.status === InstallmentStatus.DELETED}
+                  >
+                    {installment?.status === InstallmentStatus.CLOSED ? "Hợp đồng đã đóng" : 
+                     installment?.status === InstallmentStatus.DELETED ? "Hợp đồng đã xóa" : "Đóng HĐ"}
+                  </Button>
+                ) : (
+                  /* Show two buttons if there's old debt */
+                  <div className="flex gap-4">
+                    <Button
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-6"
+                      onClick={() => showCloseInstallmentConfirmation(true)}
+                    >
+                      Đóng HĐ và trả nợ
+                    </Button>
+                    <Button
+                      className="bg-orange-600 hover:bg-orange-700 text-white px-6"
+                      onClick={() => showCloseInstallmentConfirmation(false)}
+                    >
+                      Đóng HĐ và không trả nợ
+                    </Button>
+                  </div>
+                )}
               </div>
               
               {/* Confirmation Dialog for Closing Contract */}
@@ -1332,14 +1358,26 @@ export function InstallmentPaymentHistoryModal({
                   <AlertDialogHeader>
                     <AlertDialogTitle>Xác nhận đóng hợp đồng</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Bạn có chắc chắn muốn đóng hợp đồng này không? 
-                      Hành động này sẽ đánh dấu tất cả các kỳ còn lại là đã thanh toán và chuyển trạng thái hợp đồng thành "Đóng".
+                      <div className="space-y-3">
+                        <p>Bạn có chắc chắn muốn đóng hợp đồng này không? 
+                        Hành động này sẽ đánh dấu tất cả các kỳ còn lại là đã thanh toán và chuyển trạng thái hợp đồng thành "Đóng".</p>
+                        
+                        {debtAmount !== 0 && (
+                          <div className="bg-gray-50 p-3 rounded">
+                            <p className="text-sm">
+                              <strong>Nợ cũ:</strong> {payDebt 
+                                ? `Sẽ thanh toán nợ cũ ${formatCurrency(Math.abs(debtAmount))}` 
+                                : `Sẽ giữ nguyên nợ cũ ${formatCurrency(Math.abs(debtAmount))}`}
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Hủy</AlertDialogCancel>
                     <AlertDialogAction 
-                      onClick={handleCloseInstallment}
+                      onClick={() => handleCloseInstallment()}
                       className="bg-blue-600 hover:bg-blue-700 text-white"
                     >
                       Xác nhận đóng hợp đồng

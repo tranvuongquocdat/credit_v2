@@ -45,6 +45,9 @@ export default function InstallmentsPage() {
   // Get current store from context
   const { currentStore } = useStore();
   
+  // State để lưu initial filters từ URL
+  const [initialFilters, setInitialFilters] = useState<Partial<any> | undefined>(undefined);
+  
   // Use our custom hook for installments data and operations
   const { 
     installments, 
@@ -69,18 +72,23 @@ export default function InstallmentsPage() {
     refreshFinancial();
   }, [currentStore?.id]);
   
-  // Xử lý query parameter từ URL
+  // Xử lý query parameter từ URL - pre-fill form thay vì auto-search
   useEffect(() => {
     const contractParam = searchParams.get('contract');
     if (contractParam) {
-      // Nếu có tham số contract, thực hiện tìm kiếm với mã hợp đồng
-      handleSearch({
+      console.log('Pre-filling form with contract:', contractParam);
+      
+      // Set initial filters để pre-fill form
+      setInitialFilters({
         contract_code: contractParam,
-        customer_name: '',
-        start_date: '',
-        end_date: '',
-        status: "on_time" as InstallmentStatus // Sử dụng 'all' để hiển thị tất cả trạng thái
+        status: 'on_time' // Để trống để hiển thị tất cả trạng thái
       });
+      
+      // Scroll to top and highlight the search section
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      // Clear initial filters khi không có contract param
+      setInitialFilters(undefined);
     }
   }, [searchParams]);
   
@@ -230,6 +238,7 @@ export default function InstallmentsPage() {
           onReset={handleReset}
           onCreateNew={handleCreateInstallment}
           onExportExcel={handleExportExcel}
+          initialFilters={initialFilters}
         />
         
         {/* Error message */}

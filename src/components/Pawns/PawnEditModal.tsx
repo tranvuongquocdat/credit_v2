@@ -17,6 +17,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { getPawnById, updatePawn } from '@/lib/pawn';
 import { getCustomers } from '@/lib/customer';
+import { getCollateralById } from '@/lib/collateral';
 import { Customer } from '@/models/customer';
 import { PawnStatus, UpdatePawnParams, Pawn } from '@/models/pawn';
 import { toast } from '@/components/ui/use-toast';
@@ -52,14 +53,16 @@ export function PawnEditModal({
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState<PawnStatus>(PawnStatus.ON_TIME);
   
-  // State for collaterals
-  const [collaterals, setCollaterals] = useState([
-    { description: '', estimated_value: '', notes: '' }
-  ]);
+  // State for collateral details
+  const [collateralName, setCollateralName] = useState('');
+  const [collateralAttributes, setCollateralAttributes] = useState<Record<string, string>>({});
   
   // State for customers dropdown
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+  
+  // State for collateral info
+  const [selectedCollateral, setSelectedCollateral] = useState<any>(null);
   
   // State for form submission
   const [isLoading, setIsLoading] = useState(false);
@@ -99,23 +102,12 @@ export function PawnEditModal({
     setFormattedLoanAmount(formatNumber(rawValue));
   };
   
-  // Handle collateral change
-  const handleCollateralChange = (index: number, field: string, value: string) => {
-    const newCollaterals = [...collaterals];
-    newCollaterals[index] = { ...newCollaterals[index], [field]: value };
-    setCollaterals(newCollaterals);
-  };
-  
-  // Add new collateral
-  const addCollateral = () => {
-    setCollaterals([...collaterals, { description: '', estimated_value: '', notes: '' }]);
-  };
-  
-  // Remove collateral
-  const removeCollateral = (index: number) => {
-    if (collaterals.length > 1) {
-      setCollaterals(collaterals.filter((_, i) => i !== index));
-    }
+  // Handle collateral attribute change
+  const handleCollateralAttributeChange = (attrKey: string, value: string) => {
+    setCollateralAttributes(prev => ({
+      ...prev,
+      [attrKey]: value
+    }));
   };
   
   // Load pawn data and customers when modal opens
@@ -160,19 +152,14 @@ export function PawnEditModal({
         setStatus(pawnData.status as PawnStatus || PawnStatus.ON_TIME);
         setSelectedCustomerId(pawnData.customer_id);
         
-        // Set collateral information
-        if (pawnData.collateral_asset) {
-          setCollaterals([{
-            description: pawnData.collateral_asset.name || pawnData.collateral_detail || '',
-            estimated_value: pawnData.collateral_asset.default_amount?.toString() || '',
-            notes: pawnData.collateral_detail || ''
-          }]);
-        } else if (pawnData.collateral_detail) {
-          setCollaterals([{
-            description: pawnData.collateral_detail,
-            estimated_value: '',
-            notes: ''
-          }]);
+        // Set collateral information from JSON
+        if (pawnData.collateral_detail && typeof pawnData.collateral_detail === 'object') {
+          setCollateralName(pawnData.collateral_detail.name || '');
+          setCollateralAttributes(pawnData.collateral_detail.attributes || {});
+        } else if (typeof pawnData.collateral_detail === 'string') {
+          // Handle legacy string format
+          setCollateralName(pawnData.collateral_detail);
+          setCollateralAttributes({});
         }
         
         // Load customers list
@@ -186,6 +173,18 @@ export function PawnEditModal({
         const customer = customersData?.find(c => c.id === pawnData.customer_id);
         if (customer) {
           setCustomerName(customer.name);
+        }
+        
+        // Load collateral info to get attributes
+        if (pawnData.collateral_id) {
+          try {
+            const { data: collateralData, error: collateralError } = await getCollateralById(pawnData.collateral_id);
+            if (!collateralError && collateralData) {
+              setSelectedCollateral(collateralData);
+            }
+          } catch (err) {
+            console.error('Error loading collateral:', err);
+          }
         }
       } catch (err) {
         console.error('Error loading data:', err);
@@ -210,6 +209,12 @@ export function PawnEditModal({
         throw new Error('Vui lòng chọn chi nhánh trước khi cập nhật hợp đồng');
       }
       
+      // Prepare collateral detail as JSON
+      const collateralDetailJson = {
+        name: collateralName,
+        attributes: collateralAttributes
+      };
+
       // Prepare update data
       const updateData: UpdatePawnParams = {
         customer_id: selectedCustomerId,
@@ -221,7 +226,7 @@ export function PawnEditModal({
         notes: notes,
         status,
         store_id: currentStore.id,
-        collateral_detail: collaterals.filter(c => c.description.trim() !== '').map(c => c.description).join(', ')
+        collateral_detail: collateralDetailJson
       };
       
       // Call API to update pawn
@@ -312,55 +317,47 @@ export function PawnEditModal({
               />
             </div>
             
-            {/* Collaterals */}
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-start">
-              <Label className="text-right mt-2">Tài sản thế chấp</Label>
-              <div className="space-y-3">
-                {collaterals.map((collateral, index) => (
-                  <div key={index} className="border rounded-md p-3 space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium">Tài sản {index + 1}</span>
-                      {collaterals.length > 1 && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => removeCollateral(index)}
-                          className="text-red-600 border-red-300 hover:bg-red-50"
-                        >
-                          Xóa
-                        </Button>
-                      )}
-                    </div>
-                    <Input
-                      placeholder="Mô tả tài sản"
-                      value={collateral.description}
-                      onChange={(e) => handleCollateralChange(index, 'description', e.target.value)}
-                    />
-                    <Input
-                      placeholder="0"
-                      value={collateral.estimated_value}
-                      onChange={(e) => handleCollateralChange(index, 'estimated_value', e.target.value)}
-                      type="number"
-                    />
-                    <Textarea
-                      placeholder="Ghi chú"
-                      value={collateral.notes}
-                      onChange={(e) => handleCollateralChange(index, 'notes', e.target.value)}
-                      rows={2}
-                    />
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={addCollateral}
-                  className="w-full"
-                >
-                  + Thêm tài sản
-                </Button>
-              </div>
+            {/* Collateral Name */}
+            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
+              <Label htmlFor="collateralName" className="text-right">
+                Tên tài sản <span className="text-red-500">*</span>
+              </Label>
+              <Input 
+                id="collateralName"
+                value={collateralName}
+                onChange={(e) => setCollateralName(e.target.value)}
+                placeholder="Ví dụ: Xe máy Honda Wave, Nhẫn vàng 18k..."
+                required
+              />
             </div>
+
+            {/* Dynamic collateral attributes based on selected collateral */}
+            {selectedCollateral && (
+              <div className="space-y-4">
+                {/* Render dynamic attribute inputs */}
+                {[
+                  { key: 'attr_01', label: selectedCollateral.attr_01 },
+                  { key: 'attr_02', label: selectedCollateral.attr_02 },
+                  { key: 'attr_03', label: selectedCollateral.attr_03 },
+                  { key: 'attr_04', label: selectedCollateral.attr_04 },
+                  { key: 'attr_05', label: selectedCollateral.attr_05 }
+                ].map(({ key, label }) => {
+                  if (!label) return null;
+                  
+                  return (
+                    <div key={key} className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
+                      <Label htmlFor={key} className="text-right">{label}</Label>
+                      <Input 
+                        id={key}
+                        value={collateralAttributes[key] || ''}
+                        onChange={(e) => handleCollateralAttributeChange(key, e.target.value)}
+                        placeholder={`Nhập ${label.toLowerCase()}`}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             
             <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
               <Label htmlFor="loanAmount" className="text-right">

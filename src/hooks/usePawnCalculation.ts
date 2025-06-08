@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { PawnStatus } from '@/models/pawn';
 import { useStore } from '@/contexts/StoreContext';
+import { calculateActualLoanAmount } from '@/lib/Pawns/calculate_actual_loan_amount';
+import { calculateDebtToLatestPaidPeriod } from '@/lib/Pawns/calculate_remaining_debt';
+import { getExpectedMoney } from '@/lib/Pawns/get_expected_money';
 
 // Interface cho dữ liệu tài chính tổng hợp
 export interface StoreFinancialData {
@@ -64,8 +67,8 @@ export function usePawnCalculations() {
         const results = await Promise.all(
           activePawnsData.map(async (pawn) => {
             try {
-              // Calculate actual loan amount (for pawns, this is typically the original loan amount)
-              const actualLoanAmount = pawn.loan_amount;
+              // Calculate actual loan amount including additional loans and principal repayments
+              const actualLoanAmount = await calculateActualLoanAmount(pawn.id);
               
               // Calculate old debt from payment history
               const { data: paymentHistory } = await supabase
@@ -81,59 +84,30 @@ export function usePawnCalculations() {
                 .reduce((sum, record) => sum + (record.credit_amount || 0), 0) || 0;
               
               // Calculate old debt (similar to credits logic)
-              let oldDebt = 0;
-              if (paymentHistory?.length) {
-                // Simple calculation: sum of debit amounts minus credit amounts
-                oldDebt = paymentHistory.reduce((sum, record) => {
-                  if (record.transaction_type === 'payment') {
-                    return sum - (record.credit_amount || 0);
-                  } else if (record.transaction_type === 'additional_loan') {
-                    return sum + (record.debit_amount || 0);
-                  }
-                  return sum;
-                }, actualLoanAmount);
-              } else {
-                oldDebt = actualLoanAmount;
-              }
+              const oldDebt = await calculateDebtToLatestPaidPeriod(pawn.id);
               
-              // Calculate expected profit based on interest
+              // Calculate expected profit using getExpectedMoney (sum of all daily interest)
+              const expectedMoneyArray = await getExpectedMoney(pawn.id);
+              const expectedProfit = expectedMoneyArray.reduce((sum, amount) => sum + amount, 0);
+              
+              // Calculate interest to today
               const today = new Date();
               const loanStart = new Date(pawn.loan_date);
               const daysSinceLoan = Math.floor((today.getTime() - loanStart.getTime()) / (1000 * 60 * 60 * 24));
-              
-              let expectedProfit = 0;
-              let interestToday = 0;
-              
-              if (pawn.interest_type === 'percentage') {
-                // For percentage interest, calculate daily interest
-                const dailyInterestRate = pawn.interest_value / 100 / (pawn.interest_period || 30);
-                const dailyInterest = actualLoanAmount * dailyInterestRate;
-                
-                expectedProfit = dailyInterest * (pawn.loan_period || 30);
-                interestToday = dailyInterest * Math.min(daysSinceLoan + 1, pawn.loan_period || 30);
-              } else {
-                // For fixed amount interest
-                const periodsInLoan = Math.ceil((pawn.loan_period || 30) / (pawn.interest_period || 30));
-                expectedProfit = pawn.interest_value * periodsInLoan;
-                
-                const periodsToday = Math.min(
-                  Math.ceil((daysSinceLoan + 1) / (pawn.interest_period || 30)),
-                  periodsInLoan
-                );
-                interestToday = pawn.interest_value * periodsToday;
-              }
+              const daysToCalculate = Math.min(Math.max(0, daysSinceLoan + 1), expectedMoneyArray.length);
+              const interestToday = expectedMoneyArray.slice(0, daysToCalculate).reduce((sum, amount) => sum + amount, 0);
               
               return {
                 pawnId: pawn.id,
                 actualLoanAmount: Math.round(actualLoanAmount),
-                oldDebt: Math.round(Math.max(0, oldDebt)),
+                oldDebt: Math.round(oldDebt),
                 expectedProfit: Math.round(expectedProfit),
                 paidInterest: Math.round(paidInterest),
                 interestToday: Math.round(interestToday),
                 loading: false,
                 // For summary
                 summaryLoan: actualLoanAmount,
-                summaryDebt: Math.max(0, oldDebt),
+                summaryDebt: oldDebt,
                 summaryProfit: expectedProfit
               };
             } catch (error) {

@@ -27,11 +27,12 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
   const [isCalculating, setIsCalculating] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [loanAmount, setLoanAmount] = useState(0);
+  const [payDebt, setPayDebt] = useState(true); // Track whether to pay debt or not
   
   const isClosed = credit?.status === CreditStatus.CLOSED || credit?.status === CreditStatus.DELETED;
   
-  const handleCloseCredit = async (creditId: string) => {
-    console.log('Closing credit:', creditId);
+  const handleCloseCredit = async (creditId: string, shouldPayDebt: boolean = true) => {
+    console.log('Closing credit:', creditId, 'Pay debt:', shouldPayDebt);
     
     setIsClosing(true);
     
@@ -98,8 +99,8 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
           } as any);
       }
 
-      // Ghi lịch sử thanh toán nợ cũ nếu có
-      if (oldDebt !== 0) {
+      // Ghi lịch sử thanh toán nợ cũ nếu có và được chọn thanh toán
+      if (oldDebt !== 0 && shouldPayDebt) {
         await supabase
           .from('credit_history')
           .insert({
@@ -114,10 +115,10 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
           } as any);
       }
 
-      // Update credit status to closed and debt_amount to 0
+      // Update credit status to closed and debt_amount based on whether debt is paid
       const { error: updateError } = await updateCredit(creditId, { 
         status: 'closed' as CreditStatus, 
-        debt_amount: 0 
+        debt_amount: shouldPayDebt ? 0 : oldDebt
       });
 
       if (updateError) {
@@ -127,7 +128,9 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
       // Show success toast
       toast({
         title: "Thành công",
-        description: "Đã đóng hợp đồng thành công",
+        description: shouldPayDebt 
+          ? "Đã đóng hợp đồng và thanh toán nợ thành công"
+          : "Đã đóng hợp đồng thành công (giữ nguyên nợ cũ)",
       });
 
       // Close the modal
@@ -275,16 +278,39 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
         </div>
         
         <div className="mt-6 flex justify-center">
-          <Button 
-            onClick={() => setShowConfirm(true)} 
-            className="bg-blue-600 hover:bg-blue-700 text-white px-8"
-            disabled={isClosed || isCalculating || isClosing}
-          >
-            {isClosing ? "Đang đóng HĐ..." :
-             isCalculating ? "Đang tính toán..." :
-             credit?.status === CreditStatus.DELETED ? "Hợp đồng đã xóa" : 
-             credit?.status === CreditStatus.CLOSED ? "Hợp đồng đã đóng" : "Đóng HĐ"}
-          </Button>
+          {/* Show single button if no old debt or contract is already closed */}
+          {(oldDebt === 0 || isClosed) ? (
+            <Button 
+              onClick={() => { setPayDebt(true); setShowConfirm(true); }} 
+              className="bg-blue-600 hover:bg-blue-700 text-white px-8"
+              disabled={isClosed || isCalculating || isClosing}
+            >
+              {isClosing ? "Đang đóng HĐ..." :
+               isCalculating ? "Đang tính toán..." :
+               credit?.status === CreditStatus.DELETED ? "Hợp đồng đã xóa" : 
+               credit?.status === CreditStatus.CLOSED ? "Hợp đồng đã đóng" : "Đóng HĐ"}
+            </Button>
+          ) : (
+            /* Show two buttons if there's old debt */
+            <div className="flex gap-4">
+              <Button 
+                onClick={() => { setPayDebt(true); setShowConfirm(true); }} 
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6"
+                disabled={isCalculating || isClosing}
+              >
+                {isClosing && payDebt ? "Đang đóng HĐ..." :
+                 isCalculating ? "Đang tính toán..." : "Đóng HĐ và trả nợ"}
+              </Button>
+              <Button 
+                onClick={() => { setPayDebt(false); setShowConfirm(true); }} 
+                className="bg-orange-600 hover:bg-orange-700 text-white px-6"
+                disabled={isCalculating || isClosing}
+              >
+                {isClosing && !payDebt ? "Đang đóng HĐ..." :
+                 isCalculating ? "Đang tính toán..." : "Đóng HĐ và không trả nợ"}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
       <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
@@ -296,11 +322,13 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
             <p>Bạn có chắc chắn muốn đóng hợp đồng này không? Sau khi đóng, hợp đồng sẽ không thể chỉnh sửa.</p>
             
             <div className="bg-gray-50 p-3 rounded">
-              <p className="text-sm">
-                <strong>Xử lý:</strong> {remainingAmount <= 0 
-                  ? "Chỉ cần đóng hợp đồng (không còn lãi phí)" 
-                  : `Sẽ tạo lịch sử thanh toán từng ngày cho lãi phí ${formatCurrency(remainingAmount)} với date_status phù hợp`}
-              </p>
+              {oldDebt !== 0 && (
+                <p className="text-sm mt-2">
+                  <strong>Nợ cũ:</strong> {payDebt 
+                    ? `Sẽ thanh toán nợ cũ ${formatCurrency(Math.abs(oldDebt))}` 
+                    : `Sẽ giữ nguyên nợ cũ ${formatCurrency(Math.abs(oldDebt))}`}
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter>
@@ -309,7 +337,7 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
             </Button>
             <Button 
               className="bg-blue-600 text-white" 
-              onClick={() => { setShowConfirm(false); handleCloseCredit(credit.id); }}
+              onClick={() => { setShowConfirm(false); handleCloseCredit(credit.id, payDebt); }}
               disabled={isClosing}
             >
               {isClosing ? "Đang xử lý..." : "Xác nhận"}

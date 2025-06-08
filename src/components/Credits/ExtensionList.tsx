@@ -107,7 +107,7 @@ export function ExtensionList({
               <th className="px-4 py-2 text-center text-sm font-medium text-gray-500 border">Đến ngày</th>
               <th className="px-4 py-2 text-center text-sm font-medium text-gray-500 border">Số ngày</th>
               <th className="px-4 py-2 text-left text-sm font-medium text-gray-500 border">Nội dung</th>
-              <th className="px-4 py-2 text-center text-sm font-medium text-gray-500 border w-10"></th>
+              {/* <th className="px-4 py-2 text-center text-sm font-medium text-gray-500 border w-10"></th> */}
             </tr>
           </thead>
           <tbody>
@@ -146,7 +146,7 @@ export function ExtensionList({
                   <td className="px-2 py-2 text-left border">
                     {extension.notes}
                   </td>
-                  <td className="px-2 py-2 text-center border">
+                  {/* <td className="px-2 py-2 text-center border">
                     <Button 
                       variant="ghost" 
                       size="sm"
@@ -155,7 +155,7 @@ export function ExtensionList({
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
-                  </td>
+                  </td> */}
                 </tr>
               ))
             )}

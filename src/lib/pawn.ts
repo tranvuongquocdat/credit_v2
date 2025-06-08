@@ -106,7 +106,6 @@ export async function getPawnById(id: string) {
     const pawnWithRelations = {
       ...data,
       customer: data.customers || { name: 'Unknown Customer', phone: null, id_number: null },
-      collateral_asset: null
     };
     
     return { 

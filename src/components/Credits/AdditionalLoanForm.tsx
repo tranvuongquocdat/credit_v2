@@ -54,8 +54,16 @@ export function AdditionalLoanForm({ onSubmit, creditId, disabled = false, onSuc
         setCreditData(creditData);
         const endDate = creditData ? addDays(new Date(creditData.loan_date), creditData.loan_period - 1) : new Date();
         setMaxDate(format(endDate, 'yyyy-MM-dd'));
+        
+        // Set initial loan date based on latest payment or credit start date
         if (latestPaymentPaidDate) {
           setMinDate(latestPaymentPaidDate);
+          // Set loan date to the day after the latest payment date
+          const nextDay = addDays(new Date(latestPaymentPaidDate), 1);
+          setLoanDate(format(nextDay, 'yyyy-MM-dd'));
+        } else if (creditData?.loan_date) {
+          // If no payment exists, set to credit start date
+          setLoanDate(creditData.loan_date);
         }
       } catch (err) {
         console.error('Error in fetchData:', err);

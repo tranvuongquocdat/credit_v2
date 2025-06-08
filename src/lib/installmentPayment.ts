@@ -833,11 +833,10 @@ export async function countOverdueInstallments(storeId?: string) {
     today.setHours(0, 0, 0, 0);
     
     const { data, error } = await supabase
-      .from('installments')
+      .from('installments_by_store')
       .select('id, payment_due_date')
       .eq('store_id', storeId || '')
       .lte('payment_due_date', today.toISOString())
-      .eq('is_deleted', false)
       .eq('status', 'on_time');
     
     return {

@@ -24,7 +24,7 @@ export interface Pawn {
   phone?: string | null;
   address?: string | null;
   collateral_id: string;        // ID của tài sản thế chấp
-  collateral_detail?: string | null; // Chi tiết về tài sản, như biển số, màu sắc, v.v.
+  collateral_detail?: any | null; // Chi tiết về tài sản dưới dạng JSON: {name: string, attributes: {attr_01: string, ...}}
   loan_amount: number;
   interest_type: InterestType;
   interest_value: number;
@@ -47,7 +47,7 @@ export interface CreatePawnParams {
   phone?: string;
   address?: string;
   collateral_id: string;
-  collateral_detail?: string;
+  collateral_detail?: any;
   loan_amount: number;
   interest_type: InterestType;
   interest_value: number;
@@ -68,7 +68,7 @@ export interface UpdatePawnParams {
   phone?: string;
   address?: string;
   collateral_id?: string;
-  collateral_detail?: string;
+  collateral_detail?: any;
   loan_amount?: number;
   interest_type?: InterestType;
   interest_value?: number;

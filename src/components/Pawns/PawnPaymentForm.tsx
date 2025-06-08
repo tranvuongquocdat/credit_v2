@@ -119,7 +119,9 @@ export function PawnPaymentForm({
   // Handle days change
   const handleDaysChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newDays = e.target.value;
-    setDays(newDays);
+    if (parseInt(newDays) > 0) {
+      setDays(newDays);
+    }
   };
   
   // Handle interest amount change

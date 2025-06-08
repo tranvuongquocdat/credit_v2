@@ -25,6 +25,7 @@ interface SearchFiltersProps {
   onReset: () => void;
   onCreateNew: () => void;
   onExportExcel: () => void;
+  initialFilters?: Partial<SearchFilters>; // Thêm prop để pre-fill form
 }
 
 export interface SearchFilters {
@@ -42,18 +43,19 @@ export function SearchFilters({
   onSearch, 
   onReset, 
   onCreateNew, 
-  onExportExcel 
+  onExportExcel,
+  initialFilters
 }: SearchFiltersProps) {
   // Get store context
   const { currentStore, stores, setCurrentStore } = useStore();
   
   const [filters, setFilters] = useState<SearchFilters>({
-    contract_code: '',
-    customer_name: '',
-    start_date: '',
-    end_date: '',
-    duration: undefined,
-    status: 'on_time',
+    contract_code: initialFilters?.contract_code || '',
+    customer_name: initialFilters?.customer_name || '',
+    start_date: initialFilters?.start_date || '',
+    end_date: initialFilters?.end_date || '',
+    duration: initialFilters?.duration,
+    status: initialFilters?.status || 'on_time',
     store_id: currentStore?.id
   });
   
@@ -63,7 +65,20 @@ export function SearchFilters({
       ...prev,
       store_id: currentStore?.id
     }));
+    
   }, [currentStore]);
+  
+  // Update filters when initialFilters change
+  useEffect(() => {
+    if (initialFilters) {
+      console.log('SearchFilters received initialFilters:', initialFilters);
+      setFilters(prev => ({
+        ...prev,
+        ...initialFilters,
+      }));
+      onSearch(filters);
+    }
+  }, [initialFilters, currentStore]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
@@ -128,7 +143,7 @@ export function SearchFilters({
             <Input
               id="contract_code"
               placeholder="Nhập mã hợp đồng"
-              className="w-full pr-8"
+              className={`w-full pr-8 ${filters.contract_code && initialFilters?.contract_code ? 'border-blue-500 bg-blue-50' : ''}`}
               value={filters.contract_code}
               onChange={handleInputChange}
             />
