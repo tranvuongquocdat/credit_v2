@@ -1,4 +1,4 @@
-import { RefreshCw, StoreIcon } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { getStoreFinancialData, StoreFinancialData } from '@/lib/store';
 import { useStore } from '@/contexts/StoreContext';
