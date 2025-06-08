@@ -202,7 +202,6 @@ export default function IncomePage() {
   // State for customers
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [/* isLoadingCustomers - used for loading state */, setIsLoadingCustomers] = useState(false);
-  const [customerType, setCustomerType] = useState<'new' | 'existing'>('existing');
   
   // Form state
   const [formData, setFormData] = useState<TransactionFormData>({
@@ -324,13 +323,23 @@ export default function IncomePage() {
             } else {
               // If not found in our list, try to fetch from DB
               try {
-                const { data: customerData } = await supabase
-                  .from('customers')
-                  .select('name')
-                  .eq('id', transaction.customer_id)
-                  .single();
-                  
-                enhancedTransaction.customer_name = customerData?.name || transaction.customer_id;
+                const fetchCustomer = async () => {
+                  try {
+                    if (!transaction.customer_id) return;
+                    
+                    const { data } = await supabase
+                      .from('customers')
+                      .select('*')
+                      .eq('id', transaction.customer_id)
+                      .single();
+                    
+                    enhancedTransaction.customer_name = data?.name || transaction.customer_id;
+                  } catch {
+                    console.error('Error fetching customer details');
+                  }
+                };
+                
+                await fetchCustomer();
               } catch {
                 enhancedTransaction.customer_name = transaction.customer_id;
               }
@@ -428,60 +437,41 @@ export default function IncomePage() {
     }));
   };
 
-  // Handle customer selection change
-  const handleCustomerChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const customerId = e.target.value;
-    const customer = customers.find(c => c.id === customerId);
-    
-    setFormData(prev => ({
-      ...prev,
-      customer_id: customerId,
-      receiver: customer?.name || ''
-    }));
-  };
-
   // Handle adding new transaction
   const handleAddTransaction = async () => {
+    // Validation
+    if (!newCustomerName) {
+      setError("Vui lòng nhập tên khách hàng");
+      return;
+    }
+    
+    if (formData.amount <= 0) {
+      setError("Vui lòng nhập số tiền lớn hơn 0");
+      return;
+    }
+    
     setIsSubmitting(true);
-
+    setError(null);
+    
     try {
-      // Xử lý khách hàng mới nếu cần
-      let finalCustomerId = formData.customer_id;
+      // Create new customer if needed
+      let customerId = '';
       
-      if (customerType === 'new') {
-        if (!newCustomerName.trim()) {
-          throw new Error('Vui lòng nhập tên khách hàng');
-        }
+      // Always create a new customer since we're removing the existing customer option
+      const { data: newCustomer, error: customerError } = await supabase
+        .from('customers')
+        .insert({
+          name: newCustomerName,
+          phone: newCustomerPhone || null,
+          address: newCustomerAddress || null,
+          id_number: newCustomerIdNumber || null,
+          store_id: currentStore?.id
+        })
+        .select('id')
+        .single();
         
-        // Tạo khách hàng mới
-        const { data: newCustomer, error: customerError } = await supabase
-          .from('customers')
-          .insert({
-            name: newCustomerName,
-            store_id: currentStore?.id,
-            phone: newCustomerPhone,
-            address: newCustomerAddress,
-            id_number: newCustomerIdNumber
-          })
-          .select()
-          .single();
-        
-        if (customerError) {
-          throw new Error(`Không thể tạo khách hàng mới: ${customerError instanceof Error ? customerError.message : JSON.stringify(customerError)}`);
-        }
-        
-        if (!newCustomer?.id) {
-          throw new Error('Không thể tạo khách hàng mới');
-        }
-        
-        // Sử dụng ID của khách hàng mới tạo
-        finalCustomerId = newCustomer.id;
-        
-        // Cập nhật danh sách khách hàng
-        setCustomers(prev => [...prev, newCustomer as Customer]);
-      } else if (!finalCustomerId) {
-        throw new Error('Vui lòng chọn khách hàng');
-      }
+      if (customerError) throw customerError;
+      customerId = newCustomer.id;
 
       // Ensure store_id is a string (not undefined)
       const storeId = currentStore?.id || '';
@@ -494,7 +484,7 @@ export default function IncomePage() {
         employee_id: currentUser?.id || null,
         employee_name: currentUser?.username || null,
         store_id: storeId,
-        customer_id: finalCustomerId,
+        customer_id: customerId,
       };
 
       // Only insert if we have a valid store ID
@@ -520,32 +510,53 @@ export default function IncomePage() {
     }
   };
 
-  // Handle updating transaction
+  // Handle update transaction
   const handleUpdateTransaction = async () => {
     if (!selectedRecord) return;
+    
+    if (formData.amount <= 0) {
+      setError("Vui lòng nhập số tiền lớn hơn 0");
+      return;
+    }
+
     setIsSubmitting(true);
-
+    setError(null);
+    
     try {
-      const updatedTransaction = {
-        transaction_type: formData.transaction_type,
-        description: formData.description,
-        credit_amount: formData.amount,
-        debit_amount: 0,
-        update_at: new Date().toISOString(),
-        customer_id: formData.customer_id || null, // Sử dụng customer_id đã chọn
-        // Don't update employee_id or employee_name when editing
-      };
-
+      // Update transaction record
       const { error: updateError } = await supabase
         .from('transactions')
-        .update(updatedTransaction)
+        .update({
+          transaction_type: formData.transaction_type,
+          credit_amount: formData.amount,
+          description: formData.description,
+          update_at: new Date().toISOString(),
+        })
         .eq('id', selectedRecord.id);
-
+        
       if (updateError) throw updateError;
-
+      
+      // Update customer information if needed
+      if (selectedRecord.customer_id) {
+        const { error: customerUpdateError } = await supabase
+          .from('customers')
+          .update({
+            name: newCustomerName || '',
+            phone: newCustomerPhone || null,
+            address: newCustomerAddress || null,
+            id_number: newCustomerIdNumber || null,
+          })
+          .eq('id', selectedRecord.customer_id);
+          
+        if (customerUpdateError) {
+          console.error('Error updating customer:', customerUpdateError);
+          // Continue even if there's an error updating the customer
+        }
+      }
+      
       setIsFormModalOpen(false);
-      setSelectedRecord(null);
       fetchTransactions();
+      resetFormData();
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -580,19 +591,52 @@ export default function IncomePage() {
   const openEditModal = (record: Transaction) => {
     setSelectedRecord(record);
     
-    // Find customer name if available
-    const customerName = record.customer_name || 
-      customers.find(c => c.id === record.customer_id)?.name || 
-      '';
-    
+    // Set form data from the transaction record
     setFormData({
-      receiver: customerName,
+      receiver: record.customer_name || '',
       customer_id: record.customer_id || '',
       amount: record.credit_amount || 0,
       formattedAmount: formatNumber(record.credit_amount || 0),
       transaction_type: record.transaction_type || TRANSACTION_TYPES.INCOME_OTHER,
       description: record.description || '',
     });
+    
+    // If there's a customer, try to get their info for the customer fields
+    if (record.customer_id) {
+      // Look up customer details to populate the fields
+      const customer = customers.find(c => c.id === record.customer_id);
+      if (customer) {
+        setNewCustomerName(customer.name || '');
+        setNewCustomerPhone(customer.phone || '');
+        setNewCustomerAddress(customer.address || '');
+        setNewCustomerIdNumber(customer.id_number || '');
+      } else {
+        // If customer not found in the loaded list, try to fetch from the database
+        const fetchCustomer = async () => {
+          try {
+            if (!record.customer_id) return;
+            
+            const { data } = await supabase
+              .from('customers')
+              .select('*')
+              .eq('id', record.customer_id)
+              .single();
+              
+            if (data) {
+              setNewCustomerName(data.name || '');
+              setNewCustomerPhone(data.phone || '');
+              setNewCustomerAddress(data.address || '');
+              setNewCustomerIdNumber(data.id_number || '');
+            }
+          } catch {
+            console.error('Error fetching customer details');
+          }
+        };
+        
+        fetchCustomer();
+      }
+    }
+    
     setIsFormModalOpen(true);
   };
 
@@ -681,7 +725,6 @@ export default function IncomePage() {
     setNewCustomerPhone('');
     setNewCustomerAddress('');
     setNewCustomerIdNumber('');
-    setCustomerType('existing');
   };
 
   return (
@@ -943,107 +986,51 @@ export default function IncomePage() {
             </DialogHeader>
             
             <div className="grid gap-4 py-4">
-              {!selectedRecord && (
-                <div className="flex justify-center mb-2">
-                  <div className="flex space-x-8">
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="radio"
-                        id="existing-customer"
-                        name="customerType"
-                        value="existing"
-                        checked={customerType === 'existing'}
-                        onChange={() => setCustomerType('existing')}
-                        className="mr-2"
-                      />
-                      <Label htmlFor="existing-customer">Khách hàng đã có</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="radio"
-                        id="new-customer"
-                        name="customerType"
-                        value="new"
-                        checked={customerType === 'new'}
-                        onChange={() => setCustomerType('new')}
-                        className="mr-2"
-                      />
-                      <Label htmlFor="new-customer">Khách hàng mới</Label>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {customerType === 'existing' ? (
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="customer_id" className="text-right">
-                    Người nộp tiền
-                  </Label>
-                  <select
-                    id="customer_id"
-                    name="customer_id"
-                    className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2"
-                    value={formData.customer_id}
-                    onChange={handleCustomerChange}
-                    disabled={!!selectedRecord}
-                  >
-                    <option value="">-- Chọn khách hàng --</option>
-                    {customers.map(customer => (
-                      <option key={customer.id} value={customer.id}>
-                        {customer.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="newCustomerName" className="text-right">
-                      Tên khách hàng <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="newCustomerName"
-                      value={newCustomerName}
-                      onChange={(e) => setNewCustomerName(e.target.value)}
-                      className="col-span-3"
-                      required
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="newCustomerPhone" className="text-right">
-                      Số điện thoại
-                    </Label>
-                    <Input
-                      id="newCustomerPhone"
-                      value={newCustomerPhone}
-                      onChange={(e) => setNewCustomerPhone(e.target.value)}
-                      className="col-span-3"
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="newCustomerIdNumber" className="text-right">
-                      Số CCCD/Hộ chiếu
-                    </Label>
-                    <Input
-                      id="newCustomerIdNumber"
-                      value={newCustomerIdNumber}
-                      onChange={(e) => setNewCustomerIdNumber(e.target.value)}
-                      className="col-span-3"
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="newCustomerAddress" className="text-right">
-                      Địa chỉ
-                    </Label>
-                    <Input
-                      id="newCustomerAddress"
-                      value={newCustomerAddress}
-                      onChange={(e) => setNewCustomerAddress(e.target.value)}
-                      className="col-span-3"
-                    />
-                  </div>
-                </>
-              )}
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="newCustomerName" className="text-right">
+                  Tên khách hàng <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="newCustomerName"
+                  value={newCustomerName}
+                  onChange={(e) => setNewCustomerName(e.target.value)}
+                  className="col-span-3"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="newCustomerPhone" className="text-right">
+                  Số điện thoại
+                </Label>
+                <Input
+                  id="newCustomerPhone"
+                  value={newCustomerPhone}
+                  onChange={(e) => setNewCustomerPhone(e.target.value)}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="newCustomerIdNumber" className="text-right">
+                  Số CCCD/Hộ chiếu
+                </Label>
+                <Input
+                  id="newCustomerIdNumber"
+                  value={newCustomerIdNumber}
+                  onChange={(e) => setNewCustomerIdNumber(e.target.value)}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="newCustomerAddress" className="text-right">
+                  Địa chỉ
+                </Label>
+                <Input
+                  id="newCustomerAddress"
+                  value={newCustomerAddress}
+                  onChange={(e) => setNewCustomerAddress(e.target.value)}
+                  className="col-span-3"
+                />
+              </div>
               
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="amount" className="text-right">
