@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { Layout } from '@/components/Layout';
 import { FinancialSummary } from '@/components/common/FinancialSummary';
 import { supabase } from '@/lib/supabase';
@@ -433,7 +434,30 @@ export default function TotalFundPage() {
                       <TableRow key={item.id}>
                         <TableCell>{new Date(item.date).toLocaleDateString('vi-VN')}</TableCell>
                         <TableCell>{item.source}</TableCell>
-                        <TableCell>{item.contractCode || '-'}</TableCell>
+                        <TableCell>
+                          {item.contractCode && item.contractCode !== '-' ? (
+                            <Link 
+                              href={
+                                item.source === 'Tín chấp' 
+                                  ? `/credits/${item.contractCode}` 
+                                  : item.source === 'Cầm đồ' 
+                                    ? `/pawns/${item.contractCode}` 
+                                    : item.source === 'Trả góp' 
+                                      ? `/installments/${item.contractCode}` 
+                                      : '#'
+                              }
+                              className={
+                                (item.source === 'Tín chấp' || item.source === 'Cầm đồ' || item.source === 'Trả góp')
+                                  ? "text-blue-600 hover:underline" 
+                                  : ""
+                              }
+                            >
+                              {item.contractCode}
+                            </Link>
+                          ) : (
+                            '-'
+                          )}
+                        </TableCell>
                         <TableCell>{item.description}</TableCell>
                         <TableCell className="text-right font-medium text-green-600">
                           {item.income > 0 ? `${item.income.toLocaleString()} VND` : ''}
