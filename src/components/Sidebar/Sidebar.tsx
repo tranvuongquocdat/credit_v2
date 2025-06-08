@@ -21,8 +21,6 @@ import {
   FiChevronRight,
   FiFileText,
   FiTrendingUp,
-  FiPieChart,
-  FiBarChart,
   FiPackage,
   FiClock,
   FiCheckCircle,
@@ -75,7 +73,6 @@ const sidebarItems: SidebarItem[] = [
       { title: 'Thông tin chi tiết cửa hàng', path: '/stores', icon: <FiUserPlus size={18} />, redColor: true },
       { title: 'Danh sách cửa hàng', path: '/stores', icon: <FiUserCheck size={18} /> },
       { title: 'Cấu hình hàng hóa', path: '/stores/collaterals', icon: <FiUserCheck size={18} /> },
-      { title: 'Nhập tiền quỹ đầu ngày', path: '/stores', icon: <FiUserCheck size={18} />, redColor: true },
     ]
   },
   {
@@ -103,14 +100,10 @@ const sidebarItems: SidebarItem[] = [
     ]
   },
   { 
-    title: 'Thống kê', 
-    path: '/activities', 
+    title: 'Quỹ', 
+    path: '/total-fund', 
     icon: <FiActivity size={20} />,
     redColor: true,
-    submenu: [
-      { title: 'Thu tiền tín chấp', path: '/activities/overview', icon: <FiPieChart size={18} /> },
-      { title: 'Thu tiền trả góp', path: '/activities/daily', icon: <FiBarChart size={18} /> },
-    ]
   },
   { 
     title: 'Báo cáo', 
