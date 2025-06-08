@@ -4,7 +4,8 @@ import {
   PawnWithCustomerAndCollateral, 
   CreatePawnParams, 
   UpdatePawnParams,
-  PawnStatus 
+  PawnStatus,
+  PawnFilters 
 } from '@/models/pawn';
 
 /**
@@ -12,16 +13,16 @@ import {
  */
 export async function getPawns(
   page = 1,
-  limit = 10,
-  searchQuery = '',
-  storeId = '',
-  status = ''
+  pageSize = 10,
+  filters?: PawnFilters,
+  signal?: AbortSignal
 ) {
   try {
-    // Bắt đầu từ record thứ mấy
-    const from = (page - 1) * limit;
+    // Calculate pagination
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
     
-    // Tạo query cơ bản với join customers
+    // Build base query with customer join
     let query = supabase
       .from('pawns')
       .select(`
@@ -33,59 +34,145 @@ export async function getPawns(
         )
       `, { count: 'exact' });
     
-    // Áp dụng các filter nếu có
-    if (searchQuery) {
-      // Manually construct the or filter with a simple syntax to avoid parsing issues
-      const filter = 
-        `contract_code.ilike.%${searchQuery}%,` +
-        `id_number.ilike.%${searchQuery}%,` +
-        `phone.ilike.%${searchQuery}%`;
-      query = query.or(filter);
+    // Apply filters if provided
+    if (filters?.contract_code) {
+      query = query.ilike('contract_code', `%${filters.contract_code}%`);
     }
     
-    if (storeId) {
-      query = query.eq('store_id', storeId);
+    if (filters?.customer_name) {
+      // Handle search with customer name support (similar to installments)
+      const queryWithoutCustomerFilter = query;
+      
+      // Get all customer IDs whose names match the filter
+      const { data: matchingCustomers } = await supabase
+        .from('customers')
+        .select('id')
+        .ilike('name', `%${filters.customer_name}%`);
+      
+      if (matchingCustomers && matchingCustomers.length > 0) {
+        // Extract customer IDs
+        const customerIds = matchingCustomers.map(c => c.id);
+        // Apply in filter to original query
+        query = queryWithoutCustomerFilter.in('customer_id', customerIds);
+      } else {
+        // No matching customers, return empty result
+        query = queryWithoutCustomerFilter.eq('id', '00000000-0000-0000-0000-000000000000'); // Non-existent ID
+      }
     }
     
-    if (status) {
-      query = query.eq('status', status as PawnStatus);
+    if (filters?.start_date) {
+      query = query.gte('loan_date', filters.start_date);
     }
     
-    // Thực hiện query với phân trang
+    if (filters?.end_date) {
+      query = query.lte('loan_date', filters.end_date);
+    }
+    
+    if (filters?.loan_period) {
+      query = query.eq('loan_period', filters.loan_period);
+    }
+    
+    if (filters?.status && filters.status !== 'all' && filters.status !== '' as any) {
+      query = query.eq('status', filters.status as PawnStatus);
+    }
+    
+    if (filters?.store_id) {
+      query = query.eq('store_id', filters.store_id);
+    }
+    
+    // Check if request was cancelled before executing query
+    if (signal?.aborted) {
+      throw new Error('Request was cancelled');
+    }
+    
+    // Execute query with pagination
     const { data, error, count } = await query
       .order('created_at', { ascending: false })
-      .range(from, from + limit - 1);
+      .range(from, to);
     
-    if (error) throw error;
+    if (error) {
+      throw error;
+    }
     
-    // Map the data to include customer information
+    // Check if request was cancelled after query
+    if (signal?.aborted) {
+      throw new Error('Request was cancelled');
+    }
+    
+    // Transform data to match UI requirements
+    const pawnsWithRelations = (data || []).map(pawn => ({
+      ...pawn,
+      customer: pawn.customers || { name: 'Unknown Customer', phone: null, id_number: null },
+      collateral_asset: null
+    })) as PawnWithCustomerAndCollateral[];
+    
+    // Calculate total pages
+    const totalPages = Math.ceil((count || 0) / pageSize);
+
     return {
-      data: (data || []).map(pawn => ({
-        ...pawn,
-        customer: pawn.customers || { name: 'Unknown Customer', phone: null, id_number: null },
-        collateral_asset: null
-      })) as PawnWithCustomerAndCollateral[],
+      data: pawnsWithRelations,
       total: count || 0,
       page,
-      limit,
+      pageSize,
+      totalPages,
       error: null
     };
-  } catch (error) {
+  } catch (error: any) {
+    // Handle abort errors gracefully without logging
+    if (error instanceof Error && error.name === 'AbortError') {
+      return {
+        data: [],
+        total: 0,
+        page,
+        pageSize,
+        totalPages: 0,
+        error: null
+      };
+    }
+    
     console.error('Error fetching pawns:', error);
     return {
       data: [],
       total: 0,
       page,
-      limit,
+      pageSize,
+      totalPages: 0,
       error
     };
   }
 }
 
 /**
+ * Backward compatibility wrapper for old getPawns signature
+ * @deprecated Use getPawns with PawnFilters instead
+ */
+export async function getPawnsLegacy(
+  page = 1,
+  pageSize = 10,
+  searchQuery = '',
+  storeId = '',
+  status = '',
+  signal?: AbortSignal
+) {
+  const filters: PawnFilters = {};
+  
+  if (searchQuery) {
+    filters.contract_code = searchQuery;
+  }
+  if (storeId) {
+    filters.store_id = storeId;
+  }
+  if (status) {
+    filters.status = status as PawnStatus;
+  }
+  
+  return getPawns(page, pageSize, filters, signal);
+}
+
+/**
  * Lấy thông tin hợp đồng cầm đồ theo ID
  */
-export async function getPawnById(id: string) {
+export async function getPawnById(id: string, signal?: AbortSignal) {
   try {
     const { data, error } = await supabase
       .from('pawns')
@@ -102,6 +189,11 @@ export async function getPawnById(id: string) {
     
     if (error) throw error;
     
+    // Check if request was cancelled
+    if (signal?.aborted) {
+      return { data: null, error: null };
+    }
+    
     // Map the data to include customer information
     const pawnWithRelations = {
       ...data,
@@ -112,7 +204,12 @@ export async function getPawnById(id: string) {
       data: pawnWithRelations as PawnWithCustomerAndCollateral, 
       error: null 
     };
-  } catch (error) {
+  } catch (error: any) {
+    // Handle abort errors gracefully without logging
+    if (error instanceof Error && error.name === 'AbortError') {
+      return { data: null, error: null };
+    }
+    
     console.error('Error fetching pawn by ID:', error);
     return { data: null, error };
   }
@@ -241,22 +338,8 @@ export async function updatePawn(id: string, params: UpdatePawnParams) {
  */
 export async function deletePawn(id: string) {
   try {
-    // Kiểm tra xem hợp đồng có kỳ thanh toán nào không
-    const { data: paymentPeriods, error: paymentError } = await supabase
-      .from('pawn_payment_periods')
-      .select('id')
-      .eq('pawn_id', id)
-      .limit(1);
-    
-    if (paymentError) throw paymentError;
-    
-    // Nếu có kỳ thanh toán, không cho phép xóa
-    if (paymentPeriods && paymentPeriods.length > 0) {
-      return { 
-        data: null, 
-        error: { message: 'Không thể xóa hợp đồng đã có kỳ thanh toán' } 
-      };
-    }
+    // Skip payment period check since table doesn't exist yet
+    // In future: check if pawn has any payment periods before allowing deletion
     
     // Lấy thông tin hợp đồng để ghi lịch sử
     const { data: pawnData, error: pawnError } = await supabase
@@ -297,16 +380,27 @@ export async function deletePawn(id: string) {
 /**
  * Lấy các hợp đồng cầm đồ của một khách hàng
  */
-export async function getPawnsByCustomerId(customerId: string) {
+export async function getPawnsByCustomerId(customerId: string, signal?: AbortSignal) {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('pawns')
       .select('*')
       .eq('customer_id', customerId)
       .eq('status', PawnStatus.ON_TIME)
       .order('created_at', { ascending: false });
     
+    if (signal) {
+      query = query.abortSignal(signal);
+    }
+    
+    const { data, error } = await query;
+    
     if (error) throw error;
+    
+    // Check if request was cancelled
+    if (signal?.aborted) {
+      return { data: [], error: null };
+    }
     
     // Temporarily return basic pawn data without customer/collateral joins
     const pawnsWithRelations = (data || []).map(pawn => ({
@@ -319,7 +413,12 @@ export async function getPawnsByCustomerId(customerId: string) {
       data: pawnsWithRelations as PawnWithCustomerAndCollateral[], 
       error: null 
     };
-  } catch (error) {
+  } catch (error: any) {
+    // Handle abort errors gracefully without logging
+    if (error instanceof Error && error.name === 'AbortError') {
+      return { data: [], error: null };
+    }
+    
     console.error('Error fetching customer pawns:', error);
     return { data: [], error };
   }

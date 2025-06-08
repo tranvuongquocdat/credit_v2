@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Layout } from '@/components/Layout';
 import { 
@@ -51,6 +51,22 @@ export default function CreditsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
+  // Parse URL parameters for initial filters
+  const initialFilters = useMemo(() => {
+    const contract = searchParams.get('contract');
+    const customer = searchParams.get('customer');
+    const status = searchParams.get('status');
+    
+    if (contract || customer || status) {
+      return {
+        contract_code: contract || '',
+        customer_name: customer || '',
+        status: status || '' // Empty status to show all when navigating from warnings
+      };
+    }
+    
+    return undefined;
+  }, [searchParams]);
   
   // Use our custom hook for credits data and operations
   const { 
@@ -66,7 +82,10 @@ export default function CreditsPage() {
     handleDelete,
     handleUpdateStatus: updateCreditStatus,
     refetch
-  } = useCredits();
+  } = useCredits(initialFilters);
+  
+  // Track if initial filters have been processed
+  const [hasProcessedInitialFilters, setHasProcessedInitialFilters] = useState(false);
   
   // Lấy dữ liệu tài chính tổng hợp
   const { summary: financialSummary, details: creditDetails, refresh: refreshFinancial } = useCreditCalculations();
@@ -88,20 +107,13 @@ export default function CreditsPage() {
   // Calculate total pages
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   
-  // Xử lý query parameter từ URL
+  // Process initial filters only once
   useEffect(() => {
-    const contractParam = searchParams.get('contract');
-    if (contractParam) {
-      // Nếu có tham số contract, thực hiện tìm kiếm với mã hợp đồng
-      handleSearch({
-        contractCode: contractParam,
-        customerName: '',
-        startDate: '',
-        endDate: '',
-        status: 'on_time' // Sử dụng 'all' để hiển thị tất cả trạng thái
-      });
+    if (initialFilters && !hasProcessedInitialFilters) {
+      setHasProcessedInitialFilters(true);
+      // The useCredits hook will handle the initial filters
     }
-  }, [searchParams]);
+  }, [initialFilters, hasProcessedInitialFilters]);
   
   // Handle search filters
   const handleSearchFilters = (filters: any) => {
@@ -268,6 +280,7 @@ export default function CreditsPage() {
           onReset={handleReset}
           onCreateNew={handleCreateCredit}
           onExportExcel={handleExportExcel}
+          initialFilters={initialFilters}
         />
 
         {/* Bảng dữ liệu hợp đồng */}

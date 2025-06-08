@@ -175,7 +175,7 @@ export function InstallmentWarningsTable({
                 hasOverduePeriods = latePeriods > 0;
                 
                 console.log(`Contract ${installment.contract_code}: Found ${latePeriods} unpaid periods, hasOverduePeriods: ${hasOverduePeriods}`);
-                
+              
                 // 6. Calculate expected amount for each unpaid period theo đúng thứ tự và tạo button values
                 let cumulativeAmount = 0;
                 
@@ -223,8 +223,8 @@ export function InstallmentWarningsTable({
                 
                 if (actualLatePeriods > 0) {
                   for (let i = 1; i <= Math.min(actualLatePeriods, 10); i++) {
-                    buttonValues.push(amountPerPeriod * i);
-                  }
+                buttonValues.push(amountPerPeriod * i);
+              }
                   hasOverduePeriods = true;
                 }
                 
@@ -234,14 +234,14 @@ export function InstallmentWarningsTable({
               
               // Chỉ thêm vào warnings nếu thực sự có kỳ quá hạn
               if (hasOverduePeriods && latePeriods > 0) {
-                // Add to warnings
-                warningResults.push({
-                  ...installment,
-                  payments: [],
-                  latePeriods,
-                  buttonValues,
-                  totalDueAmount: installment.debt_amount || 0 // Sử dụng debt_amount từ installment
-                });
+              // Add to warnings
+              warningResults.push({
+                ...installment,
+                payments: [],
+                latePeriods,
+                buttonValues,
+                totalDueAmount: installment.debt_amount || 0 // Sử dụng debt_amount từ installment
+              });
               }
             }
             

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { PawnStatus, PawnWithCustomer } from '@/models/pawn';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { PawnStatus, PawnWithCustomer, PawnFilters } from '@/models/pawn';
 import { toast } from '@/components/ui/use-toast';
 import { getPawns } from '@/lib/pawn';
 import { useStore } from '@/contexts/StoreContext';
@@ -33,32 +33,77 @@ export function usePawns() {
   const [filters, setFilters] = useState<SearchFilters>({});
   // Get current store from store context
   const { currentStore } = useStore();
+  
+  // AbortController for request cancellation
+  const abortControllerRef = useRef<AbortController | null>(null);
+  
   // Fetch pawns data from the API
   const fetchPawns = useCallback(async () => {
+    const fetchId = Math.random().toString(36).substr(2, 9); // Unique ID
+    const timestamp = new Date().toISOString().slice(11, 23); // HH:mm:ss.sss
+    console.log(`📊 [${timestamp}] [${fetchId}] usePawns fetchPawns STARTED with filters:`, filters);
+    
+    // Cancel previous request
+    if (abortControllerRef.current) {
+      console.log(`🚫 [${timestamp}] [${fetchId}] Cancelling previous request`);
+      abortControllerRef.current.abort();
+    }
+    
+    // Create new AbortController for this request  
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     setLoading(true);
     setError(null);
     
     try {
-      let searchQuery = '';
-      if (filters.contractCode) searchQuery = filters.contractCode;
-      if (filters.customerName) searchQuery = filters.customerName;
+      // Convert SearchFilters to PawnFilters
+      const pawnFilters: PawnFilters = {
+        contract_code: filters.contractCode,
+        customer_name: filters.customerName,
+        start_date: filters.startDate,
+        end_date: filters.endDate,
+        status: filters.status as any,
+        store_id: currentStore?.id || ''
+      };
+      
+      // Check if request was cancelled
+      if (controller.signal.aborted) {
+        throw new Error('Request was cancelled');
+      }
       
       const result = await getPawns(
         currentPage,
         itemsPerPage,
-        searchQuery,
-        currentStore?.id || '',
-        filters.status
+        pawnFilters,
+        controller.signal
       );
+      
+      // Check if request was cancelled after query
+      if (controller.signal.aborted) {
+        throw new Error('Request was cancelled');
+      }
+      
+      const endTimestamp = new Date().toISOString().slice(11, 23);
+      console.log(`🎯 [${endTimestamp}] [${fetchId}] Loaded ${result.data.length} pawns successfully`);
+      
       setPawns(result.data);
       setTotalItems(result.total);
       setLoading(false);
-    } catch (err) {
+    } catch (err: any) {
+      // Handle abort errors gracefully
+      if (err instanceof Error && err.name === 'AbortError') {
+        console.log(`🚫 [${timestamp}] [${fetchId}] Request cancelled:`, err.message);
+        return;
+      }
+      
+      const errorTimestamp = new Date().toISOString().slice(11, 23);
+      console.log(`❌ [${errorTimestamp}] [${fetchId}] fetchPawns ERROR:`, err);
+      
       setError('Không thể tải dữ liệu hợp đồng');
       setLoading(false);
       console.error('Error fetching pawns:', err);
     }
-  }, [currentPage, itemsPerPage, filters]);
+  }, [currentPage, itemsPerPage, filters, currentStore?.id]);
   
   // Initial fetch on component mount
   useEffect(() => {
@@ -72,6 +117,7 @@ export function usePawns() {
   
   // Handle search with filters
   const handleSearch = (searchFilters: SearchFilters) => {
+    console.log('🔍 usePawns handleSearch called with searchFilters:', searchFilters);
     setFilters(searchFilters);
     setCurrentPage(DEFAULT_PAGE); // Reset to first page when searching
   };

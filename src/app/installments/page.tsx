@@ -80,8 +80,8 @@ export default function InstallmentsPage() {
       
       // Set initial filters để pre-fill form
       setInitialFilters({
-        contract_code: contractParam,
-        status: 'on_time' // Để trống để hiển thị tất cả trạng thái
+        contract_code: contractParam
+        // Không set status ở đây, để SearchFilters component tự quyết định
       });
       
       // Scroll to top and highlight the search section

@@ -51,6 +51,8 @@ export default function PawnsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
+  // State để lưu initial filters từ URL
+  const [initialFilters, setInitialFilters] = useState<Partial<any> | undefined>(undefined);
   
   // Use our custom hook for pawns data and operations
   const { 
@@ -88,18 +90,23 @@ export default function PawnsPage() {
   // Calculate total pages
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   
-  // Xử lý query parameter từ URL
+  // Xử lý query parameter từ URL - pre-fill form thay vì auto-search
   useEffect(() => {
     const contractParam = searchParams.get('contract');
     if (contractParam) {
-      // Nếu có tham số contract, thực hiện tìm kiếm với mã hợp đồng
-      handleSearch({
-        contractCode: contractParam,
-        customerName: '',
-        startDate: '',
-        endDate: '',
-        status: 'on_time' // Sử dụng 'all' để hiển thị tất cả trạng thái
+      console.log('Pre-filling pawns page with contract:', contractParam);
+      
+      // Set initial filters để pre-fill form
+      setInitialFilters({
+        contractCode: contractParam
+        // Không set status ở đây, để SearchFilters component tự quyết định
       });
+      
+      // Scroll to top and highlight the search section
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      // Clear initial filters khi không có contract param
+      setInitialFilters(undefined);
     }
   }, [searchParams]);
   
@@ -250,7 +257,7 @@ export default function PawnsPage() {
         {/* Title và nút trở về */}
         <div className="flex items-center justify-between border-b pb-2 mb-2">
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold">Quản lý hợp đồng tín chấp</h1>
+            <h1 className="text-lg font-bold">Quản lý hợp đồng cầm đồ</h1>
           </div>
         </div>
         
@@ -268,6 +275,7 @@ export default function PawnsPage() {
           onReset={handleReset}
           onCreateNew={handleCreatePawn}
           onExportExcel={handleExportExcel}
+          initialFilters={initialFilters}
         />
 
         {/* Bảng dữ liệu hợp đồng */}

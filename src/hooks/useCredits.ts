@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { CreditWithCustomer, CreditStatus } from '@/models/credit';
-import { getCredits, deleteCredit, updateCredit } from '@/lib/credit';
+import { getCredits, deleteCredit, updateCredit, CreditFilters } from '@/lib/credit';
 import { SearchFilters } from '@/components/Credits/SearchFilters';
 import { useStore } from '@/contexts/StoreContext';
 
-export function useCredits() {
+export function useCredits(initialFilters?: Partial<SearchFilters>) {
   const [credits, setCredits] = useState<CreditWithCustomer[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<any>(null);
@@ -12,34 +12,59 @@ export function useCredits() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [filters, setFilters] = useState<SearchFilters>({
-    contractCode: '',
-    customerName: '',
-    startDate: '',
-    endDate: '',
-    status: 'on_time'
+    contract_code: initialFilters?.contract_code || '',
+    customer_name: initialFilters?.customer_name || '',
+    start_date: initialFilters?.start_date || '',
+    end_date: initialFilters?.end_date || '',
+    status: initialFilters?.status || 'on_time'
   });
   
   // Get current store from store context
   const { currentStore } = useStore();
+  
+  // AbortController ref to cancel previous requests
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Convert SearchFilters to CreditFilters
+  const convertToApiFilters = useCallback((searchFilters: SearchFilters): CreditFilters => {
+    return {
+      contract_code: searchFilters.contract_code || undefined,
+      customer_name: searchFilters.customer_name || undefined,
+      start_date: searchFilters.start_date || undefined,
+      end_date: searchFilters.end_date || undefined,
+      status: searchFilters.status ? (searchFilters.status as CreditStatus) : undefined,
+      store_id: currentStore?.id
+    };
+  }, [currentStore]);
 
   // Fetch credits with filters
   const fetchCredits = useCallback(async () => {
+    // Cancel previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    // Create new AbortController
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    
     setLoading(true);
     setError(null);
     
     try {
-      // Combine filters into a search query
-      let searchQuery = '';
-      if (filters.contractCode) searchQuery = filters.contractCode;
-      if (filters.customerName) searchQuery = filters.customerName;
+      const apiFilters = convertToApiFilters(filters);
       
       const result = await getCredits(
         currentPage,
         itemsPerPage,
-        searchQuery,
-        currentStore?.id || '', // Use current store ID from context
-        filters.status
+        apiFilters,
+        controller.signal
       );
+      
+      // Check if request was cancelled
+      if (controller.signal.aborted) {
+        return;
+      }
       
       if (result.error) {
         throw result.error;
@@ -48,16 +73,30 @@ export function useCredits() {
       setCredits(result.data);
       setTotalItems(result.total);
     } catch (err) {
+      // Don't set error for cancelled requests
+      if (controller.signal.aborted) {
+        return;
+      }
+      
       console.error('Error fetching credits:', err);
       setError(err);
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     }
-  }, [currentPage, itemsPerPage, filters, currentStore]);
+  }, [currentPage, itemsPerPage, filters, convertToApiFilters]);
 
   // Initial load
   useEffect(() => {
     fetchCredits();
+    
+    // Cleanup function to cancel request
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, [fetchCredits]);
 
   // Handle search
@@ -68,13 +107,14 @@ export function useCredits() {
 
   // Handle reset
   const handleReset = () => {
-    setFilters({
-      contractCode: '',
-      customerName: '',
-      startDate: '',
-      endDate: '',
+    const resetFilters = {
+      contract_code: '',
+      customer_name: '',
+      start_date: '',
+      end_date: '',
       status: 'on_time'
-    });
+    };
+    setFilters(resetFilters);
     setCurrentPage(1);
   };
 
@@ -92,7 +132,7 @@ export function useCredits() {
       
       if (result.error) {
         setLoading(false);
-        return result; // Trả về kết quả có lỗi
+        return result;
       }
       
       // Remove from local state
@@ -105,11 +145,11 @@ export function useCredits() {
         fetchCredits();
       }
       
-      return result; // Trả về kết quả thành công
+      return result;
     } catch (err) {
       console.error('Error deleting credit:', err);
       setError(err);
-      return { data: null, error: err }; // Trả về lỗi
+      return { data: null, error: err };
     } finally {
       setLoading(false);
     }

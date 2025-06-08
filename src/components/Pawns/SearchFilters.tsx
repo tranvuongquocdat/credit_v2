@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -26,6 +26,7 @@ interface SearchFiltersProps {
   onReset: () => void;
   onCreateNew: () => void;
   onExportExcel?: () => void;
+  initialFilters?: Partial<SearchFilters>; // Thêm prop để pre-fill form
 }
 
 export interface SearchFilters {
@@ -41,15 +42,58 @@ export function SearchFilters({
   onSearch,
   onReset,
   onCreateNew,
-  onExportExcel
+  onExportExcel,
+  initialFilters
 }: SearchFiltersProps) {
   const [filters, setFilters] = useState<SearchFilters>({
     contractCode: '',
     customerName: '',
     startDate: '',
     endDate: '',
-    status: 'on_time'
+    status: 'on_time' // Fixed default, không dùng initialFilters ở đây
   });
+  
+  // Track if we've already processed initialFilters to prevent double search
+  const [hasProcessedInitialFilters, setHasProcessedInitialFilters] = useState(false);
+  
+  // Handle initialFilters
+  useEffect(() => {
+    console.log('🔧 Pawns SearchFilters useEffect triggered:', { 
+      hasInitialFilters: !!initialFilters,
+      hasProcessedInitialFilters 
+    });
+    
+    // Chỉ auto-search khi có initialFilters và chưa xử lý
+    if (initialFilters && !hasProcessedInitialFilters) {
+      console.log('🎯 Pawns SearchFilters processing initialFilters for first time:', initialFilters);
+      
+      // Nếu có contractCode trong initialFilters, dùng status 'all' để hiển thị tất cả trạng thái
+      // Nếu không, dùng 'on_time' làm mặc định
+      const defaultStatus = initialFilters.contractCode ? 'all' : 'on_time';
+      
+      const newFilters = {
+        contractCode: '',
+        customerName: '',
+        startDate: '',
+        endDate: '',
+        status: defaultStatus,
+        ...initialFilters // Override với initialFilters (trừ status nếu chưa set)
+      };
+      
+      setFilters(newFilters);
+      setHasProcessedInitialFilters(true); // Đánh dấu đã xử lý
+      
+      // Auto-search chỉ cho navigation từ URL
+      onSearch(newFilters);
+    }
+  }, [initialFilters, hasProcessedInitialFilters, onSearch]);
+  
+  // Reset processed flag khi initialFilters thay đổi (new navigation)
+  useEffect(() => {
+    if (initialFilters) {
+      setHasProcessedInitialFilters(false);
+    }
+  }, [initialFilters]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
@@ -96,7 +140,7 @@ export function SearchFilters({
             <Input
               id="contractCode"
               placeholder="Nhập mã hợp đồng"
-              className="w-full pr-8"
+              className={`w-full pr-8 ${filters.contractCode && initialFilters?.contractCode ? 'border-blue-500 bg-blue-50' : ''}`}
               value={filters.contractCode}
               onChange={handleInputChange}
             />

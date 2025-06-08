@@ -27,13 +27,15 @@ interface PawnWarningsTableProps {
   loading: boolean;
   statusMap: Record<string, { label: string; color: string }>;
   onViewDetail: (pawn: PawnWithCustomerAndCollateral) => void;
+  onCustomerClick?: (pawn: PawnWithCustomerAndCollateral) => void;
 }
 
 export function PawnWarningsTable({
   pawns,
   loading,
   statusMap,
-  onViewDetail
+  onViewDetail,
+  onCustomerClick
 }: PawnWarningsTableProps) {
   const [warnings, setWarnings] = useState<PawnWarning[]>([]);
   const [processingWarnings, setProcessingWarnings] = useState(false);
@@ -258,7 +260,11 @@ export function PawnWarningsTable({
                 {warning.contract_code || 'N/A'}
               </td>
               <td className="py-3 px-3 border-r border-gray-200 text-center">
-                <span className="text-red-600 font-medium">
+                <span 
+                  className="text-red-600 font-medium cursor-pointer hover:text-red-800 hover:underline"
+                  onClick={() => onCustomerClick?.(warning)}
+                  title="Click để xem chi tiết hợp đồng"
+                >
                   {warning.customer?.name || 'N/A'}
                 </span>
               </td>

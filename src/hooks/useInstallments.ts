@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   getInstallments, 
   updateInstallmentStatus, 
@@ -19,24 +19,36 @@ export function useInstallments() {
   // Get current store from context
   const { currentStore } = useStore();
   
-  const [filters, setFilters] = useState<InstallmentFilters>({
+  const [filters, setFiltersOriginal] = useState<InstallmentFilters>({
     status: InstallmentStatus.ON_TIME, // Mặc định hiển thị các hợp đồng đang vay
     store_id: currentStore?.id // Set default store_id from context
   });
+
+  // Wrapper để log mọi filter changes (simplified logging for production)
+  const setFilters = (newFilters: InstallmentFilters | ((prev: InstallmentFilters) => InstallmentFilters)) => {
+    setFiltersOriginal(newFilters);
+  };
   
   const { toast } = useToast();
 
-  // Update filters when store changes
-  useEffect(() => {
-    if (currentStore?.id) {
-      setFilters(prevFilters => ({
-        ...prevFilters,
-        store_id: currentStore.id
-      }));
-    }
-  }, [currentStore]);
+  // AbortController for request cancellation
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchInstallments = async () => {
+    const fetchId = Math.random().toString(36).substr(2, 9); // Unique ID
+    const timestamp = new Date().toISOString().slice(11, 23); // HH:mm:ss.sss
+    console.log(`📊 [${timestamp}] [${fetchId}] useInstallments fetchInstallments STARTED with filters:`, filters);
+    
+    // Cancel previous request
+    if (abortControllerRef.current) {
+      console.log(`🚫 [${timestamp}] [${fetchId}] Cancelling previous request`);
+      abortControllerRef.current.abort();
+    }
+    
+    // Create new AbortController for this request  
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    
     setLoading(true);
     setError(null);
     
@@ -47,13 +59,28 @@ export function useInstallments() {
     };
     
     try {
-      const { data, error, count } = await getInstallments(currentPage, itemsPerPage, currentFilters);
+      const { data, error, count } = await getInstallments(currentPage, itemsPerPage, currentFilters, controller.signal);
+      
+      // Check if this request was cancelled
+      if (controller.signal.aborted) {
+        console.log(`🚫 [${timestamp}] [${fetchId}] Request was cancelled`);
+        return;
+      }
       
       if (error) throw new Error(error.message);
       
+      const endTimestamp = new Date().toISOString().slice(11, 23);
+      console.log(`🎯 [${endTimestamp}] [${fetchId}] Loaded ${data.length} installments successfully`);
       setInstallments(data);
       setTotalItems(count || 0);
     } catch (err: any) {
+      // Handle abort errors gracefully
+      if (err instanceof Error && err.name === 'AbortError') {
+        console.log(`🚫 [${timestamp}] [${fetchId}] Request cancelled:`, err.message);
+        return;
+      }
+      const errorTimestamp = new Date().toISOString().slice(11, 23);
+      console.log(`❌ [${errorTimestamp}] [${fetchId}] fetchInstallments ERROR:`, err);
       console.error('Error loading installments:', err);
       setError(err.message || 'Có lỗi xảy ra khi tải dữ liệu. Vui lòng thử lại sau.');
       toast({
@@ -73,12 +100,14 @@ export function useInstallments() {
 
   // Handle search filters
   const handleSearch = (newFilters: InstallmentFilters) => {
+    console.log('🔍 useInstallments handleSearch called with newFilters:', newFilters);
     // Preserve the store_id from context
-    setFilters({
+    const updatedFilters = {
       ...newFilters,
       store_id: currentStore?.id || newFilters.store_id
-    });
-    setCurrentPage(1);
+    };
+    setFilters(updatedFilters);
+    setCurrentPage(1); // Reset về trang 1 khi search
   };
 
   // Handle reset filters
@@ -163,6 +192,7 @@ export function useInstallments() {
 
   // Refetch data
   const refetch = () => {
+    console.log('🔄 refetch called');
     fetchInstallments();
   };
 

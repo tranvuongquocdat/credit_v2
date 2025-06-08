@@ -9,8 +9,10 @@ import { calculateDebtToLatestPaidPeriod } from './Installments/calculate_remain
 export async function getInstallments(
   page = 1,
   pageSize = 10,
-  filters?: InstallmentFilters
+  filters?: InstallmentFilters,
+  signal?: AbortSignal
 ) {
+  // Debug logging removed - race condition fixed with AbortController
   try {
     // Use the installments_by_store view to include store_id
     let query = supabase
@@ -60,7 +62,7 @@ export async function getInstallments(
       query = query.eq('loan_period', filters.duration);
     }
     
-    if (filters?.status && filters.status !== 'all') {
+    if (filters?.status && filters.status !== 'all' && filters.status !== '' as any) {
       // Convert enum value to string for the database query
       query = query.eq('status', filters.status as "on_time" | "overdue" | "late_interest" | "bad_debt" | "closed" | "deleted");
     }
@@ -73,6 +75,11 @@ export async function getInstallments(
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
     
+    // Check if request was cancelled
+    if (signal?.aborted) {
+      throw new Error('Request was cancelled');
+    }
+    
     // Execute query
     const { data, error, count } = await query
       .range(from, to)
@@ -80,6 +87,11 @@ export async function getInstallments(
       
     if (error) {
       throw error;
+    }
+    
+    // Check if request was cancelled after query
+    if (signal?.aborted) {
+      throw new Error('Request was cancelled');
     }
     
     // Transform data to match UI requirements
@@ -130,6 +142,8 @@ export async function getInstallments(
     
     // Calculate total pages
     const totalPages = Math.ceil((count || 0) / pageSize);
+    
+    // Debug logging removed - race condition fixed with AbortController
     
     return { 
       data: installments, 

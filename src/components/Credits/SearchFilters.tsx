@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -24,14 +24,16 @@ interface SearchFiltersProps {
   onReset: () => void;
   onCreateNew: () => void;
   onExportExcel: () => void;
+  initialFilters?: Partial<SearchFilters>;
 }
 
 export interface SearchFilters {
-  contractCode: string;
-  customerName: string;
-  startDate: string;
-  endDate: string;
+  contract_code: string;
+  customer_name: string;
+  start_date: string;
+  end_date: string;
   status: string;
+  store_id?: string;
 }
 
 export function SearchFilters({ 
@@ -39,15 +41,31 @@ export function SearchFilters({
   onSearch, 
   onReset, 
   onCreateNew, 
-  onExportExcel 
+  onExportExcel,
+  initialFilters 
 }: SearchFiltersProps) {
   const [filters, setFilters] = useState<SearchFilters>({
-    contractCode: '',
-    customerName: '',
-    startDate: '',
-    endDate: '',
+    contract_code: '',
+    customer_name: '',
+    start_date: '',
+    end_date: '',
     status: 'on_time'
   });
+
+  // Apply initial filters when component mounts
+  useEffect(() => {
+    if (initialFilters) {
+      const newFilters: SearchFilters = {
+        contract_code: initialFilters.contract_code || '',
+        customer_name: initialFilters.customer_name || '',
+        start_date: initialFilters.start_date || '',
+        end_date: initialFilters.end_date || '',
+        status: initialFilters.status || (initialFilters.contract_code ? '' : 'on_time'), // Empty status when navigating from contract link
+        store_id: initialFilters.store_id
+      };
+      setFilters(newFilters);
+    }
+  }, [initialFilters]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
@@ -65,6 +83,7 @@ export function SearchFilters({
     
     setFilters(newFilters);
     
+    // Auto-search when status changes
     onSearch(newFilters);
   };
 
@@ -73,13 +92,14 @@ export function SearchFilters({
   };
 
   const handleReset = () => {
-    setFilters({
-      contractCode: '',
-      customerName: '',
-      startDate: '',
-      endDate: '',
+    const resetFilters = {
+      contract_code: '',
+      customer_name: '',
+      start_date: '',
+      end_date: '',
       status: 'on_time'
-    });
+    };
+    setFilters(resetFilters);
     onReset();
   };
 
@@ -87,15 +107,15 @@ export function SearchFilters({
     <>
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
         <div>
-          <label htmlFor="contractCode" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="contract_code" className="block text-sm font-medium text-gray-700 mb-1">
             Mã HD
           </label>
           <div className="relative">
             <Input
-              id="contractCode"
+              id="contract_code"
               placeholder="Nhập mã hợp đồng"
-              className="w-full pr-8"
-              value={filters.contractCode}
+              className={`w-full pr-8 ${initialFilters?.contract_code ? 'border-blue-500 border-2' : ''}`}
+              value={filters.contract_code}
               onChange={handleInputChange}
             />
             <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400">
@@ -107,15 +127,15 @@ export function SearchFilters({
         </div>
         
         <div>
-          <label htmlFor="customerName" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="customer_name" className="block text-sm font-medium text-gray-700 mb-1">
             Tên khách hàng
           </label>
           <div className="relative">
             <Input
-              id="customerName"
+              id="customer_name"
               placeholder="Nhập tên khách hàng"
-              className="w-full pr-8"
-              value={filters.customerName}
+              className={`w-full pr-8 ${initialFilters?.customer_name ? 'border-blue-500 border-2' : ''}`}
+              value={filters.customer_name}
               onChange={handleInputChange}
             />
             <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400">
@@ -127,28 +147,28 @@ export function SearchFilters({
         </div>
         
         <div>
-          <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="start_date" className="block text-sm font-medium text-gray-700 mb-1">
             Từ ngày
           </label>
           <DatePicker
-            id="startDate"
-            value={filters.startDate}
+            id="start_date"
+            value={filters.start_date}
             onChange={(value) => handleInputChange({
-              target: { id: 'startDate', value }
+              target: { id: 'start_date', value }
             } as React.ChangeEvent<HTMLInputElement>)}
             className="w-full"
           />
         </div>
         
         <div>
-          <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="end_date" className="block text-sm font-medium text-gray-700 mb-1">
             Đến ngày
           </label>
           <DatePicker
-            id="endDate"
-            value={filters.endDate}
+            id="end_date"
+            value={filters.end_date}
             onChange={(value) => handleInputChange({
-              target: { id: 'endDate', value }
+              target: { id: 'end_date', value }
             } as React.ChangeEvent<HTMLInputElement>)}
             className="w-full"
           />
@@ -159,7 +179,7 @@ export function SearchFilters({
             Trạng thái hợp đồng
           </label>
           <Select value={filters.status} onValueChange={handleStatusChange}>
-            <SelectTrigger id="status" className="w-full">
+            <SelectTrigger id="status" className={`w-full ${initialFilters?.status !== undefined ? 'border-blue-500 border-2' : ''}`}>
               <SelectValue placeholder="Tất cả" />
             </SelectTrigger>
             <SelectContent>

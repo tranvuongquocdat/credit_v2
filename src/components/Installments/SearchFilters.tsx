@@ -50,35 +50,67 @@ export function SearchFilters({
   const { currentStore, stores, setCurrentStore } = useStore();
   
   const [filters, setFilters] = useState<SearchFilters>({
-    contract_code: initialFilters?.contract_code || '',
-    customer_name: initialFilters?.customer_name || '',
-    start_date: initialFilters?.start_date || '',
-    end_date: initialFilters?.end_date || '',
-    duration: initialFilters?.duration,
-    status: initialFilters?.status || 'on_time',
-    store_id: currentStore?.id
+    contract_code: '',
+    customer_name: '',
+    start_date: '',
+    end_date: '',
+    duration: undefined,
+    status: 'on_time', // Fixed default, không dùng initialFilters ở đây
+    store_id: undefined // Sẽ được set trong useEffect
   });
   
-  // Update store_id when currentStore changes
-  useEffect(() => {
-    setFilters(prev => ({
-      ...prev,
-      store_id: currentStore?.id
-    }));
-    
-  }, [currentStore]);
+  // Track if we've already processed initialFilters to prevent double search
+  const [hasProcessedInitialFilters, setHasProcessedInitialFilters] = useState(false);
   
-  // Update filters when initialFilters change
+  // Single useEffect để handle cả store và initialFilters
   useEffect(() => {
-    if (initialFilters) {
-      console.log('SearchFilters received initialFilters:', initialFilters);
+    console.log('🔧 SearchFilters useEffect triggered:', { 
+      hasCurrentStore: !!currentStore?.id, 
+      hasInitialFilters: !!initialFilters,
+      hasProcessedInitialFilters 
+    });
+    
+    // Luôn update store_id khi currentStore thay đổi
+    if (currentStore?.id) {
       setFilters(prev => ({
         ...prev,
-        ...initialFilters,
+        store_id: currentStore.id
       }));
-      onSearch(filters);
     }
-  }, [initialFilters, currentStore]);
+    
+    // Chỉ auto-search khi có initialFilters và chưa xử lý
+    if (initialFilters && currentStore?.id && !hasProcessedInitialFilters) {
+      console.log('🎯 SearchFilters processing initialFilters for first time:', initialFilters);
+      
+      // Nếu có contract_code trong initialFilters, dùng status rỗng để hiển thị tất cả trạng thái
+      // Nếu không, dùng 'on_time' làm mặc định
+      const defaultStatus = initialFilters.contract_code ? '' : 'on_time';
+      
+      const newFilters = {
+        contract_code: '',
+        customer_name: '',
+        start_date: '',
+        end_date: '',
+        duration: undefined,
+        status: defaultStatus,
+        ...initialFilters, // Override với initialFilters (trừ status nếu chưa set)
+        store_id: currentStore.id
+      };
+      
+      setFilters(newFilters);
+      setHasProcessedInitialFilters(true); // Đánh dấu đã xử lý
+      
+      // Auto-search chỉ cho navigation từ URL
+      onSearch(newFilters);
+    }
+  }, [currentStore, initialFilters, hasProcessedInitialFilters]);
+  
+  // Reset processed flag khi initialFilters thay đổi (new navigation)
+  useEffect(() => {
+    if (initialFilters) {
+      setHasProcessedInitialFilters(false);
+    }
+  }, [initialFilters]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
@@ -96,14 +128,20 @@ export function SearchFilters({
     
     setFilters(newFilters);
     
+    // Auto-search khi thay đổi status
     onSearch(newFilters);
   };
   
   const handleDurationChange = (value: string) => {
-    setFilters(prev => ({
-      ...prev,
+    const newFilters = {
+      ...filters,
       duration: value === 'all' ? undefined : parseInt(value)
-    }));
+    };
+    
+    setFilters(newFilters);
+    
+    // Auto-search khi thay đổi duration
+    onSearch(newFilters);
   };
   
   const handleStoreChange = (value: string) => {
@@ -116,6 +154,7 @@ export function SearchFilters({
   };
 
   const handleSearch = () => {
+    console.log('🔍 SearchFilters handleSearch called with filters:', filters);
     onSearch(filters);
   };
 

@@ -7,15 +7,24 @@ import {
   CreditStatus 
 } from '@/models/credit';
 
+// Unified filter interface
+export interface CreditFilters {
+  contract_code?: string;
+  customer_name?: string;
+  start_date?: string;
+  end_date?: string;
+  status?: CreditStatus | "all";
+  store_id?: string;
+}
+
 /**
  * Lấy danh sách hợp đồng tín chấp có phân trang và tìm kiếm
  */
 export async function getCredits(
   page = 1,
   limit = 10,
-  searchQuery = '',
-  storeId = '',
-  status = ''
+  filters?: CreditFilters,
+  signal?: AbortSignal
 ) {
   try {
     // Bắt đầu từ record thứ mấy
@@ -29,29 +38,46 @@ export async function getCredits(
         customer:customers(name, phone, id_number)
       `, { count: 'exact' });
     
+    // Set AbortController signal
+    if (signal) {
+      query = query.abortSignal(signal);
+    }
+    
     // Áp dụng các filter nếu có
-    if (searchQuery) {
-      // Manually construct the or filter with a simple syntax to avoid parsing issues
-      const filter = 
-        `contract_code.ilike.%${searchQuery}%,` +
-        `id_number.ilike.%${searchQuery}%,` +
-        `phone.ilike.%${searchQuery}%`;
-      query = query.or(filter);
-    }
-    
-    if (storeId) {
-      query = query.eq('store_id', storeId);
-    }
-    
-    if (status) {
-      query = query.eq('status', status as CreditStatus);
+    if (filters) {
+      if (filters.contract_code) {
+        query = query.ilike('contract_code', `%${filters.contract_code}%`);
+      }
+      
+      if (filters.customer_name) {
+        // Use or condition to search in customer name fields
+        query = query.or(`customer.name.ilike.%${filters.customer_name}%`);
+      }
+      
+      if (filters.start_date) {
+        query = query.gte('loan_date', filters.start_date);
+      }
+      
+      if (filters.end_date) {
+        query = query.lte('loan_date', filters.end_date);
+      }
+      
+      if (filters.status && filters.status !== 'all') {
+        query = query.eq('status', filters.status);
+      }
+      
+      if (filters.store_id) {
+        query = query.eq('store_id', filters.store_id);
+      }
     }
     
     // Thực hiện query với phân trang
     const { data, error, count } = await query
       .order('created_at', { ascending: false })
       .range(from, from + limit - 1);
+    
     if (error) throw error;
+    
     return {
       data: data as CreditWithCustomer[],
       total: count || 0,
@@ -60,6 +86,17 @@ export async function getCredits(
       error: null
     };
   } catch (error) {
+    // Don't log cancelled requests
+    if (error instanceof Error && error.name === 'AbortError') {
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit,
+        error: null
+      };
+    }
+    
     console.error('Error fetching credits:', error);
     return {
       data: [],
@@ -69,6 +106,38 @@ export async function getCredits(
       error
     };
   }
+}
+
+/**
+ * Legacy function for backward compatibility
+ */
+export async function getCreditsLegacy(
+  page = 1,
+  limit = 10,
+  searchQuery = '',
+  storeId = '',
+  status = ''
+) {
+  const filters: CreditFilters = {};
+  
+  if (searchQuery) {
+    // Try to determine if it's a contract code or customer name
+    if (searchQuery.match(/^[A-Z0-9-]+$/i)) {
+      filters.contract_code = searchQuery;
+    } else {
+      filters.customer_name = searchQuery;
+    }
+  }
+  
+  if (storeId) {
+    filters.store_id = storeId;
+  }
+  
+  if (status) {
+    filters.status = status as CreditStatus;
+  }
+  
+  return getCredits(page, limit, filters);
 }
 
 /**

@@ -7,19 +7,11 @@ import { PawnWarningsTable } from '@/components/Pawns/PawnWarningsTable';
 import { PawnSearchFilters } from '@/components/Pawns/PawnSearchFilters';
 import { PawnHistoryModal } from '@/components/Pawns/PawnHistoryModal';
 import { useRouter } from 'next/navigation';
-import { PawnWithCustomerAndCollateral, PawnStatus } from '@/models/pawn';
+import { PawnWithCustomerAndCollateral, PawnStatus, PawnFilters } from '@/models/pawn';
 import { getPawns } from '@/lib/pawn';
 import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
-
-interface PawnFilters {
-  contract_code: string;
-  customer_name: string;
-  status: string;
-  start_date: string;
-  end_date: string;
-}
 
 export default function PawnWarningsPage() {
   const router = useRouter();
@@ -62,12 +54,17 @@ export default function PawnWarningsPage() {
     
     try {
       // Get all active pawns (not closed or deleted)
+      const pawnFilters: PawnFilters = {
+        contract_code: searchFilters.contract_code,
+        customer_name: searchFilters.customer_name,
+        store_id: currentStore.id,
+        status: searchFilters.status === 'all' ? undefined : searchFilters.status as PawnStatus
+      };
+      
       const { data, error: pawnError } = await getPawns(
         1,
         1000, // Get all pawns
-        searchFilters.contract_code || searchFilters.customer_name || '',
-        currentStore.id,
-        '' // Get all statuses, we'll filter on frontend
+        pawnFilters
       );
       
       if (pawnError) throw pawnError;
@@ -122,6 +119,11 @@ export default function PawnWarningsPage() {
   const handleViewDetail = (pawn: PawnWithCustomerAndCollateral) => {
     setSelectedPawn(pawn);
     setIsHistoryModalOpen(true);
+  };
+
+  // Handle customer click to navigate to pawns
+  const handleCustomerClick = (pawn: PawnWithCustomerAndCollateral) => {
+    router.push(`/pawns?contract=${pawn.contract_code}`);
   };
 
   // Handle close history modal
@@ -201,7 +203,7 @@ export default function PawnWarningsPage() {
               <label className="block text-sm font-medium mb-1">Trạng thái hợp đồng</label>
               <select
                 value={filters.status}
-                onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+                onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value as PawnStatus | "all" }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">Tất cả</option>
@@ -244,6 +246,7 @@ export default function PawnWarningsPage() {
           loading={loading}
           statusMap={statusMap}
           onViewDetail={handleViewDetail}
+          onCustomerClick={handleCustomerClick}
         />
       </div>
       

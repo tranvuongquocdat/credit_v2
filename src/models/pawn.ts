@@ -98,4 +98,14 @@ export interface PawnWithCustomer extends Pawn {
     phone?: string | null;
     id_number?: string | null;
   };
+}
+
+export interface PawnFilters {
+  contract_code?: string;
+  customer_name?: string;
+  start_date?: string;
+  end_date?: string;
+  loan_period?: number;
+  status?: PawnStatus | "all";
+  store_id?: string;
 } 
