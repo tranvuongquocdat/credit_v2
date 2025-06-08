@@ -38,7 +38,6 @@ export async function calculateDebtToLatestPaidPeriod(pawnId: string): Promise<n
       .eq('transaction_type', 'payment')
       .eq('is_deleted', false)
       .order('effective_date', { ascending: true });
-    console.log('paymentHistory', paymentHistory);
     if (paymentHistoryError) {
       throw new Error('Error fetching payment history');
     }
@@ -76,7 +75,7 @@ export async function calculateDebtToLatestPaidPeriod(pawnId: string): Promise<n
       .eq('transaction_type', 'debt_payment')
       .eq('is_deleted', false)
       .order('effective_date', { ascending: true });
-    console.log('debtHistory', debtHistory);
+
     if (debtHistoryError) {
       throw new Error('Error fetching debt history');
     }

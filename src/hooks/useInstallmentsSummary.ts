@@ -58,7 +58,6 @@ export function useInstallmentsSummary() {
       let expectedProfit = 0; // Lãi phí dự kiến
       let collectedProfit = 0; // Lãi phí đã thu
       
-      console.time('Calculate all installments');
       
       // Xử lý song song tất cả installments
       const results = await Promise.all(
@@ -108,8 +107,6 @@ export function useInstallmentsSummary() {
           expectedProfit += result.expectedProfitAmount;
         }
       });
-      
-      console.log("Collected Profit", collectedProfit);
       
       const summaryData: StoreFinancialData = {
         // Use the cash_fund from the store financial data
