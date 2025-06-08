@@ -29,6 +29,7 @@ interface FundHistoryItem {
   source: string;
   income: number;
   expense: number;
+  contractCode?: string;
 }
 
 interface BySourceTotals {
@@ -48,6 +49,11 @@ interface GenericHistoryItem {
   credit_amount?: number | null;
   fund_amount?: number | null;
   amount?: number | null;
+  contract_id?: string | null;
+  pawn_id?: string | null;
+  credit_id?: string | null;
+  installment_id?: string | null;
+  contract_code?: string | null;
 }
 
 interface DailyFundRecord {
@@ -215,28 +221,83 @@ export default function TotalFundPage() {
               source,
               income: amount > 0 ? amount : 0,
               expense: amount < 0 ? -amount : 0,
+              contractCode: item.contract_code || '-'
             });
           });
         }
       };
 
-      const tables: ('credit_history' | 'pawn_history' | 'installment_history' | 'store_fund_history' | 'transactions')[] = ['credit_history', 'pawn_history', 'installment_history', 'store_fund_history', 'transactions'];
-      const sources = ['Tín chấp', 'Cầm đồ', 'Trả góp', 'Nguồn vốn', 'Thu chi'];
+      // For credit history - get contract code by joining with credits table
+      const { data: creditHistoryData, error: creditError } = await supabase
+        .from('credit_history')
+        .select(`
+          *,
+          credits:credit_id (contract_code)
+        `);
       
-      const queries = tables.map(table => {
-        let query = supabase.from(table).select('*');
-        if (table === 'store_fund_history' || table === 'transactions') {
-          query = query.eq('store_id', storeId);
-        }
-        return query;
-      });
-
-      const results = await Promise.all(queries);
-
-      results.forEach((result, index) => {
-        if (result.error) console.error(`Error fetching ${tables[index]}:`, result.error.message);
-        else processItems(result.data, sources[index]);
-      });
+      if (creditError) console.error('Error fetching credit_history:', creditError.message);
+      else {
+        // Prepare data for processing
+        const processedCreditData = creditHistoryData.map(item => ({
+          ...item,
+          contract_code: item.credits?.contract_code || null
+        }));
+        processItems(processedCreditData, 'Tín chấp');
+      }
+      
+      // For pawn history - get contract code by joining with pawns table
+      const { data: pawnHistoryData, error: pawnError } = await supabase
+        .from('pawn_history')
+        .select(`
+          *,
+          pawns:pawn_id (contract_code)
+        `);
+      
+      if (pawnError) console.error('Error fetching pawn_history:', pawnError.message);
+      else {
+        // Prepare data for processing
+        const processedPawnData = pawnHistoryData.map(item => ({
+          ...item,
+          contract_code: item.pawns?.contract_code || null
+        }));
+        processItems(processedPawnData, 'Cầm đồ');
+      }
+      
+      // For installment history - get contract code by joining with installments table
+      const { data: installmentHistoryData, error: installmentError } = await supabase
+        .from('installment_history')
+        .select(`
+          *,
+          installments:installment_id (contract_code)
+        `);
+      
+      if (installmentError) console.error('Error fetching installment_history:', installmentError.message);
+      else {
+        // Prepare data for processing
+        const processedInstallmentData = installmentHistoryData.map(item => ({
+          ...item,
+          contract_code: item.installments?.contract_code || null
+        }));
+        processItems(processedInstallmentData, 'Trả góp');
+      }
+      
+      // For fund history - no contract code
+      const { data: storeFundData, error: fundError } = await supabase
+        .from('store_fund_history')
+        .select('*')
+        .eq('store_id', storeId);
+      
+      if (fundError) console.error('Error fetching store_fund_history:', fundError.message);
+      else processItems(storeFundData, 'Nguồn vốn');
+      
+      // For transactions - no contract code
+      const { data: transactionsData, error: transactionsError } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('store_id', storeId);
+      
+      if (transactionsError) console.error('Error fetching transactions:', transactionsError.message);
+      else processItems(transactionsData, 'Thu chi');
       
       allHistoryItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       
@@ -360,6 +421,7 @@ export default function TotalFundPage() {
                   <TableRow>
                     <TableHead>Ngày</TableHead>
                     <TableHead>Nguồn</TableHead>
+                    <TableHead>Mã HĐ</TableHead>
                     <TableHead>Mô tả</TableHead>
                     <TableHead className="text-right">Thu</TableHead>
                     <TableHead className="text-right">Chi</TableHead>
@@ -371,6 +433,7 @@ export default function TotalFundPage() {
                       <TableRow key={item.id}>
                         <TableCell>{new Date(item.date).toLocaleDateString('vi-VN')}</TableCell>
                         <TableCell>{item.source}</TableCell>
+                        <TableCell>{item.contractCode || '-'}</TableCell>
                         <TableCell>{item.description}</TableCell>
                         <TableCell className="text-right font-medium text-green-600">
                           {item.income > 0 ? `${item.income.toLocaleString()} VND` : ''}
@@ -381,7 +444,7 @@ export default function TotalFundPage() {
                       </TableRow>
                     ))
                   ) : (
-                    <TableRow><TableCell colSpan={5} className="text-center py-4">Không có dữ liệu</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="text-center py-4">Không có dữ liệu</TableCell></TableRow>
                   )}
                 </TableBody>
                 <TableFooter>
@@ -389,18 +452,18 @@ export default function TotalFundPage() {
                     <>
                       {activeTab === 'all' && totals.bySource && Object.entries(totals.bySource).map(([source, values]) => (
                         <TableRow key={source}>
-                          <TableCell colSpan={3} className="text-right font-semibold">{`Tổng ${source}`}</TableCell>
+                          <TableCell colSpan={4} className="text-right font-semibold">{`Tổng ${source}`}</TableCell>
                           <TableCell className="text-right font-semibold text-green-600">{values.income.toLocaleString()} VND</TableCell>
                           <TableCell className="text-right font-semibold text-red-600">{values.expense.toLocaleString()} VND</TableCell>
                         </TableRow>
                       ))}
                       <TableRow className="bg-gray-50">
-                        <TableCell colSpan={3} className="text-right font-bold text-lg">TỔNG BIẾN ĐỘNG</TableCell>
+                        <TableCell colSpan={4} className="text-right font-bold text-lg">TỔNG BIẾN ĐỘNG</TableCell>
                         <TableCell className="text-right font-bold text-lg text-green-600">{totals.totalIncome.toLocaleString()} VND</TableCell>
                         <TableCell className="text-right font-bold text-lg text-red-600">{totals.totalExpense.toLocaleString()} VND</TableCell>
                       </TableRow>
                        <TableRow className="bg-gray-100">
-                        <TableCell colSpan={4} className="text-right font-bold text-lg">LỢI NHUẬN</TableCell>
+                        <TableCell colSpan={5} className="text-right font-bold text-lg">LỢI NHUẬN</TableCell>
                         <TableCell className={`text-right font-bold text-lg ${totals.netChange < 0 ? 'text-red-600' : 'text-green-600'}`}>
                           {totals.netChange.toLocaleString()} VND
                         </TableCell>
