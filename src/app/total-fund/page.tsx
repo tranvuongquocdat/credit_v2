@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useStore } from '@/contexts/StoreContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { addDays, format, startOfDay } from 'date-fns';
+import { format, startOfDay } from 'date-fns';
 import {
   Table,
   TableBody,
@@ -72,7 +72,7 @@ export default function TotalFundPage() {
   
   // Date range for filtering
   const [startDate, setStartDate] = useState<string>(
-    format(addDays(new Date(), -30), 'yyyy-MM-dd')
+    format(new Date(), 'yyyy-MM-dd')
   );
   const [endDate, setEndDate] = useState<string>(
     format(new Date(), 'yyyy-MM-dd')
