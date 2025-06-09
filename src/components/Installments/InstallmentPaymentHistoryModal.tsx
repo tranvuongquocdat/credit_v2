@@ -522,16 +522,14 @@ export function InstallmentPaymentHistoryModal({
     return calculateCombinedPaymentPeriods.findIndex(p => !isPeriodInDatabase(p));
   }, [calculateCombinedPaymentPeriods]);
 
-  // Xử lý checkbox đánh dấu đã thanh toán - với phương pháp optimistic update
+  // Simplified checkbox handler using getLatestPaymentPaidDate and cycles
   const handleCheckboxChange = async (
     period: InstallmentPaymentPeriod,
     checked: boolean,
     index: number,
   ) => {
-    if (!installment?.id || processingCheckbox) return; // Prevent concurrent operations
+    if (!installment?.id || processingCheckbox) return;
     const { id: userId } = await getCurrentUser();
-    const startTime = performance.now();
-    console.log(`Starting checkbox processing for period ${period.periodNumber}, checked: ${checked}`);
     
     // Set processing state
     setProcessingCheckbox(true);
@@ -546,81 +544,108 @@ export function InstallmentPaymentHistoryModal({
         title: "Timeout",
         description: "Thao tác mất quá nhiều thời gian. Vui lòng thử lại.",
       });
-    }, 30000); // 30 second timeout
+    }, 30000);
     
     try {
       if (checked) {
-        // Check if there are any unchecked previous periods
-        const periodsToCheck = [];
+        // 1. Get latest payment date
+        const latestPaymentDate = await getLatestPaymentPaidDate(installment.id);
         
-        // Add current period
-        periodsToCheck.push(period);
+        // 2. Determine start date for payment records
+        let startDate: string;
+        if (latestPaymentDate) {
+          const nextDay = new Date(latestPaymentDate);
+          nextDay.setDate(nextDay.getDate() + 1);
+          startDate = nextDay.toISOString().split('T')[0];
+        } else {
+          startDate = installment.start_date || new Date().toISOString().split('T')[0];
+        }
         
-        // Add all previous unchecked periods
-        for (let i = 0; i < index; i++) {
-          const prevPeriod = calculateCombinedPaymentPeriods[i];
-          const isPrevPeriodChecked = isPeriodInDatabase(prevPeriod);
+        // 3. Determine end date (end of selected period)
+        const endDate = period.endDate ? 
+          new Date(period.endDate.split('/').reverse().join('-')).toISOString().split('T')[0] :
+          new Date(new Date(period.dueDate.split('/').reverse().join('-')).getTime() + (installment.payment_period - 1) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        
+        console.log(`Creating payment records from ${startDate} to ${endDate}`);
+        
+        // 4. Calculate total days and create cycles
+        const startDateObj = new Date(startDate);
+        const endDateObj = new Date(endDate);
+        const totalDays = Math.floor((endDateObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        
+        if (totalDays <= 0) {
+          throw new Error('Ngày kết thúc phải sau ngày bắt đầu');
+        }
+        
+        // 5. Create cycles based on payment_period
+        const paymentPeriod = installment.payment_period || 30;
+        const cycles = [];
+        
+        let currentStart = new Date(startDateObj);
+        
+        while (currentStart <= endDateObj) {
+          let currentEnd = new Date(currentStart);
+          currentEnd.setDate(currentStart.getDate() + paymentPeriod - 1);
           
-          // If previous period is not checked, add it to the list
-          if (!isPrevPeriodChecked) {
-            periodsToCheck.push(prevPeriod);
+          if (currentEnd > endDateObj) {
+            currentEnd = new Date(endDateObj);
           }
-        }
-        
-        // If no periods to check, exit early
-        if (periodsToCheck.length === 0) {
-          toast({
-            title: "Thông báo",
-            description: "Kỳ này đã được thanh toán rồi.",
+          
+          cycles.push({
+            start: new Date(currentStart),
+            end: new Date(currentEnd)
           });
-          return;
+          
+          currentStart = new Date(currentEnd);
+          currentStart.setDate(currentStart.getDate() + 1);
         }
         
-        console.log(`Processing ${periodsToCheck.length} periods: current period ${period.periodNumber} and ${periodsToCheck.length - 1} previous periods`);
+        console.log(`Created ${cycles.length} cycles:`, cycles.map(c => 
+          `${c.start.toISOString().split('T')[0]} → ${c.end.toISOString().split('T')[0]}`
+        ));
         
-        // Process all periods that need to be checked
-        for (const periodToCheck of periodsToCheck) {
-          console.log('Inserting daily payment records for period:', periodToCheck.periodNumber);
+        // 6. Create records for each cycle
+        const allRecords: Array<{
+          installment_id: string;
+          transaction_type: 'payment';
+          effective_date: string;
+          date_status: string | null;
+          credit_amount: number;
+          debit_amount: number;
+          description: string;
+          is_deleted: boolean;
+          transaction_date?: string;
+          created_by: string;
+        }> = [];
+        
+        cycles.forEach((cycle, cycleIndex) => {
+          const cycleStartDate = cycle.start;
+          const cycleEndDate = cycle.end;
+          const cycleDays = Math.floor((cycleEndDate.getTime() - cycleStartDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
           
-          // Parse dates
-          const startDate = new Date(periodToCheck.dueDate.split('/').reverse().join('-'));
-          const endDate = periodToCheck.endDate ? 
-            new Date(periodToCheck.endDate.split('/').reverse().join('-')) : 
-            new Date(startDate.getTime() + (installment.payment_period - 1) * 24 * 60 * 60 * 1000);
+          // Use expected amount for equal distribution across cycle
+          const totalAmount = (tempEditedAmount !== null && period.id === period.id) ? 
+            tempEditedAmount : period.expectedAmount;
+          const dailyAmount = Math.floor(totalAmount / cycleDays);
+          const lastDayAdjustment = totalAmount - (dailyAmount * cycleDays);
           
-          const totalDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-          
-          console.log(`Period ${periodToCheck.periodNumber}: ${totalDays} days from ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`);
-          
-          // Use expected amount for checkbox payment (equal distribution)
-          const totalAmount = (tempEditedAmount !== null && periodToCheck.id === period.id) ? 
-            tempEditedAmount : periodToCheck.expectedAmount;
-          const dailyAmount = Math.floor(totalAmount / totalDays);
-          const lastDayAdjustment = totalAmount - (dailyAmount * totalDays);
-          
-          console.log(`Expected distribution: ${totalDays} days, ${dailyAmount} per day, last day adjustment: ${lastDayAdjustment}`);
-          
-          // Prepare daily records to insert
-          const dailyRecords = [];
-          
-          for (let dayOffset = 0; dayOffset < totalDays; dayOffset++) {
-            const currentDate = new Date(startDate);
-            currentDate.setDate(startDate.getDate() + dayOffset);
+          for (let dayOffset = 0; dayOffset < cycleDays; dayOffset++) {
+            const currentDate = new Date(cycleStartDate);
+            currentDate.setDate(cycleStartDate.getDate() + dayOffset);
             
-            // Determine date_status
-            let dateStatus: string | null = null; // Default for middle days
-            if (totalDays === 1) {
+            // Determine date_status for this cycle
+            let dateStatus: string | null = null;
+            if (cycleDays === 1) {
               dateStatus = 'only';
             } else if (dayOffset === 0) {
               dateStatus = 'start';
-            } else if (dayOffset === totalDays - 1) {
+            } else if (dayOffset === cycleDays - 1) {
               dateStatus = 'end';
             }
             
             // Calculate amount for this day
             let dayAmount = dailyAmount;
-            if (dayOffset === totalDays - 1) {
-              // Last day gets the adjustment
+            if (dayOffset === cycleDays - 1) {
               dayAmount = dailyAmount + lastDayAdjustment;
             }
             
@@ -631,60 +656,56 @@ export function InstallmentPaymentHistoryModal({
               date_status: dateStatus,
               credit_amount: dayAmount,
               debit_amount: 0,
-              description: `Thanh toán ngày ${dayOffset + 1}/${totalDays} của kỳ ${periodToCheck.periodNumber}`,
+              description: `Thanh toán chu kỳ ${cycleIndex + 1}/${cycles.length}, ngày ${dayOffset + 1}/${cycleDays} đến kỳ ${period.periodNumber}`,
               is_deleted: false,
-              transaction_date: undefined as string | undefined,
-              created_by: userId || installment.employee_id
+              created_by: userId || installment.employee_id,
+              ...(cycles.length === 1 && selectedDate && { transaction_date: selectedDate })
             };
-            if (periodsToCheck.length == 1 && selectedDate) {
-              dailyRecord.transaction_date = selectedDate;
-            }
-
-            dailyRecords.push(dailyRecord);
+            
+            allRecords.push(dailyRecord);
           }
-          
-          // Insert daily records into installment_history
-          const { data, error } = await supabase
-            .from('installment_history')
-            .insert(dailyRecords)
-            .select();
-          
-          if (error) {
-            throw new Error(error.message);
-          }
-
-          // update payment_due_date
-          // first, get the latest payment record
-          const latestPaidDate = await getLatestPaymentPaidDate(installment.id);
-          if (latestPaidDate) {
-            const latestPaidDateObj = new Date(latestPaidDate);
-            // nếu ngày đóng cuối cùng đã là ngày kết thúc hợp đồng, set payment_due_date về null
-            const endDate = new Date(installment.loan_date || '');
-            endDate.setDate(endDate.getDate() + (installment.loan_period || 0) - 1);
-            if (latestPaidDateObj.getTime() >= endDate.getTime()) {
-              await updateInstallmentPaymentDueDate(installment.id, null);
-            } else {
-              const newDueDate = new Date(latestPaidDateObj);
-              newDueDate.setDate(newDueDate.getDate() + installment.payment_period);
-              await updateInstallmentPaymentDueDate(installment.id, newDueDate.toISOString());
-            }
+        });
+        
+        console.log(`Prepared ${allRecords.length} daily records for batch insert`);
+        
+        // 7. Batch upsert all records
+        const { data, error } = await supabase
+          .from('installment_history')
+          .upsert(allRecords)
+          .select();
+        
+        if (error) {
+          throw new Error(error.message);
+        }
+        
+        console.log(`Successfully inserted ${allRecords.length} payment records`);
+        
+        // Update payment_due_date
+        const updatedLatestPaidDate = await getLatestPaymentPaidDate(installment.id);
+        if (updatedLatestPaidDate) {
+          const latestPaidDateObj = new Date(updatedLatestPaidDate);
+          const endDate = new Date(installment.loan_date || '');
+          endDate.setDate(endDate.getDate() + (installment.loan_period || 0) - 1);
+          if (latestPaidDateObj.getTime() >= endDate.getTime()) {
+            await updateInstallmentPaymentDueDate(installment.id, null);
+          } else {
+            const newDueDate = new Date(latestPaidDateObj);
+            newDueDate.setDate(newDueDate.getDate() + installment.payment_period);
+            await updateInstallmentPaymentDueDate(installment.id, newDueDate.toISOString());
           }
         }
         
         toast({
           title: 'Thành công',
-          description: `Đã thanh toán ${periodsToCheck.length} kỳ (kỳ ${periodsToCheck.map(p => p.periodNumber).join(', ')})`,
+          description: `Đã tạo ${allRecords.length} bản ghi thanh toán đến kỳ ${period.periodNumber}`,
         });
         
       } else {
-        // Uncheck logic - mark records as deleted based on effective_date range
-        // Check if this is the latest checked period
+        // Uncheck logic - only allow unchecking latest period
         const checkedPeriods = calculateCombinedPaymentPeriods.filter(p => isPeriodInDatabase(p));
         checkedPeriods.sort((a, b) => b.periodNumber - a.periodNumber);
         
-        // Check if current period is the latest checked period
         if (checkedPeriods.length > 0 && checkedPeriods[0].periodNumber !== period.periodNumber) {
-          console.warn(`Cannot uncheck period ${period.periodNumber} because it's not the latest checked period. Latest is ${checkedPeriods[0].periodNumber}`);
           toast({
             variant: "destructive",
             title: "Không thể bỏ đánh dấu",
@@ -693,9 +714,7 @@ export function InstallmentPaymentHistoryModal({
           return;
         }
         
-        console.log('Marking daily payment records as deleted for period:', period.periodNumber);
-        
-        // Calculate the effective_date range for this period
+        // Soft delete records in this period's date range
         const startDate = new Date(period.dueDate.split('/').reverse().join('-'));
         const endDate = period.endDate ? 
           new Date(period.endDate.split('/').reverse().join('-')) : 
@@ -704,111 +723,41 @@ export function InstallmentPaymentHistoryModal({
         const startDateStr = startDate.toISOString().split('T')[0];
         const endDateStr = endDate.toISOString().split('T')[0];
         
-        console.log('Deleting records between:', startDateStr, 'and', endDateStr);
-        
-        // First, check what records exist in this date range
-        const { data: existingRecords, error: checkError } = await supabase
-          .from('installment_history')
-          .select('id, effective_date, is_deleted')
-          .eq('installment_id', installment.id)
-          .eq('transaction_type', 'payment')
-          .gte('effective_date', startDateStr)
-          .lte('effective_date', endDateStr + 'T23:59:59Z');
-          
-        if (checkError) {
-          console.error('Error checking existing records:', checkError);
-          throw new Error(checkError.message);
-        }
-        
-        console.log('Found existing records:', existingRecords);
-        
-        // Update records to is_deleted = true based on effective_date range
         const { data, error } = await supabase
           .from('installment_history')
-          .update({ is_deleted: true, updated_at: new Date().toISOString(), updated_by: userId })
+          .update({ is_deleted: true, updated_by: userId })
           .eq('installment_id', installment.id)
           .eq('transaction_type', 'payment')
           .eq('is_deleted', false)
-          .gte('effective_date', startDateStr + 'T00:00:00Z')
+          .gte('effective_date', startDateStr)
           .lte('effective_date', endDateStr + 'T23:59:59Z')
           .select();
         
         if (error) {
-          console.error('Update error:', error);
           throw new Error(error.message);
         }
         
-        console.log('Updated records:', data);
-        console.log('Number of records updated:', data?.length || 0);
-        
-        if (!data || data.length === 0) {
-          console.warn('No records were updated!');
-          // Try alternative approach - remove the is_deleted filter
-          const { data: altData, error: altError } = await supabase
-            .from('installment_history')
-            .update({ is_deleted: true, updated_by: userId })
-            .eq('installment_id', installment.id)
-            .eq('transaction_type', 'payment')
-            .gte('effective_date', startDateStr + 'T00:00:00Z')
-            .lte('effective_date', endDateStr + 'T23:59:59Z')
-            .select();
-          
-          if (altError) {
-            throw new Error(altError.message);
-          }
-          
-          console.log('Alternative update result:', altData);
-        }
-
-        // update payment_due_date
-        await updateInstallmentPaymentDueDate(installment.id, endDateStr);
-        
         toast({
           title: 'Thành công',
-          description: `Đã đánh dấu xóa ${data?.length || 0} bản ghi thanh toán cho kỳ ${period.periodNumber}`,
+          description: `Đã xóa ${data?.length || 0} bản ghi thanh toán cho kỳ ${period.periodNumber}`,
         });
       }
       
-      // Clear temp edited values
-      setTempEditedAmount(null);
-      setTempEditedDate(null);
-      
-      // Refresh data after successful operation
-      if (installment?.id) {
-        // Regenerate periods with new data
-        // const currentSessionId = modalSessionId.current;
-        // await generatePeriodsFromExpectedMoney(installment.id, currentSessionId);
-        
-        // // Refresh amount history
-        await loadTransactionHistory();
-        
-        // // Refresh installment info
-        await reloadInstallmentInfo();
-        
-        // Call callback to update summary immediately
-        if (onPaymentUpdate) {
-          onPaymentUpdate();
-        }
-        
-        // Mark that data has changed
-        setHasDataChanged(true);
-      }
-      
-      const endTime = performance.now();
-      console.log(`Checkbox processing completed in ${endTime - startTime}ms`);
+      // Reload data
+      await reloadInstallmentInfo();
+      setHasDataChanged(true);
       
     } catch (error) {
-      console.error("Error in handleCheckboxChange:", error);
+      console.error('Error handling payment records:', error);
       toast({
-        variant: "destructive",
-        title: "Lỗi",
-        description: error instanceof Error ? error.message : "Có lỗi xảy ra khi xử lý. Vui lòng thử lại.",
+        title: 'Lỗi',
+        description: error instanceof Error ? error.message : 'Không thể xử lý bản ghi thanh toán',
+        variant: 'destructive'
       });
     } finally {
-      // Always reset processing state when completed
+      clearTimeout(timeoutId);
       setProcessingCheckbox(false);
       setProcessingPeriodId(null);
-      clearTimeout(timeoutId);
     }
   };
 

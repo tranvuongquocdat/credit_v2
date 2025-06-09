@@ -175,10 +175,11 @@ export function PaymentTab({
   // Use generated periods for display
   const periodsToDisplay = generatedPeriods;
 
-  // Updated checkbox handler - simplified for pawns (only one period at a time)
+  // Updated checkbox handler - simplified using cycles like Credit and Installment
   const handleCheckboxChange = async (period: PawnPaymentPeriod, checked: boolean, index: number) => {
     if (!pawn?.id || isProcessingCheckbox) return;
     const { id: userId } = await getCurrentUser();
+    
     // Set global loading state
     setIsProcessingCheckbox(true);
     
@@ -188,80 +189,135 @@ export function PaymentTab({
     
     try {
       if (checked) {
-        // For pawns, only check the current period (no previous periods logic)
-        console.log('Inserting daily payment records for period:', period.period_number);
+        // 1. Get latest payment date
+        const latestPaidDate = await getLatestPaymentPaidDate(pawn.id);
         
-        // Calculate all days in this period
-        const startDate = new Date(period.start_date);
-        const endDate = new Date(period.end_date);
-        const totalDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-        
-        console.log(`Period ${period.period_number}: ${totalDays} days from ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`);
-        
-        // Use expected amount for checkbox payment (equal distribution)
-        const totalAmount = period.expected_amount || 0;
-        const dailyAmount = Math.floor(totalAmount / totalDays);
-        const lastDayAdjustment = totalAmount - (dailyAmount * totalDays);
-        
-        console.log(`Expected distribution: ${totalDays} days, ${dailyAmount} per day, last day adjustment: ${lastDayAdjustment}`);
-        
-        // Prepare daily records to insert
-        const dailyRecords = [];
-        
-        for (let dayOffset = 0; dayOffset < totalDays; dayOffset++) {
-          const currentDate = new Date(startDate);
-          currentDate.setDate(startDate.getDate() + dayOffset);
-          
-          // Determine date_status
-          let dateStatus: string | null = null; // Default for middle days
-          if (totalDays === 1) {
-            dateStatus = 'only';
-          } else if (dayOffset === 0) {
-            dateStatus = 'start';
-          } else if (dayOffset === totalDays - 1) {
-            dateStatus = 'end';
-          }
-          
-          // Calculate amount for this day
-          let dayAmount = dailyAmount;
-          if (dayOffset === totalDays - 1) {
-            // Last day gets the adjustment
-            dayAmount = dailyAmount + lastDayAdjustment;
-          }
-          
-          const dailyRecord = {
-            pawn_id: pawn.id,
-            transaction_type: 'payment' as const,
-            effective_date: currentDate.toISOString(),
-            date_status: dateStatus,
-            credit_amount: dayAmount,
-            debit_amount: 0,
-            description: `Thanh toán ngày ${dayOffset + 1}/${totalDays} của kỳ ${period.period_number}`,
-            is_deleted: false,
-            created_by: userId
-          };
-          
-          dailyRecords.push(dailyRecord);
+        // 2. Determine start date for payment records
+        let startDate: string;
+        if (latestPaidDate) {
+          const nextDay = new Date(latestPaidDate);
+          nextDay.setDate(nextDay.getDate() + 1);
+          startDate = nextDay.toISOString().split('T')[0];
+        } else {
+          startDate = pawn.loan_date;
         }
         
-        // Insert daily records into pawn_history
+        // 3. Determine end date (end of selected period)
+        const endDate = period.end_date.split('T')[0];
+        
+        console.log(`Creating payment records from ${startDate} to ${endDate}`);
+        
+        // 4. Calculate total days and create cycles
+        const startDateObj = new Date(startDate);
+        const endDateObj = new Date(endDate);
+        const totalDays = Math.floor((endDateObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        
+        if (totalDays <= 0) {
+          throw new Error('Ngày kết thúc phải sau ngày bắt đầu');
+        }
+        
+        // 5. Get expected money for daily amounts
+        const dailyAmounts = await getExpectedMoney(pawn.id);
+        const loanStart = new Date(pawn.loan_date);
+        
+        // 6. Create cycles based on interest_period
+        const interestPeriod = pawn.interest_period || 30;
+        const cycles = [];
+        
+        let currentStart = new Date(startDateObj);
+        
+        while (currentStart <= endDateObj) {
+          let currentEnd = new Date(currentStart);
+          currentEnd.setDate(currentStart.getDate() + interestPeriod - 1);
+          
+          if (currentEnd > endDateObj) {
+            currentEnd = new Date(endDateObj);
+          }
+          
+          cycles.push({
+            start: new Date(currentStart),
+            end: new Date(currentEnd)
+          });
+          
+          currentStart = new Date(currentEnd);
+          currentStart.setDate(currentStart.getDate() + 1);
+        }
+        
+        console.log(`Created ${cycles.length} cycles:`, cycles.map(c => 
+          `${c.start.toISOString().split('T')[0]} → ${c.end.toISOString().split('T')[0]}`
+        ));
+        
+        // 7. Create records for each cycle
+        const allRecords: Array<{
+          pawn_id: string;
+          transaction_type: 'payment';
+          effective_date: string;
+          date_status: string | null;
+          credit_amount: number;
+          debit_amount: number;
+          description: string;
+          is_deleted: boolean;
+          created_by: string;
+        }> = [];
+        
+        cycles.forEach((cycle, cycleIndex) => {
+          const cycleStartDate = cycle.start;
+          const cycleEndDate = cycle.end;
+          const cycleDays = Math.floor((cycleEndDate.getTime() - cycleStartDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+          
+          for (let dayOffset = 0; dayOffset < cycleDays; dayOffset++) {
+            const currentDate = new Date(cycleStartDate);
+            currentDate.setDate(cycleStartDate.getDate() + dayOffset);
+            
+            // Calculate day index relative to loan start for expected amount
+            const dayIndex = Math.floor((currentDate.getTime() - loanStart.getTime()) / (1000 * 60 * 60 * 24));
+            const dayAmount = (dayIndex >= 0 && dayIndex < dailyAmounts.length) ? dailyAmounts[dayIndex] : 0;
+            
+            // Determine date_status for this cycle
+            let dateStatus: string | null = null;
+            if (cycleDays === 1) {
+              dateStatus = 'only';
+            } else if (dayOffset === 0) {
+              dateStatus = 'start';
+            } else if (dayOffset === cycleDays - 1) {
+              dateStatus = 'end';
+            }
+            
+            const dailyRecord = {
+              pawn_id: pawn.id,
+              transaction_type: 'payment' as const,
+              effective_date: currentDate.toISOString(),
+              date_status: dateStatus,
+              credit_amount: Math.round(dayAmount),
+              debit_amount: 0,
+              description: `Thanh toán chu kỳ ${cycleIndex + 1}/${cycles.length}, ngày ${dayOffset + 1}/${cycleDays} đến kỳ ${period.period_number}`,
+              is_deleted: false,
+              created_by: userId || 'system'
+            };
+            
+            allRecords.push(dailyRecord);
+          }
+        });
+        
+        console.log(`Prepared ${allRecords.length} daily records for batch insert`);
+        
+        // 8. Batch upsert all records
         const { data, error } = await supabase
           .from('pawn_history')
-          .insert(dailyRecords)
+          .upsert(allRecords)
           .select();
         
         if (error) {
           throw new Error(error.message);
         }
         
-        console.log('Inserted', dailyRecords.length, 'daily payment records for period', period.period_number);
+        console.log(`Successfully inserted ${allRecords.length} payment records`);
         
-        // Update loan_period by adding the number of days in this period
-        const periodDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        // Update loan_period by adding the number of days
         const currentLoanPeriod = pawn.loan_period || 0;
-        const newLoanPeriod = currentLoanPeriod + periodDays;
+        const newLoanPeriod = currentLoanPeriod + totalDays;
         
-        console.log(`Updating loan_period: ${currentLoanPeriod} + ${periodDays} = ${newLoanPeriod}`);
+        console.log(`Updating loan_period: ${currentLoanPeriod} + ${totalDays} = ${newLoanPeriod}`);
         
         const { error: updateError } = await supabase
           .from('pawns')
@@ -270,24 +326,34 @@ export function PaymentTab({
         
         if (updateError) {
           console.error('Error updating loan_period:', updateError);
-          // Don't throw error, just log it since payment was already recorded
         }
         
         toast({
           title: 'Thành công',
-          description: `Đã thanh toán kỳ ${period.period_number}`,
+          description: `Đã tạo ${allRecords.length} bản ghi thanh toán đến kỳ ${period.period_number}`,
         });
         
       } else {
-        // Uncheck: Mark daily records for this period as deleted (soft delete)
-        console.log('Marking daily payment records as deleted for period:', period.period_number);
+        // Uncheck logic - only allow unchecking latest period
+        const checkedPeriods = periodsToDisplay.filter(p => 
+          p.id && p.id.startsWith('db-') && (p.actual_amount || 0) > 0
+        );
         
+        checkedPeriods.sort((a, b) => b.period_number - a.period_number);
+        
+        if (checkedPeriods.length > 0 && checkedPeriods[0].period_number !== period.period_number) {
+          toast({
+            variant: "destructive",
+            title: "Không thể bỏ đánh dấu",
+            description: `Bạn chỉ có thể bỏ đánh dấu kỳ ${checkedPeriods[0].period_number} (kỳ thanh toán gần nhất).`
+          });
+          return;
+        }
+        
+        // Soft delete records in this period's date range
         const startDate = period.start_date.split('T')[0];
         const endDate = period.end_date.split('T')[0];
         
-        console.log('Deleting records between:', startDate, 'and', endDate);
-        
-        // Update records to is_deleted = true
         const { data, error } = await supabase
           .from('pawn_history')
           .update({is_deleted: true, updated_by: userId})
@@ -299,19 +365,15 @@ export function PaymentTab({
           .select();
         
         if (error) {
-          console.error('Update error:', error);
           throw new Error(error.message);
         }
         
-        console.log('Updated records:', data);
-        console.log('Number of records updated:', data?.length || 0);
-        
-        // Update loan_period by subtracting the number of days in this period
+        // Update loan_period by subtracting the number of days
         const startDateObj = new Date(period.start_date);
         const endDateObj = new Date(period.end_date);
         const periodDays = Math.floor((endDateObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)) + 1;
         const currentLoanPeriod = pawn.loan_period || 0;
-        const newLoanPeriod = Math.max(0, currentLoanPeriod - periodDays); // Ensure it doesn't go below 0
+        const newLoanPeriod = Math.max(0, currentLoanPeriod - periodDays);
         
         console.log(`Updating loan_period: ${currentLoanPeriod} - ${periodDays} = ${newLoanPeriod}`);
         
@@ -322,23 +384,22 @@ export function PaymentTab({
         
         if (updateError) {
           console.error('Error updating loan_period:', updateError);
-          // Don't throw error, just log it since payment deletion was already recorded
         }
         
         toast({
           title: 'Thành công',
-          description: `Đã bỏ thanh toán kỳ ${period.period_number}`,
+          description: `Đã xóa ${data?.length || 0} bản ghi thanh toán cho kỳ ${period.period_number}`,
         });
-        }
-        
+      }
+      
       // Trigger data change to regenerate periods
-        if (onDataChange) onDataChange();
+      if (onDataChange) onDataChange();
       
     } catch (error) {
-      console.error('Error handling daily payment records:', error);
+      console.error('Error handling payment records:', error);
       toast({
         title: 'Lỗi',
-        description: error instanceof Error ? error.message : 'Không thể xử lý bản ghi thanh toán hàng ngày',
+        description: error instanceof Error ? error.message : 'Không thể xử lý bản ghi thanh toán',
         variant: 'destructive'
       });
     } finally {
