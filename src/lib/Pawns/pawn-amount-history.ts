@@ -4,6 +4,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { getCurrentUser } from '../auth';
 
 interface ContractReopeningResult {
   success: boolean;
@@ -26,6 +27,7 @@ export async function recordContractReopening(
   description?: string
 ) {
   try {
+    const { id: userId } = await getCurrentUser();
     // Lấy lịch sử đóng hợp đồng gần nhất
     const { data: closureHistory, error: closureError } = await supabase
       .from('pawn_history')
@@ -53,7 +55,8 @@ export async function recordContractReopening(
         transaction_type: 'contract_reopen',
         pawn_amount: 0,
         debit_amount: lastClosureAmount, // Lấy số tiền đóng hợp đồng gần nhất
-        description: description || 'Mở lại hợp đồng'
+        description: description || 'Mở lại hợp đồng',
+        created_by: userId
         // transaction_date field is no longer used, created_at is set automatically
       } as any)
       .select()

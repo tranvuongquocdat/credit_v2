@@ -14,6 +14,7 @@ import { calculateDebtToLatestPaidPeriod } from '@/lib/Pawns/calculate_remaining
 import { recordDailyPayments } from '@/lib/Pawns/record_daily_payments';
 import { getUnpaidStartDate } from '@/lib/Pawns/get_unpaid_start_date';
 import { calculateActualLoanAmount } from '@/lib/Pawns/calculate_actual_loan_amount';
+import { getCurrentUser } from '@/lib/auth';
 
 interface RedeemTabProps {
   pawn: PawnWithCustomerAndCollateral;
@@ -39,7 +40,7 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
     
     try {
       const contractRedeemAmount = actualLoanAmount; // Tiền gốc thực tế
-      
+      const { id: userId } = await getCurrentUser();
       // Case 1: Nếu tiền lãi phí <= 0, chỉ cần chuyển trạng thái sang CLOSED
       if (remainingAmount <= 0) {
         console.log('No remaining interest, just closing contract...');
@@ -53,7 +54,8 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
             credit_amount: contractRedeemAmount + remainingAmount,
             debit_amount: 0,
             description: `Chuộc đồ (gốc: ${formatCurrency(actualLoanAmount)} + lãi: ${formatCurrency(remainingAmount)})`,
-            is_created_from_contract_closure: true
+            is_created_from_contract_closure: true,
+            created_by: userId
 
           } as any);
       } 
@@ -83,7 +85,8 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
             credit_amount: contractRedeemAmount,
             debit_amount: 0,
             description: `Chuộc đồ (gốc: ${formatCurrency(actualLoanAmount)} + lãi: ${formatCurrency(remainingAmount)})`,
-            is_created_from_contract_closure: true
+            is_created_from_contract_closure: true,
+            created_by: userId
           } as any);
       }
 
@@ -99,7 +102,8 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
             description: oldDebt > 0 
               ? 'Thanh toán nợ cũ khi chuộc đồ' 
               : 'Hoàn trả tiền thừa khi chuộc đồ',
-            is_created_from_contract_closure: true
+            is_created_from_contract_closure: true,
+            created_by: userId
           } as any);
       }
 

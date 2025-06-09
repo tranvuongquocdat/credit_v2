@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { PawnPrincipalRepayment } from '@/models/principal-repayment';
+import { getCurrentUser } from '../auth';
 
 // Định nghĩa kiểu dữ liệu phù hợp với schema của pawn_history
 interface PawnPrincipalRepaymentData {
@@ -52,6 +53,7 @@ export async function getPawnPrincipalRepayments(pawnId: string): Promise<PawnPr
  */
 export async function addPawnPrincipalRepayment(repayment: PawnPrincipalRepayment): Promise<PawnPrincipalRepayment> {
   try {
+    const { id: userId } = await getCurrentUser();
     // Get current loan amount
     const { data: pawnData, error: fetchError } = await supabase
       .from('pawns')
@@ -81,7 +83,8 @@ export async function addPawnPrincipalRepayment(repayment: PawnPrincipalRepaymen
         debit_amount: 0, // No debit for repayment
         description: repayment.note || "Trả bớt gốc",
         effective_date: new Date().toISOString(),
-        is_deleted: false
+        is_deleted: false,
+        created_by: userId
       })
       .select()
       .single();
@@ -122,6 +125,7 @@ export async function addPawnPrincipalRepayment(repayment: PawnPrincipalRepaymen
  */
 export async function deletePawnAmountHistory(id: string): Promise<void> {
   try {
+    const { id: userId } = await getCurrentUser();
     // Get the record details first to restore the loan amount later
     const { data: record, error: fetchError } = await supabase
       .from('pawn_history')
@@ -139,7 +143,7 @@ export async function deletePawnAmountHistory(id: string): Promise<void> {
     // Đánh dấu is_deleted = true thay vì xóa hẳn
     const { error: deleteError } = await supabase
       .from('pawn_history')
-      .update({ is_deleted: true })
+      .update({ is_deleted: true, updated_by: userId })
       .eq('id', id);
     
     if (deleteError) {

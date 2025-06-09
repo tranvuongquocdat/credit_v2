@@ -3,6 +3,7 @@ import { getPawnPaymentHistory } from './payment_history';
 import { getExpectedMoney } from './get_expected_money';
 import { convertFromHistoryToTimeArrayWithStatus } from './convert_from_history_to_time_array';
 import { formatCurrency } from '../utils';
+import { getCurrentUser } from '../auth';
 
 /**
  * Xử lý chuộc đồ khi có lãi phí cần thanh toán
@@ -73,6 +74,7 @@ export async function processPawnRedemption(pawnId: string): Promise<void> {
 
         // Tạo lịch sử thanh toán cho kỳ này
         if (expectedAmount > 0) {
+          const { id: userId } = await getCurrentUser();
           await supabase
             .from('pawn_history')
             .insert({
@@ -82,7 +84,8 @@ export async function processPawnRedemption(pawnId: string): Promise<void> {
               debit_amount: 0,
               notes: `Thanh toán lãi kỳ ${index + 1} (${start_date} - ${end_date}) khi chuộc đồ`,
               transaction_date: today,
-              is_deleted: false
+              is_deleted: false,
+              created_by: userId
             } as any);
         }
       }
@@ -101,6 +104,7 @@ export async function processPawnRedemption(pawnId: string): Promise<void> {
         const overdueInterest = dailyInterestRate * daysOverdue;
         
         if (overdueInterest > 0) {
+          const { id: userId } = await getCurrentUser();
           await supabase
             .from('pawn_history')
             .insert({
@@ -110,7 +114,8 @@ export async function processPawnRedemption(pawnId: string): Promise<void> {
               debit_amount: 0,
               notes: `Thanh toán lãi quá hạn ${daysOverdue} ngày (${formatCurrency(dailyInterestRate)}/ngày) khi chuộc đồ`,
               transaction_date: today,
-              is_deleted: false
+              is_deleted: false,
+              created_by: userId
             } as any);
         }
       }

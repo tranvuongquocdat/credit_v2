@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { PrincipalRepayment } from '@/models/principal-repayment';
 import { CreditTransactionType } from './credit-amount-history';
+import { getCurrentUser } from '../auth';
 
 // Định nghĩa kiểu dữ liệu phù hợp với schema của credit_history
 interface PrincipalRepaymentData {
@@ -53,6 +54,7 @@ export async function getPrincipalRepayments(creditId: string): Promise<Principa
  */
 export async function addPrincipalRepayment(repayment: PrincipalRepayment): Promise<PrincipalRepayment> {
   try {
+    const { id: userId } = await getCurrentUser();
     // Get current loan amount
     const { data: creditData, error: fetchError } = await supabase
       .from('credits')
@@ -82,7 +84,8 @@ export async function addPrincipalRepayment(repayment: PrincipalRepayment): Prom
         debit_amount: 0, // No debit for repayment
         description: repayment.note || "Trả bớt gốc",
         effective_date: new Date().toISOString(),
-        is_deleted: false
+        is_deleted: false,
+        created_by: userId
       })
       .select()
       .single();
@@ -123,6 +126,7 @@ export async function addPrincipalRepayment(repayment: PrincipalRepayment): Prom
  */
 export async function deleteCreditAmountHistory(id: string): Promise<void> {
   try {
+    const { id: userId } = await getCurrentUser();
     // Get the record details first to restore the loan amount later
     const { data: record, error: fetchError } = await supabase
       .from('credit_history')
@@ -140,7 +144,7 @@ export async function deleteCreditAmountHistory(id: string): Promise<void> {
     // Đánh dấu is_deleted = true thay vì xóa hẳn
     const { error: deleteError } = await supabase
       .from('credit_history')
-      .update({ is_deleted: true })
+      .update({ is_deleted: true, updated_by: userId })
       .eq('id', id);
     
     if (deleteError) {

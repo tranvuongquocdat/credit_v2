@@ -15,6 +15,7 @@ import {
 import { getLatestPaymentPaidDate } from '@/lib/Pawns/get_latest_payment_paid_date';
 import { getExpectedMoney } from '@/lib/Pawns/get_expected_money';
 import { convertFromHistoryToTimeArrayWithStatus } from '@/lib/Pawns/convert_from_history_to_time_array';
+import { getCurrentUser } from '@/lib/auth';
 
 type PaymentTabProps = {
   pawn: PawnWithCustomerAndCollateral | null;
@@ -177,7 +178,7 @@ export function PaymentTab({
   // Updated checkbox handler - simplified for pawns (only one period at a time)
   const handleCheckboxChange = async (period: PawnPaymentPeriod, checked: boolean, index: number) => {
     if (!pawn?.id || isProcessingCheckbox) return;
-    
+    const { id: userId } = await getCurrentUser();
     // Set global loading state
     setIsProcessingCheckbox(true);
     
@@ -236,7 +237,8 @@ export function PaymentTab({
             credit_amount: dayAmount,
             debit_amount: 0,
             description: `Thanh toán ngày ${dayOffset + 1}/${totalDays} của kỳ ${period.period_number}`,
-            is_deleted: false
+            is_deleted: false,
+            created_by: userId
           };
           
           dailyRecords.push(dailyRecord);
@@ -288,7 +290,7 @@ export function PaymentTab({
         // Update records to is_deleted = true
         const { data, error } = await supabase
           .from('pawn_history')
-          .update({is_deleted: true})
+          .update({is_deleted: true, updated_by: userId})
           .eq('pawn_id', pawn.id)
           .eq('transaction_type', 'payment')
           .eq('is_deleted', false)

@@ -1,6 +1,7 @@
 import { supabase } from '../supabase';
 import { updateInstallment } from '../installment';
 import { InstallmentStatus } from '@/models/installment';
+import { getCurrentUser } from '../auth';
 
 /**
  * Mở lại hợp đồng đã đóng bằng cách đánh dấu xóa các lịch sử payment từ việc đóng hợp đồng
@@ -10,7 +11,7 @@ import { InstallmentStatus } from '@/models/installment';
 export async function reopenContract(installmentId: string): Promise<void> {
   try {
     console.log('Reopening contract:', installmentId);
-
+    const { id: userId } = await getCurrentUser();
     // 1. Lấy thông tin lịch sử đóng hợp đồng gần nhất
     const { data: contractCloseHistory, error: fetchError } = await supabase
       .from('installment_history')
@@ -50,7 +51,7 @@ export async function reopenContract(installmentId: string): Promise<void> {
     // 2. Đánh dấu is_deleted = true cho tất cả payment records được tạo từ việc đóng hợp đồng
     const { error: updatePaymentError } = await supabase
       .from('installment_history')
-      .update({ is_deleted: true })
+      .update({ is_deleted: true, updated_by: userId })
       .eq('installment_id', installmentId)
       .eq('transaction_type', 'payment')
       .eq('is_created_from_contract_closure', true);
@@ -68,13 +69,14 @@ export async function reopenContract(installmentId: string): Promise<void> {
         installment_amount: 0,
         debit_amount: totalDebitAmount,
         description: `Mở lại hợp đồng - hoàn trả ${totalDebitAmount.toLocaleString()} VND (đóng HĐ: ${contractCloseAmount.toLocaleString()} + lãi phí: ${totalPaymentAmount.toLocaleString()})`,
-        is_created_from_contract_closure: false
+        is_created_from_contract_closure: false,
+        created_by: userId
       } as any);
     
     // 4. Update is_created_from_contract_closure installment history của payment về false
     const { error: updatePaymentIsCreatedFromContractClosureError } = await supabase
       .from('installment_history')
-      .update({ is_created_from_contract_closure: false })
+      .update({ is_created_from_contract_closure: false, updated_by: userId })
       .eq('installment_id', installmentId)
       .eq('transaction_type', 'payment')
       .eq('is_created_from_contract_closure', true);

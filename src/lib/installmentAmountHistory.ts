@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { getCurrentUser } from './auth';
 
 // Định nghĩa các kiểu dữ liệu
 export enum TransactionType {
@@ -18,7 +19,7 @@ export interface InstallmentAmountHistoryDB {
   id: string | number;
   installment_id: string;
   created_at?: string | null;
-  employee_id: string | null;
+  created_by: string | null;
   debit_amount: number | null;
   credit_amount: number | null;
   description: string | null;
@@ -32,7 +33,7 @@ export interface InstallmentAmountHistory {
   id: string;
   installmentId: string;
   createdAt: string;
-  employeeId: string;
+  createdBy: string;
   debitAmount: number;
   creditAmount: number;
   description: string;
@@ -75,20 +76,19 @@ export async function getInstallmentAmountHistory(installmentId: string) {
  */
 export async function createInstallmentAmountHistory(params: {
   installmentId: string,
-  employeeId: string,
   debitAmount?: number,
   creditAmount?: number,
   description: string,
   transactionType: TransactionType
 }) {
   try {
-    const { installmentId, employeeId, debitAmount = 0, creditAmount = 0, description, transactionType } = params;
-    
+    const { installmentId, debitAmount = 0, creditAmount = 0, description, transactionType } = params;
+    const { id: userId } = await getCurrentUser();
     const { data, error } = await supabase
       .from('installment_history')
       .insert({
         installment_id: installmentId,
-        employee_id: employeeId,
+        created_by: userId,
         debit_amount: debitAmount,
         credit_amount: creditAmount,
         description,
@@ -118,14 +118,12 @@ export async function createInstallmentAmountHistory(params: {
 export async function recordDebtPayment(installmentId: string, employeeId: string, amount: number) {
   if (amount < 0) return createInstallmentAmountHistory({
     installmentId,
-    employeeId,
     creditAmount: Math.abs(amount),
     description: 'Thanh toán nợ',
     transactionType: TransactionType.DEBT_PAYMENT
   });
   return createInstallmentAmountHistory({
     installmentId,
-    employeeId,
     debitAmount: amount,
     description: 'Thanh toán nợ',
     transactionType: TransactionType.DEBT_PAYMENT
@@ -138,7 +136,6 @@ export async function recordDebtPayment(installmentId: string, employeeId: strin
 export async function recordContractCreation(installmentId: string, employeeId: string, amount: number) {
   return createInstallmentAmountHistory({
     installmentId,
-    employeeId,
     debitAmount: amount,
     description: 'Tạo mới hợp đồng',
     transactionType: TransactionType.CREATE_CONTRACT
@@ -151,7 +148,6 @@ export async function recordContractCreation(installmentId: string, employeeId: 
 export async function recordContractUpdate(installmentId: string, employeeId: string, description: string = 'Cập nhật hợp đồng') {
   return createInstallmentAmountHistory({
     installmentId,
-    employeeId,
     description,
     transactionType: TransactionType.UPDATE_CONTRACT
   });
@@ -163,7 +159,6 @@ export async function recordContractUpdate(installmentId: string, employeeId: st
 export async function recordPayment(installmentId: string, employeeId: string, amount: number) {
   return createInstallmentAmountHistory({
     installmentId,
-    employeeId,
     creditAmount: amount,
     description: 'Đóng tiền hộ',
     transactionType: TransactionType.PAYMENT
@@ -176,7 +171,6 @@ export async function recordPayment(installmentId: string, employeeId: string, a
 export async function recordCancelPayment(installmentId: string, employeeId: string, amount: number) {
   return createInstallmentAmountHistory({
     installmentId,
-    employeeId,
     debitAmount: amount,
     description: 'Hủy đóng tiền hộ',
     transactionType: TransactionType.CANCEL_PAYMENT
@@ -186,10 +180,9 @@ export async function recordCancelPayment(installmentId: string, employeeId: str
 /**
  * Ghi lịch sử khi đóng hợp đồng
  */
-export async function recordContractClosure(installmentId: string, employeeId: string) {
+export async function recordContractClosure(installmentId: string) {
   return createInstallmentAmountHistory({
     installmentId,
-    employeeId,
     description: 'Đóng hợp đồng',
     transactionType: TransactionType.CLOSE_CONTRACT
   });
@@ -198,10 +191,9 @@ export async function recordContractClosure(installmentId: string, employeeId: s
 /**
  * Ghi lịch sử khi mở lại hợp đồng
  */
-export async function recordContractReopening(installmentId: string, employeeId: string) {
+export async function recordContractReopening(installmentId: string) {
   return createInstallmentAmountHistory({
     installmentId,
-    employeeId,
     description: 'Mở lại hợp đồng',
     transactionType: TransactionType.REOPEN_CONTRACT
   });
@@ -213,16 +205,14 @@ export async function recordContractReopening(installmentId: string, employeeId:
 export async function recordContractRotation(
   oldInstallmentId: string, 
   newInstallmentId: string, 
-  employeeId: string, 
   remainingDebt: number
 ) {
   // Ghi lịch sử đóng hợp đồng cũ
-  await recordContractClosure(oldInstallmentId, employeeId);
+  await recordContractClosure(oldInstallmentId);
   
   // Ghi lịch sử tạo hợp đồng mới
   return createInstallmentAmountHistory({
     installmentId: newInstallmentId,
-    employeeId,
     description: `Đảo từ hợp đồng cũ`,
     transactionType: TransactionType.ROTATE_CONTRACT
   });
@@ -233,14 +223,14 @@ export async function recordContractRotation(
  */
 export async function recordBulkPayment(
   installmentId: string,
-  employeeId: string,
   amount: number,
   periodCount: number
 ) {
   try {
+    const { id: userId } = await getCurrentUser();
     const payload = {
       installment_id: installmentId,
-      employee_id: employeeId,
+      created_by: userId,
       credit_amount: amount,
       debit_amount: 0,
       description: `Đóng lãi ${periodCount} kỳ`,
@@ -272,13 +262,11 @@ export async function recordBulkPayment(
  */
 export async function recordInstallmentContractDeletion(
   installmentId: string,
-  employeeId: string,
   downPayment: number,
   description?: string
 ) {
   return createInstallmentAmountHistory({
     installmentId,
-    employeeId,
     creditAmount: downPayment, // Positive for credit (returning the down payment)
     description: description || 'Xóa hợp đồng trả góp',
     transactionType: TransactionType.CONTRACT_DELETE
@@ -293,7 +281,7 @@ function transformHistory(item: InstallmentAmountHistoryDB): InstallmentAmountHi
     id: String(item.id),
     installmentId: item.installment_id,
     createdAt: item.created_at || new Date().toISOString(),
-    employeeId: item.employee_id || '',
+    createdBy: item.created_by || '',
     debitAmount: item.debit_amount || 0,
     creditAmount: item.credit_amount || 0,
     description: item.description || '',

@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { Extension } from '@/models/extension';
 import { addDays, format } from 'date-fns';
+import { getCurrentUser } from './auth';
 
 /**
  * Lấy danh sách các khoản gia hạn theo credit_id
@@ -32,6 +33,7 @@ export async function getExtensions(creditId: string): Promise<Extension[]> {
  */
 export async function addExtension(extension: Extension): Promise<Extension> {
   try {
+    const { id: userId } = await getCurrentUser();
     // Lấy thông tin hợp đồng để tính toán ngày kết thúc cũ
     const { data: creditData, error: creditError } = await supabase
       .from('credits')
@@ -85,6 +87,7 @@ export async function addExtension(extension: Extension): Promise<Extension> {
         description: extension.notes || null,
         effective_date: extension.from_date!,
         transaction_type: 'contract_extension',
+        created_by: userId
       })
       .select()
       .single();

@@ -15,6 +15,7 @@ import {
   calculateCustomPeriodInterest, 
 } from '@/lib/Credits/save_custom_payment';
 import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_date';
+import { getCurrentUser } from '@/lib/auth';
 
 type PaymentTabProps = {
   credit: CreditWithCustomer | null;
@@ -217,7 +218,7 @@ export function PaymentTab({
     // Set loading state for this period
     const periodId = period.id || `temp-${period.period_number}`;
     setLoadingPeriods(prev => ({ ...prev, [periodId]: true }));
-    
+    const { id: userId } = await getCurrentUser();
     try {
       if (checked) {
         // 1. Lấy ngày cuối cùng đã đóng tiền
@@ -326,7 +327,8 @@ export function PaymentTab({
               credit_amount: Math.round(dayAmount),
               debit_amount: 0,
               description: `Thanh toán chu kỳ ${cycleIndex + 1}/${cycles.length}, ngày ${dayOffset + 1}/${cycleDays} đến kỳ ${period.period_number}`,
-              is_deleted: false
+              is_deleted: false,
+              created_by: userId,
             };
             
             allRecords.push(dailyRecord);
@@ -375,7 +377,7 @@ export function PaymentTab({
         
         const { data, error } = await supabase
           .from('credit_history')
-          .update({ is_deleted: true })
+          .update({ is_deleted: true, updated_by: userId })
           .eq('credit_id', credit.id)
           .eq('transaction_type', 'payment')
           .eq('is_deleted', false)

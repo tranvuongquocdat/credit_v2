@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { AdditionalLoan } from '@/models/additional-loan';
+import { getCurrentUser } from '../auth';
 
 /**
  * Lấy danh sách các khoản vay thêm theo credit_id
@@ -42,6 +43,7 @@ export async function getAdditionalLoans(creditId: string): Promise<AdditionalLo
  */
 export async function addAdditionalLoan(loan: AdditionalLoan): Promise<AdditionalLoan> {
   try {
+    const { id: userId } = await getCurrentUser();
     // Get current loan amount
     const { data: creditData, error: fetchError } = await supabase
       .from('credits')
@@ -71,6 +73,7 @@ export async function addAdditionalLoan(loan: AdditionalLoan): Promise<Additiona
       transaction_type: 'additional_loan',
       description: loan.note || "Vay thêm",
       created_at: new Date().toISOString(),
+      created_by: userId
     })
     .select()
     .single();
@@ -110,6 +113,7 @@ export async function addAdditionalLoan(loan: AdditionalLoan): Promise<Additiona
  */
 export async function deleteCreditAmountHistory(id: string): Promise<void> {
   try {
+    const { id: userId } = await getCurrentUser();
     // Get the record details first to restore the loan amount later
     const { data: record, error: fetchError } = await supabase
       .from('credit_history')
@@ -125,7 +129,7 @@ export async function deleteCreditAmountHistory(id: string): Promise<void> {
     // Delete the history record by setting is_deleted = true
     const { error: deleteError } = await supabase
     .from('credit_history')
-    .update({ is_deleted: true })
+    .update({ is_deleted: true, updated_by: userId })
     .eq('id', id);
     
     if (deleteError) {

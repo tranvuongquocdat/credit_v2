@@ -1,5 +1,6 @@
 import { supabase } from '../supabase';
 import { getExpectedMoney } from './get_expected_money';
+import { getCurrentUser } from '../auth';
 
 /**
  * Ghi từng bản ghi payment hàng ngày từ startDate đến endDate
@@ -14,6 +15,10 @@ export async function recordDailyPayments(
   endDate: string
 ): Promise<void> {
   try {
+    const { id: userId } = await getCurrentUser();
+    if (!userId) {
+      throw new Error('Không thể xác định người dùng');
+    }
     // 1. Lấy thông tin hợp đồng
     const { data: installment, error: installmentError } = await supabase
       .from('installments')
@@ -48,6 +53,7 @@ export async function recordDailyPayments(
       description: string;
       is_deleted: boolean; // Add this field like PaymentTab
       is_created_from_contract_closure: boolean;
+      created_by: string;
     }> = [];
 
     const current = new Date(start);
@@ -97,7 +103,8 @@ export async function recordDailyPayments(
         debit_amount: 0,
         description: `Đóng lãi phí ngày ${index + 1}/${dates.length} khi đóng hợp đồng`,
         is_deleted: false, // Add is_deleted field like PaymentTab
-        is_created_from_contract_closure: true // Keep this for tracking closure records
+        is_created_from_contract_closure: true, // Keep this for tracking closure records
+        created_by: userId
       });
     });
 
@@ -128,6 +135,10 @@ export async function recordDailyPaymentsWithCustomAmount(
   customAmount: number
 ): Promise<void> {
   try {
+    const { id: userId } = await getCurrentUser();
+    if (!userId) {
+      throw new Error('Không thể xác định người dùng');
+    }
     // 1. Lấy thông tin hợp đồng
     const { data: installment, error: installmentError } = await supabase
       .from('installments')
@@ -175,6 +186,7 @@ export async function recordDailyPaymentsWithCustomAmount(
       description: string;
       is_deleted: boolean;
       is_created_from_contract_closure: boolean;
+      created_by: string;
     }> = [];
 
     // 4. Tạo records cho từng ngày với custom amount
@@ -207,7 +219,8 @@ export async function recordDailyPaymentsWithCustomAmount(
         debit_amount: 0,
         description: `Đóng lãi phí tùy biến ngày ${index + 1}/${totalDays} (${dayAmount} VNĐ)`,
         is_deleted: false,
-        is_created_from_contract_closure: false // Custom payment, not from closure
+        is_created_from_contract_closure: false, // Custom payment, not from closure
+        created_by: userId
       });
     });
 

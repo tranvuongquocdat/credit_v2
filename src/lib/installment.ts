@@ -564,9 +564,9 @@ export async function updateInstallmentStatus(id: string, status: InstallmentSta
     // Record history based on status change
     try {
       if (status === InstallmentStatus.CLOSED) {
-        await recordContractClosure(data.id, data.employee_id);
+        await recordContractClosure(data.id);
       } else if (status === InstallmentStatus.FINISHED) {
-        await recordContractReopening(data.id, data.employee_id);
+        await recordContractReopening(data.id);
       }
     } catch (historyError) {
       console.error('Error recording status update history:', historyError);
@@ -610,7 +610,7 @@ export async function deleteInstallment(id: string) {
     // Get installment data for history logging
     const { data: installmentData, error: installmentError } = await supabase
       .from('installments')
-      .select('down_payment, contract_code, employee_id')
+      .select('down_payment, contract_code')
       .eq('id', id)
       .single();
     
@@ -620,7 +620,6 @@ export async function deleteInstallment(id: string) {
     const { recordInstallmentContractDeletion } = await import('@/lib/installmentAmountHistory');
     await recordInstallmentContractDeletion(
       id,
-      installmentData.employee_id,
       installmentData.down_payment,
       `Xóa hợp đồng trả góp ${installmentData.contract_code || id}`
     );

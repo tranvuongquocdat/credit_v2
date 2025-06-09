@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { getinstallmentPaymentHistory } from './payment_history';
 import { getExpectedMoney } from './get_expected_money';
 import { convertFromHistoryToTimeArrayWithStatus } from './convert_from_history_to_time_array';
+import { getCurrentUser } from '../auth';
 
 /**
  * Fill all remaining unpaid periods for an installment when closing the contract
@@ -11,11 +12,10 @@ import { convertFromHistoryToTimeArrayWithStatus } from './convert_from_history_
  */
 export async function fillRemainingPeriods(
   installmentId: string,
-  employeeId: string
 ): Promise<{ success: boolean; error?: string; periodsAdded?: number }> {
   try {
     console.log('🔄 Starting fillRemainingPeriods for installment:', installmentId);
-
+    const { id: userId } = await getCurrentUser();
     // 1. Get installment details
     const { data: installment, error: installmentError } = await supabase
       .from('installments')
@@ -133,7 +133,7 @@ export async function fillRemainingPeriods(
           credit_amount: dayAmount,
           debit_amount: 0,
           description: `Đóng hợp đồng - Thanh toán ngày ${dayOffset + 1}/${totalDays} của kỳ ${period.periodNumber}`,
-          employee_id: employeeId,
+          created_by: userId,
           is_deleted: false
         };
 

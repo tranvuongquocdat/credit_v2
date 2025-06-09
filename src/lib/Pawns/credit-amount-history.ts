@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { getCurrentUser } from '../auth';
 
 export enum PawnTransactionType {
   PRINCIPAL_REPAYMENT = 'principal_repayment',
@@ -98,6 +99,7 @@ export async function recordPrincipalRepayment(
     // }
 
     // 2. Insert the history record with new schema format
+    const { id: userId } = await getCurrentUser();
     const { data, error } = await supabase
       .from('pawn_history')
       .insert({
@@ -106,6 +108,7 @@ export async function recordPrincipalRepayment(
         credit_amount: repaymentAmount, // Negative for principal repayment
         principal_change_description: notes,
         effective_date: transactionDate,
+        created_by: userId
       })
       .select()
       .single();
@@ -127,6 +130,7 @@ export async function recordAdditionalLoan(
   notes?: string
 ) {
   try {
+    const { id: userId } = await getCurrentUser();
     const { data, error } = await supabase
       .from('pawn_history')
       .insert({
@@ -135,6 +139,7 @@ export async function recordAdditionalLoan(
         debit_amount: additionalAmount,
         principal_change_description: notes || "Vay thêm",
         effective_date: transactionDate,
+        created_by: userId
       })
       .select()
       .single();
@@ -182,6 +187,7 @@ export async function recordInterestPayment(
   description?: string
 ) {
   try {
+    const { id: userId } = await getCurrentUser();
     const { data, error } = await supabase
       .from('pawn_history')
       .insert({
@@ -189,7 +195,8 @@ export async function recordInterestPayment(
         transaction_type: 'payment' as PawnTransactionType,
         credit_amount: amount, // Positive for pawn (incoming money)
         debit_amount: 0,
-        description: description || 'Đóng lãi phí'
+        description: description || 'Đóng lãi phí',
+        created_by: userId
         // transaction_date field is no longer used, created_at is set automatically
       } as PawnAmountHistoryInsert)
       .select()
@@ -213,6 +220,7 @@ export async function recordCancelInterestPayment(
   description?: string
 ) {
   try {
+    const { id: userId } = await getCurrentUser();
     const { data, error } = await supabase
       .from('pawn_history')
       .insert({
@@ -220,7 +228,8 @@ export async function recordCancelInterestPayment(
         transaction_type: 'payment_cancel',
         debit_amount: amount, // Positive for debit (money going out)
         credit_amount: 0,
-        description: description || 'Hủy đóng lãi phí'
+        description: description || 'Hủy đóng lãi phí',
+        created_by: userId
       } as any)
       .select()
       .single();
@@ -244,6 +253,7 @@ export async function recordContractClosure(
   description?: string
 ) {
   try {
+    const { id: userId } = await getCurrentUser();
     const { data, error } = await supabase
       .from('pawn_history')
       .insert({
@@ -251,7 +261,8 @@ export async function recordContractClosure(
         transaction_type: 'contract_close',
         credit_amount: amount, // Positive for pawn (incoming money)
         debit_amount: 0,
-        description: description || 'Đóng hợp đồng'
+        description: description || 'Đóng hợp đồng',
+        created_by: userId
         // transaction_date field is no longer used, created_at is set automatically
       } as any)
       .select()
@@ -296,6 +307,7 @@ export async function recordContractReopening(
       : 0;
 
     // Ghi lại lịch sử mở khóa hợp đồng với số tiền đóng hợp đồng gần nhất vào debit_amount
+    const { id: userId } = await getCurrentUser();
     const { data, error } = await supabase
       .from('pawn_history')
       .insert({
@@ -303,7 +315,8 @@ export async function recordContractReopening(
         transaction_type: 'contract_reopen',
         credit_amount: 0,
         debit_amount: lastClosureAmount, // Lấy số tiền đóng hợp đồng gần nhất
-        description: description || 'Mở lại hợp đồng'
+        description: description || 'Mở lại hợp đồng',
+        created_by: userId
         // transaction_date field is no longer used, created_at is set automatically
       } as any)
       .select()
@@ -327,6 +340,7 @@ export async function recordContractDeletion(
   description?: string
 ) {
   try {
+    const { id: userId } = await getCurrentUser();
     const { data, error } = await supabase
       .from('pawn_history')
       .insert({
@@ -334,7 +348,8 @@ export async function recordContractDeletion(
         transaction_type: PawnTransactionType.CONTRACT_DELETE,
         credit_amount: loanAmount, // Positive for pawn (returning the loan amount)
         debit_amount: 0,
-        description: description || 'Xóa hợp đồng'
+        description: description || 'Xóa hợp đồng',
+        created_by: userId
       } as any)
       .select()
       .single();
@@ -359,6 +374,7 @@ export async function recordDebtPayment(
   isRefund: boolean = false // true nếu là hoàn trả tiền thừa
 ) {
   try {
+    const { id: userId } = await getCurrentUser();
     const { data, error } = await supabase
       .from('pawn_history')
       .insert({
@@ -367,7 +383,8 @@ export async function recordDebtPayment(
         credit_amount: isRefund ? 0 : amount, // Nếu là thanh toán nợ
         debit_amount: isRefund ? amount : 0,  // Nếu là hoàn trả tiền thừa
         description: description || (isRefund ? 'Hoàn trả tiền thừa' : 'Thanh toán nợ cũ'),
-        effective_date: transactionDate
+        effective_date: transactionDate,
+        created_by: userId
       } as PawnAmountHistoryInsert)
       .select()
       .single();
@@ -391,6 +408,7 @@ export async function recordCancelDebtPayment(
   wasRefund: boolean = false // true nếu cancel một lần hoàn trả
 ) {
   try {
+    const { id: userId } = await getCurrentUser();
     const { data, error } = await supabase
       .from('pawn_history')
       .insert({
@@ -398,7 +416,8 @@ export async function recordCancelDebtPayment(
         transaction_type: 'debt_payment',
         credit_amount: wasRefund ? amount : 0,  // Ngược lại với record ban đầu
         debit_amount: wasRefund ? 0 : amount,   // Ngược lại với record ban đầu
-        description: description || (wasRefund ? 'Hủy hoàn trả tiền thừa' : 'Hủy thanh toán nợ cũ')
+        description: description || (wasRefund ? 'Hủy hoàn trả tiền thừa' : 'Hủy thanh toán nợ cũ'),
+        created_by: userId
       } as any)
       .select()
       .single();

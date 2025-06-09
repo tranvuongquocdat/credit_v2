@@ -4,11 +4,9 @@ import { formatCurrency } from "@/lib/utils";
 import Spinner from "@/components/ui/spinner";
 import { useEffect, useState } from "react";
 import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
-import { getInstallmentPaymentPeriods } from "@/lib/installmentPayment";
 import { AlertTriangleIcon } from "lucide-react";
 import { useStore } from "@/contexts/StoreContext";
 import { useRouter } from "next/navigation";
-import { calculateRemainingToPay } from "@/lib/installmentCalculations";
 import { getLatestPaymentPaidDate } from '@/lib/Installments/get_latest_payment_paid_date';
 import { getinstallmentPaymentHistory } from "@/lib/Installments/payment_history";
 import { getExpectedMoney } from "@/lib/Installments/get_expected_money";
@@ -77,7 +75,7 @@ export function InstallmentWarningsTable({
         // Process each installment
         for (const installment of installments) {
           try {
-            // Sử dụng getLatestPaymentPaidDate thay vì getInstallmentPaymentPeriods
+            // Get latest payment paid date
             const latestPaymentDate = await getLatestPaymentPaidDate(installment.id);
             
             // Tính tổng số tiền đã thanh toán từ history

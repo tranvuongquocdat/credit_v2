@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { getCurrentUser } from './auth';
 
 export enum PawnTransactionType {
   PAYMENT = 'payment', // đóng lãi phí
@@ -28,10 +29,8 @@ export interface PawnHistoryRecord {
   transaction_type: PawnTransactionType;
   debit_amount?: number;
   credit_amount?: number;
-  transaction_date: string;
   description?: string;
-  employee_id?: string;
-  created_by?: string;
+  created_by: string;
   created_at: string;
   updated_at: string;
 }
@@ -46,7 +45,7 @@ export async function recordPrincipalRepayment(
   notes?: string
 ) {
   try {
-
+    const { id: userId } = await getCurrentUser();
     const { data, error } = await supabase
       .from('pawn_history')
       .insert({
@@ -55,6 +54,7 @@ export async function recordPrincipalRepayment(
         credit_amount: repaymentAmount, // Negative for principal repayment
         principal_change_description: notes,
         effective_date: transactionDate,
+        created_by: userId
       })
       .select()
       .single();
@@ -76,6 +76,7 @@ export async function recordAdditionalLoan(
   notes?: string
 ) {
   try {
+    const { id: userId } = await getCurrentUser();
     const { data, error } = await supabase
       .from('pawn_history')
       .insert({
@@ -84,6 +85,7 @@ export async function recordAdditionalLoan(
         debit_amount: additionalAmount,
         principal_change_description: notes,
         effective_date: transactionDate,
+        created_by: userId
       })
       .select()
       .single();
@@ -121,51 +123,6 @@ export async function getPawnAmountHistory(pawnId: string) {
   }
 }
 
-/**
- * Get pawn amount history records from pawn_amount_history table
- */
-export async function getPawnAmountHistoryRecords(pawnId: string) {
-  try {
-    const { data, error } = await supabase
-      .from('pawn_amount_history')
-      .select('*')
-      .eq('pawn_id', pawnId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      throw error;
-    }
-    
-    return { data, error: null };
-  } catch (error) {
-    console.error('Error fetching pawn amount history records:', error);
-    return { data: null, error };
-  }
-}
-
-/**
- * Delete a pawn amount history record
- */
-export async function deletePawnAmountHistory(historyId: string) {
-  try {
-    // Delete from pawn_amount_history (trigger will handle pawn_history)
-    const { data, error } = await supabase
-      .from('pawn_amount_history')
-      .delete()
-      .eq('id', historyId)
-      .select()
-      .single();
-
-    if (error) {
-      throw error;
-    }
-
-    return { data, error: null };
-  } catch (error) {
-    console.error('Error deleting pawn amount history:', error);
-    return { data: null, error };
-  }
-}
 
 /**
  * Record pawn contract deletion
@@ -176,6 +133,7 @@ export async function recordPawnContractDeletion(
   description?: string
 ) {
   try {
+    const { id: userId } = await getCurrentUser();
     const { data, error } = await supabase
       .from('pawn_history')
       .insert({
@@ -184,7 +142,8 @@ export async function recordPawnContractDeletion(
         credit_amount: loanAmount, // Positive for credit (returning the loan amount)
         debit_amount: 0,
         transaction_date: new Date().toISOString(),
-        notes: description || 'Xóa hợp đồng cầm đồ'
+        notes: description || 'Xóa hợp đồng cầm đồ',
+        created_by: userId
       } as any)
       .select()
       .single();

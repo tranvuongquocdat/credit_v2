@@ -35,12 +35,10 @@ export async function signOut() {
 // Lấy thông tin người dùng hiện tại
 export async function getCurrentUser() {
   const { data: { user } } = await supabase.auth.getUser();
-  console.log(user);
   // Lấy username từ bảng profiles nếu user tồn tại
   let username = null;
   let role = 'user';
   let is_banned = false;
-  
   if (user) {
     const { data: profileData, error } = await supabase
       .from('profiles')
@@ -53,7 +51,6 @@ export async function getCurrentUser() {
       is_banned = profileData.is_banned || false;
     }
   }
-  
   return { ...user, username, role, is_banned };
 }
 

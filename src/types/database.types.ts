@@ -134,51 +134,54 @@ export type Database = {
       credit_history: {
         Row: {
           created_at: string
+          created_by: string | null
           credit_amount: number | null
           credit_id: string
           date_status: string | null
           debit_amount: number | null
           description: string | null
           effective_date: string | null
-          employee_id: string | null
           id: string
           is_created_from_contract_closure: boolean | null
           is_deleted: boolean
           principal_change_description: string | null
           transaction_type: Database["public"]["Enums"]["credit_transaction_type"]
           updated_at: string | null
+          updated_by: string | null
         }
         Insert: {
           created_at?: string
+          created_by?: string | null
           credit_amount?: number | null
           credit_id: string
           date_status?: string | null
           debit_amount?: number | null
           description?: string | null
           effective_date?: string | null
-          employee_id?: string | null
           id?: string
           is_created_from_contract_closure?: boolean | null
           is_deleted?: boolean
           principal_change_description?: string | null
           transaction_type: Database["public"]["Enums"]["credit_transaction_type"]
           updated_at?: string | null
+          updated_by?: string | null
         }
         Update: {
           created_at?: string
+          created_by?: string | null
           credit_amount?: number | null
           credit_id?: string
           date_status?: string | null
           debit_amount?: number | null
           description?: string | null
           effective_date?: string | null
-          employee_id?: string | null
           id?: string
           is_created_from_contract_closure?: boolean | null
           is_deleted?: boolean
           principal_change_description?: string | null
           transaction_type?: Database["public"]["Enums"]["credit_transaction_type"]
           updated_at?: string | null
+          updated_by?: string | null
         }
         Relationships: [
           {
@@ -189,10 +192,17 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "credit_amount_history_employee_id_fkey"
-            columns: ["employee_id"]
+            foreignKeyName: "credit_history_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
-            referencedRelation: "employees"
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_history_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -406,12 +416,12 @@ export type Database = {
       installment_history: {
         Row: {
           created_at: string | null
+          created_by: string | null
           credit_amount: number
           date_status: string | null
           debit_amount: number
           description: string | null
           effective_date: string | null
-          employee_id: string | null
           id: string
           installment_id: string
           is_created_from_contract_closure: boolean
@@ -419,15 +429,16 @@ export type Database = {
           transaction_date: string | null
           transaction_type: string
           updated_at: string | null
+          updated_by: string | null
         }
         Insert: {
           created_at?: string | null
+          created_by?: string | null
           credit_amount?: number
           date_status?: string | null
           debit_amount?: number
           description?: string | null
           effective_date?: string | null
-          employee_id?: string | null
           id?: string
           installment_id: string
           is_created_from_contract_closure?: boolean
@@ -435,15 +446,16 @@ export type Database = {
           transaction_date?: string | null
           transaction_type: string
           updated_at?: string | null
+          updated_by?: string | null
         }
         Update: {
           created_at?: string | null
+          created_by?: string | null
           credit_amount?: number
           date_status?: string | null
           debit_amount?: number
           description?: string | null
           effective_date?: string | null
-          employee_id?: string | null
           id?: string
           installment_id?: string
           is_created_from_contract_closure?: boolean
@@ -451,15 +463,9 @@ export type Database = {
           transaction_date?: string | null
           transaction_type?: string
           updated_at?: string | null
+          updated_by?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "installment_amount_history_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "installment_amount_history_installment_id_fkey"
             columns: ["installment_id"]
@@ -472,6 +478,20 @@ export type Database = {
             columns: ["installment_id"]
             isOneToOne: false
             referencedRelation: "installments_by_store"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installment_history_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installment_history_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -551,12 +571,12 @@ export type Database = {
       pawn_history: {
         Row: {
           created_at: string
+          created_by: string | null
           credit_amount: number | null
           date_status: string | null
           debit_amount: number | null
           description: string | null
           effective_date: string | null
-          employee_id: string | null
           id: string
           is_created_from_contract_closure: boolean | null
           is_deleted: boolean
@@ -564,15 +584,16 @@ export type Database = {
           principal_change_description: string | null
           transaction_type: Database["public"]["Enums"]["pawn_transaction_type"]
           updated_at: string | null
+          updated_by: string | null
         }
         Insert: {
           created_at?: string
+          created_by?: string | null
           credit_amount?: number | null
           date_status?: string | null
           debit_amount?: number | null
           description?: string | null
           effective_date?: string | null
-          employee_id?: string | null
           id?: string
           is_created_from_contract_closure?: boolean | null
           is_deleted?: boolean
@@ -580,15 +601,16 @@ export type Database = {
           principal_change_description?: string | null
           transaction_type: Database["public"]["Enums"]["pawn_transaction_type"]
           updated_at?: string | null
+          updated_by?: string | null
         }
         Update: {
           created_at?: string
+          created_by?: string | null
           credit_amount?: number | null
           date_status?: string | null
           debit_amount?: number | null
           description?: string | null
           effective_date?: string | null
-          employee_id?: string | null
           id?: string
           is_created_from_contract_closure?: boolean | null
           is_deleted?: boolean
@@ -596,20 +618,28 @@ export type Database = {
           principal_change_description?: string | null
           transaction_type?: Database["public"]["Enums"]["pawn_transaction_type"]
           updated_at?: string | null
+          updated_by?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "pawn_amount_history_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "pawn_amount_history_pawn_id_fkey"
             columns: ["pawn_id"]
             isOneToOne: false
             referencedRelation: "pawns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pawn_history_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pawn_history_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -806,6 +836,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          is_deleted: boolean
           store_id: string
           total_fund: number
           updated_at: string | null
@@ -813,6 +844,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          is_deleted?: boolean
           store_id: string
           total_fund: number
           updated_at?: string | null
@@ -820,6 +852,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          is_deleted?: boolean
           store_id?: string
           total_fund?: number
           updated_at?: string | null

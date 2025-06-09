@@ -13,6 +13,7 @@ import { calculateCloseContractInterest } from '@/lib/Credits/calculate_close_co
 import { getUnpaidStartDate } from '@/lib/Credits/get_unpaid_start_date';
 import { recordDailyPayments } from '@/lib/Credits/record_daily_payments';
 import { calculateActualLoanAmount } from '@/lib/Credits/calculate_actual_loan_amount';
+import { getCurrentUser } from '@/lib/auth';
 
 interface CloseTabProps {
   credit: CreditWithCustomer;
@@ -28,11 +29,11 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
   const [isClosing, setIsClosing] = useState(false);
   const [loanAmount, setLoanAmount] = useState(0);
   const [payDebt, setPayDebt] = useState(true); // Track whether to pay debt or not
-  
   const isClosed = credit?.status === CreditStatus.CLOSED || credit?.status === CreditStatus.DELETED;
   
   const handleCloseCredit = async (creditId: string, shouldPayDebt: boolean = true) => {
     console.log('Closing credit:', creditId, 'Pay debt:', shouldPayDebt);
+    const { id: userId } = await getCurrentUser();
     
     setIsClosing(true);
     
@@ -52,7 +53,8 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
             credit_amount: contractCloseAmount + remainingAmount,
             debit_amount: 0,
             description: `Đóng hợp đồng (gốc: ${formatCurrency(loanAmount)} + lãi: ${formatCurrency(remainingAmount)})`,
-            is_created_from_contract_closure: true
+            is_created_from_contract_closure: true,
+            created_by: userId
           } as any);
       } 
       // Case 2: Nếu lãi phí > 0, cần thêm lịch sử từ ngày bắt đầu chưa đóng đến hôm nay
@@ -82,7 +84,8 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
             credit_amount: contractCloseAmount,
             debit_amount: 0,
             description: `Đóng hợp đồng (gốc: ${formatCurrency(loanAmount)} + lãi: ${formatCurrency(remainingAmount)})`,
-            is_created_from_contract_closure: true
+            is_created_from_contract_closure: true,
+            created_by: userId
           } as any);
       }
       // Case 3: Nếu lãi phí = 0, chỉ cần ghi thanh toán gốc vào lịch sử
@@ -95,7 +98,8 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
             credit_amount: loanAmount,
             debit_amount: 0,
             description: `Đóng hợp đồng (gốc: ${formatCurrency(loanAmount)})`,
-            is_created_from_contract_closure: true
+            is_created_from_contract_closure: true,
+            created_by: userId
           } as any);
       }
 
@@ -111,7 +115,8 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
             description: oldDebt > 0 
               ? 'Thanh toán nợ cũ khi đóng hợp đồng' 
               : 'Hoàn trả tiền thừa khi đóng hợp đồng',
-            is_created_from_contract_closure: true
+            is_created_from_contract_closure: true,
+            created_by: userId
           } as any);
       }
 

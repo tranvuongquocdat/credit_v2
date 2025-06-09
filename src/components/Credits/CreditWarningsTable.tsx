@@ -51,8 +51,8 @@ export function CreditWarningsTable({
       // Use callback if provided
       onCustomerClick(warning);
     } else {
-      // Default behavior: redirect to credits page with contract filter
-      router.push(`/credits?contract=${warning.contract_code}`);
+      // Updated: redirect to credits page with path parameter instead of query parameter
+      router.push(`/credits/${warning.contract_code}`);
     }
   };
   

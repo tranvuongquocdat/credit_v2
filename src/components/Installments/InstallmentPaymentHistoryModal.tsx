@@ -51,6 +51,7 @@ import { getExpectedMoney } from "@/lib/Installments/get_expected_money";
 import { convertFromHistoryToTimeArrayWithStatus } from "@/lib/Installments/convert_from_history_to_time_array";
 import { fillRemainingPeriods } from "@/lib/Installments/fill_remaining_periods";
 import { getLatestPaymentPaidDate } from "@/lib/Installments/get_latest_payment_paid_date";
+import { getCurrentUser } from "@/lib/auth";
 // Define the tabs for this modal
 export type TabId =
   | "payment"
@@ -528,7 +529,7 @@ export function InstallmentPaymentHistoryModal({
     index: number,
   ) => {
     if (!installment?.id || processingCheckbox) return; // Prevent concurrent operations
-    
+    const { id: userId } = await getCurrentUser();
     const startTime = performance.now();
     console.log(`Starting checkbox processing for period ${period.periodNumber}, checked: ${checked}`);
     
@@ -631,9 +632,9 @@ export function InstallmentPaymentHistoryModal({
               credit_amount: dayAmount,
               debit_amount: 0,
               description: `Thanh toán ngày ${dayOffset + 1}/${totalDays} của kỳ ${periodToCheck.periodNumber}`,
-              employee_id: installment.employee_id,
               is_deleted: false,
-              transaction_date: undefined as string | undefined
+              transaction_date: undefined as string | undefined,
+              created_by: userId || installment.employee_id
             };
             if (periodsToCheck.length == 1 && selectedDate) {
               dailyRecord.transaction_date = selectedDate;
@@ -724,7 +725,7 @@ export function InstallmentPaymentHistoryModal({
         // Update records to is_deleted = true based on effective_date range
         const { data, error } = await supabase
           .from('installment_history')
-          .update({ is_deleted: true, updated_at: new Date().toISOString() })
+          .update({ is_deleted: true, updated_at: new Date().toISOString(), updated_by: userId })
           .eq('installment_id', installment.id)
           .eq('transaction_type', 'payment')
           .eq('is_deleted', false)
@@ -745,7 +746,7 @@ export function InstallmentPaymentHistoryModal({
           // Try alternative approach - remove the is_deleted filter
           const { data: altData, error: altError } = await supabase
             .from('installment_history')
-            .update({ is_deleted: true })
+            .update({ is_deleted: true, updated_by: userId })
             .eq('installment_id', installment.id)
             .eq('transaction_type', 'payment')
             .gte('effective_date', startDateStr + 'T00:00:00Z')
@@ -926,7 +927,7 @@ export function InstallmentPaymentHistoryModal({
       await updateInstallmentStatus(installment.id, InstallmentStatus.CLOSED);
 
       // Record in transaction history
-      await recordContractClosure(installment.id, installment.employee_id);
+      await recordContractClosure(installment.id);
 
       // Create a new contract
       const newContract = {
@@ -953,7 +954,6 @@ export function InstallmentPaymentHistoryModal({
         await recordContractRotation(
           installment.id,
           data.id,
-          installment.employee_id,
           Math.max(0, calculateRemainingToPay(installment, totalPaidAmount)),
         );
       }
@@ -1040,7 +1040,7 @@ export function InstallmentPaymentHistoryModal({
         console.log('🔄 Filling remaining periods before closing contract. Remaining amount:', remainingAmount);
         
         // Fill all remaining unpaid periods
-        const fillResult = await fillRemainingPeriods(installment.id, installment.employee_id);
+        const fillResult = await fillRemainingPeriods(installment.id);
         
         if (!fillResult.success) {
           throw new Error(fillResult.error || 'Failed to fill remaining periods');
@@ -1055,7 +1055,7 @@ export function InstallmentPaymentHistoryModal({
           });
         }
       }
-      await recordContractClosure(installment.id, installment.employee_id);
+      await recordContractClosure(installment.id);
       
       // Reload installment info to get updated status
       await reloadInstallmentInfo();

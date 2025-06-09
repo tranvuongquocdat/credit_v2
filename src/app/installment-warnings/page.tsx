@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
 import { getLatestPaymentPaidDate } from "@/lib/Installments/get_latest_payment_paid_date";
 import { supabase } from "@/lib/supabase";
+import { getCurrentUser } from "@/lib/auth";
 
 export default function InstallmentWarningsPage() {
   const [installments, setInstallments] = useState<InstallmentWithCustomer[]>([]);
@@ -128,7 +129,7 @@ export default function InstallmentWarningsPage() {
     
     setProcessingPayment(true);
     const { installment, amount } = selectedPayment;
-    
+    const { id: userId } = await getCurrentUser();
     try {
       // 1. Lấy ngày cuối cùng đã đóng tiền
       const { getLatestPaymentPaidDate } = await import('@/lib/Installments/get_latest_payment_paid_date');
@@ -263,9 +264,9 @@ export default function InstallmentWarningsPage() {
             credit_amount: dayAmount,
             debit_amount: 0,
             description: `Thanh toán nhanh kỳ ${periodIndex + 1}/${numberOfPeriods}, ngày ${dayOffset + 1}/${actualPeriodDays}`,
-            employee_id: installment.employee_id,
             is_deleted: false,
-            transaction_date: new Date().toISOString()
+            transaction_date: new Date().toISOString(),
+            created_by: userId || installment.employee_id
           };
 
           allDailyRecords.push(dailyRecord);
