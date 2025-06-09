@@ -187,6 +187,31 @@ export default function TotalFundPage() {
     }
   };
 
+  const fetchAllData = async (query: any, pageSize: number = 1000) => {
+    let allData: any[] = [];
+    let from = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const { data, error } = await query.range(from, from + pageSize - 1);
+      
+      if (error) {
+        console.error('Error fetching data:', error);
+        break;
+      }
+
+      if (data && data.length > 0) {
+        allData = [...allData, ...data];
+        from += pageSize;
+        hasMore = data.length === pageSize;
+      } else {
+        hasMore = false;
+      }
+    }
+
+    return allData;
+  };
+
   // Fetch all fund history
   const fetchAndProcessHistory = async () => {
     setLoading(true);
@@ -228,52 +253,59 @@ export default function TotalFundPage() {
         }
       };
 
-      // For credit history - get contract code by joining with credits table
-      const { data: creditHistoryData, error: creditError } = await supabase
-        .from('credit_history')
-        .select(`
-          *,
-          credits:credit_id (contract_code)
-        `);
+      // Sử dụng fetchAllData cho credit history
+      const creditHistoryData = await fetchAllData(
+        supabase
+          .from('credit_history')
+          .select(`
+            *,
+            credits!inner (contract_code, store_id)
+          `)
+          .eq('credits.store_id', storeId)
+      );
       
-      if (creditError) console.error('Error fetching credit_history:', creditError.message);
-      else {
-        // Prepare data for processing
+      if (creditHistoryData) {
         const processedCreditData = creditHistoryData.map(item => ({
           ...item,
           contract_code: item.credits?.contract_code || null
         }));
         processItems(processedCreditData, 'Tín chấp');
       }
+
+      // Tương tự cho các truy vấn khác...
+      const pawnHistoryData = await fetchAllData(
+        supabase
+          .from('pawn_history')
+          .select(`
+            *,
+            pawns!inner (contract_code, store_id)
+          `)
+          .eq('pawns.store_id', storeId)
+      );
       
-      // For pawn history - get contract code by joining with pawns table
-      const { data: pawnHistoryData, error: pawnError } = await supabase
-        .from('pawn_history')
-        .select(`
-          *,
-          pawns:pawn_id (contract_code)
-        `);
-      
-      if (pawnError) console.error('Error fetching pawn_history:', pawnError.message);
-      else {
-        // Prepare data for processing
+      if (pawnHistoryData) {
         const processedPawnData = pawnHistoryData.map(item => ({
           ...item,
           contract_code: item.pawns?.contract_code || null
         }));
         processItems(processedPawnData, 'Cầm đồ');
       }
-      
-      // For installment history - get contract code by joining with installments table
+
+      // For installment history
       const { data: installmentHistoryData, error: installmentError } = await supabase
         .from('installment_history')
         .select(`
           *,
-          installments:installment_id (contract_code)
-        `);
+          installments!inner (
+            contract_code,
+            employee_id,
+            employees!inner (store_id)
+          )
+        `)
+        .eq('installments.employees.store_id', storeId)
+        .limit(10000);
       
-      if (installmentError) console.error('Error fetching installment_history:', installmentError.message);
-      else {
+      if (installmentHistoryData) {
         // Prepare data for processing
         const processedInstallmentData = installmentHistoryData.map(item => ({
           ...item,
@@ -282,23 +314,23 @@ export default function TotalFundPage() {
         processItems(processedInstallmentData, 'Trả góp');
       }
       
-      // For fund history - no contract code
+      // For fund history
       const { data: storeFundData, error: fundError } = await supabase
         .from('store_fund_history')
         .select('*')
-        .eq('store_id', storeId);
+        .eq('store_id', storeId)
+        .limit(10000);
       
-      if (fundError) console.error('Error fetching store_fund_history:', fundError.message);
-      else processItems(storeFundData, 'Nguồn vốn');
+      if (storeFundData) processItems(storeFundData, 'Nguồn vốn');
       
-      // For transactions - no contract code
+      // For transactions
       const { data: transactionsData, error: transactionsError } = await supabase
         .from('transactions')
         .select('*')
-        .eq('store_id', storeId);
+        .eq('store_id', storeId)
+        .limit(10000);
       
-      if (transactionsError) console.error('Error fetching transactions:', transactionsError.message);
-      else processItems(transactionsData, 'Thu chi');
+      if (transactionsData) processItems(transactionsData, 'Thu chi');
       
       allHistoryItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       
