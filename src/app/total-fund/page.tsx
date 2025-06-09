@@ -253,15 +253,16 @@ export default function TotalFundPage() {
         }
       };
 
-      // For credit history
-      const { data: creditHistoryData, error: creditError } = await supabase
-        .from('credit_history')
-        .select(`
-          *,
-          credits!inner (contract_code, store_id)
-        `)
-        .eq('credits.store_id', storeId)
-        .limit(10000);
+      // Sử dụng fetchAllData cho credit history
+      const creditHistoryData = await fetchAllData(
+        supabase
+          .from('credit_history')
+          .select(`
+            *,
+            credits!inner (contract_code, store_id)
+          `)
+          .eq('credits.store_id', storeId)
+      );
       
       if (creditHistoryData) {
         const processedCreditData = creditHistoryData.map(item => ({
@@ -270,16 +271,17 @@ export default function TotalFundPage() {
         }));
         processItems(processedCreditData, 'Tín chấp');
       }
-      
-      // For pawn history
-      const { data: pawnHistoryData, error: pawnError } = await supabase
-        .from('pawn_history')
-        .select(`
-          *,
-          pawns!inner (contract_code, store_id)
-        `)
-        .eq('pawns.store_id', storeId)
-        .limit(10000);
+
+      // Tương tự cho các truy vấn khác...
+      const pawnHistoryData = await fetchAllData(
+        supabase
+          .from('pawn_history')
+          .select(`
+            *,
+            pawns!inner (contract_code, store_id)
+          `)
+          .eq('pawns.store_id', storeId)
+      );
       
       if (pawnHistoryData) {
         const processedPawnData = pawnHistoryData.map(item => ({
@@ -288,7 +290,7 @@ export default function TotalFundPage() {
         }));
         processItems(processedPawnData, 'Cầm đồ');
       }
-      
+
       // For installment history
       const { data: installmentHistoryData, error: installmentError } = await supabase
         .from('installment_history')
