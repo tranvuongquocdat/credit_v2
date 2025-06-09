@@ -149,7 +149,7 @@ export async function createEmployee(params: CreateEmployeeParams) {
     // Nếu đăng ký thành công, lưu username vào bảng profiles
     if (authData && authData.user) {
       const { error: profileError } = await supabase.from('profiles').insert([
-        { id: authData.user.id, username: params.username, role: "member" }
+        { id: authData.user.id, username: params.username, role: "employee" }
       ]);
       if (profileError) {
         // Nếu có lỗi khi lưu profile, có thể cần xóa user đã tạo
