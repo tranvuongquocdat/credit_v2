@@ -111,11 +111,6 @@ export function CreditsTable({
   // Toast hook
   const { toast } = useToast();
   
-  // Handle customer name click
-  const handleCustomerClick = (credit: CreditWithCustomer) => {
-    router.push(`/credits?customer=${encodeURIComponent(credit.customer?.name || '')}`);
-  };
-  
   // Format tiền tệ
   const formatCurrency = (amount: number): string => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
@@ -433,8 +428,7 @@ export function CreditsTable({
                   {credit.contract_code || '-'}
                 </TableCell>
                 <TableCell 
-                  className="py-3 px-3 text-center border-b border-r border-gray-200 cursor-pointer text-blue-600 hover:text-blue-800 hover:underline"
-                  onClick={() => handleCustomerClick(credit)}
+                  className="py-3 px-3 text-center border-b border-r border-gray-200"
                   title={`Xem hợp đồng của ${credit.customer?.name}`}
                 >
                   {credit.customer?.name || '-'}

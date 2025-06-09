@@ -7,7 +7,6 @@ import { EmployeeCreateModal } from '@/components/Employees/EmployeeCreateModal'
 import { EmployeeEditModal } from '@/components/Employees/EmployeeEditModal';
 import { EmployeeStatusDialog } from '@/components/Employees/EmployeeStatusDialog';
 import { getEmployees, createEmployee, updateEmployee, deactivateEmployee, activateEmployee } from '@/lib/employee';
-import { getStores } from '@/lib/store';
 import { Employee, EmployeeFormData, EmployeeStatus, EmployeeWithProfile } from '@/models/employee';
 import { Store } from '@/models/store';
 import { Plus, Edit, UserX, UserCheck, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
@@ -16,8 +15,12 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useStore } from '@/contexts/StoreContext';
 
 export default function EmployeesPage() {
+  // Get current store from context
+  const { currentStore } = useStore();
+  
   // Trạng thái
   const [employees, setEmployees] = useState<EmployeeWithProfile[]>([]);
   const [totalPages, setTotalPages] = useState(1);
@@ -28,8 +31,6 @@ export default function EmployeesPage() {
   // Search và filter
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [storeFilter, setStoreFilter] = useState('');
-  const [stores, setStores] = useState<Store[]>([]);
   
   // Modal
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -39,6 +40,14 @@ export default function EmployeesPage() {
 
   // Fetch danh sách nhân viên
   const fetchEmployees = async () => {
+    // Nếu không có currentStore, không fetch
+    if (!currentStore) {
+      setEmployees([]);
+      setTotalPages(0);
+      setIsLoading(false);
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
     
@@ -47,7 +56,7 @@ export default function EmployeesPage() {
         currentPage,
         10,
         searchQuery,
-        storeFilter,
+        currentStore.id, // Sử dụng currentStore.id thay vì storeFilter
         statusFilter
       );
       
@@ -67,30 +76,14 @@ export default function EmployeesPage() {
     }
   };
 
-  // Fetch danh sách cửa hàng cho filter
-  const fetchStores = async () => {
-    try {
-      const { data, error } = await getStores(1, 100); // Lấy tối đa 100 cửa hàng
-      
-      if (error) {
-        throw new Error(error.message);
-      }
-      
-      setStores(data);
-    } catch (err) {
-      console.error('Error fetching stores:', err);
-    }
-  };
+
 
   // Fetch lại khi các dependency thay đổi
   useEffect(() => {
     fetchEmployees();
-  }, [currentPage, searchQuery, statusFilter, storeFilter]);
+  }, [currentPage, searchQuery, statusFilter, currentStore]);
 
-  // Fetch danh sách cửa hàng khi component mount
-  useEffect(() => {
-    fetchStores();
-  }, []);
+
   
   // Nội dung các hàm xử lý tìm kiếm đã được di chuyển vào SearchFilters component
 
@@ -203,16 +196,14 @@ export default function EmployeesPage() {
 
         {/* Search và filter */}
         <SearchFilters 
-          stores={stores}
+          stores={[]} // Không cần stores nữa vì dùng currentStore
           onSearch={(filters: EmployeeSearchFilters) => {
             setSearchQuery(filters.query);
-            setStoreFilter(filters.store);
             setStatusFilter(filters.status);
             setCurrentPage(1);
           }}
           onReset={() => {
             setSearchQuery('');
-            setStoreFilter('all');
             setStatusFilter('all');
             setCurrentPage(1);
           }}
@@ -369,7 +360,7 @@ export default function EmployeesPage() {
         onSuccess={() => {
           fetchEmployees();
         }}
-        stores={stores}
+        stores={[]} // Không cần stores nữa vì dùng currentStore
       />
 
       {/* Modal sửa thông tin nhân viên */}
@@ -383,7 +374,7 @@ export default function EmployeesPage() {
           fetchEmployees();
         }}
         employee={selectedEmployee}
-        stores={stores}
+        stores={[]} // Không cần stores nữa vì dùng currentStore
       />
 
       {/* Dialog thay đổi trạng thái nhân viên */}

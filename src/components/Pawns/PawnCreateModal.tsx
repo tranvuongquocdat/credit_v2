@@ -170,7 +170,13 @@ export function PawnCreateModal({
     async function loadCustomers() {
       setIsLoadingCustomers(true);
       try {
-        const { data, error } = await getCustomers(1, 1000);
+        const { data, error } = await getCustomers(
+          1, 
+          1000, 
+          '', // search query
+          currentStore?.id || '', // filter by store_id from context
+          '' // status filter
+        );
         if (error) throw error;
         setCustomers(data || []);
       } catch (err) {

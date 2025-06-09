@@ -43,6 +43,16 @@ export function usePawns() {
     const timestamp = new Date().toISOString().slice(11, 23); // HH:mm:ss.sss
     console.log(`📊 [${timestamp}] [${fetchId}] usePawns fetchPawns STARTED with filters:`, filters);
     
+    // Kiểm tra currentStore - nếu không có store thì trả về dữ liệu rỗng
+    if (!currentStore) {
+      console.log(`🚫 [${timestamp}] [${fetchId}] No current store - returning empty data`);
+      setPawns([]);
+      setTotalItems(0);
+      setLoading(false);
+      setError(null); // Không hiển thị error, chỉ trả về dữ liệu rỗng
+      return;
+    }
+    
     // Cancel previous request
     if (abortControllerRef.current) {
       console.log(`🚫 [${timestamp}] [${fetchId}] Cancelling previous request`);
@@ -63,7 +73,7 @@ export function usePawns() {
         start_date: filters.startDate,
         end_date: filters.endDate,
         status: filters.status as any,
-        store_id: currentStore?.id || ''
+        store_id: currentStore.id // Sử dụng currentStore.id trực tiếp thay vì || ''
       };
       
       // Check if request was cancelled

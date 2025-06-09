@@ -20,32 +20,97 @@ export async function getStores(
   searchQuery: string = '',
   statusFilter: string = ''
 ) {
-  let query = supabase
-    .from(TABLE_NAME)
-    .select('*', { count: 'exact' })
-    .eq('is_deleted', false)
-    .order('created_at', { ascending: false });
+  try {
+    // Lấy thông tin user hiện tại từ getCurrentUser
+    const { getCurrentUser } = await import('./auth');
+    const currentUser = await getCurrentUser();
+    
+    if (!currentUser || !currentUser.id) {
+      return { 
+        data: [], 
+        error: { message: 'Người dùng chưa đăng nhập' }, 
+        count: 0,
+        totalPages: 0
+      };
+    }
 
-  // Lọc theo trạng thái nếu có
-  if (statusFilter) {
-    query = query.eq('status', statusFilter);
-  }
+    const { id: userId, role } = currentUser;
 
-  // Tìm kiếm theo tên nếu có
-  if (searchQuery) {
-    query = query.ilike('name', `%${searchQuery}%`);
+    let query = supabase
+      .from(TABLE_NAME)
+      .select('*', { count: 'exact' })
+      .eq('is_deleted', false)
+      .order('created_at', { ascending: false });
+
+    // Áp dụng phân quyền theo role
+    if (role === 'admin') {
+      // Nếu là admin, chỉ lấy các store mà họ tạo (created_by = user_id)
+      query = query.eq('created_by', userId);
+    } else if (role === 'employee') {
+      // Nếu là employee, lấy store mà họ thuộc về thông qua bảng employees
+      const { data: employeeData, error: employeeError } = await supabase
+        .from('employees')
+        .select('store_id')
+        .eq('user_id', userId)
+        .single();
+
+      if (employeeError || !employeeData?.store_id) {
+        return { 
+          data: [], 
+          error: { message: 'Không tìm thấy thông tin nhân viên hoặc cửa hàng' }, 
+          count: 0,
+          totalPages: 0
+        };
+      }
+
+      // Lấy thông tin store mà employee thuộc về
+      query = query.eq('id', employeeData.store_id);
+    } else {
+      // Các role khác không có quyền truy cập store
+      return { 
+        data: [], 
+        error: { message: 'Không có quyền truy cập cửa hàng' }, 
+        count: 0,
+        totalPages: 0
+      };
+    }
+
+    // Lọc theo trạng thái nếu có
+    if (statusFilter && statusFilter !== 'all') {
+      query = query.eq('status', statusFilter);
+    }
+
+    // Tìm kiếm theo tên nếu có
+    if (searchQuery) {
+      query = query.ilike('name', `%${searchQuery}%`);
+    }
+
+    // Phân trang
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+    const { data, error, count } = await query.range(from, to);
+    
+    if (error) {
+      throw error;
+    }
+
+    console.log(data);
+    return { 
+      data: data as Store[], 
+      error: null, 
+      count,
+      totalPages: count ? Math.ceil(count / limit) : 0
+    };
+
+  } catch (error) {
+    console.error('Error fetching stores:', error);
+    return { 
+      data: [], 
+      error, 
+      count: 0,
+      totalPages: 0
+    };
   }
-  // Phân trang
-  const from = (page - 1) * limit;
-  const to = from + limit - 1;
-  const { data, error, count } = await query.range(from, to);
-  console.log(data);
-  return { 
-    data: data as Store[], 
-    error, 
-    count,
-    totalPages: count ? Math.ceil(count / limit) : 0
-  };
 }
 
 // Lấy thông tin cửa hàng theo ID
@@ -62,6 +127,10 @@ export async function getStoreById(id: string) {
 
 // Tạo cửa hàng mới
 export async function createStore(storeData: StoreFormData) {
+  const { getCurrentUser } = await import('./auth');
+  const currentUser = await getCurrentUser();
+  const userId = currentUser?.id;
+
   // Ensure required fields are not null
   const formattedData = {
     ...storeData,
@@ -71,7 +140,7 @@ export async function createStore(storeData: StoreFormData) {
     phone: storeData.phone || '',
     is_deleted: false,
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
+    created_by: userId
   };
 
   const { data, error } = await supabase
@@ -158,15 +227,60 @@ export async function getStoreFinancialData(storeId: string = '1'): Promise<Stor
 
 // Lấy tất cả cửa hàng (không phân trang) - sử dụng cho select options
 export async function getAllActiveStores() {
-  const { data, error } = await supabase
-    .from(TABLE_NAME)
-    .select('id, name, cash_fund, investment')
-    .eq('is_deleted', false)
-    .eq('status', 'active')
-    .order('name');
-  
-  return { data: data as Pick<Store, 'id' | 'name' | 'cash_fund' | 'investment'>[], error };
+  try {
+    // Lấy thông tin user hiện tại từ getCurrentUser
+    const { getCurrentUser } = await import('./auth');
+    const currentUser = await getCurrentUser();
+    
+    if (!currentUser || !currentUser.id) {
+      return { data: [], error: { message: 'Người dùng chưa đăng nhập' } };
+    }
+
+    const { id: userId, role } = currentUser;
+
+    let query = supabase
+      .from(TABLE_NAME)
+      .select('id, name, cash_fund, investment')
+      .eq('is_deleted', false)
+      .eq('status', 'active');
+
+    if (role === 'admin') {
+      // Nếu là admin, lấy các store mà họ tạo (created_by = user_id)
+      query = query.eq('created_by', userId);
+    } else if (role === 'employee') {
+      // Nếu là employee, lấy store mà họ thuộc về thông qua bảng employees
+      const { data: employeeData, error: employeeError } = await supabase
+        .from('employees')
+        .select('store_id')
+        .eq('user_id', userId)
+        .single();
+
+      if (employeeError || !employeeData?.store_id) {
+        return { data: [], error: { message: 'Không tìm thấy thông tin nhân viên hoặc cửa hàng' } };
+      }
+
+      // Lấy thông tin store mà employee thuộc về
+      query = query.eq('id', employeeData.store_id);
+    } else {
+      // Các role khác không có quyền truy cập store
+      return { data: [], error: { message: 'Không có quyền truy cập cửa hàng' } };
+    }
+
+    const { data, error } = await query.order('name');
+
+    if (error) {
+      throw error;
+    }
+
+    return { data: data as Pick<Store, 'id' | 'name' | 'cash_fund' | 'investment'>[], error: null };
+
+  } catch (error) {
+    console.error('Error fetching stores:', error);
+    return { data: [], error };
+  }
 }
+
+
 
 // Update the cash fund of a store (add or subtract amount)
 export async function updateStoreCashFund(storeId: string, amount: number) {

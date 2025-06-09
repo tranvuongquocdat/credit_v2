@@ -33,12 +33,21 @@ export function useCredits(initialFilters?: Partial<SearchFilters>) {
       start_date: searchFilters.start_date || undefined,
       end_date: searchFilters.end_date || undefined,
       status: searchFilters.status ? (searchFilters.status as CreditStatus) : undefined,
-      store_id: currentStore?.id
+      store_id: currentStore?.id // Sử dụng currentStore?.id để tránh lỗi null
     };
   }, [currentStore]);
 
   // Fetch credits with filters
   const fetchCredits = useCallback(async () => {
+    // Kiểm tra currentStore - nếu không có store thì trả về dữ liệu rỗng
+    if (!currentStore) {
+      setCredits([]);
+      setTotalItems(0);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     // Cancel previous request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();

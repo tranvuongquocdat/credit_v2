@@ -3,8 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { InstallmentStatus } from '@/models/installment';
 import { StoreFinancialData, getStoreFinancialData } from '@/lib/store';
 import { useStore } from '@/contexts/StoreContext';
-import { getinstallmentPaymentHistory } from '@/lib/Installments/payment_history';
-import { calculateDebtToLatestPaidPeriod } from '@/lib/Installments/calculate_remaining_debt';
+import { calculateInstallmentMetrics } from '@/lib/Installments/calculate_installment_metrics';
 
 export function useInstallmentsSummary() {
   const [data, setData] = useState<StoreFinancialData | null>(null);
@@ -61,39 +60,7 @@ export function useInstallmentsSummary() {
       
       // Xử lý song song tất cả installments
       const results = await Promise.all(
-        activeInstallments.map(async (installment) => {
-          try {
-            // Skip if installment.id is null
-            if (!installment.id) return null;
-            
-            const paymentHistory = await getinstallmentPaymentHistory(installment.id);
-            const totalPaidFromHistory = paymentHistory.reduce((sum, record) => sum + (record.credit_amount || 0), 0);
-            
-            // Tính nợ cũ
-            const oldDebt = await calculateDebtToLatestPaidPeriod(installment.id);
-            
-            // Tính lãi phí đã thu: totalPaidFromHistory - down_payment (nếu dương)
-            const profitCollected = Math.max(0, totalPaidFromHistory - (installment.down_payment || 0));
-            
-            // Tính tổng tiền cho vay (tiền giao khách): down_payment - totalPaidFromHistory (nếu dương)
-            const loanAmount = Math.max(0, (installment.down_payment || 0) - totalPaidFromHistory);
-            
-            // Lãi phí dự kiến = installment_amount - down_payment
-            const expectedProfitAmount = installment.status === InstallmentStatus.ON_TIME 
-              ? (installment.installment_amount || 0) - (installment.down_payment || 0)
-              : 0;
-            
-            return {
-              oldDebt,
-              profitCollected,
-              loanAmount,
-              expectedProfitAmount
-            };
-          } catch (error) {
-            console.error(`Error calculating for installment ${installment.id}:`, error);
-            return null;
-          }
-        })
+        activeInstallments.map(installment => calculateInstallmentMetrics(installment))
       );
       
       console.timeEnd('Calculate all installments');

@@ -39,6 +39,16 @@ export function useInstallments() {
     const timestamp = new Date().toISOString().slice(11, 23); // HH:mm:ss.sss
     console.log(`📊 [${timestamp}] [${fetchId}] useInstallments fetchInstallments STARTED with filters:`, filters);
     
+    // Kiểm tra currentStore - nếu không có store thì trả về dữ liệu rỗng
+    if (!currentStore) {
+      console.log(`🚫 [${timestamp}] [${fetchId}] No current store - returning empty data`);
+      setInstallments([]);
+      setTotalItems(0);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     // Cancel previous request
     if (abortControllerRef.current) {
       console.log(`🚫 [${timestamp}] [${fetchId}] Cancelling previous request`);
@@ -55,7 +65,7 @@ export function useInstallments() {
     // Always ensure store_id is set from context if available
     const currentFilters = {
       ...filters,
-      store_id: currentStore?.id || filters.store_id
+      store_id: currentStore.id // Sử dụng currentStore.id trực tiếp vì đã kiểm tra null ở trên
     };
     
     try {

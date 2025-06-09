@@ -12,21 +12,28 @@ export async function getEmployees(
   status = ''
 ) {
   try {
+    // Nếu không có storeId, trả về rỗng (cần có store để filter)
+    if (!storeId) {
+      return { 
+        data: [], 
+        error: null, 
+        totalPages: 0, 
+        count: 0 
+      };
+    }
+
     // Tính toán offset dựa trên trang và limit
     const offset = (page - 1) * limit;
 
-    // Tạo query cơ bản
+    // Tạo query cơ bản với filter theo store
     let query = supabase
       .from('employees')
-      .select('*, profiles(email,username), stores(id,name)', { count: 'exact' });
+      .select('*, profiles(email,username), stores(id,name)', { count: 'exact' })
+      .eq('store_id', storeId);
 
     // Thêm các điều kiện tìm kiếm nếu có
     if (searchQuery) {
       query = query.ilike('full_name', `%${searchQuery}%`);
-    }
-
-    if (storeId) {
-      query = query.eq('store_id', storeId);
     }
 
     if (status) {

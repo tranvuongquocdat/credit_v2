@@ -69,8 +69,8 @@ const sidebarItems: SidebarItem[] = [
     path: '/stores', 
     icon: <FiShoppingBag size={20} />,
     submenu: [
-      { title: 'Tổng quát chuỗi cửa hàng', path: '/stores', icon: <FiUsers size={18} />, redColor: true },
-      { title: 'Thông tin chi tiết cửa hàng', path: '/stores', icon: <FiUserPlus size={18} />, redColor: true },
+      { title: 'Tổng quát chuỗi cửa hàng', path: '/stores/overview', icon: <FiUsers size={18} />, redColor: true },
+      { title: 'Thông tin chi tiết cửa hàng', path: '/stores/detail', icon: <FiUserPlus size={18} />, redColor: true },
       { title: 'Danh sách cửa hàng', path: '/stores', icon: <FiUserCheck size={18} /> },
       { title: 'Cấu hình hàng hóa', path: '/stores/collaterals', icon: <FiUserCheck size={18} /> },
     ]

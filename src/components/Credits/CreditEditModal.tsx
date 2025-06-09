@@ -294,8 +294,14 @@ export function CreditEditModal({
         setStatus(creditData.status as CreditStatus || CreditStatus.ON_TIME);
         setSelectedCustomerId(creditData.customer_id);
         
-        // Load customers list
-        const { data: customersData, error: customersError } = await getCustomers(1, 1000);
+        // Load customers list filtered by current store
+        const { data: customersData, error: customersError } = await getCustomers(
+          1, 
+          1000, 
+          '', // search query
+          currentStore?.id || '', // filter by store_id from context
+          '' // status filter
+        );
         
         if (customersError) throw customersError;
         
