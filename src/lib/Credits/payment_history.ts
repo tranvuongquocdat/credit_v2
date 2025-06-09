@@ -26,23 +26,46 @@ export async function getCreditPaymentHistory(
   creditId: string, 
   includeDeleted: boolean = false
 ): Promise<PaymentHistoryRecord[]> {
-  let query = supabase
-    .from('credit_history')
-    .select('*')
-    .eq('credit_id', creditId)
-    .eq('transaction_type', 'payment');
-
-  // Filter out deleted records by default
-  if (!includeDeleted) {
-    query = query.eq('is_deleted', false);
+  // Sử dụng phân trang để lấy tất cả dữ liệu
+  let allData: PaymentHistoryRecord[] = [];
+  let page = 0;
+  const pageSize = 1000; // Giới hạn mặc định của Supabase
+  let hasMore = true;
+  
+  while (hasMore) {
+    let query = supabase
+      .from('credit_history')
+      .select('*')
+      .eq('credit_id', creditId)
+      .eq('transaction_type', 'payment')
+      .order('effective_date', { ascending: true })
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+    
+    // Filter out deleted records by default
+    if (!includeDeleted) {
+      query = query.eq('is_deleted', false);
+    }
+    
+    const { data, error } = await query;
+    
+    if (error) {
+      console.error('Error fetching payment history:', error);
+      throw new Error(`Failed to fetch payment history: ${error.message}`);
+    }
+    
+    // Nếu không có dữ liệu hoặc dữ liệu ít hơn kích thước trang, dừng vòng lặp
+    if (!data || data.length < pageSize) {
+      hasMore = false;
+    }
+    
+    if (data) {
+      allData = [...allData, ...data];
+    }
+    
+    page++;
   }
-  const { data, error } = await query.order('effective_date', { ascending: true });
-  if (error) {
-    console.error('Error fetching payment history:', error);
-    throw new Error(`Failed to fetch payment history: ${error.message}`);
-  }
 
-  return data || [];
+  return allData;
 }
 
 /**

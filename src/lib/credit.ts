@@ -49,10 +49,27 @@ export async function getCredits(
         query = query.ilike('contract_code', `%${filters.contract_code}%`);
       }
       
-      if (filters.customer_name) {
-        // Use or condition to search in customer name fields
-        query = query.or(`customer.name.ilike.%${filters.customer_name}%`);
+      if (filters?.customer_name) {
+        // Handle search with customer name support (similar to installments)
+        const queryWithoutCustomerFilter = query;
+        
+        // Get all customer IDs whose names match the filter
+        const { data: matchingCustomers } = await supabase
+          .from('customers')
+          .select('id')
+          .ilike('name', `%${filters.customer_name}%`);
+        
+        if (matchingCustomers && matchingCustomers.length > 0) {
+          // Extract customer IDs
+          const customerIds = matchingCustomers.map(c => c.id);
+          // Apply in filter to original query
+          query = queryWithoutCustomerFilter.in('customer_id', customerIds);
+        } else {
+          // No matching customers, return empty result
+          query = queryWithoutCustomerFilter.eq('id', '00000000-0000-0000-0000-000000000000'); // Non-existent ID
+        }
       }
+      
       
       if (filters.start_date) {
         query = query.gte('loan_date', filters.start_date);

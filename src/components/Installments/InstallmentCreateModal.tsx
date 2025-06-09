@@ -133,8 +133,14 @@ export function InstallmentCreateModal({
       setIsLoadingEmployees(true);
       
       try {
-        // Load customers
-        const { data: customersData, error: customersError } = await getCustomers(1, 1000);
+        // Load customers filtered by current store
+        const { data: customersData, error: customersError } = await getCustomers(
+          1, 
+          1000, 
+          '', // search query
+          currentStore?.id || '', // filter by store_id from context
+          '' // status filter
+        );
         if (customersError) throw customersError;
         setCustomers(customersData || []);
         
@@ -250,18 +256,6 @@ export function InstallmentCreateModal({
       
       if (paymentPrd <= 0) {
         throw new Error('Kỳ hạn trả nợ phải lớn hơn 0');
-      }
-      
-      // Kiểm tra số dư quỹ của cửa hàng
-      const { data: storeData, error: storeError } = await getStoreById(selectedEmployee.store_id);
-      if (storeError) {
-        throw new Error('Không thể lấy thông tin cửa hàng');
-      }
-      
-      // Kiểm tra xem quỹ có đủ tiền không
-      const currentCashFund = storeData?.cash_fund || 0;
-      if (currentCashFund < downPayment) {
-        throw new Error(`Quỹ tiền mặt không đủ để tạo hợp đồng. Quỹ hiện tại: ${formatNumber(currentCashFund)}, Cần: ${formatNumber(downPayment)}`);
       }
       
       // Get or create customer

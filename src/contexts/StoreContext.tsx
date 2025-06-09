@@ -45,7 +45,7 @@ export const StoreProvider = ({ children }: StoreProviderProps) => {
       
       if (error) {
         console.error('❌ Error fetching stores:', error);
-        throw new Error(error.message);
+        throw new Error(typeof error === 'object' && error && 'message' in error ? error.message as string : 'Failed to fetch stores');
       }
       
       console.log('✅ Stores fetched successfully:', data?.length || 0, 'stores');
@@ -75,9 +75,11 @@ export const StoreProvider = ({ children }: StoreProviderProps) => {
           localStorage.setItem('currentStoreId', data[0].id);
         }
       } else {
-        console.log('⚠️ No stores available');
+        console.log('⚠️ No stores available - user may not have access to any stores');
         setStores([]);
         setCurrentStoreState(null);
+        // Xóa store đã lưu trong localStorage vì không còn hợp lệ
+        localStorage.removeItem('currentStoreId');
       }
       
       setError(null);

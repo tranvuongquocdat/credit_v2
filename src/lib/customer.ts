@@ -19,6 +19,18 @@ export async function getCustomers(
   debugLog('Getting customers with params:', { page, limit, searchQuery, storeId, status });
   
   try {
+    // Kiểm tra storeId - nếu không có thì trả về rỗng
+    if (!storeId) {
+      debugLog('No storeId provided, returning empty result');
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit,
+        error: null
+      };
+    }
+    
     // Bắt đầu từ record thứ mấy
     const from = (page - 1) * limit;
     
@@ -33,13 +45,9 @@ export async function getCustomers(
       query = query.or(`name.ilike.%${searchQuery}%,phone.ilike.%${searchQuery}%,id_number.ilike.%${searchQuery}%`);
     }
     
-    if (storeId) {
-      // Basic store filter
-      debugLog(`Filtering by store_id: ${storeId} (${typeof storeId})`);
-      query = query.eq('store_id', storeId);
-    } else {
-      debugLog('No store filter applied');
-    }
+    // Filter theo store được truyền vào từ UI (currentStore từ TopNavbar)
+    debugLog(`Filtering by store_id: ${storeId} (${typeof storeId})`);
+    query = query.eq('store_id', storeId);
 
     if (status) {
       debugLog(`Filtering by status: ${status}`);

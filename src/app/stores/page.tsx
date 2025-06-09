@@ -126,7 +126,7 @@ export default function StoresPage() {
       );
       
       if (error) {
-        throw new Error(error.message);
+        throw new Error((error as any)?.message || 'Đã xảy ra lỗi khi tải dữ liệu');
       }
       
       setStores(data);
@@ -165,7 +165,7 @@ export default function StoresPage() {
       const { data: newStore, error } = await createStore(data);
       
       if (error) {
-        throw new Error(error.message);
+        throw new Error((error as any)?.message || 'Không thể tạo cửa hàng mới');
       }
       
       setIsFormModalOpen(false);
@@ -187,7 +187,7 @@ export default function StoresPage() {
       const { error } = await updateStore(selectedStore.id, data);
       
       if (error) {
-        throw new Error(error.message);
+        throw new Error((error as any)?.message || 'Không thể cập nhật cửa hàng');
       }
       
       setIsFormModalOpen(false);
@@ -210,7 +210,7 @@ export default function StoresPage() {
       const { error } = await deleteStore(selectedStore.id);
       
       if (error) {
-        throw new Error(error.message);
+        throw new Error((error as any)?.message || 'Không thể xóa cửa hàng');
       }
       
       setIsDeleteModalOpen(false);
@@ -560,41 +560,18 @@ export default function StoresPage() {
               <DialogTitle>{selectedStore ? 'Chỉnh sửa cửa hàng' : 'Thêm cửa hàng mới'}</DialogTitle>
             </DialogHeader>
             
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const formData = new FormData(e.currentTarget);
-              const data = {
-                name: formData.get('name') as string,
-                address: formData.get('address') as string,
-                phone: formData.get('phone') as string,
-                investment: parseFloat(formData.get('investment') as string) || 0,
-                cash_fund: parseFloat(formData.get('cash_fund') as string) || 0,
-                status: formData.get('status') as StoreStatus || StoreStatus.ACTIVE
-              };
-              
-              if (selectedStore) {
-                handleUpdateStore(data);
-              } else {
-                handleAddStore(data);
-              }
-            }}>
-              <StoreForm
-                initialData={selectedStore}
-                onSubmit={selectedStore ? handleUpdateStore : handleAddStore}
-                isSubmitting={isSubmitting}
-                hideButtons={true}
-              />
-              
-              <DialogFooter className="mt-6">
-                <Button variant="outline" type="button" onClick={() => setIsFormModalOpen(false)}>
-                  Hủy
-                </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
-                  {selectedStore ? 'Cập nhật' : 'Tạo cửa hàng'}
-                </Button>
-              </DialogFooter>
-            </form>
+            <StoreForm
+              initialData={selectedStore}
+              onSubmit={selectedStore ? handleUpdateStore : handleAddStore}
+              isSubmitting={isSubmitting}
+              hideButtons={false}
+            />
+            
+            <DialogFooter className="mt-6">
+              <Button variant="outline" type="button" onClick={() => setIsFormModalOpen(false)}>
+                Hủy
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
         

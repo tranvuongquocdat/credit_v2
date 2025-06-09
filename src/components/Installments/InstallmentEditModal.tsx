@@ -23,6 +23,7 @@ import { Customer } from '@/models/customer';
 import { Employee } from '@/models/employee';
 import Spinner from '@/components/ui/spinner';
 import { Alert } from "@/components/ui/alert";
+import { useStore } from '@/contexts/StoreContext';
 
 interface InstallmentEditModalProps {
   isOpen: boolean;
@@ -37,6 +38,8 @@ export function InstallmentEditModal({
   installmentId,
   onSuccess 
 }: InstallmentEditModalProps) {
+  // Get current store from context
+  const { currentStore } = useStore();
   // State for form values
   const [customerType, setCustomerType] = useState<'existing'>('existing');
   const [customerName, setCustomerName] = useState('');
@@ -140,8 +143,14 @@ export function InstallmentEditModal({
           setSelectedCustomerId(installmentData.customer_id);
         }
         
-        // Load customers
-        const { data: customersData, error: customersError } = await getCustomers(1, 1000);
+        // Load customers filtered by current store
+        const { data: customersData, error: customersError } = await getCustomers(
+          1, 
+          1000, 
+          '', // search query
+          currentStore?.id || '', // filter by store_id from context
+          '' // status filter
+        );
         if (customersError) throw new Error('Không thể tải danh sách khách hàng');
         setCustomers(customersData || []);
         

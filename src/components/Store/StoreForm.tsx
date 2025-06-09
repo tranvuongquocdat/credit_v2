@@ -38,13 +38,23 @@ interface StoreFormProps {
 
 // Schema validation cho form
 const formSchema = z.object({
-  name: z.string().min(1, { message: "Tên cửa hàng không được để trống" }),
-  address: z.string().min(1, { message: "Địa chỉ không được để trống" }),
+  name: z.string()
+    .min(1, { message: "Tên cửa hàng không được để trống" })
+    .max(100, { message: "Tên cửa hàng không được quá 100 ký tự" }),
+  address: z.string()
+    .min(1, { message: "Địa chỉ không được để trống" })
+    .max(255, { message: "Địa chỉ không được quá 255 ký tự" }),
   phone: z.string()
     .min(1, { message: "Số điện thoại không được để trống" })
-    .regex(/^[0-9]{10,11}$/, { message: "Số điện thoại không hợp lệ" }),
-  investment: z.coerce.number().min(0, { message: "Vốn đầu tư không được âm" }).optional(),
-  cash_fund: z.coerce.number().min(0, { message: "Quỹ tiền mặt không được âm" }).optional(),
+    .regex(/^[0-9]{10,11}$/, { message: "Số điện thoại phải có 10-11 chữ số" }),
+  investment: z.coerce.number()
+    .min(0, { message: "Vốn đầu tư không được âm" })
+    .max(999999999999, { message: "Vốn đầu tư quá lớn" })
+    .optional(),
+  cash_fund: z.coerce.number()
+    .min(0, { message: "Quỹ tiền mặt không được âm" })
+    .max(999999999999, { message: "Quỹ tiền mặt quá lớn" })
+    .optional(),
   status: z.nativeEnum(StoreStatus, {
     required_error: "Vui lòng chọn trạng thái"
   })
@@ -73,12 +83,22 @@ export default function StoreForm({ initialData, onSubmit, isSubmitting, hideBut
   useEffect(() => {
     if (initialData) {
       form.reset({
-        name: initialData.name,
+        name: initialData.name || '',
         address: initialData.address || '',
         phone: initialData.phone || '',
         investment: initialData.investment || 0,
         cash_fund: initialData.cash_fund || 0,
         status: initialData.status || StoreStatus.ACTIVE
+      });
+    } else {
+      // Reset form khi không có initialData (tạo mới)
+      form.reset({
+        name: '',
+        address: '',
+        phone: '',
+        investment: 0,
+        cash_fund: 0,
+        status: StoreStatus.ACTIVE
       });
     }
   }, [initialData, form]);
@@ -158,8 +178,10 @@ export default function StoreForm({ initialData, onSubmit, isSubmitting, hideBut
                 <FormControl>
                   <Input
                     type="number"
-                    placeholder="Nhập vốn đầu tư"
-                    {...field}
+                    placeholder="0"
+                    min="0"
+                    step="1000"
+                    value={field.value || ''}
                     onChange={(e) => {
                       const value = e.target.value === '' ? 0 : Number(e.target.value);
                       field.onChange(value);
@@ -184,8 +206,10 @@ export default function StoreForm({ initialData, onSubmit, isSubmitting, hideBut
                 <FormControl>
                   <Input
                     type="number"
-                    placeholder="Nhập quỹ tiền mặt"
-                    {...field}
+                    placeholder="0"
+                    min="0"
+                    step="1000"
+                    value={field.value || ''}
                     onChange={(e) => {
                       const value = e.target.value === '' ? 0 : Number(e.target.value);
                       field.onChange(value);
@@ -207,7 +231,7 @@ export default function StoreForm({ initialData, onSubmit, isSubmitting, hideBut
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Trạng thái</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Chọn trạng thái" />
@@ -227,7 +251,7 @@ export default function StoreForm({ initialData, onSubmit, isSubmitting, hideBut
 
         {!hideButtons && (
           <div className="flex justify-end mt-6 space-x-3">
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting} className="min-w-[120px]">
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

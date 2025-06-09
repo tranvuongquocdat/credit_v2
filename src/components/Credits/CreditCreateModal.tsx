@@ -36,6 +36,9 @@ export function CreditCreateModal({
   onClose,
   onSuccess
 }: CreditCreateModalProps) {
+  // Get current store from context
+  const { currentStore } = useStore();
+  
   // State for form values
   const [customerType, setCustomerType] = useState<'new' | 'existing'>('new');
   const [customerName, setCustomerName] = useState('');
@@ -139,7 +142,13 @@ export function CreditCreateModal({
     async function loadCustomers() {
       setIsLoadingCustomers(true);
       try {
-        const { data, error } = await getCustomers(1, 1000);
+        const { data, error } = await getCustomers(
+          1, 
+          1000, 
+          '', // search query
+          currentStore?.id || '', // filter by store_id from context
+          '' // status filter
+        );
         if (error) throw error;
         setCustomers(data || []);
       } catch (err) {
@@ -150,7 +159,7 @@ export function CreditCreateModal({
     }
     
     loadCustomers();
-  }, [isOpen]);
+  }, [isOpen, currentStore]);
   
   // Handle customer selection change
   const handleCustomerChange = (customerId: string) => {
@@ -240,9 +249,6 @@ export function CreditCreateModal({
     setLoanAmount(newAmountStr);
     setFormattedLoanAmount(formatNumber(newAmountStr));
   };
-  
-  // Get current store from context
-  const { currentStore } = useStore();
   
   // Load fund status for the current store
   useEffect(() => {
