@@ -228,13 +228,21 @@ export default function TotalFundPage() {
         }
       };
 
-      // For credit history - get contract code by joining with credits table
+      // First get all credit IDs for this store
+      const { data: creditIds } = await supabase
+        .from('credits')
+        .select('id')
+        .eq('store_id', storeId);
+      
+      // Then get credit history for those IDs
       const { data: creditHistoryData, error: creditError } = await supabase
         .from('credit_history')
         .select(`
           *,
           credits:credit_id (contract_code)
-        `);
+        `)
+        .eq('is_deleted', false)
+        .in('credit_id', creditIds?.map(c => c.id) || []);
       
       if (creditError) console.error('Error fetching credit_history:', creditError.message);
       else {
@@ -246,13 +254,21 @@ export default function TotalFundPage() {
         processItems(processedCreditData, 'Tín chấp');
       }
       
-      // For pawn history - get contract code by joining with pawns table
+      // First get all pawn IDs for this store
+      const { data: pawnIds } = await supabase
+        .from('pawns')
+        .select('id')
+        .eq('store_id', storeId);
+      
+      // Then get pawn history for those IDs
       const { data: pawnHistoryData, error: pawnError } = await supabase
         .from('pawn_history')
         .select(`
           *,
           pawns:pawn_id (contract_code)
-        `);
+        `)
+        .eq('is_deleted', false)
+        .in('pawn_id', pawnIds?.map(p => p.id) || []);
       
       if (pawnError) console.error('Error fetching pawn_history:', pawnError.message);
       else {
@@ -264,13 +280,21 @@ export default function TotalFundPage() {
         processItems(processedPawnData, 'Cầm đồ');
       }
       
-      // For installment history - get contract code by joining with installments table
+      // First get all installment IDs for this store
+      const { data: installmentIds } = await supabase
+        .from('installments')
+        .select('id')
+        .eq('store_id', storeId);
+      
+      // Then get installment history for those IDs
       const { data: installmentHistoryData, error: installmentError } = await supabase
         .from('installment_history')
         .select(`
           *,
           installments:installment_id (contract_code)
-        `);
+        `)
+        .eq('is_deleted', false)
+        .in('installment_id', installmentIds?.map(i => i.id) || []);
       
       if (installmentError) console.error('Error fetching installment_history:', installmentError.message);
       else {
