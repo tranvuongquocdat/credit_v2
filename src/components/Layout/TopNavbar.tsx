@@ -122,6 +122,9 @@ export function TopNavbar({ onToggleSidebar }: TopNavbarProps) {
   const { currentStore, stores, setCurrentStore, loading, refreshStores } = useStore();
   const router = useRouter();
   
+  // State để theo dõi lần đầu component mount
+  const [hasInitialized, setHasInitialized] = useState(false);
+  
   // Handler for store selection - memoized to prevent recreating on every render
   const handleStoreChange = useCallback((store: any) => {
     console.log('handleStoreChange', store);
@@ -133,6 +136,15 @@ export function TopNavbar({ onToggleSidebar }: TopNavbarProps) {
     // Buộc router refresh để làm mới dữ liệu trang
     router.refresh();
   }, [setCurrentStore, router]);
+  
+  // Auto refresh stores khi component mount lần đầu (sau khi login)
+  useEffect(() => {
+    if (!hasInitialized) {
+      console.log('TopNavbar: Auto refreshing stores on first mount');
+      refreshStores();
+      setHasInitialized(true);
+    }
+  }, [hasInitialized, refreshStores]);
   
   // Log when component mounts and when current store changes
   useEffect(() => {
