@@ -79,26 +79,21 @@ const mockData = [
 // - Payment history data: Dữ liệu thanh toán lãi
 export const convertFromHistoryToTimeArray = (loanStartDate: string, loanEndDate: string, paymentPeriod: number, historyData: any[], payment_history_data: any[]) => {
     const result: [string, string][] = [];
-    
-    // Sắp xếp payment_history_data theo effective_date
-    const sortedHistory = [...payment_history_data].sort((a, b) => 
-        new Date(a.effective_date).getTime() - new Date(b.effective_date).getTime()
-    );
-    
+
     // Xử lý các kỳ trong payment history
     let i = 0;
-    while (i < sortedHistory.length) {
-        const current = sortedHistory[i];
+    while (i < payment_history_data.length) {
+        const current = payment_history_data[i];
         
         if (current.date_status === 'start') {
             // Tìm ngày end tương ứng
             let endIndex = i + 1;
-            while (endIndex < sortedHistory.length && sortedHistory[endIndex].date_status !== 'end') {
+            while (endIndex < payment_history_data.length && payment_history_data[endIndex].date_status !== 'end') {
                 endIndex++;
             }
             
-            if (endIndex < sortedHistory.length) {
-                result.push([current.effective_date, sortedHistory[endIndex].effective_date]);
+            if (endIndex < payment_history_data.length) {
+                result.push([current.effective_date, payment_history_data[endIndex].effective_date]);
                 i = endIndex + 1;
             } else {
                 // Nếu không tìm thấy end, chỉ lấy ngày start
@@ -116,9 +111,9 @@ export const convertFromHistoryToTimeArray = (loanStartDate: string, loanEndDate
     // Tìm ngày bắt đầu cho việc chia kỳ tiếp theo
     let nextPeriodStartDate: string;
     
-    if (sortedHistory.length > 0) {
+    if (payment_history_data.length > 0) {
         // Nếu có payment history, bắt đầu từ ngày sau ngày cuối cùng
-        const lastPaymentDate = sortedHistory[sortedHistory.length - 1].effective_date;
+        const lastPaymentDate = payment_history_data[payment_history_data.length - 1].effective_date;
         const lastDate = new Date(lastPaymentDate);
         lastDate.setDate(lastDate.getDate() + 1);
         nextPeriodStartDate = formatDate(lastDate);
@@ -179,24 +174,20 @@ export const convertFromHistoryToStatusArray = (
 ): boolean[] => {
     const result: boolean[] = [];
     
-    // Sắp xếp payment_history_data theo effective_date
-    const sortedHistory = [...payment_history_data].sort((a, b) => 
-        new Date(a.effective_date).getTime() - new Date(b.effective_date).getTime()
-    );
     
     // Xử lý các kỳ trong payment history - những kỳ này đã checked
     let i = 0;
-    while (i < sortedHistory.length) {
-        const current = sortedHistory[i];
+    while (i < payment_history_data.length) {
+        const current = payment_history_data[i];
         
         if (current.date_status === 'start') {
             // Tìm ngày end tương ứng
             let endIndex = i + 1;
-            while (endIndex < sortedHistory.length && sortedHistory[endIndex].date_status !== 'end') {
+            while (endIndex < payment_history_data.length && payment_history_data[endIndex].date_status !== 'end') {
                 endIndex++;
             }
             
-            if (endIndex < sortedHistory.length) {
+            if (endIndex < payment_history_data.length) {
                 result.push(true); // Đã checked
                 i = endIndex + 1;
             } else {
@@ -214,9 +205,9 @@ export const convertFromHistoryToStatusArray = (
     // Tìm ngày bắt đầu cho việc chia kỳ tiếp theo
     let nextPeriodStartDate: string;
     
-    if (sortedHistory.length > 0) {
+    if (payment_history_data.length > 0) {
         // Nếu có payment history, bắt đầu từ ngày sau ngày cuối cùng
-        const lastPaymentDate = sortedHistory[sortedHistory.length - 1].effective_date;
+        const lastPaymentDate = payment_history_data[payment_history_data.length - 1].effective_date;
         const lastDate = new Date(lastPaymentDate);
         lastDate.setDate(lastDate.getDate() + 1);
         nextPeriodStartDate = formatDate(lastDate);
