@@ -15,12 +15,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { DatePicker } from '@/components/ui/date-picker';
 import { AlertCircle, Loader2 } from 'lucide-react';
-import { getPawnById, updatePawn } from '@/lib/pawn';
+import { getPawnById, hasPawnAnyPayments, updatePawn } from '@/lib/pawn';
 import { getCustomers } from '@/lib/customer';
-import { getCollateralById } from '@/lib/collateral';
+import { getCollateralById, getCollateralsByStore } from '@/lib/collateral';
 import { Customer } from '@/models/customer';
-import { PawnStatus, UpdatePawnParams, Pawn } from '@/models/pawn';
+import { PawnStatus, UpdatePawnParams, Pawn, InterestType } from '@/models/pawn';
 import { toast } from '@/components/ui/use-toast';
+import { Collateral } from '@/models/collateral';
 
 interface PawnEditModalProps {
   isOpen: boolean;
@@ -44,25 +45,28 @@ export function PawnEditModal({
   const [idNumber, setIdNumber] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
+  const [collateralId, setCollateralId] = useState<string>('');
   const [loanAmount, setLoanAmount] = useState<string>('');
   const [formattedLoanAmount, setFormattedLoanAmount] = useState<string>('');
-  const [interestRate, setInterestRate] = useState<string>('');
-  const [loanPeriod, setLoanPeriod] = useState<string>('');
-  const [pawnDate, setPawnDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [maturityDate, setMaturityDate] = useState('');
+  const [interestType, setInterestType] = useState<string>('daily');
+  const [interestNotation, setInterestNotation] = useState<string>('k_per_million');
+  const [interestValue, setInterestValue] = useState<string>('');
+  const [interestPeriod, setInterestPeriod] = useState<string>('30');
+  const [loanDate, setLoanDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState<PawnStatus>(PawnStatus.ON_TIME);
   
   // State for collateral details
   const [collateralName, setCollateralName] = useState('');
   const [collateralAttributes, setCollateralAttributes] = useState<Record<string, string>>({});
+  const [collaterals, setCollaterals] = useState<Collateral[]>([]);
   
   // State for customers dropdown
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   
   // State for collateral info
-  const [selectedCollateral, setSelectedCollateral] = useState<any>(null);
+  const [selectedCollateral, setSelectedCollateral] = useState<Collateral | null>(null);
   
   // State for form submission
   const [isLoading, setIsLoading] = useState(false);
@@ -72,17 +76,46 @@ export function PawnEditModal({
   
   // State for interest rate validation warning
   const [interestRateWarning, setInterestRateWarning] = useState<string | null>(null);
+
+  // State to track if pawn has payments
+  const [hasPayments, setHasPayments] = useState<boolean>(false);
   
-  // Function to validate interest rate (for pawn monthly percentage)
-  const validateInterestRate = (value: string) => {
+  // Quick buttons for loan amount
+  const loanAmountPresets = [-5, +5, 10, 20, 30, 40, 50];
+  
+  // Function to validate interest rate
+  const validateInterestRate = (value: string, type: string, notation: string) => {
     const numValue = parseFloat(value || '0');
     if (isNaN(numValue) || numValue <= 0) {
       setInterestRateWarning(null);
       return;
     }
     
-    // For pawn interest rate (monthly percentage), check if > 8.3%
-    if (numValue > 8.3) {
+    let isExceeded = false;
+    
+    if (type === 'daily') {
+      // Lãi ngày > 2.74
+      if (numValue > 2.74) {
+        isExceeded = true;
+      }
+    } else if (type === 'monthly_30' || type === 'monthly_custom') {
+      // Lãi phí tháng (%) > 8.3
+      if (numValue > 8.3) {
+        isExceeded = true;
+      }
+    } else if (type === 'weekly_percent') {
+      // Lãi phí tuần (%) > 1.92
+      if (numValue > 1.92) {
+        isExceeded = true;
+      }
+    } else if (type === 'weekly_k') {
+      // Lãi phí tuần (k) > 19.17
+      if (numValue > 19.17) {
+        isExceeded = true;
+      }
+    }
+    
+    if (isExceeded) {
       setInterestRateWarning('Lãi suất nhập vượt mức cho phép (100%/năm), vi phạm Điều 201 Bộ luật Hình sự. Vui lòng điều chỉnh.');
     } else {
       setInterestRateWarning(null);
@@ -102,6 +135,44 @@ export function PawnEditModal({
     setFormattedLoanAmount(formatNumber(rawValue));
   };
   
+  // Adjust loan amount with quick buttons
+  const adjustLoanAmount = (adjustment: number) => {
+    const currentAmount = parseInt(loanAmount || '0');
+    const newAmount = Math.max(0, currentAmount + adjustment);
+    setLoanAmount(newAmount.toString());
+    setFormattedLoanAmount(formatNumber(newAmount));
+  };
+  
+  // Handle interest type change
+  const handleInterestTypeChange = (type: string) => {
+    setInterestType(type);
+    // Reset interest notation based on type
+    if (type === 'daily' || type === 'weekly_k') {
+      setInterestNotation('k_per_million');
+    } else {
+      setInterestNotation('percent_per_month');
+    }
+    
+    // Validate interest rate with new type
+    validateInterestRate(interestValue, type, interestNotation);
+  };
+
+  // Handle collateral selection change
+  const handleCollateralChange = (collateralId: string) => {
+    setCollateralId(collateralId);
+    const selected = collaterals.find(c => c.id === collateralId);
+    if (selected) {
+      setSelectedCollateral(selected);
+      
+      // Reset collateral attributes when changing collateral type
+      setCollateralAttributes({});
+      
+    } else {
+      setSelectedCollateral(null);
+      setCollateralAttributes({});
+    }
+  };
+
   // Handle collateral attribute change
   const handleCollateralAttributeChange = (attrKey: string, value: string) => {
     setCollateralAttributes(prev => ({
@@ -113,6 +184,18 @@ export function PawnEditModal({
   // Load pawn data and customers when modal opens
   useEffect(() => {
     if (!isOpen || !pawnId) return;
+    
+    async function loadCollaterals() {
+      try {
+        const { data, error } = await getCollateralsByStore(currentStore!.id);
+        if (error) throw error;
+        setCollaterals(data || []);
+      } catch (err) {
+        console.error('Error loading collaterals:', err);
+      }
+    }
+    
+    loadCollaterals();
     
     async function loadData() {
       setIsLoadingData(true);
@@ -135,19 +218,16 @@ export function PawnEditModal({
         setIdNumber(pawnData.id_number || '');
         setPhone(pawnData.phone || '');
         setAddress(pawnData.address || '');
+        setCollateralId(pawnData.collateral_id || '');
+        setInterestType(pawnData.interest_ui_type || 'daily');
+        setInterestNotation(pawnData.interest_notation || 'k_per_million');
+        
         const loanAmountStr = pawnData.loan_amount?.toString() || '';
         setLoanAmount(loanAmountStr);
         setFormattedLoanAmount(formatNumber(loanAmountStr));
-        setInterestRate(pawnData.interest_value?.toString() || '');
-        setLoanPeriod(pawnData.loan_period?.toString() || '');
-        setPawnDate(pawnData.loan_date ? format(new Date(pawnData.loan_date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
-        // Calculate maturity date from loan_date and loan_period
-        if (pawnData.loan_date && pawnData.loan_period) {
-          const loanDate = new Date(pawnData.loan_date);
-          const maturityDate = new Date(loanDate);
-          maturityDate.setDate(loanDate.getDate() + pawnData.loan_period);
-          setMaturityDate(format(maturityDate, 'yyyy-MM-dd'));
-        }
+        setInterestValue(pawnData.interest_value?.toString() || '');
+        setInterestPeriod(pawnData.interest_period?.toString() || '30');
+        setLoanDate(pawnData.loan_date ? format(new Date(pawnData.loan_date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
         setNotes(pawnData.notes || '');
         setStatus(pawnData.status as PawnStatus || PawnStatus.ON_TIME);
         setSelectedCustomerId(pawnData.customer_id);
@@ -192,6 +272,14 @@ export function PawnEditModal({
             console.error('Error loading collateral:', err);
           }
         }
+
+        // Check if pawn has any payments
+        const { hasPaidPeriods, error: paymentsError } = await hasPawnAnyPayments(pawnId);
+        if (paymentsError) {
+          console.error('Error checking payments:', paymentsError);
+        } else {
+          setHasPayments(hasPaidPeriods);
+        }
       } catch (err) {
         console.error('Error loading data:', err);
         setError('Có lỗi xảy ra khi tải dữ liệu. Vui lòng thử lại sau.');
@@ -215,6 +303,36 @@ export function PawnEditModal({
         throw new Error('Vui lòng chọn chi nhánh trước khi cập nhật hợp đồng');
       }
       
+      // Map the UI interest type to the backend interest type
+      let backendInterestType = InterestType.PERCENTAGE;
+      let actualInterestValue = parseFloat(interestValue || '0');
+      
+      // Convert interest value based on notation
+      if (interestType === 'daily') {
+        backendInterestType = InterestType.FIXED_AMOUNT;
+      } else if (interestType === 'monthly_30' || interestType === 'monthly_custom') {
+        backendInterestType = InterestType.PERCENTAGE;
+        // Keep percentage as is
+      } else if (interestType === 'weekly_percent') {
+        backendInterestType = InterestType.PERCENTAGE;
+        // Keep percentage as is
+      } else if (interestType === 'weekly_k') {
+        backendInterestType = InterestType.FIXED_AMOUNT;
+      }
+      
+      // Convert interest period based on interest type
+      const convertInterestPeriodForStorage = (period: string, type: string): number => {
+        const periodNum = parseInt(period || '0');
+        // For weekly interest types, if user enters 1, it means 1 week (7 days)
+        // For monthly interest types, if user enters 1, it means 1 month (30 days)
+        if (type.startsWith('weekly') && periodNum > 0) {
+          return periodNum * 7; // weeks to days
+        } else if (type.startsWith('monthly') && periodNum > 0) {
+          return periodNum * 30; // months to days
+        }
+        return periodNum; // already in days
+      };
+      
       // Prepare collateral detail as JSON
       const collateralDetailJson = {
         name: collateralName,
@@ -225,10 +343,14 @@ export function PawnEditModal({
       const updateData: UpdatePawnParams = {
         customer_id: selectedCustomerId,
         contract_code: contractCode,
+        collateral_id: collateralId,
         loan_amount: parseInt(loanAmount || '0'),
-        interest_value: parseFloat(interestRate || '0'),
-        loan_period: parseInt(loanPeriod || '0'),
-        loan_date: new Date(pawnDate),
+        interest_type: backendInterestType,
+        interest_value: actualInterestValue,
+        interest_ui_type: interestType, // Store the UI interest type
+        interest_notation: interestNotation, // Store the notation format
+        interest_period: convertInterestPeriodForStorage(interestPeriod, interestType),
+        loan_date: new Date(loanDate),
         notes: notes,
         status,
         store_id: currentStore.id,
@@ -274,12 +396,28 @@ export function PawnEditModal({
               <Label htmlFor="customerName" className="text-right">
                 Tên khách hàng
               </Label>
-              <Input 
-                id="customerName"
-                value={customerName}
-                readOnly
-                className="bg-gray-50"
-              />
+              <select 
+                className="border rounded-md p-2 w-full"
+                value={selectedCustomerId}
+                onChange={(e) => {
+                  setSelectedCustomerId(e.target.value);
+                  const customer = customers.find(c => c.id === e.target.value);
+                  if (customer) {
+                    setCustomerName(customer.name);
+                    setIdNumber(customer.id_number || '');
+                    setPhone(customer.phone || '');
+                    setAddress(customer.address || '');
+                  }
+                }}
+                required
+              >
+                <option value="">Chọn khách hàng</option>
+                {customers.map(customer => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.name}
+                  </option>
+                ))}
+              </select>
             </div>
             
             <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
@@ -289,6 +427,7 @@ export function PawnEditModal({
                 value={contractCode}
                 onChange={(e) => setContractCode(e.target.value)}
                 placeholder=""
+                disabled
               />
             </div>
             
@@ -299,6 +438,7 @@ export function PawnEditModal({
                 value={idNumber}
                 onChange={(e) => setIdNumber(e.target.value)}
                 placeholder=""
+                disabled
               />
             </div>
             
@@ -309,6 +449,7 @@ export function PawnEditModal({
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder=""
+                disabled
               />
             </div>
             
@@ -320,7 +461,27 @@ export function PawnEditModal({
                 onChange={(e) => setAddress(e.target.value)}
                 rows={3}
                 placeholder=""
+                disabled
               />
+            </div>
+            
+            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
+              <Label htmlFor="collateralId" className="text-right">
+                Tài sản thế chấp <span className="text-red-500">*</span>
+              </Label>
+              <select 
+                className="border rounded-md p-2 w-full"
+                value={collateralId}
+                onChange={(e) => handleCollateralChange(e.target.value)}
+                required
+              >
+                <option value="">Chọn tài sản</option>
+                {collaterals.map(collateral => (
+                  <option key={collateral.id} value={collateral.id}>
+                    {collateral.name} ({collateral.code})
+                  </option>
+                ))}
+              </select>
             </div>
             
             {/* Collateral Name */}
@@ -336,6 +497,17 @@ export function PawnEditModal({
                 required
               />
             </div>
+            
+            {selectedCollateral && (
+              <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-start">
+                <div className="text-right text-sm text-gray-500">Thông tin tài sản:</div>
+                <div className="text-sm bg-gray-50 p-2 rounded">
+                  <div><span className="font-medium">Loại:</span> {selectedCollateral.category}</div>
+                  <div><span className="font-medium">Mã:</span> {selectedCollateral.code}</div>
+                  <div><span className="font-medium">Giá trị mặc định:</span> {formatNumber(selectedCollateral.default_amount || 0)}đ</div>
+                </div>
+              </div>
+            )}
 
             {/* Dynamic collateral attributes based on selected collateral */}
             {selectedCollateral && (
@@ -367,35 +539,160 @@ export function PawnEditModal({
             
             <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
               <Label htmlFor="loanAmount" className="text-right">
-                Số tiền vay <span className="text-red-500">*</span>
+                Tổng số tiền vay <span className="text-red-500">*</span>
               </Label>
-              <Input 
-                id="loanAmount"
-                type="text"
-                value={formattedLoanAmount}
-                onChange={handleLoanAmountChange}
-                required
-                inputMode="numeric"
-                placeholder="0"
-              />
+              <div>
+                <Input 
+                  id="loanAmount"
+                  type="text"
+                  value={formattedLoanAmount}
+                  onChange={handleLoanAmountChange}
+                  required
+                  inputMode="numeric"
+                  placeholder="0"
+                  disabled={hasPayments}
+                />
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {loanAmountPresets.map(amount => (
+                    <Button 
+                      key={amount}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => adjustLoanAmount(amount * 1000000)}
+                      className="px-2 py-1 h-auto"
+                      disabled={hasPayments}
+                    >
+                      {amount > 0 ? '+' : ''}{amount}
+                    </Button>
+                  ))}
+                </div>
+              </div>
             </div>
             
             <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="interestRate" className="text-right">
-                Lãi suất (%/tháng) <span className="text-red-500">*</span>
+              <Label className="text-right">Hình thức lãi</Label>
+              <select 
+                className="border rounded-md p-2 w-full"
+                value={interestType}
+                onChange={(e) => handleInterestTypeChange(e.target.value)}
+                disabled={hasPayments}
+              >
+                <option value="daily">Lãi phí ngày</option>
+                <option value="monthly_30">Lãi phí tháng (%) (30 ngày)</option>
+                <option value="monthly_custom">Lãi phí tháng (%) (Định kỳ)</option>
+                <option value="weekly_percent">Lãi phí tuần (%)</option>
+                <option value="weekly_k">Lãi phí tuần (k)</option>
+              </select>
+            </div>
+            
+            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
+              <Label htmlFor="interestValue" className="text-right">
+                Lãi suất <span className="text-red-500">*</span>
               </Label>
-              <Input 
-                id="interestRate"
-                type="number"
-                value={interestRate}
-                onChange={(e) => {
-                  setInterestRate(e.target.value);
-                  validateInterestRate(e.target.value);
-                }}
-                required
-                placeholder="0"
-                step="0.1"
-              />
+              <div>
+                <div className="flex gap-2 items-center">
+                  <Input 
+                    id="interestValue"
+                    type="text"
+                    value={interestValue}
+                    onChange={(e) => {
+                      setInterestValue(e.target.value);
+                      validateInterestRate(e.target.value, interestType, interestNotation);
+                    }}
+                    required
+                    className="w-24"
+                    placeholder="0"
+                    disabled={hasPayments}
+                  />
+                  
+                  {interestType === 'daily' && (
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center">
+                        <input 
+                          type="radio" 
+                          id="k_per_million" 
+                          name="interestNotation" 
+                          value="k_per_million"
+                          checked={interestNotation === 'k_per_million'}
+                          onChange={() => {
+                            setInterestNotation('k_per_million');
+                            validateInterestRate(interestValue, interestType, 'k_per_million');
+                          }}
+                          className="mr-1"
+                          disabled={hasPayments}
+                        />
+                        <label htmlFor="k_per_million">k/1 triệu</label>
+                      </div>
+                      <div className="flex items-center">
+                        <input 
+                          type="radio" 
+                          id="k_per_day" 
+                          name="interestNotation" 
+                          value="k_per_day"
+                          checked={interestNotation === 'k_per_day'}
+                          onChange={() => {
+                            setInterestNotation('k_per_day');
+                            validateInterestRate(interestValue, interestType, 'k_per_day');
+                          }}
+                          className="mr-1"
+                          disabled={hasPayments}
+                        />
+                        <label htmlFor="k_per_day">k/ngày</label>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {interestType === 'weekly_k' && (
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center">
+                        <input 
+                          type="radio" 
+                          id="k_per_million_weekly" 
+                          name="interestNotation" 
+                          value="k_per_million"
+                          checked={interestNotation === 'k_per_million'}
+                          onChange={() => {
+                            setInterestNotation('k_per_million');
+                            validateInterestRate(interestValue, interestType, 'k_per_million');
+                          }}
+                          className="mr-1"
+                          disabled={hasPayments}
+                        />
+                        <label htmlFor="k_per_million_weekly">k/1 triệu</label>
+                      </div>
+                      <div className="flex items-center">
+                        <input 
+                          type="radio" 
+                          id="k_per_week" 
+                          name="interestNotation" 
+                          value="k_per_week"
+                          checked={interestNotation === 'k_per_week'}
+                          onChange={() => {
+                            setInterestNotation('k_per_week');
+                            validateInterestRate(interestValue, interestType, 'k_per_week');
+                          }}
+                          className="mr-1"
+                          disabled={hasPayments}
+                        />
+                        <label htmlFor="k_per_week">k/tuần</label>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {(interestType === 'monthly_30' || interestType === 'monthly_custom') && (
+                    <div className="flex items-center gap-1">
+                      <span>% / tháng</span>
+                    </div>
+                  )}
+                  
+                  {interestType === 'weekly_percent' && (
+                    <div className="flex items-center gap-1">
+                      <span>% / tuần</span>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
             
             {interestRateWarning && (
@@ -411,58 +708,37 @@ export function PawnEditModal({
             )}
             
             <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="loanPeriod" className="text-right">
-                Thời hạn (tháng) <span className="text-red-500">*</span>
+              <Label htmlFor="interestPeriod" className="text-right">
+                Kỳ lãi phí <span className="text-red-500">*</span>
               </Label>
-              <Input 
-                id="loanPeriod"
-                type="number"
-                value={loanPeriod}
-                onChange={(e) => setLoanPeriod(e.target.value)}
-                required
-                placeholder="0"
-              />
+              <div className="flex items-center gap-2">
+                <Input 
+                  id="interestPeriod"
+                  type="number"
+                  value={interestPeriod}
+                  onChange={(e) => setInterestPeriod(e.target.value)}
+                  className="w-24"
+                  min="1"
+                  placeholder="30"
+                  required
+                />
+                <span>
+                  {interestType === 'daily' && 'ngày (mỗi kỳ lãi)'}
+                  {interestType === 'monthly_30' && 'tháng (mỗi kỳ lãi)'}
+                  {interestType === 'monthly_custom' && 'ngày (mỗi kỳ lãi)'}
+                  {interestType === 'weekly_percent' && 'tuần (mỗi kỳ lãi)'}
+                  {interestType === 'weekly_k' && 'tuần (mỗi kỳ lãi)'}
+                </span>
+              </div>
             </div>
             
             <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="pawnDate" className="text-right">
-                Ngày cầm <span className="text-red-500">*</span>
-              </Label>
+              <Label htmlFor="loanDate" className="text-right">Ngày vay</Label>
               <DatePicker
-                id="pawnDate"
-                value={pawnDate}
-                onChange={setPawnDate}
-                required
+                value={loanDate}
+                onChange={(value) => setLoanDate(value)}
+                disabled={hasPayments}
               />
-            </div>
-            
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="maturityDate" className="text-right">
-                Ngày đáo hạn
-              </Label>
-              <DatePicker
-                id="maturityDate"
-                value={maturityDate}
-                onChange={setMaturityDate}
-              />
-            </div>
-            
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="status" className="text-right">
-                Trạng thái
-              </Label>
-              <select 
-                className="border rounded-md p-2 w-full"
-                value={status}
-                onChange={(e) => setStatus(e.target.value as PawnStatus)}
-              >
-                <option value={PawnStatus.ON_TIME}>Đang vay</option>
-                <option value={PawnStatus.OVERDUE}>Quá hạn</option>
-                <option value={PawnStatus.LATE_INTEREST}>Chậm lãi</option>
-                <option value={PawnStatus.BAD_DEBT}>Nợ xấu</option>
-                <option value={PawnStatus.CLOSED}>Đã đóng</option>
-                <option value={PawnStatus.DELETED}>Đã xóa</option>
-              </select>
             </div>
             
             <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-start">
@@ -484,6 +760,10 @@ export function PawnEditModal({
                 </span>
               </div>
             )}
+            
+            <div className="text-center text-red-500 text-sm mt-2">
+              *Chú ý : Khách hàng phải đảm bảo lãi suất và chi phí khi cho vay (gọi chung là "chi phí vay") tuân thủ quy định pháp luật tại từng thời điểm.
+            </div>
             
             <div className="flex justify-center space-x-4 mt-6">
               <Button 

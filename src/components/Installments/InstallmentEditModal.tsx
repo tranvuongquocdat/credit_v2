@@ -153,7 +153,7 @@ export function InstallmentEditModal({
         setCustomers(customersData || []);
         
         // Load employees
-        const { data: employeesData, error: employeesError } = await getEmployees(1, 1000);
+        const { data: employeesData, error: employeesError } = await getEmployees(1, 1000, '', currentStore?.id || '');
         if (employeesError) throw new Error('Không thể tải danh sách nhân viên');
         setEmployees(employeesData || []);
       } catch (err: any) {
@@ -212,6 +212,7 @@ export function InstallmentEditModal({
       // Always include these fields
       installmentData.notes = notes;
       installmentData.payment_period = parseInt(paymentPeriod || '10');
+      installmentData.employee_id = employeeId;
       // Only include these fields if no payments exist
       if (!hasPayments) {
         installmentData.customer_id = selectedCustomerId;
@@ -220,12 +221,11 @@ export function InstallmentEditModal({
         installmentData.id_number = idNumber;
         installmentData.phone = phone;
         installmentData.address = address;
-        installmentData.amount_given = parseInt(amountGiven || '0');
+        installmentData.installment_amount = parseInt(amountGiven || '0');
+        installmentData.down_payment = parseInt(customerAmount || '0');
         installmentData.interest_rate = parseFloat(interestRate || '0');
         installmentData.duration = parseInt(duration || '7');
-        installmentData.payment_period = parseInt(paymentPeriod || '10');
         installmentData.start_date = startDate;
-        installmentData.employee_id = employeeId;
         installmentData.store_id = installment.store_id || '1';
         installmentData.advance_payment = advancePayment;
       }
@@ -447,7 +447,6 @@ export function InstallmentEditModal({
               value={employeeId}
               onChange={(e) => setEmployeeId(e.target.value)}
               required
-              disabled={hasPayments}
             >
               <option value="">Chọn nhân viên</option>
               {employees.map(employee => (

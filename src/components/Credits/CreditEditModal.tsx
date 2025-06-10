@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2 } from 'lucide-react';
-import { getCreditById, updateCredit } from '@/lib/credit';
+import { getCreditById, hasCreditAnyPayments, updateCredit } from '@/lib/credit';
 import { getCustomers } from '@/lib/customer';
 import { Customer } from '@/models/customer';
 import { UpdateCreditParams, InterestType, CreditStatus, Credit } from '@/models/credit';
@@ -71,6 +71,9 @@ export function CreditEditModal({
   
   // State for interest rate validation warning
   const [interestRateWarning, setInterestRateWarning] = useState<string | null>(null);
+
+  // State to track if credit has payments
+  const [hasPayments, setHasPayments] = useState<boolean>(false);
   
   // Function to validate interest rate
   const validateInterestRate = (value: string, type: string) => {
@@ -213,6 +216,14 @@ export function CreditEditModal({
         
         setCredit(creditData);
         
+        // Check if credit has any payments
+        const { hasPaidPeriods, error: paymentsError } = await hasCreditAnyPayments(creditId);
+        if (paymentsError) {
+          console.error('Error checking payments:', paymentsError);
+        } else {
+          setHasPayments(hasPaidPeriods);
+        }
+
         // Set form values from credit data
         setContractCode(creditData.contract_code || '');
         setIdNumber(creditData.id_number || '');
@@ -463,12 +474,28 @@ export function CreditEditModal({
               <Label htmlFor="customerName" className="text-right">
                 Tên khách hàng
               </Label>
-              <Input 
-                id="customerName"
-                value={customerName}
-                readOnly
-                className="bg-gray-50"
-              />
+              <select 
+                className="border rounded-md p-2 w-full"
+                value={selectedCustomerId}
+                onChange={(e) => {
+                  setSelectedCustomerId(e.target.value);
+                  const customer = customers.find(c => c.id === e.target.value);
+                  if (customer) {
+                    setCustomerName(customer.name);
+                    setIdNumber(customer.id_number || '');
+                    setPhone(customer.phone || '');
+                    setAddress(customer.address || '');
+                  }
+                }}
+                required
+              >
+                <option value="">Chọn khách hàng</option>
+                {customers.map(customer => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.name}
+                  </option>
+                ))}
+              </select>
             </div>
             
             <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
@@ -478,6 +505,7 @@ export function CreditEditModal({
                 value={contractCode}
                 onChange={(e) => setContractCode(e.target.value)}
                 placeholder="Mã hợp đồng"
+                disabled
               />
             </div>
             
@@ -487,6 +515,7 @@ export function CreditEditModal({
                 id="idNumber"
                 value={idNumber}
                 onChange={(e) => setIdNumber(e.target.value)}
+                disabled
               />
             </div>
             
@@ -496,6 +525,7 @@ export function CreditEditModal({
                 id="phone"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
+                disabled
               />
             </div>
             
@@ -506,6 +536,7 @@ export function CreditEditModal({
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 rows={3}
+                disabled
               />
             </div>
             
@@ -516,6 +547,7 @@ export function CreditEditModal({
                 value={collateral}
                 onChange={(e) => setCollateral(e.target.value)}
                 rows={3}
+                disabled
               />
             </div>
             
@@ -532,6 +564,7 @@ export function CreditEditModal({
                   required
                   inputMode="numeric"
                   placeholder="0"
+                  disabled={hasPayments}
                 />
                 <div className="flex flex-wrap gap-2 mt-2">
                   {loanAmountPresets.map(amount => (
@@ -542,6 +575,7 @@ export function CreditEditModal({
                       size="sm"
                       onClick={() => adjustLoanAmount(amount * 1000000)}
                       className="px-2 py-1 h-auto"
+                      disabled={hasPayments}
                     >
                       {amount > 0 ? '+' : ''}{amount}
                     </Button>
@@ -556,6 +590,7 @@ export function CreditEditModal({
                 className="border rounded-md p-2 w-full"
                 value={interestType}
                 onChange={(e) => handleInterestTypeChange(e.target.value)}
+                disabled={hasPayments}
               >
                 <option value="daily">Lãi phí ngày</option>
                 <option value="monthly_30">Lãi phí tháng (%) (30 ngày)</option>
@@ -582,6 +617,7 @@ export function CreditEditModal({
                   className="w-32"
                   placeholder="0"
                   min={0}
+                  disabled={hasPayments}
                 />
                 <div className="flex flex-wrap gap-4 items-center">
                   {interestType === 'daily' && (
@@ -597,6 +633,7 @@ export function CreditEditModal({
                             validateInterestRate(interestValue, interestType);
                           }}
                           className="mr-2"
+                          disabled={hasPayments}
                         />
                         <label htmlFor="interestDaily1" className="text-sm">k/1 triệu</label>
                       </div>
@@ -611,6 +648,7 @@ export function CreditEditModal({
                             validateInterestRate(interestValue, interestType);
                           }}
                           className="mr-2"
+                          disabled={hasPayments}
                         />
                         <label htmlFor="interestDaily2" className="text-sm">k/1 ngày</label>
                       </div>
@@ -630,6 +668,7 @@ export function CreditEditModal({
                             validateInterestRate(interestValue, interestType);
                           }}
                           className="mr-2"
+                          disabled={hasPayments}
                         />
                         <label htmlFor="interestMonthly1" className="text-sm">%/1 tháng</label>
                       </div>
@@ -649,6 +688,7 @@ export function CreditEditModal({
                             validateInterestRate(interestValue, interestType);
                           }}
                           className="mr-2"
+                          disabled={hasPayments}
                         />
                         <label htmlFor="interestWeeklyPercent1" className="text-sm">% /1 tuần (VD : 2% / 1 tuần)</label>
                       </div>
@@ -664,6 +704,7 @@ export function CreditEditModal({
                           name="interestWeeklyK" 
                           checked={true}
                           className="mr-2"
+                          disabled={hasPayments}
                         />
                         <label htmlFor="interestWeeklyK1" className="text-sm">k/1 tuần (VD: 100k/1 tuần)</label>
                       </div>
@@ -699,6 +740,7 @@ export function CreditEditModal({
                 required
                 placeholder="0"
                 min={0}
+                disabled={hasPayments}
               />
             </div>
             
@@ -740,6 +782,7 @@ export function CreditEditModal({
                 value={loanDate}
                 onChange={(e) => setLoanDate(e.target.value)}
                 required
+                disabled={hasPayments}
               />
             </div>
             

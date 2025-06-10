@@ -1,3 +1,4 @@
+import { getCurrentUser } from './auth';
 import { supabase } from './supabase';
 import { 
   Pawn, 
@@ -278,6 +279,10 @@ export async function createPawn(params: CreatePawnParams) {
  */
 export async function updatePawn(id: string, params: UpdatePawnParams) {
   try {
+    const { id: userId } = await getCurrentUser();
+    // First, get the pawn data
+    const { data: pawnData, error: pawnError } = await getPawnById(id);
+    if (pawnError) throw pawnError;
     // Chuyển đổi Date object thành string nếu cần
     const loanDate = params.loan_date instanceof Date 
       ? params.loan_date.toISOString() 
@@ -325,6 +330,18 @@ export async function updatePawn(id: string, params: UpdatePawnParams) {
       customer: { name: 'Unknown Customer', phone: null, id_number: null },
       collateral_asset: null
     };
+
+    // Insert pawn history
+    const { data: pawnHistoryData, error: pawnHistoryError } = await supabase
+      .from('pawn_history')
+      .insert({
+        pawn_id: id,
+        transaction_type: 'update_contract',
+        credit_amount: pawnData?.loan_amount,
+        debit_amount: updateData.loan_amount,
+        description: `Cập nhật hợp đồng cầm đồ`,
+        created_by: userId,
+      })
     
     return { data: pawnWithRelations as PawnWithCustomerAndCollateral, error: null };
   } catch (error) {
@@ -339,7 +356,24 @@ export async function updatePawn(id: string, params: UpdatePawnParams) {
 export async function deletePawn(id: string) {
   try {
     // Skip payment period check since table doesn't exist yet
-    // In future: check if pawn has any payment periods before allowing deletion
+    // Check if pawn has any payment periods before allowing deletion
+    const { data: paymentPeriods, error: paymentError } = await supabase
+      .from('pawn_history')
+      .select('id')
+      .eq('is_deleted', false)
+      .eq('transaction_type', 'payment')
+      .eq('pawn_id', id)
+      .limit(1);
+    
+    if (paymentError) throw paymentError;
+    
+    // If there are payment periods, don't allow deletion
+    if (paymentPeriods && paymentPeriods.length > 0) {
+      return { 
+        success: false, 
+        error: { message: 'Không thể xóa hợp đồng đã có kỳ thanh toán' } 
+      };
+    }
     
     // Lấy thông tin hợp đồng để ghi lịch sử
     const { data: pawnData, error: pawnError } = await supabase
@@ -446,3 +480,19 @@ export async function updatePawnStatus(id: string, status: PawnStatus) {
     return { data: null, error };
   }
 } 
+
+
+export async function hasPawnAnyPayments(id: string) {
+  const { data, error } = await supabase
+    .from('pawn_history')
+    .select('id')
+    .eq('is_deleted', false)
+    .eq('transaction_type', 'payment')
+    .eq('pawn_id', id)
+    .limit(1);
+    if (error) throw error;
+    return {
+      hasPaidPeriods: data && data.length > 0,
+      error: null
+    };
+}

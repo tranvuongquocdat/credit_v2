@@ -236,6 +236,16 @@ export async function createCredit(params: CreateCreditParams) {
  */
 export async function updateCredit(id: string, params: UpdateCreditParams) {
   try {
+
+    const { data: currentData, error: fetchError } = await supabase
+      .from('credits')
+      .select('loan_amount')
+      .eq('id', id)
+      .single();
+      
+    if (fetchError) {
+      throw fetchError;
+    }
     const updateData: Record<string, any> = {};
     
     // Chỉ cập nhật các trường được cung cấp
@@ -274,6 +284,20 @@ export async function updateCredit(id: string, params: UpdateCreditParams) {
         customer:customers(name, phone, id_number)
       `)
       .single();
+    
+    // Cập nhật lịch sử thanh toán
+    const { data: paymentData, error: paymentError } = await supabase
+      .from('credit_history')
+      .insert({
+        credit_id: id,
+        transaction_type: 'update_contract',
+        credit_amount: currentData.loan_amount,
+        debit_amount: params.loan_amount,
+        description: `Cập nhật hợp đồng`,
+        is_deleted: false,
+        created_at: new Date().toISOString()
+      })
+      .select()
     
     if (error) throw error;
     
@@ -452,4 +476,19 @@ export function calculateCreditInterest(credit: Credit, currentDate = new Date()
       error
     };
   }
+}
+
+export async function hasCreditAnyPayments(id: string) {
+  const { data, error } = await supabase
+    .from('credit_history')
+    .select('id')
+    .eq('is_deleted', false)
+    .eq('transaction_type', 'payment')
+    .eq('credit_id', id)
+    .limit(1);
+    if (error) throw error;
+    return {
+      hasPaidPeriods: data && data.length > 0,
+      error: null
+    };
 }

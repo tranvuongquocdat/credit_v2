@@ -405,8 +405,12 @@ export async function updateInstallment(id: string, installment: Partial<Install
       dbInstallment.employee_id = installment.employee_id;
     }
     
-    if (installment.amount_given !== undefined) {
-      dbInstallment.down_payment = installment.amount_given;
+    if (installment.down_payment !== undefined) {
+      dbInstallment.down_payment = installment.down_payment;
+    }
+
+    if (installment.installment_amount !== undefined) {
+      dbInstallment.installment_amount = installment.installment_amount;
     }
     
     if (installment.duration !== undefined) {
@@ -431,6 +435,10 @@ export async function updateInstallment(id: string, installment: Partial<Install
     
     if (installment.status !== undefined) {
       dbInstallment.status = installment.status.toString() as any;
+    }
+
+    if (installment.employee_id !== undefined) {
+      dbInstallment.employee_id = installment.employee_id;
     }
     
     // Update the database record
@@ -489,7 +497,7 @@ export async function updateInstallment(id: string, installment: Partial<Install
         description = `Cập nhật thời hạn: ${installment.duration} ngày`;
       }
       
-      await recordContractUpdate(data.id, data.employee_id, description);
+      await recordContractUpdate(data.id, downPayment, currentData.down_payment, description);
     } catch (historyError) {
       console.error('Error recording contract update history:', historyError);
       // Continue anyway
@@ -594,6 +602,7 @@ export async function deleteInstallment(id: string) {
       .from('installment_history')
       .select('id')
       .eq('is_deleted', false)
+      .eq('transaction_type', 'payment')
       .eq('installment_id', id)
       .limit(1);
     

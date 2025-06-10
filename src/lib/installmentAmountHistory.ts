@@ -145,10 +145,12 @@ export async function recordContractCreation(installmentId: string, employeeId: 
 /**
  * Ghi lịch sử khi cập nhật hợp đồng
  */
-export async function recordContractUpdate(installmentId: string, employeeId: string, description: string = 'Cập nhật hợp đồng') {
+export async function recordContractUpdate(installmentId: string, downPayment: number, oldDownPayment: number, employeeId: string, description: string = 'Cập nhật hợp đồng') {
   return createInstallmentAmountHistory({
     installmentId,
     description,
+    debitAmount: downPayment,
+    creditAmount: oldDownPayment,
     transactionType: TransactionType.UPDATE_CONTRACT
   });
 }
