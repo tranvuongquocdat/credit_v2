@@ -77,7 +77,7 @@ export default function SignUp() {
                 style={{ width: '100%', padding: '12px', border: '1px solid #ccc', borderRadius: '5px', fontSize: '16px', backgroundColor: 'white' }}
               >
                 <option value="user">Người dùng (User)</option>
-                <option value="owner">Chủ sở hữu (Owner)</option>
+                <option value="superadmin">Super Admin</option>
                 <option value="admin">Quản trị viên (Admin)</option>
               </select>
             </div>

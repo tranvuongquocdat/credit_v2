@@ -1,8 +1,8 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { signOut } from '@/lib/auth';
+import { signOut, getCurrentUser } from '@/lib/auth';
 import { 
   FiHome, 
   FiCreditCard, 
@@ -25,7 +25,8 @@ import {
   FiClock,
   FiCheckCircle,
   FiUserCheck,
-  FiUserPlus
+  FiUserPlus,
+  FiShield
 } from 'react-icons/fi';
 
 interface SubMenuItem {
@@ -41,6 +42,7 @@ interface SidebarItem {
   icon: React.ReactElement;
   submenu?: SubMenuItem[];
   redColor?: boolean;
+  superAdminOnly?: boolean;
 }
 
 const sidebarItems: SidebarItem[] = [
@@ -123,14 +125,43 @@ const sidebarItems: SidebarItem[] = [
       { title: 'Dòng tiền theo ngày', path: '/reports/money-by-day', icon: <FiPackage size={18} /> },
     ]
   },
+  // SuperAdmin section
+  { 
+    title: 'Quản trị hệ thống', 
+    path: '/admins', 
+    icon: <FiShield size={20} />,
+    redColor: true,
+    superAdminOnly: true,
+    submenu: [
+      { title: 'Quản lý Admin', path: '/admins', icon: <FiShield size={18} />, redColor: true },
+    ]
+  },
 ];
 
 export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isLoadingUser, setIsLoadingUser] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
+
+  // Get current user to check role
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const user = await getCurrentUser();
+        setCurrentUser(user);
+      } catch (error) {
+        console.error('Error fetching user:', error);
+      } finally {
+        setIsLoadingUser(false);
+      }
+    };
+
+    fetchUser();
+  }, []);
 
   const toggleExpanded = (path: string) => {
     if (isCollapsed) return; // Không mở submenu khi sidebar thu gọn
@@ -162,6 +193,18 @@ export default function Sidebar() {
     window.dispatchEvent(event);
   };
 
+  // Filter sidebar items based on user role
+  const getFilteredSidebarItems = () => {
+    if (isLoadingUser) return sidebarItems.filter(item => !item.superAdminOnly);
+    
+    return sidebarItems.filter(item => {
+      if (item.superAdminOnly) {
+        return currentUser?.role === 'superadmin';
+      }
+      return true;
+    });
+  };
+
   return (
     <div 
       className={`fixed left-0 top-14 h-[calc(100vh-3.5rem)] bg-white shadow-lg transition-all duration-300 ${
@@ -170,7 +213,14 @@ export default function Sidebar() {
     >
       <div className="flex h-12 items-center justify-between px-4 border-b">
         {!isCollapsed && (
-          <h2 className="text-sm font-medium text-gray-600">Menu điều hướng</h2>
+          <div className="flex items-center space-x-2">
+            <h2 className="text-sm font-medium text-gray-600">Menu điều hướng</h2>
+            {currentUser?.role === 'superadmin' && (
+              <span className="px-2 py-1 text-xs bg-red-100 text-red-600 rounded-full font-medium">
+                SUPERADMIN
+              </span>
+            )}
+          </div>
         )}
         <button
           onClick={toggleCollapsed}
@@ -182,7 +232,7 @@ export default function Sidebar() {
 
       <nav className="p-4 flex flex-col h-[calc(100vh-3.5rem-3rem)] overflow-y-auto">
         <ul className="space-y-1 flex-grow">
-          {sidebarItems.map((item) => (
+          {getFilteredSidebarItems().map((item) => (
             <li key={item.path}>
               {item.submenu ? (
                 // Item có submenu
@@ -193,11 +243,17 @@ export default function Sidebar() {
                       isItemActive(item)
                         ? 'bg-blue-50 text-blue-600'
                         : 'text-gray-600 hover:bg-gray-50'
-                    } ${isCollapsed ? 'justify-center' : ''}`}
+                    } ${isCollapsed ? 'justify-center' : ''} ${
+                      item.superAdminOnly ? 'border-2 border-red-200 bg-red-50' : ''
+                    }`}
                   >
                     <div className="flex items-center space-x-3">
                       <span className="flex-shrink-0">{item.icon}</span>
-                      {!isCollapsed && <span className={item.redColor ? 'text-red-600' : ''}>{item.title}</span>}
+                      {!isCollapsed && (
+                        <span className={item.redColor ? 'text-red-600 font-medium' : ''}>
+                          {item.title}
+                        </span>
+                      )}
                     </div>
                     {!isCollapsed && (
                       <span className="flex-shrink-0">
@@ -223,7 +279,9 @@ export default function Sidebar() {
                             }`}
                           >
                             <span className="flex-shrink-0">{subItem.icon}</span>
-                            <span className={subItem.redColor ? 'text-red-600' : ''}>{subItem.title}</span>
+                            <span className={subItem.redColor ? 'text-red-600 font-medium' : ''}>
+                              {subItem.title}
+                            </span>
                           </Link>
                         </li>
                       ))}
@@ -238,10 +296,16 @@ export default function Sidebar() {
                     pathname.startsWith(item.path)
                       ? 'bg-blue-50 text-blue-600'
                       : 'text-gray-600 hover:bg-gray-50'
-                  } ${isCollapsed ? 'justify-center' : ''}`}
+                  } ${isCollapsed ? 'justify-center' : ''} ${
+                    item.superAdminOnly ? 'border-2 border-red-200 bg-red-50' : ''
+                  }`}
                 >
                   <span className="flex-shrink-0">{item.icon}</span>
-                  {!isCollapsed && <span>{item.title}</span>}
+                  {!isCollapsed && (
+                    <span className={item.redColor ? 'text-red-600 font-medium' : ''}>
+                      {item.title}
+                    </span>
+                  )}
                 </Link>
               )}
             </li>

@@ -56,6 +56,7 @@ export function usePawnCalculations() {
       let totalLoan = 0;
       let totalOldDebt = 0;
       let totalProfit = 0;
+      let totalCollectedInterest = 0;
       const newDetails: Record<string, PawnFinancialDetail> = {};
       
       if (activePawnsData?.length) {
@@ -84,18 +85,11 @@ export function usePawnCalculations() {
             totalLoan += result.summaryLoan;
             totalOldDebt += result.summaryDebt;
             totalProfit += result.summaryProfit;
+            totalCollectedInterest += result.paidInterest;
           }
         });
       }
       
-      // 5. Tính collected interest
-      const { data: paymentHistory } = await supabase
-        .from('pawn_history')
-        .select('credit_amount')
-        .eq('transaction_type', 'payment')
-        .eq('is_deleted', false);
-      
-      const collectedInterest = paymentHistory?.reduce((sum, record) => sum + (record.credit_amount || 0), 0) || 0;
       
       // 6. Set results
       setSummary({
@@ -104,7 +98,7 @@ export function usePawnCalculations() {
         totalLoan: Math.round(totalLoan),
         oldDebt: Math.round(totalOldDebt),
         profit: Math.round(totalProfit),
-        collectedInterest: Math.round(collectedInterest)
+        collectedInterest: Math.round(totalCollectedInterest)
       });
       
       setDetails(newDetails);
