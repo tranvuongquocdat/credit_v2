@@ -1,16 +1,8 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
-import { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Layout } from '@/components/Layout';
-import { 
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle 
-} from '@/components/ui/alert-dialog';
-
-import { toast } from '@/components/ui/use-toast';
+import { useRouter } from 'next/navigation';
 
 // Import custom components
 import { FinancialSummary } from '@/components/common/FinancialSummary';
@@ -27,7 +19,11 @@ import { usePawns } from '@/hooks/usePawns';
 // Import types and API functions
 import { PawnStatus, PawnWithCustomer } from '@/models/pawn';
 import { usePawnCalculations } from '@/hooks/usePawnCalculation';
-
+import { 
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle 
+} from '@/components/ui/alert-dialog';
+import { toast } from '@/components/ui/use-toast';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -39,12 +35,19 @@ const statusMap: Record<string, { label: string, color: string }> = {
   [PawnStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
 };
 
+interface PawnContractClientProps {
+  contractCode: string;
+}
 
-
-export default function PawnsPage() {
+export function PawnContractClient({ contractCode }: PawnContractClientProps) {
+  const router = useRouter();
   
-  // State để lưu initial filters từ URL
-  const [initialFilters, setInitialFilters] = useState<Partial<any> | undefined>(undefined);
+  // Memoize initialFilters to prevent re-creation on every render
+  const initialFilters = useMemo(() => ({
+    contractCode: contractCode || '',
+    customerName: '',
+    status: ''
+  }), [contractCode]);
   
   // Use our custom hook for pawns data and operations
   const { 
@@ -60,8 +63,16 @@ export default function PawnsPage() {
     refetch
   } = usePawns();
   
+  // Set initial filters when component mounts or contractCode changes
+  useEffect(() => {
+    if (contractCode) {
+      handleSearch(initialFilters);
+    }
+  }, [contractCode, handleSearch, initialFilters]);
+  
   // Lấy dữ liệu tài chính tổng hợp
   const { summary: financialSummary, refresh: refreshFinancial } = usePawnCalculations();
+  
   // State for dialogs
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedPawn, setSelectedPawn] = useState<PawnWithCustomer | null>(null);
@@ -80,26 +91,23 @@ export default function PawnsPage() {
   // Calculate total pages
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   
-  // Handle search filters
-  const handleSearchFilters = (filters: any) => {
+  // Memoize search handler to prevent re-creation on every render
+  const handleSearchFilters = useCallback((filters: any) => {
     handleSearch(filters);
-  };
+  }, [handleSearch]);
   
   // Handle create new pawn
   const handleCreatePawn = () => {
-    // Mở modal tạo hợp đồng mới thay vì chuyển trang
     setIsPawnCreateModalOpen(true);
   };
   
   // Handle export to Excel
   const handleExportExcel = () => {
-    // In a real app, this would generate and download an Excel file
     alert('Export to Excel functionality would be implemented here');
   };
   
   // Handle edit pawn
   const handleEditPawn = (pawnId: string) => {
-    // Mở modal chỉnh sửa thay vì chuyển trang
     setEditPawnId(pawnId);
     setIsPawnEditModalOpen(true);
   };
@@ -121,9 +129,7 @@ export default function PawnsPage() {
     try {
       const result = await handleDelete(pawnId);
       
-      // Kiểm tra nếu có lỗi từ việc xóa
       if (result && result.error) {
-        // Hiển thị thông báo lỗi
         toast({
           title: 'Lỗi',
           description: result.error ? String(result.error) : 'Không thể xóa hợp đồng',
@@ -138,7 +144,6 @@ export default function PawnsPage() {
         variant: 'default',
       });
       
-      // Refresh dữ liệu tài chính sau khi xóa thành công
       refreshFinancial();
     } catch (error) {
       console.error('Error in handleDeletePawn:', error);
@@ -162,7 +167,6 @@ export default function PawnsPage() {
   const handleClosePaymentHistory = (hasDataChanged?: boolean) => {
     setIsPaymentHistoryModalOpen(false);
     setPaymentHistoryPawn(null);
-    // Only refresh data if there were actual changes
     if (hasDataChanged) {
       handleRefresh();
     }
@@ -170,8 +174,8 @@ export default function PawnsPage() {
   
   // Handle refresh after contract operations
   const handleRefresh = () => {
-    refetch(); // Refresh pawns list
-    refreshFinancial(); // Refresh financial data
+    refetch();
+    refreshFinancial();
   };
   
   return (
@@ -180,8 +184,14 @@ export default function PawnsPage() {
         {/* Title và nút trở về */}
         <div className="flex items-center justify-between border-b pb-2 mb-2">
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold">Quản lý hợp đồng cầm đồ</h1>
+            <h1 className="text-lg font-bold">Hợp đồng cầm đồ: {contractCode}</h1>
           </div>
+          <button 
+            onClick={() => router.push('/pawns')}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            Quay lại danh sách hợp đồng
+          </button>
         </div>
         
         {/* Thông tin tài chính */}
@@ -229,7 +239,6 @@ export default function PawnsPage() {
           onPageChange={handlePageChange}
         />
         
-        
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <AlertDialogContent>
@@ -267,7 +276,7 @@ export default function PawnsPage() {
           onClose={() => setIsPawnCreateModalOpen(false)}
           onSuccess={() => {
             setIsPawnCreateModalOpen(false);
-            refetch(); // Refresh danh sách hợp đồng sau khi tạo mới
+            refetch();
           }}
         />
         
@@ -279,11 +288,11 @@ export default function PawnsPage() {
             pawnId={editPawnId}
             onSuccess={() => {
               setIsPawnEditModalOpen(false);
-              refetch(); // Refresh danh sách hợp đồng sau khi cập nhật
+              refetch();
             }}
           />
         )}
       </div>
     </Layout>
   );
-}
+} 

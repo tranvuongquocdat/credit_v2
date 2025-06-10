@@ -1,14 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { Layout } from '@/components/Layout';
-import { 
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle 
-} from '@/components/ui/alert-dialog';
-
-import { toast } from '@/components/ui/use-toast';
+import { useRouter } from 'next/navigation';
 
 // Import custom components
 import { FinancialSummary } from '@/components/common/FinancialSummary';
@@ -25,7 +19,11 @@ import { useCredits } from '@/hooks/useCredits';
 // Import types and API functions
 import { CreditStatus, CreditWithCustomer } from '@/models/credit';
 import { useCreditCalculations } from '@/hooks/useCreditCalculation';
-
+import { 
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle 
+} from '@/components/ui/alert-dialog';
+import { toast } from '@/components/ui/use-toast';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -37,32 +35,23 @@ const statusMap: Record<string, { label: string, color: string }> = {
   [CreditStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
 };
 
+interface CreditContractClientProps {
+  contractCode: string;
+}
 
-export default function CreditsPage() {
+export function CreditContractClient({ contractCode }: CreditContractClientProps) {
   const router = useRouter();
   
-  // Parse URL parameters for initial filters
-  const initialFilters = useMemo(() => {
-    const contract = '';
-    const customer = '';
-    const status = '';
-    
-    if (contract || customer || status) {
-      return {
-        contract_code: contract || '',
-        customer_name: customer || '',
-        status: status || '' // Empty status to show all when navigating from warnings
-      };
-    }
-    
-    return undefined;
-  }, []);
+  // Initialize with filter by contract code
+  const initialFilters = {
+    contract_code: contractCode || '',
+    customer_name: '',
+    status: ''
+  };
   
   // Use our custom hook for credits data and operations
   const { 
     credits, 
-    loading, 
-    error, 
     totalItems, 
     currentPage, 
     itemsPerPage,
@@ -74,11 +63,9 @@ export default function CreditsPage() {
     refetch
   } = useCredits(initialFilters);
   
-  // Track if initial filters have been processed
-  const [hasProcessedInitialFilters, setHasProcessedInitialFilters] = useState(false);
-  
   // Lấy dữ liệu tài chính tổng hợp
   const { summary: financialSummary, details: creditDetails, refresh: refreshFinancial } = useCreditCalculations();
+  
   // State for dialogs
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedCredit, setSelectedCredit] = useState<CreditWithCustomer | null>(null);
@@ -97,14 +84,6 @@ export default function CreditsPage() {
   // Calculate total pages
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   
-  // Process initial filters only once
-  useEffect(() => {
-    if (initialFilters && !hasProcessedInitialFilters) {
-      setHasProcessedInitialFilters(true);
-      // The useCredits hook will handle the initial filters
-    }
-  }, [initialFilters, hasProcessedInitialFilters]);
-  
   // Handle search filters
   const handleSearchFilters = (filters: any) => {
     handleSearch(filters);
@@ -112,19 +91,16 @@ export default function CreditsPage() {
   
   // Handle create new credit
   const handleCreateCredit = () => {
-    // Mở modal tạo hợp đồng mới thay vì chuyển trang
     setIsCreditCreateModalOpen(true);
   };
   
   // Handle export to Excel
   const handleExportExcel = () => {
-    // In a real app, this would generate and download an Excel file
     alert('Export to Excel functionality would be implemented here');
   };
   
   // Handle edit credit
   const handleEditCredit = (creditId: string) => {
-    // Mở modal chỉnh sửa thay vì chuyển trang
     setEditCreditId(creditId);
     setIsCreditEditModalOpen(true);
   };
@@ -136,14 +112,11 @@ export default function CreditsPage() {
   
   // Handle opening status dialog
   const handleOpenStatusDialog = (credit: CreditWithCustomer) => {
-    // Nếu hợp đồng đang ở trạng thái đóng (closed), xử lý mở lại hợp đồng
     if (credit.status === CreditStatus.CLOSED) {
-      // Hiển thị dialog xác nhận
       if (confirm('Bạn có muốn mở lại hợp đồng này không? Trạng thái sẽ chuyển về "Đúng hẹn"')) {
         reopenContract(credit);
       }
     } else {
-      // Trường hợp bình thường: mở dialog chọn trạng thái
       setSelectedCredit(credit);
     }
   };
@@ -151,7 +124,6 @@ export default function CreditsPage() {
   // Hàm mở lại hợp đồng
   const reopenContract = async (credit: CreditWithCustomer) => {
     try {
-      // Ghi lại lịch sử mở lại hợp đồng với số tiền đóng hợp đồng gần nhất
       const { recordContractReopening } = await import('@/lib/Credits/credit-amount-history');
       const result = await recordContractReopening(
         credit.id,
@@ -161,10 +133,8 @@ export default function CreditsPage() {
       
       console.log('Reopened contract with amount:', result.lastClosureAmount);
       
-      // Cập nhật trạng thái hợp đồng về đúng hẹn
       updateCreditStatus(credit.id, CreditStatus.ON_TIME);
       
-      // Refresh dữ liệu tài chính
       refreshFinancial();
     } catch (error) {
       console.error('Error reopening contract:', error);
@@ -193,9 +163,7 @@ export default function CreditsPage() {
     try {
       const result = await handleDelete(creditId);
       
-      // Kiểm tra nếu có lỗi từ việc xóa
       if (result && result.error) {
-        // Hiển thị thông báo lỗi
         toast({
           title: 'Lỗi',
           description: result.error ? String(result.error) : 'Không thể xóa hợp đồng',
@@ -210,7 +178,6 @@ export default function CreditsPage() {
         variant: 'default',
       });
       
-      // Refresh dữ liệu tài chính sau khi xóa thành công
       refreshFinancial();
     } catch (error) {
       console.error('Error in handleDeleteCredit:', error);
@@ -234,7 +201,6 @@ export default function CreditsPage() {
   const handleClosePaymentHistory = (hasDataChanged?: boolean) => {
     setIsPaymentHistoryModalOpen(false);
     setPaymentHistoryCredit(null);
-    // Only refresh data if there were actual changes
     if (hasDataChanged) {
       handleRefresh();
     }
@@ -242,8 +208,8 @@ export default function CreditsPage() {
   
   // Handle refresh after contract operations
   const handleRefresh = () => {
-    refetch(); // Refresh credits list
-    refreshFinancial(); // Refresh financial data
+    refetch();
+    refreshFinancial();
   };
   
   return (
@@ -252,8 +218,14 @@ export default function CreditsPage() {
         {/* Title và nút trở về */}
         <div className="flex items-center justify-between border-b pb-2 mb-2">
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold">Quản lý hợp đồng tín chấp</h1>
+            <h1 className="text-lg font-bold">Hợp đồng: {contractCode}</h1>
           </div>
+          <button 
+            onClick={() => router.push('/credits')}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            Quay lại danh sách hợp đồng
+          </button>
         </div>
         
         {/* Thông tin tài chính */}
@@ -295,7 +267,6 @@ export default function CreditsPage() {
           onPageChange={handlePageChange}
         />
         
-        
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <AlertDialogContent>
@@ -333,7 +304,7 @@ export default function CreditsPage() {
           onClose={() => setIsCreditCreateModalOpen(false)}
           onSuccess={() => {
             setIsCreditCreateModalOpen(false);
-            refetch(); // Refresh danh sách hợp đồng sau khi tạo mới
+            refetch();
           }}
         />
         
@@ -345,11 +316,11 @@ export default function CreditsPage() {
             creditId={editCreditId}
             onSuccess={() => {
               setIsCreditEditModalOpen(false);
-              refetch(); // Refresh danh sách hợp đồng sau khi cập nhật
+              refetch();
             }}
           />
         )}
       </div>
     </Layout>
   );
-}
+} 

@@ -1,9 +1,12 @@
 "use client";
-import { useState, useEffect } from 'react';
+
+export const dynamic = 'force-dynamic';
+
+import { useState, useEffect, Suspense } from 'react';
 import { signIn } from '../../lib/auth';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function Login() {
+function LoginForm() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -111,5 +114,13 @@ export default function Login() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function Login() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }

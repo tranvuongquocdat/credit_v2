@@ -109,7 +109,7 @@ export default function PawnWarningsPage() {
 
   // Handle customer click to navigate to pawns
   const handleCustomerClick = (pawn: PawnWithCustomerAndCollateral) => {
-    router.push(`/pawns?contract=${pawn.contract_code}`);
+    router.push(`/pawns/${pawn.contract_code}`);
   };
 
   // Handle close history modal

@@ -56,14 +56,8 @@ export function SearchFilters({
   // Track if we've already processed initialFilters to prevent double search
   const [hasProcessedInitialFilters, setHasProcessedInitialFilters] = useState(false);
   
-  // Handle initialFilters
+  // Process initial filters only once when component mounts or initialFilters changes
   useEffect(() => {
-    console.log('🔧 Pawns SearchFilters useEffect triggered:', { 
-      hasInitialFilters: !!initialFilters,
-      hasProcessedInitialFilters 
-    });
-    
-    // Chỉ auto-search khi có initialFilters và chưa xử lý
     if (initialFilters && !hasProcessedInitialFilters) {
       console.log('🎯 Pawns SearchFilters processing initialFilters for first time:', initialFilters);
       
@@ -86,7 +80,7 @@ export function SearchFilters({
       // Auto-search chỉ cho navigation từ URL
       onSearch(newFilters);
     }
-  }, [initialFilters, hasProcessedInitialFilters, onSearch]);
+  }, [initialFilters, hasProcessedInitialFilters]); // Removed onSearch from dependencies
   
   // Reset processed flag khi initialFilters thay đổi (new navigation)
   useEffect(() => {

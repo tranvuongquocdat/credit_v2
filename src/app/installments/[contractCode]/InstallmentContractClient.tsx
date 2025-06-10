@@ -1,32 +1,29 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
-import { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { Layout } from '@/components/Layout/Layout';
-
-import { 
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle 
-} from '@/components/ui/alert-dialog';
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { Layout } from '@/components/Layout';
+import { useRouter } from 'next/navigation';
 
 // Import custom components
 import { FinancialSummary } from '@/components/common/FinancialSummary';
 import { SearchFilters } from '@/components/Installments/SearchFilters';
-import { InstallmentsTable } from '@/components/Installments/InstallmentsTable';  
-import { InstallmentsPagination } from '@/components/Installments/InstallmentsPagination'; 
+import { InstallmentsTable } from '@/components/Installments/InstallmentsTable';
+import { InstallmentsPagination } from '@/components/Installments/InstallmentsPagination';
+import { InstallmentPaymentHistoryModal } from '@/components/Installments/InstallmentPaymentHistoryModal';
 import { InstallmentCreateModal } from '@/components/Installments/InstallmentCreateModal';
 import { InstallmentEditModal } from '@/components/Installments/InstallmentEditModal';
-import { InstallmentPaymentHistoryModal } from '@/components/Installments/InstallmentPaymentHistoryModal';
 
 // Import custom hooks
 import { useInstallments } from '@/hooks/useInstallments';
 import { useInstallmentsSummary } from '@/hooks/useInstallmentsSummary';
-import { useStore } from '@/contexts/StoreContext';
 
 // Import types and API functions
-import { InstallmentStatus, InstallmentWithCustomer } from '@/models/installment';
+import { InstallmentStatus, InstallmentWithCustomer, InstallmentFilters } from '@/models/installment';
+import { 
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle 
+} from '@/components/ui/alert-dialog';
+import { toast } from '@/components/ui/use-toast';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -40,13 +37,19 @@ const statusMap: Record<string, { label: string, color: string }> = {
   [InstallmentStatus.FINISHED]: { label: 'Hoàn thành', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
 };
 
-export default function InstallmentsPage() {
+interface InstallmentContractClientProps {
+  contractCode: string;
+}
+
+export function InstallmentContractClient({ contractCode }: InstallmentContractClientProps) {
+  const router = useRouter();
   
-  // Get current store from context
-  const { currentStore } = useStore();
-  
-  // State để lưu initial filters từ URL
-  const [initialFilters, setInitialFilters] = useState<Partial<any> | undefined>(undefined);
+  // Memoize initialFilters to prevent re-creation on every render
+  const initialFilters = useMemo((): Partial<InstallmentFilters> => ({
+    contract_code: contractCode || '',
+    customer_name: '',
+    status: undefined // Use undefined instead of empty string to show all statuses
+  }), [contractCode]);
   
   // Use our custom hook for installments data and operations
   const { 
@@ -64,13 +67,15 @@ export default function InstallmentsPage() {
     refetch
   } = useInstallments();
   
+  // Set initial filters when component mounts or contractCode changes
+  useEffect(() => {
+    if (contractCode) {
+      handleSearch(initialFilters);
+    }
+  }, [contractCode, initialFilters]);
+  
   // Sử dụng custom hook để lấy dữ liệu tài chính
   const { data: financialSummary, refresh: refreshFinancial } = useInstallmentsSummary();
-  
-  // Refresh financial data when store changes
-  useEffect(() => {
-    refreshFinancial();
-  }, [currentStore?.id]);
   
   // State for dialogs
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -83,8 +88,6 @@ export default function InstallmentsPage() {
   const [isInstallmentEditModalOpen, setIsInstallmentEditModalOpen] = useState(false);
   const [editInstallmentId, setEditInstallmentId] = useState<string>('');
   
-  // State cho modal thanh toán (đã bỏ modal chi tiết)
-  
   // State cho modal thanh toán (InstallmentPaymentHistoryModal)
   const [isPaymentActionsModalOpen, setIsPaymentActionsModalOpen] = useState(false);
   const [selectedInstallmentForPayment, setSelectedInstallmentForPayment] = useState<InstallmentWithCustomer | null>(null);
@@ -92,38 +95,25 @@ export default function InstallmentsPage() {
   // Calculate total pages
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   
-  // Handle search filters
-  const handleSearchFilters = (filters: any) => {
+  // Memoize search handler to prevent re-creation on every render
+  const handleSearchFilters = useCallback((filters: any) => {
     handleSearch(filters);
-  };
+  }, [handleSearch]);
   
   // Handle create new installment
   const handleCreateInstallment = () => {
-    // Mở modal tạo hợp đồng mới thay vì chuyển trang
     setIsInstallmentCreateModalOpen(true);
   };
   
   // Handle export to Excel
   const handleExportExcel = () => {
-    // In a real app, this would generate and download an Excel file
     alert('Export to Excel functionality would be implemented here');
   };
   
   // Handle edit installment
   const handleEditInstallment = (installmentId: string) => {
-    // Mở modal chỉnh sửa thay vì chuyển trang
     setEditInstallmentId(installmentId);
     setIsInstallmentEditModalOpen(true);
-  };
-  
-  // Handle opening status dialog
-  const handleOpenStatusDialog = (installment: InstallmentWithCustomer) => {
-    setSelectedInstallment(installment);
-  };
-  
-  // Handle closing status dialog
-  const handleCloseStatusDialog = () => {
-    setSelectedInstallment(null);
   };
   
   // Handle opening delete dialog
@@ -138,16 +128,39 @@ export default function InstallmentsPage() {
     setSelectedInstallment(null);
   };
   
-  // Handle delete action
-  const handleDeleteAction = async () => {
-    if (!selectedInstallment) return;
-    
-    const { success, error } = await handleDelete(selectedInstallment);
-    
-    if (success) {
+  // Handle deleting installment
+  const handleDeleteInstallment = async (installmentId: string) => {
+    try {
+      const installment = installments.find(i => i.id === installmentId);
+      if (!installment) return;
+      
+      const result = await handleDelete(installment);
+      
+      if (result && result.error) {
+        toast({
+          title: 'Lỗi',
+          description: result.error ? String(result.error) : 'Không thể xóa hợp đồng',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      toast({
+        title: 'Thành công',
+        description: 'Hợp đồng đã được xóa thành công',
+        variant: 'default',
+      });
+      
+      refreshFinancial();
+    } catch (error) {
+      console.error('Error in handleDeleteInstallment:', error);
+      toast({
+        title: 'Lỗi',
+        description: 'Có lỗi xảy ra khi xóa hợp đồng',
+        variant: 'destructive',
+      });
+    } finally {
       handleCloseDeleteDialog();
-    } else {
-      console.error('Error deleting installment:', error);
     }
   };
   
@@ -167,25 +180,37 @@ export default function InstallmentsPage() {
       refreshFinancial();
     }
   };
-
+  
+  // Handle refresh after contract operations
+  const handleRefresh = () => {
+    refetch();
+    refreshFinancial();
+  };
+  
   return (
     <Layout>
       <div className="max-w-full">
-        {/* Title */}
+        {/* Title và nút trở về */}
         <div className="flex items-center justify-between border-b pb-2 mb-2">
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold">Quản lý hợp đồng trả góp</h1>
+            <h1 className="text-lg font-bold">Hợp đồng trả góp: {contractCode}</h1>
           </div>
+          <button 
+            onClick={() => router.push('/installments')}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            Quay lại danh sách hợp đồng
+          </button>
         </div>
         
-        {/* Financial Summary */}
-        <FinancialSummary
+        {/* Thông tin tài chính */}
+        <FinancialSummary 
           fundStatus={financialSummary || undefined}
           onRefresh={refreshFinancial}
           autoFetch={false}
         />
         
-        {/* Search and filters */}
+        {/* Bộ lọc và tìm kiếm */}
         <SearchFilters
           statusMap={statusMap}
           onSearch={handleSearchFilters}
@@ -194,77 +219,29 @@ export default function InstallmentsPage() {
           onExportExcel={handleExportExcel}
           initialFilters={initialFilters}
         />
-        
-        {/* Error message */}
-        {error && (
-          <div className="text-red-700 py-2" role="alert">
-            <p>{error}</p>
-          </div>
-        )}
-        
-        {/* Installments Table */}
-        <div className="rounded-md border mt-4 mb-1 border-gray-200 shadow-sm overflow-hidden">
-          <InstallmentsTable
-            installments={installments}
-            statusMap={statusMap}
-            isLoading={loading}
-            onEdit={handleEditInstallment}
-            onUpdateStatus={handleOpenStatusDialog}
-            onDelete={handleOpenDeleteDialog}
-            onShowPaymentActions={handleShowPaymentActions}
-          />
-        </div>
-        
-        {/* Modal tạo hợp đồng mới */}
-        <InstallmentCreateModal
-          isOpen={isInstallmentCreateModalOpen}
-          onClose={() => setIsInstallmentCreateModalOpen(false)}
-          onSuccess={() => {
-            setIsInstallmentCreateModalOpen(false);
-            refetch();
-            refreshFinancial();
+
+        {/* Bảng dữ liệu hợp đồng */}
+        <InstallmentsTable
+          installments={installments}
+          isLoading={loading}
+          statusMap={statusMap}
+          onEdit={handleEditInstallment}
+          onShowPaymentActions={handleShowPaymentActions}
+          onDelete={handleOpenDeleteDialog}
+          onUpdateStatus={(installment: InstallmentWithCustomer) => {
+            // Handle status update - you may want to implement a status selection dialog
+            console.log('Update status for installment:', installment.id);
           }}
         />
-
-        {/* Modal chỉnh sửa hợp đồng */}
-        {editInstallmentId && (
-          <InstallmentEditModal
-            isOpen={isInstallmentEditModalOpen}
-            onClose={() => setIsInstallmentEditModalOpen(false)}
-            installmentId={editInstallmentId}
-            onSuccess={() => {
-              setIsInstallmentEditModalOpen(false);
-              refetch();
-            }}
-          />
-        )}
         
-        {/* Modal chi tiết hợp đồng đã bị loại bỏ */}
-        
-        {/* Modal thao tác thanh toán */}
-        {selectedInstallmentForPayment && (
-          <InstallmentPaymentHistoryModal
-            isOpen={isPaymentActionsModalOpen}
-            onClose={handleClosePaymentHistory}
-            installment={selectedInstallmentForPayment}
-            onContractStatusChange={() => {
-              refetch();
-              handleClosePaymentHistory(true);
-            }}
-            onPaymentUpdate={refreshFinancial}
-          />
-        )}
-        
-        {/* Pagination */}
-        <div className="mt-4">
-          <InstallmentsPagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            totalItems={totalItems}
-            itemsPerPage={itemsPerPage}
-            onPageChange={handlePageChange}
-          />
-        </div>
+        {/* Phân trang */}
+        <InstallmentsPagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          itemsPerPage={itemsPerPage}
+          onPageChange={handlePageChange}
+        />
         
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
@@ -278,8 +255,8 @@ export default function InstallmentsPage() {
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Hủy</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDeleteAction}
+              <AlertDialogAction 
+                onClick={() => selectedInstallment && handleDeleteInstallment(selectedInstallment.id)}
                 className="bg-red-600 hover:bg-red-700"
               >
                 Xóa
@@ -287,7 +264,39 @@ export default function InstallmentsPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+        
+        {/* Modal thanh toán (InstallmentPaymentHistoryModal) */}
+        {selectedInstallmentForPayment && (
+          <InstallmentPaymentHistoryModal
+            isOpen={isPaymentActionsModalOpen}
+            onClose={handleClosePaymentHistory}
+            installment={selectedInstallmentForPayment}
+          />
+        )}
+
+        {/* Modal tạo hợp đồng mới */}
+        <InstallmentCreateModal
+          isOpen={isInstallmentCreateModalOpen}
+          onClose={() => setIsInstallmentCreateModalOpen(false)}
+          onSuccess={() => {
+            setIsInstallmentCreateModalOpen(false);
+            refetch();
+          }}
+        />
+        
+        {/* Modal chỉnh sửa hợp đồng */}
+        {editInstallmentId && (
+          <InstallmentEditModal
+            isOpen={isInstallmentEditModalOpen}
+            onClose={() => setIsInstallmentEditModalOpen(false)}
+            installmentId={editInstallmentId}
+            onSuccess={() => {
+              setIsInstallmentEditModalOpen(false);
+              refetch();
+            }}
+          />
+        )}
       </div>
     </Layout>
   );
-}
+} 
