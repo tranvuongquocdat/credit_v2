@@ -292,18 +292,19 @@ export default function TotalFundPage() {
       }
 
       // For installment history
-      const { data: installmentHistoryData } = await supabase
-        .from('installment_history')
-        .select(`
-          *,
-          installments!inner (
-            contract_code,
-            employee_id,
-            employees!inner (store_id)
-          )
-        `)
-        .eq('installments.employees.store_id', storeId)
-        .limit(10000);
+      const installmentHistoryData = await fetchAllData(
+        supabase
+          .from('installment_history')
+          .select(`
+            *,
+            installments!inner (
+              contract_code,
+              employee_id,
+              employees!inner (store_id)
+            )
+          `)
+          .eq('installments.employees.store_id', storeId)
+      );
       
       if (installmentHistoryData) {
         // Prepare data for processing
