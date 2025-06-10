@@ -197,12 +197,13 @@ export default function Sidebar() {
   const getFilteredSidebarItems = () => {
     if (isLoadingUser) return sidebarItems.filter(item => !item.superAdminOnly);
     
-    return sidebarItems.filter(item => {
-      if (item.superAdminOnly) {
-        return currentUser?.role === 'superadmin';
-      }
-      return true;
-    });
+    // If user is superadmin, only show SuperAdmin items
+    if (currentUser?.role === 'superadmin') {
+      return sidebarItems.filter(item => item.superAdminOnly);
+    }
+    
+    // For other users, show all items except SuperAdmin ones
+    return sidebarItems.filter(item => !item.superAdminOnly);
   };
 
   return (
