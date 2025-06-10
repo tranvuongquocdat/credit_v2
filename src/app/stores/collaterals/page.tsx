@@ -1,6 +1,5 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { Layout } from '@/components/Layout';
 import { useStore } from '@/contexts/StoreContext';
 import { CollateralsPage } from '@/components/Collaterals';

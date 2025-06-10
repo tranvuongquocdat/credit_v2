@@ -17,7 +17,6 @@ import { AlertCircle } from 'lucide-react';
 import { createInstallment } from '@/lib/installment';
 import { getCustomers, createCustomer } from '@/lib/customer';
 import { getEmployees } from '@/lib/employee';
-import { updateStoreCashFundOnly, getStoreById } from '@/lib/store';
 import { Customer } from '@/models/customer';
 import { Employee } from '@/models/employee';
 import { InstallmentStatus } from '@/models/installment';

@@ -17,7 +17,7 @@ import {
 import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
 import { resetInstallmentDebtAmount } from "@/lib/installmentPayment";
 import { getInstallmentById, updateInstallmentPaymentDueDate } from "@/lib/installment";
-import { formatCurrency, formatDate, formatNumberWithCommas, parseFormattedNumber } from "@/lib/utils";
+import { formatCurrency, formatDate, parseFormattedNumber } from "@/lib/utils";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";

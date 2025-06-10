@@ -78,35 +78,3 @@ export async function checkUserBanStatus(userId: string) {
     return { is_banned: false, error };
   }
 }
-
-// Thực hiện ban/unban người dùng (chỉ nên gọi từ phía server với Service Role Key)
-export async function banUser(userId: string, shouldBan: boolean = true) {
-  if (!userId) {
-    return { success: false, error: new Error('ID người dùng không hợp lệ') };
-  }
-  
-  try {
-    // Gọi API ban/unban
-    const response = await fetch('/api/users/ban', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ 
-        userId, 
-        action: shouldBan ? 'ban' : 'unban' 
-      }),
-    });
-    
-    const result = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(result.error || 'Đã xảy ra lỗi khi thay đổi trạng thái người dùng');
-    }
-    
-    return { success: true, error: null };
-  } catch (error) {
-    console.error('Error changing user ban status:', error);
-    return { success: false, error };
-  }
-}

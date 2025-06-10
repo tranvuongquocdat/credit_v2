@@ -87,6 +87,7 @@ export interface PawnWithCustomerAndCollateral extends Pawn {
     name: string;
     phone?: string | null;
     id_number?: string | null;
+    address?: string | null;
   };
   collateral_asset?: Collateral | null;
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { format, addDays, max, parseISO } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
 import { toast } from '@/components/ui/use-toast';
@@ -18,7 +18,7 @@ interface AdditionalLoanFormProps {
   onSuccess?: () => void;
 }
 
-export function AdditionalLoanForm({ onSubmit, creditId, disabled = false, onSuccess }: AdditionalLoanFormProps) {
+export function AdditionalLoanForm({ onSubmit, creditId, disabled = false }: AdditionalLoanFormProps) {
   const [loanDate, setLoanDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [amount, setAmount] = useState<number>(0);
   const [formattedAmount, setFormattedAmount] = useState<string>('');

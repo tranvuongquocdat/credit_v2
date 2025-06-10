@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
 import { addDays, format } from 'date-fns';
-import { Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -35,7 +33,7 @@ export function ExtensionList({
     if (!dateString) return '';
     try {
       return format(new Date(dateString), 'dd-MM-yyyy');
-    } catch (e) {
+    } catch {
       return dateString;
     }
   };
@@ -81,12 +79,6 @@ export function ExtensionList({
     }
   };
   
-  // Hiển thị dialog xác nhận xóa
-  const confirmDelete = (extension: Extension) => {
-    setExtensionToDelete(extension);
-    setDeleteDialogOpen(true);
-  };
-
   return (
     <div className="mt-4">
       <div className="flex items-center mb-2">

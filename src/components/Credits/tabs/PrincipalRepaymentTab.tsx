@@ -15,7 +15,6 @@ interface PrincipalRepaymentTabProps {
 
 export function PrincipalRepaymentTab({
   credit,
-  refreshRepayments,
   setRefreshRepayments,
   onDataChange
 }: PrincipalRepaymentTabProps) {
@@ -52,7 +51,7 @@ export function PrincipalRepaymentTab({
             const { recordPrincipalRepayment } = await import('@/lib/Credits/credit-amount-history');
             
             // Sử dụng API mới để ghi lại khoản trả bớt gốc vào credit_history
-            const { data: historyData, error } = await recordPrincipalRepayment(
+            const { error } = await recordPrincipalRepayment(
               credit.id,
               data.amount,
               data.repaymentDate,

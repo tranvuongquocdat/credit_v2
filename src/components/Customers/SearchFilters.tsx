@@ -11,7 +11,7 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { Store } from '@/models/store';
-import { UserPlus, SearchIcon, PlusIcon } from 'lucide-react';
+import { SearchIcon, PlusIcon } from 'lucide-react';
 
 interface StatusMapType {
   [key: string]: { 

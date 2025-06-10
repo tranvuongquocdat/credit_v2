@@ -45,4 +45,9 @@ export interface UpdateEmployeeParams {
   password?: string; // Optional - nếu muốn thay đổi mật khẩu
 }
 
+export interface EmployeeWithAuth extends Employee {
+  uid: string;
+  // Add any other auth-related fields
+}
+
 export type DbEmployee = Database['public']['Tables']['employees']['Row'];

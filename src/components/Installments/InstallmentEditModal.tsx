@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { AlertCircle, InfoIcon, LockIcon } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { getInstallmentById, updateInstallment } from '@/lib/installment';
 import { getCustomers } from '@/lib/customer';
 import { getEmployees } from '@/lib/employee';
@@ -22,7 +22,6 @@ import { Installment } from '@/models/installment';
 import { Customer } from '@/models/customer';
 import { Employee } from '@/models/employee';
 import Spinner from '@/components/ui/spinner';
-import { Alert } from "@/components/ui/alert";
 import { useStore } from '@/contexts/StoreContext';
 
 interface InstallmentEditModalProps {
@@ -41,7 +40,6 @@ export function InstallmentEditModal({
   // Get current store from context
   const { currentStore } = useStore();
   // State for form values
-  const [customerType, setCustomerType] = useState<'existing'>('existing');
   const [customerName, setCustomerName] = useState('');
   const [contractCode, setContractCode] = useState('');
   const [idNumber, setIdNumber] = useState('');
@@ -51,12 +49,12 @@ export function InstallmentEditModal({
   const [formattedAmountGiven, setFormattedAmountGiven] = useState<string>('');
   const [customerAmount, setCustomerAmount] = useState<string>('');
   const [formattedCustomerAmount, setFormattedCustomerAmount] = useState<string>('');
-  const [interestRate, setInterestRate] = useState<string>('10');
+  const interestRate = '10';
   const [duration, setDuration] = useState<string>('');
   const [paymentPeriod, setPaymentPeriod] = useState<string>('');
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [notes, setNotes] = useState('');
-  const [advancePayment, setAdvancePayment] = useState(false);
+  const advancePayment = false;
   const [employeeId, setEmployeeId] = useState<string>('');
   
   // State for customers dropdown

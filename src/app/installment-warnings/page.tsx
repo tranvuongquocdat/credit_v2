@@ -276,7 +276,7 @@ export default function InstallmentWarningsPage() {
       console.log(`Created ${allDailyRecords.length} daily records for ${numberOfPeriods} periods`);
       
       // 6. Insert tất cả daily records vào database
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('installment_history')
         .insert(allDailyRecords)
         .select();

@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Loader2, UserCog, AlertCircle } from 'lucide-react';
+import { useState } from 'react';
+import { AlertCircle } from 'lucide-react';
 import { Store } from '@/models/store';
-import { Employee, EmployeeFormData, EmployeeStatus, EmployeeWithProfile } from '@/models/employee';
+import { EmployeeFormData, EmployeeWithProfile } from '@/models/employee';
 import { updateEmployee } from '@/lib/employee';
 import {
   Dialog,
@@ -30,7 +29,6 @@ export function EmployeeEditModal({
   onClose,
   onSuccess,
   employee,
-  stores
 }: EmployeeEditModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);

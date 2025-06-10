@@ -5,7 +5,7 @@ import { getCurrentUser } from '../../lib/auth';
 import { useRouter } from 'next/navigation';
 import { Layout } from '@/components/Layout';
 import { Card } from '@/components/ui/card';
-import { ArrowUp, ArrowDown, DollarSign, Calendar, Users, CreditCard, TrendingDown, TrendingUp } from 'lucide-react';
+import { ArrowUp, ArrowDown, DollarSign, Calendar, CreditCard, TrendingDown } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,12 +13,6 @@ import { Badge } from '@/components/ui/badge';
 export default function Dashboard() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    totalDebt: 1615000,
-    paymentPeriods: 37350,
-    paid: 0,
-    overdue: 2
-  });
   const router = useRouter();
 
   useEffect(() => {

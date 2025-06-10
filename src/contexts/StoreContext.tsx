@@ -85,8 +85,6 @@ export const StoreProvider = ({ children }: StoreProviderProps) => {
       setError(null);
     } catch (err) {
       console.error('❌ Failed to fetch stores:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      setError(err instanceof Error ? err : new Error('Unknown error occurred'));
     }
   };
 

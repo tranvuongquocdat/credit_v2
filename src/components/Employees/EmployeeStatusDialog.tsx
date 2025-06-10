@@ -2,13 +2,12 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, UserX, UserCheck } from 'lucide-react';
-import { Employee, EmployeeStatus, EmployeeWithAuth } from '@/models/employee';
+import { AlertCircle } from 'lucide-react';
+import { EmployeeStatus, EmployeeWithAuth } from '@/models/employee';
 import { activateEmployee, deactivateEmployee } from '@/lib/employee';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,

@@ -292,7 +292,7 @@ export default function TotalFundPage() {
       }
 
       // For installment history
-      const { data: installmentHistoryData, error: installmentError } = await supabase
+      const { data: installmentHistoryData } = await supabase
         .from('installment_history')
         .select(`
           *,
@@ -315,7 +315,7 @@ export default function TotalFundPage() {
       }
       
       // For fund history
-      const { data: storeFundData, error: fundError } = await supabase
+      const { data: storeFundData } = await supabase
         .from('store_fund_history')
         .select('*')
         .eq('store_id', storeId)
@@ -324,7 +324,7 @@ export default function TotalFundPage() {
       if (storeFundData) processItems(storeFundData, 'Nguồn vốn');
       
       // For transactions
-      const { data: transactionsData, error: transactionsError } = await supabase
+      const { data: transactionsData } = await supabase
         .from('transactions')
         .select('*')
         .eq('store_id', storeId)

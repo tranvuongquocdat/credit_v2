@@ -2,12 +2,14 @@ import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 
+type Params = Promise<{ id: string }>;
+
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Params }
 ) {
   try {
-    const userId = params.id;
+    const { id: userId } = await params;
     
     if (!userId) {
       return NextResponse.json(
@@ -76,7 +78,6 @@ export async function GET(
             email: authUser.user.email,
             emailConfirmed: authUser.user.email_confirmed_at,
             lastSignIn: authUser.user.last_sign_in_at,
-            banned: authUser.user.banned
           };
         }
       }
@@ -97,10 +98,10 @@ export async function GET(
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Params }
 ) {
   try {
-    const userId = params.id;
+    const { id: userId } = await params;
     const requestData = await request.json();
     
     if (!userId) {
@@ -138,7 +139,7 @@ export async function PATCH(
     }
 
     // Dữ liệu được phép cập nhật tùy thuộc vào quyền
-    let updateData: Record<string, any> = {};
+    const updateData: Record<string, any> = {};
     
     // Các trường người dùng thông thường có thể cập nhật
     if (requestData.displayName) {

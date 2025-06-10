@@ -2,7 +2,6 @@
 import { useState } from 'react';
 import { signUp } from '../../lib/auth';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 
 export default function SignUp() {
   const [username, setUsername] = useState('');

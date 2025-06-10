@@ -31,7 +31,6 @@ interface CreditWarningsTableProps {
 export function CreditWarningsTable({
   credits,
   isLoading,
-  onPayment,
   onCustomerClick,
   onShowPaymentHistory,
 }: CreditWarningsTableProps) {
@@ -102,7 +101,7 @@ export function CreditWarningsTable({
             const oldDebt = await calculateDebtToLatestPaidPeriod(credit.id);
 
             let interestAmount = 0;
-            let daysPastDue = 0;
+            const daysPastDue = 0;
             let latePeriods = 0;
             let reason = '';
 

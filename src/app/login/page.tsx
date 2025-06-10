@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react';
 import { signIn } from '../../lib/auth';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 
 export default function Login() {
   const [username, setUsername] = useState('');

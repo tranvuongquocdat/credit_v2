@@ -37,7 +37,7 @@ export function EmployeesPagination({
     } else {
       // Show a subset of pages with current page in the middle
       let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
-      let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+      const endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
       
       // Adjust if we're near the end
       if (endPage - startPage + 1 < maxPagesToShow) {
@@ -53,7 +53,6 @@ export function EmployeesPagination({
   };
 
   // Always show pagination UI even with just one page to maintain consistent layout
-  const effectiveTotalPages = Math.max(1, totalPages);
   const pageNumbers = totalPages > 0 ? getPageNumbers() : [1];
   
   return (

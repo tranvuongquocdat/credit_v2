@@ -209,7 +209,7 @@ export function PaymentTab({
   };
   
   // Updated checkbox handler - simplified version using getLatestPaymentPaidDate
-  const handleCheckboxChange = async (period: CreditPaymentPeriod, checked: boolean, index: number) => {
+  const handleCheckboxChange = async (period: CreditPaymentPeriod, checked: boolean) => {
     if (!credit?.id || isProcessingCheckbox) return;
     
     // Set global loading state
@@ -338,7 +338,7 @@ export function PaymentTab({
         console.log(`Prepared ${allRecords.length} daily records for batch insert`);
         
         // 8. Batch upsert tất cả records
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('credit_history')
           .upsert(allRecords)
           .select();
@@ -617,7 +617,7 @@ export function PaymentTab({
                           autoFocus
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
-                              handleCheckboxChange(period, true, index);
+                              handleCheckboxChange(period, true);
                             } else if (e.key === 'Escape') {
                               cancelEditing();
                             }
@@ -628,7 +628,7 @@ export function PaymentTab({
                           className="text-xs bg-blue-500 text-white px-1 rounded"
                           onClick={(e) => {
                             e.preventDefault();
-                            handleCheckboxChange(period, true, index);
+                            handleCheckboxChange(period, true);
                           }}
                         >
                           OK
@@ -687,7 +687,7 @@ export function PaymentTab({
                             return (
                               <Checkbox 
                                 checked={hasPayments} 
-                                onCheckedChange={(checked) => handleCheckboxChange(period, !!checked, index)}
+                                onCheckedChange={(checked) => handleCheckboxChange(period, !!checked)}
                                 disabled={isDisabled || isProcessingCheckbox}
                               />
                             );

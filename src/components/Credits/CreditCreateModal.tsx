@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '@/contexts/StoreContext';
 import { format } from 'date-fns';
-import { vi } from 'date-fns/locale';
 import { 
   Dialog, 
   DialogContent, 
@@ -21,7 +20,7 @@ import { createCredit } from '@/lib/credit';
 import { getCustomers, createCustomer } from '@/lib/customer';
 import { Customer } from '@/models/customer';
 import { CreateCreditParams, InterestType, CreditStatus } from '@/models/credit';
-import { getStoreFinancialData, updateStoreCashFundOnly } from '@/lib/store';
+import { getStoreFinancialData } from '@/lib/store';
 import { AlertCircle } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
@@ -82,7 +81,7 @@ export function CreditCreateModal({
   const [interestRateWarning, setInterestRateWarning] = useState<string | null>(null);
   
   // Function to validate interest rate
-  const validateInterestRate = (value: string, type: string, notation: string) => {
+  const validateInterestRate = (value: string, type: string) => {
     const numValue = parseFloat(value || '0');
     if (isNaN(numValue) || numValue <= 0) {
       setInterestRateWarning(null);
@@ -239,7 +238,7 @@ export function CreditCreateModal({
     }
     
     // Validate interest rate with new type
-    validateInterestRate(interestValue, value, interestNotation);
+    validateInterestRate(interestValue, value);
   };
   
   // Quick loan amount adjustment
@@ -633,7 +632,7 @@ export function CreditCreateModal({
                 value={interestValue}
                 onChange={(e) => {
                   setInterestValue(e.target.value);
-                  validateInterestRate(e.target.value, interestType, interestNotation);
+                  validateInterestRate(e.target.value, interestType);
                 }}
                 required
                 className="w-32"
@@ -651,7 +650,7 @@ export function CreditCreateModal({
                         checked={interestNotation === 'k_per_million'}
                         onChange={() => {
                           setInterestNotation('k_per_million');
-                          validateInterestRate(interestValue, interestType, 'k_per_million');
+                          validateInterestRate(interestValue, interestType);
                         }}
                         className="mr-2"
                       />
@@ -665,7 +664,7 @@ export function CreditCreateModal({
                         checked={interestNotation === 'k_per_day'}
                         onChange={() => {
                           setInterestNotation('k_per_day');
-                          validateInterestRate(interestValue, interestType, 'k_per_day');
+                          validateInterestRate(interestValue, interestType);
                         }}
                         className="mr-2"
                       />
@@ -684,7 +683,7 @@ export function CreditCreateModal({
                         checked={interestNotation === 'percent_per_month'}
                         onChange={() => {
                           setInterestNotation('percent_per_month');
-                          validateInterestRate(interestValue, interestType, 'percent_per_month');
+                          validateInterestRate(interestValue, interestType);
                         }}
                         className="mr-2"
                       />
@@ -703,7 +702,7 @@ export function CreditCreateModal({
                         checked={interestNotation === 'percent_per_week'}
                         onChange={() => {
                           setInterestNotation('percent_per_week');
-                          validateInterestRate(interestValue, interestType, 'percent_per_week');
+                          validateInterestRate(interestValue, interestType);
                         }}
                         className="mr-2"
                       />
@@ -722,7 +721,7 @@ export function CreditCreateModal({
                         checked={interestNotation === 'k_per_week'}
                         onChange={() => {
                           setInterestNotation('k_per_week');
-                          validateInterestRate(interestValue, interestType, 'k_per_week');
+                          validateInterestRate(interestValue, interestType);
                         }}
                         className="mr-2"
                       />
@@ -837,7 +836,7 @@ export function CreditCreateModal({
           )}
           
           <div className="text-center text-red-500 text-sm mt-2">
-            *Chú ý : Khách hàng phải đảm bảo lãi suất và chi phí khi cho vay (gọi chung là "chi phí vay") tuân thủ quy định pháp luật tại từng thời điểm.
+            *Chú ý : Khách hàng phải đảm bảo lãi suất và chi phí khi cho vay (gọi chung là chi phí vay) tuân thủ quy định pháp luật tại từng thời điểm.
           </div>
           
           <div className="flex justify-center space-x-4 mt-6">

@@ -80,10 +80,8 @@ export function CreditsTable({
   credits, 
   statusMap,
   calculatedDetails,
-  onView, 
   onEdit, 
   onDelete, 
-  onUpdateStatus,
   onShowPaymentHistory,
   onRefresh
 }: CreditsTableProps) {
@@ -104,10 +102,7 @@ export function CreditsTable({
   
   // State cho calculated status
   const [calculatedStatuses, setCalculatedStatuses] = useState<Record<string, CreditStatusResult>>({});
-  
-  // Router for navigation
-  const router = useRouter();
-  
+
   // Toast hook
   const { toast } = useToast();
   
@@ -167,7 +162,7 @@ export function CreditsTable({
       
       // Tính ngày kết thúc hợp đồng
       const loanEndDate = new Date(loanStartDate);
-      let loanPeriodDays = credit.loan_period;
+      const loanPeriodDays = credit.loan_period;
       loanEndDate.setDate(loanStartDate.getDate() + loanPeriodDays - 1);
       
       // Lấy kỳ lãi (số ngày)

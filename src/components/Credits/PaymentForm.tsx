@@ -32,11 +32,7 @@ interface PaymentFormProps {
 }
 
 export function PaymentForm({
-  onClose,
   defaultStartDate = new Date(),
-  defaultEndDate = addDays(new Date(), 8),
-  defaultAmount = 0,
-  creditId,
   interestCalculator,
   onSubmit,
   loanDate,
@@ -49,11 +45,6 @@ export function PaymentForm({
   const formatNumber = (value: string | number): string => {
     const numericValue = value.toString().replace(/[^0-9]/g, '');
     return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  };
-
-  // Hàm tính khoảng cách giữa hai ngày (bao gồm cả ngày cuối)
-  const calculateDaysBetween = (startDate: Date, endDate: Date): number => {
-    return differenceInDays(endDate, startDate) + 1;
   };
 
   // Tính ngày bắt đầu dựa trên kỳ thanh toán cuối cùng

@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { Employee, EmployeeFormData, EmployeeStatus, EmployeeWithProfile } from '@/models/employee';
+import { EmployeeFormData, EmployeeStatus, EmployeeWithProfile } from '@/models/employee';
 import { Store } from '@/models/store';
 import { getStores } from '@/lib/store';
 

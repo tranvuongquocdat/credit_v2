@@ -17,7 +17,7 @@ import { Loader2 } from 'lucide-react';
 import { getCreditById, updateCredit } from '@/lib/credit';
 import { getCustomers } from '@/lib/customer';
 import { Customer } from '@/models/customer';
-import { UpdateCreditParams, InterestType, CreditStatus, Credit, CreditWithCustomer } from '@/models/credit';
+import { UpdateCreditParams, InterestType, CreditStatus, Credit } from '@/models/credit';
 import { toast } from '@/components/ui/use-toast';
 import { AlertCircle } from 'lucide-react';
 
@@ -73,7 +73,7 @@ export function CreditEditModal({
   const [interestRateWarning, setInterestRateWarning] = useState<string | null>(null);
   
   // Function to validate interest rate
-  const validateInterestRate = (value: string, type: string, notation: string) => {
+  const validateInterestRate = (value: string, type: string) => {
     const numValue = parseFloat(value || '0');
     if (isNaN(numValue) || numValue <= 0) {
       setInterestRateWarning(null);
@@ -190,7 +190,7 @@ export function CreditEditModal({
     }
     
     // Validate interest rate with new type
-    validateInterestRate(interestValue, value, interestNotation);
+      validateInterestRate(interestValue, value);
   };
   
   // Load credit data and customers when modal opens
@@ -576,7 +576,7 @@ export function CreditEditModal({
                   value={interestValue}
                   onChange={(e) => {
                     setInterestValue(e.target.value);
-                    validateInterestRate(e.target.value, interestType, interestNotation);
+                    validateInterestRate(e.target.value, interestType);
                   }}
                   required
                   className="w-32"
@@ -594,7 +594,7 @@ export function CreditEditModal({
                           checked={interestNotation === 'k_per_million'}
                           onChange={() => {
                             setInterestNotation('k_per_million');
-                            validateInterestRate(interestValue, interestType, 'k_per_million');
+                            validateInterestRate(interestValue, interestType);
                           }}
                           className="mr-2"
                         />
@@ -608,7 +608,7 @@ export function CreditEditModal({
                           checked={interestNotation === 'k_per_day'}
                           onChange={() => {
                             setInterestNotation('k_per_day');
-                            validateInterestRate(interestValue, interestType, 'k_per_day');
+                            validateInterestRate(interestValue, interestType);
                           }}
                           className="mr-2"
                         />
@@ -627,7 +627,7 @@ export function CreditEditModal({
                           checked={interestNotation === 'percent_per_month'}
                           onChange={() => {
                             setInterestNotation('percent_per_month');
-                            validateInterestRate(interestValue, interestType, 'percent_per_month');
+                            validateInterestRate(interestValue, interestType);
                           }}
                           className="mr-2"
                         />
@@ -646,7 +646,7 @@ export function CreditEditModal({
                           checked={interestNotation === 'percent_per_week'}
                           onChange={() => {
                             setInterestNotation('percent_per_week');
-                            validateInterestRate(interestValue, interestType, 'percent_per_week');
+                            validateInterestRate(interestValue, interestType);
                           }}
                           className="mr-2"
                         />

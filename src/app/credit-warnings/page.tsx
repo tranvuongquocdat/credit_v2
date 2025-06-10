@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useStore } from "@/contexts/StoreContext";
-import { CreditWithCustomer, CreditStatus } from "@/models/credit";
+import { CreditWithCustomer } from "@/models/credit";
 import { getCredits, CreditFilters } from "@/lib/credit";
 import { CreditWarningsTable } from "@/components/Credits/CreditWarningsTable";
 import { Search } from "lucide-react";
@@ -12,15 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PaymentHistoryModal } from "@/components/Credits/PaymentHistoryModal";
 
-// Map trạng thái thành nhãn và màu sắc
-const statusMap: Record<string, { label: string, color: string }> = {
-  [CreditStatus.ON_TIME]: { label: 'Đúng hẹn', color: 'bg-green-100 text-green-800' },
-  [CreditStatus.OVERDUE]: { label: 'Quá hạn', color: 'bg-red-100 text-red-800' },
-  [CreditStatus.LATE_INTEREST]: { label: 'Chậm lãi', color: 'bg-yellow-100 text-yellow-800' },
-  [CreditStatus.BAD_DEBT]: { label: 'Nợ xấu', color: 'bg-purple-100 text-purple-800' },
-  [CreditStatus.CLOSED]: { label: 'Đã đóng', color: 'bg-blue-100 text-blue-800' },
-  [CreditStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
-};
 
 export default function CreditWarningPage() {
   const [credits, setCredits] = useState<CreditWithCustomer[]>([]);

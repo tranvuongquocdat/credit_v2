@@ -35,7 +35,7 @@ export function CreditsPagination({
     } else {
       // Show a subset of pages with current page in the middle
       let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
-      let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+      const endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
       
       // Adjust if we're near the end
       if (endPage - startPage + 1 < maxPagesToShow) {

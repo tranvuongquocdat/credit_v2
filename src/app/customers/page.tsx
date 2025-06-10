@@ -3,8 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Layout } from '@/components/Layout';
-import { Button } from '@/components/ui/button';
-import { ChevronLeft } from 'lucide-react';
 import { useStore } from '@/contexts/StoreContext';
 
 // Import custom components
@@ -44,7 +42,7 @@ export default function CustomersPage() {
   
   // Basic state
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const pageSize = 10;
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [searchFilters, setSearchFilters] = useState({
     query: '',

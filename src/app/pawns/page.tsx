@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Layout } from '@/components/Layout';
 import { 
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
@@ -37,18 +37,9 @@ const statusMap: Record<string, { label: string, color: string }> = {
   [PawnStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
 };
 
-// Interface cho quỹ tiền mặt
-interface FundStatus {
-  totalFund: number; // Tổng quỹ
-  totalLoan: number; // Tổng cho vay
-  profit: number;    // Lợi nhuận
-  availableFund: number; // Quỹ khả dụng
-  oldDebt: number; // Tiền nợ
-  collectedInterest?: number; // Lãi phí đã thu
-}
+
 
 export default function PawnsPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   
   // State để lưu initial filters từ URL
@@ -58,7 +49,6 @@ export default function PawnsPage() {
   const { 
     pawns, 
     loading, 
-    error, 
     totalItems, 
     currentPage, 
     itemsPerPage,
@@ -66,12 +56,11 @@ export default function PawnsPage() {
     handleReset,
     handlePageChange,
     handleDelete,
-    handleUpdateStatus: updatePawnStatus,
     refetch
   } = usePawns();
   
   // Lấy dữ liệu tài chính tổng hợp
-  const { summary: financialSummary, details: pawnDetails, refresh: refreshFinancial } = usePawnCalculations();
+  const { summary: financialSummary, refresh: refreshFinancial } = usePawnCalculations();
   // State for dialogs
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedPawn, setSelectedPawn] = useState<PawnWithCustomer | null>(null);
@@ -132,53 +121,6 @@ export default function PawnsPage() {
     // Mở modal chỉnh sửa thay vì chuyển trang
     setEditPawnId(pawnId);
     setIsPawnEditModalOpen(true);
-  };
-  
-  // Handle view pawn details
-  const handleViewPawnDetail = (pawnId: string) => {
-    router.push(`/pawns/${pawnId}`);
-  };
-  
-  // Handle opening status dialog
-  const handleOpenStatusDialog = (pawn: PawnWithCustomer) => {
-    // Nếu hợp đồng đang ở trạng thái đóng (closed), xử lý mở lại hợp đồng
-    if (pawn.status === PawnStatus.CLOSED) {
-      // Hiển thị dialog xác nhận
-      if (confirm('Bạn có muốn mở lại hợp đồng này không? Trạng thái sẽ chuyển về "Đúng hẹn"')) {
-        reopenContract(pawn);
-      }
-    } else {
-      // Trường hợp bình thường: mở dialog chọn trạng thái
-      setSelectedPawn(pawn);
-    }
-  };
-  
-  // Hàm mở lại hợp đồng
-  const reopenContract = async (pawn: PawnWithCustomer) => {
-    try {
-      // Ghi lại lịch sử mở lại hợp đồng với số tiền đóng hợp đồng gần nhất
-      const { recordContractReopening } = await import('@/lib/Pawns/pawn-amount-history');
-      const result = await recordContractReopening(
-        pawn.id,
-        new Date().toISOString(),
-        'Mở lại hợp đồng từ trạng thái đóng'
-      );
-      
-      console.log('Reopened contract with amount:', result.lastClosureAmount);
-      
-      // Cập nhật trạng thái hợp đồng về đúng hẹn
-      updatePawnStatus(pawn.id, PawnStatus.ON_TIME);
-      
-      // Refresh dữ liệu tài chính
-      refreshFinancial();
-    } catch (error) {
-      console.error('Error reopening contract:', error);
-      toast({
-        title: 'Lỗi',
-        description: 'Có lỗi xảy ra khi mở lại hợp đồng',
-        variant: 'destructive',
-      });
-    }
   };
   
   // Handle opening delete dialog

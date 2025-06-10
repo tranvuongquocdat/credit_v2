@@ -8,13 +8,11 @@ import { initializeDefaultPermissions } from '@/lib/permission';
 import { getCurrentUser } from '@/lib/auth';
 import { EmployeeWithProfile } from '@/models/employee';
 import { 
-  Plus, 
   Search, 
   UserCog, 
   ChevronLeft, 
   ChevronRight, 
   RefreshCw,
-  Settings
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

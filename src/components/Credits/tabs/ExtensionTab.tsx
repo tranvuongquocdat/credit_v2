@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { CreditWithCustomer, CreditStatus } from '@/models/credit';
 import { ExtensionForm } from '../ExtensionForm';
 import { ExtensionList } from '../ExtensionList';
-import { addExtension, updateCreditEndDate } from '@/lib/extension';
+import { addExtension } from '@/lib/extension';
 import { format } from 'date-fns';
 import { toast } from '@/components/ui/use-toast';
 

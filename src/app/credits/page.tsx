@@ -37,15 +37,6 @@ const statusMap: Record<string, { label: string, color: string }> = {
   [CreditStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
 };
 
-// Interface cho quỹ tiền mặt
-interface FundStatus {
-  totalFund: number; // Tổng quỹ
-  totalLoan: number; // Tổng cho vay
-  profit: number;    // Lợi nhuận
-  availableFund: number; // Quỹ khả dụng
-  oldDebt: number; // Tiền nợ
-  collectedInterest?: number; // Lãi phí đã thu
-}
 
 export default function CreditsPage() {
   const router = useRouter();
@@ -341,7 +332,7 @@ export default function CreditsPage() {
         <CreditCreateModal
           isOpen={isCreditCreateModalOpen}
           onClose={() => setIsCreditCreateModalOpen(false)}
-          onSuccess={(creditId) => {
+          onSuccess={() => {
             setIsCreditCreateModalOpen(false);
             refetch(); // Refresh danh sách hợp đồng sau khi tạo mới
           }}
@@ -353,7 +344,7 @@ export default function CreditsPage() {
             isOpen={isCreditEditModalOpen}
             onClose={() => setIsCreditEditModalOpen(false)}
             creditId={editCreditId}
-            onSuccess={(creditId) => {
+            onSuccess={() => {
               setIsCreditEditModalOpen(false);
               refetch(); // Refresh danh sách hợp đồng sau khi cập nhật
             }}

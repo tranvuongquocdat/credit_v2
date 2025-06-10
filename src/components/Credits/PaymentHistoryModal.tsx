@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   Dialog, 
   DialogContent, 
@@ -8,7 +8,7 @@ import {
   DialogTitle 
 } from '@/components/ui/dialog';
 import { CreditWithCustomer } from '@/models/credit';
-import { getInterestDisplayString, calculateInterestAmount as calculateInterestForPeriod, calculateInterestWithPrincipalChanges, PrincipalChange, calculateDailyRateForCredit } from '@/lib/interest-calculator';
+import { getInterestDisplayString } from '@/lib/interest-calculator';
 import { CreditActionTabs, DEFAULT_CREDIT_TABS, TabId } from './CreditActionTabs';
 import { AdditionalLoanTab, BadCreditTab, CloseTab, DocumentsTab, ExtensionTab, PaymentTab, PrincipalRepaymentTab } from './tabs';
 import { getCreditById } from '@/lib/credit';

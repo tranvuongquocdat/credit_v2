@@ -276,7 +276,7 @@ export function CollateralsPage({ storeId }: CollateralsPageProps) {
             <DialogTitle>Xác nhận xóa</DialogTitle>
           </DialogHeader>
           <div>
-            Bạn có chắc chắn muốn xóa tài sản thế chấp "{deletingCollateral?.name}" không? 
+            Bạn có chắc chắn muốn xóa tài sản thế chấp {deletingCollateral?.name} không? 
             Hành động này không thể hoàn tác.
           </div>
           <DialogFooter>

@@ -5,7 +5,7 @@ import { Layout } from '@/components/Layout';
 import { StoreForm } from '@/components/Store';
 import { getStores, createStore, updateStore, deleteStore } from '@/lib/store';
 import { Store, StoreFormData, StoreStatus } from '@/models/store';
-import { Plus, Pencil, Trash2, RefreshCw, SearchIcon, MoreVertical, FileEditIcon, PhoneIcon } from 'lucide-react';
+import { Plus, Pencil, Trash2, RefreshCw, SearchIcon, MoreVertical, PhoneIcon } from 'lucide-react';
 
 // Shadcn UI components
 import { Button } from "@/components/ui/button";
@@ -162,7 +162,7 @@ export default function StoresPage() {
     setIsSubmitting(true);
     
     try {
-      const { data: newStore, error } = await createStore(data);
+      const { error } = await createStore(data);
       
       if (error) {
         throw new Error((error as any)?.message || 'Không thể tạo cửa hàng mới');
@@ -253,7 +253,7 @@ export default function StoresPage() {
     } else {
       // Show a subset of pages with current page in the middle
       let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
-      let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+      const endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
       
       // Adjust if we're near the end
       if (endPage - startPage + 1 < maxPagesToShow) {

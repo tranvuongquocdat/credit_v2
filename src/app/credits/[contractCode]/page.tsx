@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Layout } from '@/components/Layout';
 import { useRouter } from 'next/navigation';
 
@@ -35,8 +35,12 @@ const statusMap: Record<string, { label: string, color: string }> = {
   [CreditStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
 };
 
-export default function CreditContractPage({ params }: { params: { contractCode: string } }) {
-  const { contractCode } = params;
+type PageProps = {
+  params: Promise<{ contractCode: string }>;
+};
+
+export default async function CreditContractPage({ params }: PageProps) {
+  const { contractCode } = await params;
   const router = useRouter();
   
   // Initialize with filter by contract code
@@ -49,8 +53,6 @@ export default function CreditContractPage({ params }: { params: { contractCode:
   // Use our custom hook for credits data and operations
   const { 
     credits, 
-    loading, 
-    error, 
     totalItems, 
     currentPage, 
     itemsPerPage,
@@ -302,7 +304,7 @@ export default function CreditContractPage({ params }: { params: { contractCode:
         <CreditCreateModal
           isOpen={isCreditCreateModalOpen}
           onClose={() => setIsCreditCreateModalOpen(false)}
-          onSuccess={(creditId) => {
+          onSuccess={() => {
             setIsCreditCreateModalOpen(false);
             refetch();
           }}
@@ -314,7 +316,7 @@ export default function CreditContractPage({ params }: { params: { contractCode:
             isOpen={isCreditEditModalOpen}
             onClose={() => setIsCreditEditModalOpen(false)}
             creditId={editCreditId}
-            onSuccess={(creditId) => {
+            onSuccess={() => {
               setIsCreditEditModalOpen(false);
               refetch();
             }}

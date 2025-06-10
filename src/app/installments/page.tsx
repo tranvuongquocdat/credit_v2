@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Layout } from '@/components/Layout/Layout';
 
 import { 
@@ -39,7 +39,6 @@ const statusMap: Record<string, { label: string, color: string }> = {
 };
 
 export default function InstallmentsPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   
   // Get current store from context
@@ -146,19 +145,6 @@ export default function InstallmentsPage() {
     setSelectedInstallment(null);
   };
   
-  // Handle updating installment status
-  const handleUpdateStatusAction = async (status: InstallmentStatus) => {
-    if (!selectedInstallment) return;
-    
-    const { success, error } = await handleUpdateStatus(selectedInstallment.id, status);
-    
-    if (success) {
-      handleCloseStatusDialog();
-    } else {
-      console.error('Error updating status:', error);
-    }
-  };
-  
   // Handle opening delete dialog
   const handleOpenDeleteDialog = (installment: InstallmentWithCustomer) => {
     setSelectedInstallment(installment);
@@ -182,19 +168,6 @@ export default function InstallmentsPage() {
     } else {
       console.error('Error deleting installment:', error);
     }
-  };
-  
-  // Handle installment creation success
-  const handleCreateSuccess = () => {
-    setIsInstallmentCreateModalOpen(false);
-    refetch();
-    refreshFinancial();
-  };
-  
-  // Handle installment edit success
-  const handleEditSuccess = () => {
-    setIsInstallmentEditModalOpen(false);
-    refetch();
   };
   
   // Handle showing payment actions modal

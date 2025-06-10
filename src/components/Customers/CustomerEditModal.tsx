@@ -13,15 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -35,7 +26,6 @@ import {
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import { Separator } from '@/components/ui/separator';
 
 // Schema cho form chỉnh sửa khách hàng
 const customerFormSchema = z.object({
@@ -117,7 +107,7 @@ export function CustomerEditModal({
         ...values,
       };
       
-      const { data, error } = await updateCustomer(customer.id, customerData);
+      const { error } = await updateCustomer(customer.id, customerData);
       
       if (error) throw new Error(error.toString());
       

@@ -10,7 +10,7 @@ interface DocumentsTabProps {
   creditStatus?: string;
 }
 
-export function DocumentsTab({ creditId, creditStatus }: DocumentsTabProps) {
+export function DocumentsTab({ creditStatus }: DocumentsTabProps) {
   // Check if credit is closed or deleted
   const isDisabled = creditStatus === CreditStatus.CLOSED || creditStatus === CreditStatus.DELETED;
 

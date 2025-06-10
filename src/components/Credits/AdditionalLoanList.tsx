@@ -48,7 +48,7 @@ export function AdditionalLoanList({
   const formatDate = (dateString: string): string => {
     try {
       return format(new Date(dateString), 'dd-MM-yyyy');
-    } catch (e) {
+    } catch {
       return dateString;
     }
   };

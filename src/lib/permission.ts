@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Permission, EmployeePermission, PermissionNode, DEFAULT_PERMISSIONS } from '@/models/permission';
+import { Permission, PermissionNode, DEFAULT_PERMISSIONS } from '@/models/permission';
 
 // Lấy tất cả permissions
 export async function getPermissions(): Promise<{ data: Permission[] | null; error: any }> {
@@ -9,7 +9,7 @@ export async function getPermissions(): Promise<{ data: Permission[] | null; err
       .select('*')
       .order('name');
 
-    return { data, error };
+    return { data: data as Permission[], error };
   } catch (error) {
     console.error('Error fetching permissions:', error);
     return { data: null, error };

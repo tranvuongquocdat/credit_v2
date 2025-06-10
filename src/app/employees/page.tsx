@@ -7,13 +7,9 @@ import { EmployeeCreateModal } from '@/components/Employees/EmployeeCreateModal'
 import { EmployeeEditModal } from '@/components/Employees/EmployeeEditModal';
 import { EmployeeStatusDialog } from '@/components/Employees/EmployeeStatusDialog';
 import { getEmployees, createEmployee, updateEmployee, deactivateEmployee, activateEmployee } from '@/lib/employee';
-import { Employee, EmployeeFormData, EmployeeStatus, EmployeeWithProfile } from '@/models/employee';
-import { Store } from '@/models/store';
-import { Plus, Edit, UserX, UserCheck, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { EmployeeFormData, EmployeeStatus, EmployeeWithProfile } from '@/models/employee';
+import { Edit, UserX, UserCheck, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useStore } from '@/contexts/StoreContext';
 
@@ -36,7 +32,6 @@ export default function EmployeesPage() {
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeWithProfile | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Fetch danh sách nhân viên
   const fetchEmployees = async () => {
@@ -82,90 +77,6 @@ export default function EmployeesPage() {
   useEffect(() => {
     fetchEmployees();
   }, [currentPage, searchQuery, statusFilter, currentStore]);
-
-
-  
-  // Nội dung các hàm xử lý tìm kiếm đã được di chuyển vào SearchFilters component
-
-  // Xử lý thêm nhân viên mới
-  const handleAddEmployee = async (data: EmployeeFormData) => {
-    setIsSubmitting(true);
-    
-    try {
-      const { data: newEmployee, error } = await createEmployee(data);
-      
-      if (error) {
-        const errorMessage = typeof error === 'object' && error !== null && 'message' in error 
-    ? String(error.message) 
-    : 'Lỗi không xác định';
-  throw new Error(errorMessage);
-      }
-      
-      setIsFormModalOpen(false);
-      fetchEmployees(); // Refresh danh sách
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Không thể tạo nhân viên mới');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Xử lý cập nhật nhân viên
-  const handleUpdateEmployee = async (data: EmployeeFormData) => {
-    if (!selectedEmployee) return;
-    
-    setIsSubmitting(true);
-    
-    try {
-      const { error } = await updateEmployee(selectedEmployee.uid, data);
-      
-      if (error) {
-        const errorMessage = typeof error === 'object' && error !== null && 'message' in error 
-    ? String(error.message) 
-    : 'Lỗi không xác định';
-  throw new Error(errorMessage);
-      }
-      
-      setIsFormModalOpen(false);
-      setSelectedEmployee(null);
-      fetchEmployees(); // Refresh danh sách
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Không thể cập nhật nhân viên');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Các hàm xử lý form đã được di chuyển vào các modal component
-
-  // Xử lý thay đổi trạng thái nhân viên
-  const handleChangeEmployeeStatus = async () => {
-    if (!selectedEmployee) return;
-    
-    setIsSubmitting(true);
-    
-    try {
-      const isActivating = selectedEmployee.status === EmployeeStatus.INACTIVE;
-      const { error } = isActivating 
-        ? await activateEmployee(selectedEmployee.uid)
-        : await deactivateEmployee(selectedEmployee.uid);
-      
-      if (error) {
-        const errorMessage = typeof error === 'object' && error !== null && 'message' in error 
-    ? String(error.message) 
-    : 'Lỗi không xác định';
-  throw new Error(errorMessage);
-      }
-      
-      setIsStatusModalOpen(false);
-      setSelectedEmployee(null);
-      fetchEmployees(); // Refresh danh sách
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Không thể thay đổi trạng thái nhân viên');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   // Mở modal chỉnh sửa
   const openEditModal = (employee: EmployeeWithProfile) => {

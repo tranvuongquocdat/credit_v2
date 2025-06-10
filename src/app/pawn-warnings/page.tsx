@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { Layout } from '@/components/Layout';
 import { useStore } from '@/contexts/StoreContext';
 import { PawnWarningsTable } from '@/components/Pawns/PawnWarningsTable';
-import { PawnSearchFilters } from '@/components/Pawns/PawnSearchFilters';
 import { PawnHistoryModal } from '@/components/Pawns/PawnHistoryModal';
 import { useRouter } from 'next/navigation';
 import { PawnWithCustomerAndCollateral, PawnStatus, PawnFilters } from '@/models/pawn';
@@ -100,19 +99,6 @@ export default function PawnWarningsPage() {
   const handleSearch = (searchFilters: PawnFilters) => {
     setFilters(searchFilters);
     loadPawns(searchFilters);
-  };
-  
-  // Handle reset filters
-  const handleResetFilters = () => {
-    const emptyFilters: PawnFilters = {
-      contract_code: '',
-      customer_name: '',
-      status: 'all',
-      start_date: '',
-      end_date: ''
-    };
-    setFilters(emptyFilters);
-    loadPawns(emptyFilters);
   };
 
   // Handle view detail
