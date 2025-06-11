@@ -6,11 +6,13 @@ import { useStore } from '@/contexts/StoreContext';
 import { PawnWarningsTable } from '@/components/Pawns/PawnWarningsTable';
 import { PawnHistoryModal } from '@/components/Pawns/PawnHistoryModal';
 import { useRouter } from 'next/navigation';
-import { PawnWithCustomerAndCollateral, PawnStatus, PawnFilters } from '@/models/pawn';
-import { getPawns } from '@/lib/pawn';
+import { PawnWithCustomerAndCollateral, PawnStatus } from '@/models/pawn';
+import { getPawnWarnings } from '@/lib/pawn-warnings';
 import { Button } from '@/components/ui/button';
-import { Download } from 'lucide-react';
+import { Download, Search } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
+import { Input } from '@/components/ui/input';
+import { PawnWarningsPagination } from '@/components/Pawns/PawnWarningsPagination';
 
 export default function PawnWarningsPage() {
   const router = useRouter();
@@ -21,14 +23,21 @@ export default function PawnWarningsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // State for filters
-  const [filters, setFilters] = useState<PawnFilters>({
-    contract_code: '',
-    customer_name: '',
-    status: 'all',
-    start_date: '',
-    end_date: ''
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const itemsPerPage = 10;
+  
+  // State for summary
+  const [summary, setSummary] = useState({
+    totalLoanAmount: 0,
+    totalDueAmount: 0
   });
+  
+  // State for filters
+  const [customerNameFilter, setCustomerNameFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<PawnStatus | "all">("all");
   
   // State for modals
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
@@ -44,61 +53,51 @@ export default function PawnWarningsPage() {
     [PawnStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' }
   };
   
-  // Load pawns data
-  const loadPawns = async (searchFilters: PawnFilters = filters) => {
+  // Load pawns data when the page loads, store changes, or pagination/filter changes
+  useEffect(() => {
+    if (currentStore?.id) {
+      loadPawns();
+    }
+  }, [currentStore, currentPage, customerNameFilter, statusFilter]);
+  
+  // Load pawns with warnings
+  const loadPawns = async () => {
     if (!currentStore?.id) return;
     
     setLoading(true);
     setError(null);
     
     try {
-      // Get all active pawns (not closed or deleted)
-      const pawnFilters: PawnFilters = {
-        contract_code: searchFilters.contract_code,
-        customer_name: searchFilters.customer_name,
-        store_id: currentStore.id,
-        status: searchFilters.status === 'all' ? undefined : searchFilters.status as PawnStatus
-      };
-      
-      const { data, error: pawnError } = await getPawns(
-        1,
-        1000, // Get all pawns
-        pawnFilters
+      const { data, error: warningsError, totalItems: total, totalPages: pages, summary: summaryData } = await getPawnWarnings(
+        currentPage,
+        itemsPerPage,
+        currentStore.id,
+        customerNameFilter,
+        statusFilter
       );
       
-      if (pawnError) throw pawnError;
+      if (warningsError) {
+        throw warningsError;
+      }
       
-      // Filter only active pawns that might have warnings
-      const activePawns = (data || []).filter(pawn => 
-        pawn.status !== PawnStatus.CLOSED && 
-        pawn.status !== PawnStatus.DELETED
-      );
+      setPawns(data || []);
+      setTotalItems(total || 0);
+      setTotalPages(pages || 1);
       
-      setPawns(activePawns);
+      if (summaryData) {
+        setSummary(summaryData);
+      }
     } catch (err) {
-      console.error('Error loading pawns:', err);
+      console.error('Error loading pawn warnings:', err);
       setError('Có lỗi xảy ra khi tải dữ liệu. Vui lòng thử lại sau.');
       toast({
         title: 'Lỗi',
-        description: 'Không thể tải danh sách hợp đồng cầm đồ',
+        description: 'Không thể tải danh sách cảnh báo cầm đồ',
         variant: 'destructive',
       });
     } finally {
       setLoading(false);
     }
-  };
-  
-  // Load data when component mounts or store changes
-  useEffect(() => {
-    if (currentStore?.id) {
-      loadPawns(filters);
-    }
-  }, [currentStore?.id]);
-  
-  // Handle search
-  const handleSearch = (searchFilters: PawnFilters) => {
-    setFilters(searchFilters);
-    loadPawns(searchFilters);
   };
 
   // Handle view detail
@@ -113,9 +112,38 @@ export default function PawnWarningsPage() {
   };
 
   // Handle close history modal
-  const handleCloseHistoryModal = () => {
+  const handleCloseHistoryModal = (hasDataChanged?: boolean) => {
     setIsHistoryModalOpen(false);
     setSelectedPawn(null);
+    
+    // Reload data if there were changes
+    if (hasDataChanged) {
+      loadPawns();
+    }
+  };
+  
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+  
+  // Handle filter change
+  const handleCustomerFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCustomerNameFilter(e.target.value);
+    setCurrentPage(1); // Reset to first page when filter changes
+  };
+  
+  // Handle status filter change
+  const handleStatusFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setStatusFilter(e.target.value as PawnStatus | "all");
+    setCurrentPage(1); // Reset to first page when filter changes
+  };
+  
+  // Handle clear filters
+  const handleClearFilters = () => {
+    setCustomerNameFilter("");
+    setStatusFilter("all");
+    setCurrentPage(1);
   };
   
   // Handle export Excel
@@ -176,20 +204,25 @@ export default function PawnWarningsPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
             <div>
               <label className="block text-sm font-medium mb-1">Tên khách hàng</label>
-              <input
-                type="text"
-                placeholder="Tên khách hàng, VD: Tuấn"
-                value={filters.customer_name}
-                onChange={(e) => setFilters(prev => ({ ...prev, customer_name: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                  <Search className="h-4 w-4 text-gray-400" />
+                </div>
+                <Input
+                  type="text"
+                  placeholder="Tên khách hàng, VD: Tuấn"
+                  value={customerNameFilter}
+                  onChange={handleCustomerFilterChange}
+                  className="pl-10 w-full"
+                />
+              </div>
             </div>
             
             <div>
               <label className="block text-sm font-medium mb-1">Trạng thái hợp đồng</label>
               <select
-                value={filters.status}
-                onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value as PawnStatus | "all" }))}
+                value={statusFilter}
+                onChange={handleStatusFilterChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">Tất cả</option>
@@ -202,10 +235,11 @@ export default function PawnWarningsPage() {
             
             <div className="flex items-end gap-2">
               <Button 
-                onClick={() => handleSearch(filters)}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={handleClearFilters}
+                variant="outline"
+                disabled={!customerNameFilter && statusFilter === "all"}
               >
-                Tìm kiếm
+                Xóa bộ lọc
               </Button>
               <Button 
                 onClick={handleExportExcel}
@@ -217,6 +251,24 @@ export default function PawnWarningsPage() {
               </Button>
             </div>
           </div>
+          
+          {/* Show filter info if active */}
+          {(customerNameFilter || statusFilter !== "all") && (
+            <div className="mt-2 text-sm text-blue-600">
+              {customerNameFilter && (
+                <span>Đang lọc theo tên khách hàng: <span className="font-semibold">{customerNameFilter}</span> </span>
+              )}
+              {statusFilter !== "all" && (
+                <span>
+                  {customerNameFilter && "| "}
+                  Trạng thái: <span className="font-semibold">{statusMap[statusFilter].label}</span>
+                </span>
+              )}
+              {totalItems > 0 ? 
+                ` (${totalItems} kết quả)` : 
+                " (Không có kết quả)"}
+            </div>
+          )}
         </div>
         
         {/* Error Display */}
@@ -233,7 +285,21 @@ export default function PawnWarningsPage() {
           statusMap={statusMap}
           onViewDetail={handleViewDetail}
           onCustomerClick={handleCustomerClick}
+          summary={summary}
         />
+        
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="mt-4 flex justify-center">
+            <PawnWarningsPagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              itemsPerPage={itemsPerPage}
+              onPageChange={handlePageChange}
+            />
+          </div>
+        )}
       </div>
       
       {/* Modals */}

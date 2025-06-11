@@ -84,4 +84,8 @@ export interface CreditWithCustomer extends Credit {
     phone?: string | null;
     id_number?: string | null;
   };
+  // Custom fields for warnings
+  reason?: string;
+  latestPaymentDate?: string | null;
+  needsWarning?: boolean;
 }

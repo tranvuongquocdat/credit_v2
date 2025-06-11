@@ -54,7 +54,7 @@ export function InstallmentWarningsTable({
       onCustomerClick(warning);
     } else {
       // Default behavior: redirect to installments page with contract filter
-      router.push(`/installments?contract=${warning.contract_code}`);
+      router.push(`/installments/${warning.contract_code}`);
     }
   };
   

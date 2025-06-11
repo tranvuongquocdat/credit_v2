@@ -8,6 +8,8 @@ import { useStore } from "@/contexts/StoreContext";
 import { useRouter } from "next/navigation";
 import { countOverdueInstallments } from "@/lib/installmentPayment";
 import { countPawnWarnings } from "@/lib/pawn-warnings";
+import { countCreditWarnings } from "@/lib/credit-warnings";
+import { getCurrentUser } from "@/lib/auth";
 
 // This interface will represent the notification data structure
 interface NotificationCounts {
@@ -136,7 +138,14 @@ export function TopNavbar({ onToggleSidebar }: TopNavbarProps) {
     // Buộc router refresh để làm mới dữ liệu trang
     router.refresh();
   }, [setCurrentStore, router]);
-  
+  const [user, setUser] = useState<any>(null);
+  useEffect(() => { 
+    const fetchUser = async () => {
+      const user = await getCurrentUser();
+      setUser(user);
+    };
+    fetchUser();
+  }, []);
   // Auto refresh stores khi component mount lần đầu (sau khi login)
   useEffect(() => {
     if (!hasInitialized) {
@@ -167,14 +176,20 @@ export function TopNavbar({ onToggleSidebar }: TopNavbarProps) {
             console.error('Error fetching pawn warnings count:', pawnError);
           }
           
+          // Get real count of credit warnings
+          const { count: creditWarningsCount, error: creditError } = await countCreditWarnings(currentStore.id);
+          
+          if (creditError) {
+            console.error('Error fetching credit warnings count:', creditError);
+          }
+          
           // Simulate different notification counts based on store ID to demonstrate it works
-          const storeIdNum = parseInt(currentStore.id) || 0;
           const mockData = {
-            storeInvoices: 2 + storeIdNum,
-            appointments: 3 + storeIdNum,
-            pawnInvoices: pawnError ? (4 + storeIdNum) : pawnWarningsCount, // Use real count if available
-            loanInvoices: 6 + storeIdNum,
-            installmentInvoices: installmentError ? (9 + storeIdNum) : overdueInstallments // Use real count if available
+            storeInvoices: 0,
+            appointments: 0,
+            pawnInvoices: pawnError ? 0 : pawnWarningsCount, // Use real count if available
+            loanInvoices: creditError ? 0 : creditWarningsCount, // Use real count if available
+            installmentInvoices: installmentError ? 0 : overdueInstallments // Use real count if available
           };
           
           setNotificationCounts(mockData);
@@ -298,9 +313,9 @@ export function TopNavbar({ onToggleSidebar }: TopNavbarProps) {
         <div className="relative group ml-2">
           <button className="flex items-center space-x-1 p-1 hover:bg-[#3a5a75] transition-colors border-l border-r border-[rgba(0,0,0,0.2)] relative">
             <Avatar className="h-8 w-8 bg-[#729bbe]">
-              <AvatarFallback className="bg-[#3a5a75] text-white">AD</AvatarFallback>
+              <AvatarFallback className="bg-[#3a5a75] text-white">{user?.username?.charAt(0).toUpperCase() || 'N/A'}</AvatarFallback>
             </Avatar>
-            <span className="ml-1 hidden md:inline-block">Admin</span>
+            <span className="ml-1 hidden md:inline-block">{user?.username || 'N/A'}</span>
             <ChevronDown className="h-4 w-4 hidden md:block" />
           </button>
           

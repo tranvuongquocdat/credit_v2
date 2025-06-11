@@ -1308,8 +1308,7 @@ export function InstallmentPaymentHistoryModal({
                     <AlertDialogTitle>Xác nhận đóng hợp đồng</AlertDialogTitle>
                     <AlertDialogDescription>
                       <div className="space-y-3">
-                        <p>Bạn có chắc chắn muốn đóng hợp đồng này không? 
-                        Hành động này sẽ đánh dấu tất cả các kỳ còn lại là đã thanh toán và chuyển trạng thái hợp đồng thành "Đóng".</p>
+                        <p>Bạn có chắc chắn muốn đóng hợp đồng này không? Hành động này sẽ đánh dấu tất cả các kỳ còn lại là đã thanh toán và chuyển trạng thái hợp đồng thành "Đóng".</p>
                         
                         {debtAmount !== 0 && (
                           <div className="bg-gray-50 p-3 rounded">

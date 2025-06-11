@@ -565,13 +565,9 @@ export default function StoresPage() {
               onSubmit={selectedStore ? handleUpdateStore : handleAddStore}
               isSubmitting={isSubmitting}
               hideButtons={false}
+              onClose={() => setIsFormModalOpen(false)}
             />
             
-            <DialogFooter className="mt-6">
-              <Button variant="outline" type="button" onClick={() => setIsFormModalOpen(false)}>
-                Hủy
-              </Button>
-            </DialogFooter>
           </DialogContent>
         </Dialog>
         

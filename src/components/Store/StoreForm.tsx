@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect } from 'react';
-import { Store, StoreFormData, StoreStatus } from '@/models/store';
+import { useEffect } from 'react';
+import { Store, StoreFormData } from '@/models/store';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
@@ -9,7 +9,6 @@ import * as z from 'zod';
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -19,14 +18,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 
 interface StoreFormProps {
@@ -34,6 +25,7 @@ interface StoreFormProps {
   onSubmit: (data: StoreFormData) => Promise<void>;
   isSubmitting: boolean;
   hideButtons?: boolean;
+  onClose: () => void;
 }
 
 // Schema validation cho form
@@ -47,25 +39,9 @@ const formSchema = z.object({
   phone: z.string()
     .min(1, { message: "Số điện thoại không được để trống" })
     .regex(/^[0-9]{10,11}$/, { message: "Số điện thoại phải có 10-11 chữ số" }),
-  investment: z.coerce.number()
-    .min(0, { message: "Vốn đầu tư không được âm" })
-    .max(999999999999, { message: "Vốn đầu tư quá lớn" })
-    .optional(),
-  cash_fund: z.coerce.number()
-    .min(0, { message: "Quỹ tiền mặt không được âm" })
-    .max(999999999999, { message: "Quỹ tiền mặt quá lớn" })
-    .optional(),
-  status: z.nativeEnum(StoreStatus, {
-    required_error: "Vui lòng chọn trạng thái"
-  })
 });
 
-export default function StoreForm({ initialData, onSubmit, isSubmitting, hideButtons = false }: StoreFormProps) {
-  // Format number to currency
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
-  };
-  
+export default function StoreForm({ initialData, onSubmit, isSubmitting, hideButtons = false, onClose }: StoreFormProps) {
   // Sử dụng React Hook Form với Zod validation
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -73,9 +49,6 @@ export default function StoreForm({ initialData, onSubmit, isSubmitting, hideBut
       name: '',
       address: '',
       phone: '',
-      investment: 0,
-      cash_fund: 0,
-      status: StoreStatus.ACTIVE
     },
   });
   
@@ -86,9 +59,6 @@ export default function StoreForm({ initialData, onSubmit, isSubmitting, hideBut
         name: initialData.name || '',
         address: initialData.address || '',
         phone: initialData.phone || '',
-        investment: initialData.investment || 0,
-        cash_fund: initialData.cash_fund || 0,
-        status: initialData.status || StoreStatus.ACTIVE
       });
     } else {
       // Reset form khi không có initialData (tạo mới)
@@ -96,9 +66,6 @@ export default function StoreForm({ initialData, onSubmit, isSubmitting, hideBut
         name: '',
         address: '',
         phone: '',
-        investment: 0,
-        cash_fund: 0,
-        status: StoreStatus.ACTIVE
       });
     }
   }, [initialData, form]);
@@ -167,90 +134,11 @@ export default function StoreForm({ initialData, onSubmit, isSubmitting, hideBut
               </FormItem>
             )}
           />
-
-          {/* Vốn đầu tư */}
-          <FormField
-            control={form.control}
-            name="investment"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Vốn đầu tư (VNĐ)</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    min="0"
-                    step="1000"
-                    value={field.value || ''}
-                    onChange={(e) => {
-                      const value = e.target.value === '' ? 0 : Number(e.target.value);
-                      field.onChange(value);
-                    }}
-                  />
-                </FormControl>
-                {field.value !== undefined && field.value > 0 && (
-                  <p className="text-sm text-muted-foreground">{formatCurrency(field.value)}</p>
-                )}
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          {/* Quỹ tiền mặt */}
-          <FormField
-            control={form.control}
-            name="cash_fund"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Quỹ tiền mặt (VNĐ)</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    min="0"
-                    step="1000"
-                    value={field.value || ''}
-                    onChange={(e) => {
-                      const value = e.target.value === '' ? 0 : Number(e.target.value);
-                      field.onChange(value);
-                    }}
-                  />
-                </FormControl>
-                {field.value !== undefined && field.value > 0 && (
-                  <p className="text-sm text-muted-foreground">{formatCurrency(field.value)}</p>
-                )}
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          {/* Trạng thái */}
-          <FormField
-            control={form.control}
-            name="status"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Trạng thái</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Chọn trạng thái" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value={StoreStatus.ACTIVE}>Hoạt động</SelectItem>
-                    <SelectItem value={StoreStatus.SUSPENDED}>Tạm ngưng</SelectItem>
-                    <SelectItem value={StoreStatus.INACTIVE}>Không hoạt động</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
         </div>
 
         {!hideButtons && (
           <div className="flex justify-end mt-6 space-x-3">
+            <Button variant="outline" type="button" onClick={onClose}>Hủy</Button>
             <Button type="submit" disabled={isSubmitting} className="min-w-[120px]">
               {isSubmitting ? (
                 <>

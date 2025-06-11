@@ -1,7 +1,6 @@
 import { supabase } from './supabase';
 import { CreateInstallmentParams, Installment, InstallmentFilters, InstallmentStatus, InstallmentWithCustomer } from '@/models/installment';
 import { Customer } from '@/models/customer';
-import { format, addDays } from 'date-fns';
 import { formatCurrency } from '@/lib/utils';
 import { calculateDebtToLatestPaidPeriod } from './Installments/calculate_remaining_debt';
 

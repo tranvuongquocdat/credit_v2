@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useStore } from "@/contexts/StoreContext";
 import { CreditWithCustomer } from "@/models/credit";
-import { getCredits, CreditFilters } from "@/lib/credit";
+import { getCreditWarnings } from "@/lib/credit-warnings";
 import { CreditWarningsTable } from "@/components/Credits/CreditWarningsTable";
 import { Search } from "lucide-react";
 import { toast } from '@/components/ui/use-toast';
@@ -11,69 +11,55 @@ import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PaymentHistoryModal } from "@/components/Credits/PaymentHistoryModal";
-
+import { CreditWarningsPagination } from "@/components/Credits/CreditWarningsPagination";
 
 export default function CreditWarningPage() {
   const [credits, setCredits] = useState<CreditWithCustomer[]>([]);
-  const [filteredCredits, setFilteredCredits] = useState<CreditWithCustomer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [customerNameFilter, setCustomerNameFilter] = useState("");
   const { currentStore } = useStore();
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const itemsPerPage = 10;
   
   // State for payment history modal
   const [isPaymentHistoryModalOpen, setIsPaymentHistoryModalOpen] = useState(false);
   const [paymentHistoryCredit, setPaymentHistoryCredit] = useState<CreditWithCustomer | null>(null);
   
-  // Load all credits when the page loads or store changes
+  // Load credits when the page loads, store changes, or pagination/filter changes
   useEffect(() => {
-    loadCredits();
-  }, [currentStore]);
-  
-  // Filter credits when the customer name filter changes
-  useEffect(() => {
-    if (!credits.length) {
-      setFilteredCredits([]);
-      return;
+    if (currentStore?.id) {
+      loadCredits();
     }
-    
-    if (!customerNameFilter.trim()) {
-      setFilteredCredits(credits);
-      return;
-    }
-    
-    const filtered = credits.filter(credit => 
-      credit.customer?.name?.toLowerCase().includes(customerNameFilter.toLowerCase())
-    );
-    
-    setFilteredCredits(filtered);
-  }, [credits, customerNameFilter]);
+  }, [currentStore, currentPage, customerNameFilter]);
   
   async function loadCredits() {
+    if (!currentStore?.id) return;
+    
     setIsLoading(true);
     try {
-      // Create AbortController
-      const controller = new AbortController();
-      
-      // Fetch all credits filtered by current store
-      const filters: CreditFilters = {
-        store_id: currentStore?.id
-      };
-      
-      const { data, error } = await getCredits(1, 1000, filters, controller.signal);
+      const { data, error, totalItems: total, totalPages: pages } = await getCreditWarnings(
+        currentPage,
+        itemsPerPage,
+        currentStore.id,
+        customerNameFilter
+      );
       
       if (error) {
         toast({
           title: "Có lỗi khi tải dữ liệu hợp đồng",
-          description: typeof error === 'object' && error !== null && 'message' in error 
-            ? error.message as string 
-            : "Đã xảy ra lỗi không xác định",
+          description: typeof error === 'string' ? error : "Đã xảy ra lỗi không xác định",
         });
-        console.error("Error loading credits:", error);
+        console.error("Error loading credit warnings:", error);
         return;
       }
       
       setCredits(data || []);
-      setFilteredCredits(data || []);
+      setTotalItems(total || 0);
+      setTotalPages(pages || 1);
     } catch (err) {
       console.error("Error in loadCredits:", err);
       toast({
@@ -101,6 +87,23 @@ export default function CreditWarningPage() {
     }
   };
   
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+  
+  // Handle filter change
+  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCustomerNameFilter(e.target.value);
+    setCurrentPage(1); // Reset to first page when filter changes
+  };
+  
+  // Handle filter clear
+  const handleClearFilter = () => {
+    setCustomerNameFilter("");
+    setCurrentPage(1);
+  };
+  
   return (
     <Layout>
       <div className="container mx-auto">
@@ -122,13 +125,13 @@ export default function CreditWarningPage() {
                 type="text"
                 placeholder="Tìm kiếm theo tên khách hàng..."
                 value={customerNameFilter}
-                onChange={(e) => setCustomerNameFilter(e.target.value)}
+                onChange={handleFilterChange}
                 className="pl-10"
               />
             </div>
             <Button 
               variant="outline" 
-              onClick={() => setCustomerNameFilter("")}
+              onClick={handleClearFilter}
               disabled={!customerNameFilter}
             >
               Xóa bộ lọc
@@ -138,8 +141,8 @@ export default function CreditWarningPage() {
           {customerNameFilter && (
             <div className="mt-2 text-sm text-blue-600">
               Đang lọc theo tên khách hàng: <span className="font-semibold">{customerNameFilter}</span>
-              {filteredCredits.length > 0 ? 
-                ` (${filteredCredits.length} kết quả)` : 
+              {totalItems > 0 ? 
+                ` (${totalItems} kết quả)` : 
                 " (Không có kết quả)"}
             </div>
           )}
@@ -147,10 +150,23 @@ export default function CreditWarningPage() {
         
         <div className="mt-6">
           <CreditWarningsTable
-            credits={filteredCredits}
+            credits={credits}
             isLoading={isLoading}
             onShowPaymentHistory={handleShowPaymentHistory}
           />
+          
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="mt-4 flex justify-center">
+              <CreditWarningsPagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                itemsPerPage={itemsPerPage}
+                onPageChange={handlePageChange}
+              />
+            </div>
+          )}
         </div>
       </div>
       

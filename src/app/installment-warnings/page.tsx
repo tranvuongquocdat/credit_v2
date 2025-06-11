@@ -1,10 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useStore } from "@/contexts/StoreContext";
 import { InstallmentStatus, InstallmentWithCustomer } from "@/models/installment";
-import { getInstallments } from "@/lib/installment";
-import { InstallmentWarningsTable } from "@/components/Installments/InstallmentWarningsTable";
 import { Search } from "lucide-react";
 import { toast } from '@/components/ui/use-toast';
 import { Layout } from "@/components/Layout";
@@ -18,14 +16,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
-import { getLatestPaymentPaidDate } from "@/lib/Installments/get_latest_payment_paid_date";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUser } from "@/lib/auth";
+import { InstallmentWarningsTable } from "@/components/Installments/InstallmentWarningsTable";
+import { getInstallmentWarnings } from "@/lib/installment-warnings";
+import { InstallmentWarningsPagination } from "@/components/Installments/InstallmentWarningsPagination";
 
 export default function InstallmentWarningsPage() {
   const [installments, setInstallments] = useState<InstallmentWithCustomer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [customerNameFilter, setCustomerNameFilter] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [itemsPerPage] = useState(10);
   const { currentStore } = useStore();
   const [processingPayment, setProcessingPayment] = useState(false);
   const [paymentConfirmOpen, setPaymentConfirmOpen] = useState(false);
@@ -36,70 +40,43 @@ export default function InstallmentWarningsPage() {
   
   const router = useRouter();
   
-  // Sử dụng useMemo để tính toán filtered data
-  const filteredInstallments = useMemo(() => {
-    if (!installments.length) return [];
-    
-    if (!customerNameFilter.trim()) {
-      return installments;
-    }
-    
-    console.log('Filtering with customerNameFilter:', customerNameFilter);
-    
-    return installments.filter(installment => {
-      const customerName = installment.customer?.name?.toLowerCase() || '';
-      const filterText = customerNameFilter.toLowerCase();
-      const shouldInclude = customerName.includes(filterText);
-      
-      console.log(`Contract ${installment.contract_code}: customerName="${customerName}", filter="${filterText}", include=${shouldInclude}`);
-      
-      return shouldInclude;
-    });
-  }, [installments, customerNameFilter]);
-  
-  // Load installments khi page load hoặc store thay đổi
+  // Load installments khi page load, store thay đổi, filter thay đổi hoặc trang thay đổi
   useEffect(() => {
     loadInstallments();
-  }, [currentStore]);
+  }, [currentStore, customerNameFilter, currentPage]);
   
   async function loadInstallments() {
+    if (!currentStore?.id) return;
+    
     setIsLoading(true);
     try {
-      const { data, error } = await getInstallments(1,10, {
-        status: InstallmentStatus.ON_TIME,
-        store_id: currentStore?.id || '',
-      });
+      const { data, error, totalItems, totalPages } = await getInstallmentWarnings(
+        currentPage,
+        itemsPerPage,
+        currentStore.id,
+        customerNameFilter
+      );
 
-      // lấy ra ngày cuối cùng đóng tiền của từng hợp đồng qua getLatestPaymentPaidDate
-      const latestPaymentPaidDate = await Promise.all(data.map(async (installment) => {
-        return {
-          ...installment,
-          latestPaymentPaidDate: await getLatestPaymentPaidDate(installment.id)
-        };
-      }));
-
-      // nếu nhỏ hơn bằng hôm nay ( có giá trị trả về ), hoặc start_date nhỏ hơn bằng hôm nay ( nếu null) => cảnh báo
-      const warningInstallments = latestPaymentPaidDate.filter(installment => {
-        if (installment.latestPaymentPaidDate) {
-          return new Date(installment.latestPaymentPaidDate) <= new Date();
-        }
-        return new Date(installment.start_date) <= new Date();
-      });
-      
       if (error) {
         toast({
           title: "Có lỗi khi tải dữ liệu hợp đồng",
-          description: error.message,
+          description: error,
+          variant: "destructive"
         });
         return;
       }
       
-      setInstallments(warningInstallments || []);
+      setInstallments(data || []);
+      setTotalItems(totalItems);
+      setTotalPages(totalPages);
+      
+      console.log(`Loaded ${data.length} installments out of ${totalItems} total (page ${currentPage}/${totalPages})`);
     } catch (err) {
       console.error("Error in loadInstallments:", err);
       toast({
         title: "Có lỗi khi tải dữ liệu hợp đồng",
         description: "Vui lòng thử lại sau",
+        variant: "destructive"
       });
     } finally {
       setIsLoading(false);
@@ -121,6 +98,23 @@ export default function InstallmentWarningsPage() {
   // Handle customer click to navigate to credits
   const handleCustomerClick = (installment: InstallmentWithCustomer) => {
     router.push(`/installments/${installment.contract_code}`);
+  };
+  
+  // Handle search submit
+  const handleSearch = () => {
+    setCurrentPage(1); // Reset to first page when filtering
+    loadInstallments();
+  };
+  
+  // Clear filter
+  const clearFilter = () => {
+    setCustomerNameFilter("");
+    setCurrentPage(1);
+  };
+  
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
   };
   
   // Process payment after confirmation
@@ -348,12 +342,13 @@ export default function InstallmentWarningsPage() {
                 placeholder="Tìm kiếm theo tên khách hàng..."
                 value={customerNameFilter}
                 onChange={(e) => setCustomerNameFilter(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                 className="pl-10"
               />
             </div>
             <Button 
               variant="outline" 
-              onClick={() => setCustomerNameFilter("")}
+              onClick={clearFilter}
               disabled={!customerNameFilter}
             >
               Xóa bộ lọc
@@ -363,8 +358,8 @@ export default function InstallmentWarningsPage() {
           {customerNameFilter && (
             <div className="mt-2 text-sm text-blue-600">
               Đang lọc theo tên khách hàng: <span className="font-semibold">{customerNameFilter}</span>
-              {filteredInstallments.length > 0 ? 
-                ` (${filteredInstallments.length} kết quả)` : 
+              {totalItems > 0 ? 
+                ` (${totalItems} kết quả)` : 
                 " (Không có kết quả)"}
             </div>
           )}
@@ -372,11 +367,24 @@ export default function InstallmentWarningsPage() {
         
         <div className="mt-6">
           <InstallmentWarningsTable
-            installments={filteredInstallments}
+            installments={installments}
             isLoading={isLoading}
             onPayment={handlePayment}
             onCustomerClick={handleCustomerClick}
           />
+          
+          {/* Pagination Component */}
+          {totalPages > 1 && (
+            <div className="mt-4 flex justify-center">
+              <InstallmentWarningsPagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                itemsPerPage={itemsPerPage}
+                onPageChange={handlePageChange}
+              />
+            </div>
+          )}
         </div>
       </div>
       

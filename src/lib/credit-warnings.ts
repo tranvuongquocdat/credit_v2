@@ -1,52 +1,51 @@
-import { supabase } from '@/lib/supabase';
-import { PawnWithCustomerAndCollateral, PawnStatus } from '@/models/pawn';
-import { getLatestPaymentPaidDate } from '@/lib/Pawns/get_latest_payment_paid_date';
-import { calculateActualLoanAmount } from '@/lib/Pawns/calculate_actual_loan_amount';
+import { supabase } from "@/lib/supabase";
+import { CreditWithCustomer } from "@/models/credit";
+import { getLatestPaymentPaidDate } from "@/lib/Credits/get_latest_payment_paid_date";
 
 /**
- * Count the number of pawn contracts that have warnings (overdue or late interest)
+ * Count the number of credit contracts that have warnings (overdue or late interest)
  */
-export async function countPawnWarnings(storeId: string): Promise<{ count: number; error: any }> {
+export async function countCreditWarnings(storeId: string): Promise<{ count: number; error: any }> {
   try {
     if (!storeId) {
       return { count: 0, error: "Không có cửa hàng" };
     }
     
-    // Lấy tất cả pawns với trạng thái không phải CLOSED hoặc DELETED
-    const { data: pawns, error: pawnsError } = await supabase
-      .from('pawns')
+    // Lấy tất cả credits với trạng thái on_time thuộc store
+    const { data: credits, error: creditsError } = await supabase
+      .from('credits')
       .select(`
         id,
         loan_date,
         loan_period,
         interest_period
       `)
-      .not('status', 'in', `(${PawnStatus.CLOSED},${PawnStatus.DELETED})`)
+      .eq('status', 'on_time')
       .eq('store_id', storeId);
     
-    if (pawnsError) {
-      console.error("Error fetching pawns for counting:", pawnsError);
-      return { count: 0, error: pawnsError };
+    if (creditsError) {
+      console.error("Error fetching credits for counting:", creditsError);
+      return { count: 0, error: creditsError };
     }
     
-    if (!pawns || pawns.length === 0) {
+    if (!credits || credits.length === 0) {
       return { count: 0, error: null };
     }
     
-    // Đếm số lượng pawns cần cảnh báo
+    // Đếm số lượng credits cần cảnh báo
     const today = new Date();
     let warningCount = 0;
     
-    // Process each pawn to check if it needs a warning
-    for (const pawn of pawns) {
+    // Process each credit to check if it needs a warning
+    for (const credit of credits) {
       try {
         // Get latest payment date
-        const latestPaymentDate = await getLatestPaymentPaidDate(pawn.id);
+        const latestPaymentDate = await getLatestPaymentPaidDate(credit.id);
         
         // Calculate contract end date
-        const loanDate = new Date(pawn.loan_date || '');
+        const loanDate = new Date(credit.loan_date || '');
         const contractEndDate = new Date(loanDate);
-        contractEndDate.setDate(loanDate.getDate() + (pawn.loan_period || 0) - 1);
+        contractEndDate.setDate(loanDate.getDate() + (credit.loan_period || 0) - 1);
         
         // Is contract overdue?
         const isOverdue = today > contractEndDate;
@@ -58,14 +57,15 @@ export async function countPawnWarnings(storeId: string): Promise<{ count: numbe
           // Has payment history - check days since last payment
           const latestPaymentDateTime = new Date(latestPaymentDate);
           
-          // Tính số ngày từ lần thanh toán cuối đến ngày kết thúc hợp đồng (nếu đã quá hạn) hoặc đến hôm nay
+          // Tính số ngày từ lần thanh toán cuối đến hôm nay (hoặc ngày kết thúc hợp đồng nếu đã quá hạn)
+          // Đây là sửa đổi chính: sử dụng Math.min để đảm bảo chỉ tính đến ngày kết thúc hợp đồng
           const endDateForCalculation = isOverdue ? contractEndDate : today;
           const daysSinceLastPayment = Math.floor(
             (endDateForCalculation.getTime() - latestPaymentDateTime.getTime()) / (1000 * 60 * 60 * 24)
           );
           
           // Calculate late periods
-          const interestPeriod = pawn.interest_period || 30;
+          const interestPeriod = credit.interest_period || 10;
           const latePeriods = Math.floor(daysSinceLastPayment / interestPeriod);
           
           // If late by one or more periods, it needs warning
@@ -74,14 +74,14 @@ export async function countPawnWarnings(storeId: string): Promise<{ count: numbe
           }
         } else {
           // No payments yet - check days since loan date
-          // Tính số ngày từ ngày vay đến ngày kết thúc hợp đồng (nếu đã quá hạn) hoặc đến hôm nay
+          // Chỉ tính đến ngày kết thúc hợp đồng nếu đã quá hạn
           const endDateForCalculation = isOverdue ? contractEndDate : today;
           const daysSinceLoan = Math.floor(
             (endDateForCalculation.getTime() - loanDate.getTime()) / (1000 * 60 * 60 * 24) + 1
           );
           
           // Calculate late periods
-          const interestPeriod = pawn.interest_period || 30;
+          const interestPeriod = credit.interest_period || 10;
           const latePeriods = Math.floor(daysSinceLoan / interestPeriod);
           
           // If late by one or more periods, it needs warning
@@ -90,29 +90,28 @@ export async function countPawnWarnings(storeId: string): Promise<{ count: numbe
           }
         }
         
-        // If overdue or needs warning, increment counter
-        if (isOverdue || needsWarning) {
+        // Add to warning count if needs warning or is overdue
+        if (needsWarning || isOverdue) {
           warningCount++;
         }
       } catch (err) {
-        console.error(`Error processing pawn ${pawn.id} for count:`, err);
-        // Continue with other pawns even if this one fails
+        console.error(`Error processing credit ${credit.id} for count:`, err);
+        // Continue with other credits even if this one fails
       }
     }
     
     return { count: warningCount, error: null };
   } catch (err) {
-    console.error("Error in countPawnWarnings:", err);
+    console.error("Error in countCreditWarnings:", err);
     return { count: 0, error: err instanceof Error ? err.message : "Unknown error" };
   }
 }
 
-export async function getPawnWarnings(
+export async function getCreditWarnings(
   page: number = 1,
   limit: number = 10,
   storeId: string,
-  customerFilter: string = '',
-  statusFilter: PawnStatus | 'all' = 'all'
+  customerFilter: string = ''
 ) {
   try {
     if (!storeId) {
@@ -124,29 +123,23 @@ export async function getPawnWarnings(
       };
     }
 
-    console.log("Executing pawn warnings query with:", { page, limit, storeId, customerFilter, statusFilter });
+    console.log("Executing credit warnings query with:", { page, limit, storeId, customerFilter });
     
-    // Lấy tất cả pawns với trạng thái không phải CLOSED hoặc DELETED
-    let pawnsQuery = supabase
-      .from('pawns')
+    // Lấy tất cả credits với trạng thái 'on_time' thuộc store
+    let creditsQuery = supabase
+      .from('credits')
       .select(`
         *,
-        customer:customers(*),
-        collateral_asset:collaterals(*)
+        customer:customers(*)
       `)
-      .not('status', 'in', `(${PawnStatus.CLOSED},${PawnStatus.DELETED})`)
+      .eq('status', 'on_time')
       .eq('store_id', storeId)
       .order('created_at', { ascending: false });
-      
-    // Apply status filter if specified
-    if (statusFilter !== 'all') {
-      pawnsQuery = pawnsQuery.eq('status', statusFilter);
-    }
       
     // Áp dụng filter theo tên khách hàng nếu có
     if (customerFilter) {
       // First apply other filters, then fetch customer IDs manually and apply a second filter
-      const queryWithoutCustomerFilter = pawnsQuery;
+      const queryWithoutCustomerFilter = creditsQuery;
       
       // Get all customer IDs whose names match the filter
       const { data: matchingCustomers } = await supabase
@@ -158,22 +151,22 @@ export async function getPawnWarnings(
         // Extract customer IDs
         const customerIds = matchingCustomers.map(c => c.id);
         // Apply in filter to original query
-        pawnsQuery = queryWithoutCustomerFilter.in('customer_id', customerIds);
+        creditsQuery = queryWithoutCustomerFilter.in('customer_id', customerIds);
       } else {
         // No matching customers, return empty result
-        pawnsQuery = queryWithoutCustomerFilter.eq('id', '00000000-0000-0000-0000-000000000000'); // Non-existent ID
+        creditsQuery = queryWithoutCustomerFilter.eq('id', '00000000-0000-0000-0000-000000000000'); // Non-existent ID
       }
     }
     
-    // Fetch all pawns matching our filters (no pagination yet)
-    const { data: allPawns, error: pawnsError } = await pawnsQuery;
+    // Fetch all credits matching our filters (no pagination yet)
+    const { data: allCredits, error: creditsError } = await creditsQuery;
     
-    if (pawnsError) {
-      console.error("Error fetching pawns:", pawnsError);
-      throw pawnsError;
+    if (creditsError) {
+      console.error("Error fetching credits:", creditsError);
+      throw creditsError;
     }
     
-    if (!allPawns || allPawns.length === 0) {
+    if (!allCredits || allCredits.length === 0) {
       return { 
         data: [], 
         error: null, 
@@ -182,44 +175,40 @@ export async function getPawnWarnings(
       };
     }
     
-    // Process pawns to check for warnings
+    // Process credits to check for warnings
     const today = new Date();
-    const processedPawns = await Promise.all(
-      allPawns.map(async (pawn) => {
+    const processedCredits = await Promise.all(
+      allCredits.map(async (credit) => {
         try {
           // Sử dụng hàm có sẵn để lấy ngày thanh toán cuối cùng
-          const latestPaymentDate = await getLatestPaymentPaidDate(pawn.id);
+          const latestPaymentDate = await getLatestPaymentPaidDate(credit.id);
           
           // Calculate contract end date
-          const loanDate = new Date(pawn.loan_date || '');
+          const loanDate = new Date(credit.loan_date || '');
           const contractEndDate = new Date(loanDate);
-          contractEndDate.setDate(loanDate.getDate() + (pawn.loan_period || 0) - 1);
+          contractEndDate.setDate(loanDate.getDate() + (credit.loan_period || 0) - 1);
           
           // Is contract overdue?
           const isOverdue = today > contractEndDate;
-          
-          // Calculate actual loan amount
-          const actualLoanAmount = await calculateActualLoanAmount(pawn.id);
           
           // Check if needs warning:
           // 1. If has latest payment, check if it's before today
           // 2. If no payment, check if loan date is before today
           let needsWarning = false;
           let reason = '';
-          let oldDebt = 0;
-          let interestAmount = 0;
           
           if (latestPaymentDate) {
             const latestPaymentDateTime = new Date(latestPaymentDate);
             
-            // Tính số ngày từ lần thanh toán cuối đến ngày kết thúc hợp đồng (nếu đã quá hạn) hoặc đến hôm nay
+            // Tính số ngày từ lần thanh toán cuối đến hôm nay (hoặc ngày kết thúc hợp đồng nếu đã quá hạn)
+            // Đây là sửa đổi chính: chỉ tính đến ngày kết thúc hợp đồng
             const endDateForCalculation = isOverdue ? contractEndDate : today;
             const daysSinceLastPayment = Math.floor(
               (endDateForCalculation.getTime() - latestPaymentDateTime.getTime()) / (1000 * 60 * 60 * 24)
             );
             
-            // Tính số kỳ chậm (mặc định 30 ngày/kỳ hoặc theo interest_period)
-            const interestPeriod = pawn.interest_period || 30;
+            // Tính số kỳ chậm (mặc định 10 ngày/kỳ hoặc theo interest_period)
+            const interestPeriod = credit.interest_period || 10;
             const latePeriods = Math.floor(daysSinceLastPayment / interestPeriod);
             
             if (latePeriods > 0) {
@@ -237,16 +226,17 @@ export async function getPawnWarnings(
               }
             }
           } else {
-            // No payments yet - check days since loan date
-            // Tính số ngày từ ngày vay đến ngày kết thúc hợp đồng (nếu đã quá hạn) hoặc đến hôm nay
+            // No payments yet - check if loan date is before today
+            // Chỉ tính đến ngày kết thúc hợp đồng nếu đã quá hạn
             const endDateForCalculation = isOverdue ? contractEndDate : today;
             const daysSinceLoan = Math.floor(
               (endDateForCalculation.getTime() - loanDate.getTime()) / (1000 * 60 * 60 * 24) + 1
             );
-            const interestPeriod = pawn.interest_period || 30;
+            const interestPeriod = credit.interest_period || 10;
             const latePeriods = Math.floor(daysSinceLoan / interestPeriod);
             if (latePeriods > 0) {
               needsWarning = true;
+              
               reason = `Chậm ${latePeriods} kỳ`;
               
               // Add overdue info if applicable
@@ -261,72 +251,56 @@ export async function getPawnWarnings(
             }
           }
           
-          // Return pawn with warning info if needed
-          // Always return the pawn for display, even if there's no warning
-          // This allows flexible filtering by the UI
-          return {
-            ...pawn,
-            latestPaymentDate,
-            reason: reason || 'Cần kiểm tra',
-            needsWarning: needsWarning,
-            actualLoanAmount: actualLoanAmount || pawn.loan_amount,
-            oldDebt: oldDebt,
-            interestAmount: interestAmount,
-            totalDueAmount: oldDebt + interestAmount
-          };
+          // Return credit with warning info if needed
+          if (needsWarning) {
+            return {
+              ...credit,
+              latestPaymentDate,
+              reason,
+              needsWarning: true
+            };
+          }
+          
+          return null; // Not a warning
         } catch (err) {
-          console.error(`Error processing pawn ${pawn.id}:`, err);
+          console.error(`Error processing credit ${credit.id}:`, err);
           return null;
         }
       })
     );
     
-    // Filter out nulls and only include warnings if needed
-    const warningPawns = processedPawns
-      .filter(pawn => pawn !== null) as PawnWithCustomerAndCollateral[];
-    
-    // Sort by loan date (oldest first)
-    warningPawns.sort((a, b) => {
-      const dateA = a?.loan_date ? new Date(a.loan_date).getTime() : 0;
-      const dateB = b?.loan_date ? new Date(b.loan_date).getTime() : 0;
-      return dateA - dateB;
-    });
+    // Filter out nulls and sort by loan date (oldest first)
+    const warningCredits = processedCredits
+      .filter(credit => credit !== null)
+      .sort((a, b) => {
+        const dateA = a?.loan_date ? new Date(a.loan_date).getTime() : 0;
+        const dateB = b?.loan_date ? new Date(b.loan_date).getTime() : 0;
+        return dateA - dateB;
+      }) as CreditWithCustomer[];
     
     // Apply pagination manually
     const offset = (page - 1) * limit;
-    const paginatedPawns = warningPawns.slice(offset, offset + limit);
+    const paginatedCredits = warningCredits.slice(offset, offset + limit);
     
     // Calculate total pages
-    const totalItems = warningPawns.length;
+    const totalItems = warningCredits.length;
     const totalPages = Math.ceil(totalItems / limit);
     
-    // Calculate grand totals for summary
-    const grandTotalLoanAmount = warningPawns.reduce((sum, pawn) => sum + (pawn.actualLoanAmount || 0), 0);
-    const grandTotalDueAmount = warningPawns.reduce((sum, pawn) => sum + (pawn.totalDueAmount || 0), 0);
-    
-    console.log(`Pawn warnings result: ${paginatedPawns.length} items, total: ${totalItems}, pages: ${totalPages}`);
+    console.log(`Credit warnings result: ${paginatedCredits.length} items, total: ${totalItems}, pages: ${totalPages}`);
     
     return { 
-      data: paginatedPawns, 
+      data: paginatedCredits, 
       error: null, 
       totalItems,
-      totalPages,
-      summary: {
-        totalLoanAmount: grandTotalLoanAmount,
-        totalDueAmount: grandTotalDueAmount
-      }
+      totalPages
     };
   } catch (err) {
-    console.error("Error in getPawnWarnings:", err);
+    console.error("Error in getCreditWarnings:", err);
     return { 
       data: [], 
       error: err instanceof Error ? err.message : "Unknown error", 
       totalItems: 0,
-      totalPages: 0,
-      summary: {
-        totalLoanAmount: 0,
-        totalDueAmount: 0
-      }
+      totalPages: 0
     };
   }
 } 

@@ -90,6 +90,14 @@ export interface PawnWithCustomerAndCollateral extends Pawn {
     address?: string | null;
   };
   collateral_asset?: Collateral | null;
+  // Warning fields
+  latestPaymentDate?: string | null;
+  reason?: string;
+  needsWarning?: boolean;
+  actualLoanAmount?: number;
+  oldDebt?: number;
+  interestAmount?: number;
+  totalDueAmount?: number;
 }
 
 // Thông tin hợp đồng với dữ liệu khách hàng

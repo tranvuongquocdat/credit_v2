@@ -130,10 +130,9 @@ const sidebarItems: SidebarItem[] = [
     title: 'Quản trị hệ thống', 
     path: '/admins', 
     icon: <FiShield size={20} />,
-    redColor: true,
     superAdminOnly: true,
     submenu: [
-      { title: 'Quản lý Admin', path: '/admins', icon: <FiShield size={18} />, redColor: true },
+      { title: 'Quản lý Admin', path: '/admins', icon: <FiShield size={18} /> },
     ]
   },
 ];
@@ -144,6 +143,7 @@ export default function Sidebar() {
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isLoadingUser, setIsLoadingUser] = useState(true);
+  const [isFiltering, setIsFiltering] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -151,12 +151,14 @@ export default function Sidebar() {
   useEffect(() => {
     const fetchUser = async () => {
       try {
+        setIsFiltering(true);
         const user = await getCurrentUser();
         setCurrentUser(user);
       } catch (error) {
         console.error('Error fetching user:', error);
       } finally {
         setIsLoadingUser(false);
+        setIsFiltering(false);
       }
     };
 
@@ -195,7 +197,7 @@ export default function Sidebar() {
 
   // Filter sidebar items based on user role
   const getFilteredSidebarItems = () => {
-    if (isLoadingUser) return sidebarItems.filter(item => !item.superAdminOnly);
+    if (isLoadingUser || isFiltering) return [];
     
     // If user is superadmin, only show SuperAdmin items
     if (currentUser?.role === 'superadmin') {
@@ -206,12 +208,36 @@ export default function Sidebar() {
     return sidebarItems.filter(item => !item.superAdminOnly);
   };
 
-  return (
-    <div 
-      className={`fixed left-0 top-14 h-[calc(100vh-3.5rem)] bg-white shadow-lg transition-all duration-300 ${
+  // Don't render content while filtering
+  if (isFiltering) {
+    return (
+      <div className={`fixed left-0 top-14 h-[calc(100vh-3.5rem)] bg-white shadow-lg transition-all duration-300 ${
         isCollapsed ? 'w-20' : 'w-64'
-      } z-40`}
-    >
+      } z-40`}>
+        <div className="flex h-12 items-center justify-between px-4 border-b">
+          {!isCollapsed && (
+            <div className="flex items-center space-x-2">
+              <h2 className="text-sm font-medium text-gray-600">Menu điều hướng</h2>
+            </div>
+          )}
+          <button
+            onClick={toggleCollapsed}
+            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            {isCollapsed ? <FiMenu size={20} /> : <FiChevronLeft size={20} />}
+          </button>
+        </div>
+        <div className="p-4 flex items-center justify-center h-[calc(100vh-3.5rem-3rem)]">
+          <div className="animate-pulse text-gray-400">Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`fixed left-0 top-14 h-[calc(100vh-3.5rem)] bg-white shadow-lg transition-all duration-300 ${
+      isCollapsed ? 'w-20' : 'w-64'
+    } z-40`}>
       <div className="flex h-12 items-center justify-between px-4 border-b">
         {!isCollapsed && (
           <div className="flex items-center space-x-2">
@@ -236,7 +262,6 @@ export default function Sidebar() {
           {getFilteredSidebarItems().map((item) => (
             <li key={item.path}>
               {item.submenu ? (
-                // Item có submenu
                 <div>
                   <button
                     onClick={() => toggleExpanded(item.path)}
@@ -245,7 +270,7 @@ export default function Sidebar() {
                         ? 'bg-blue-50 text-blue-600'
                         : 'text-gray-600 hover:bg-gray-50'
                     } ${isCollapsed ? 'justify-center' : ''} ${
-                      item.superAdminOnly ? 'border-2 border-red-200 bg-red-50' : ''
+                      item.superAdminOnly ? 'border-2' : ''
                     }`}
                   >
                     <div className="flex items-center space-x-3">
@@ -290,7 +315,6 @@ export default function Sidebar() {
                   )}
                 </div>
               ) : (
-                // Item không có submenu
                 <Link
                   href={item.path}
                   className={`flex items-center space-x-3 p-2.5 rounded-lg transition-colors ${
@@ -298,7 +322,7 @@ export default function Sidebar() {
                       ? 'bg-blue-50 text-blue-600'
                       : 'text-gray-600 hover:bg-gray-50'
                   } ${isCollapsed ? 'justify-center' : ''} ${
-                    item.superAdminOnly ? 'border-2 border-red-200 bg-red-50' : ''
+                    item.superAdminOnly ? 'border-2' : ''
                   }`}
                 >
                   <span className="flex-shrink-0">{item.icon}</span>
