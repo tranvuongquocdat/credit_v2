@@ -77,6 +77,7 @@ export async function getInstallmentWarnings(
       .select('installment_id, effective_date, transaction_type')
       .in('installment_id', installmentIds as string[])
       .eq('transaction_type', 'payment')
+      .eq('is_deleted', false)
       .order('effective_date', { ascending: false });
       
     if (paymentsError) {

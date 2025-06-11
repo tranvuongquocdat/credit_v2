@@ -267,7 +267,7 @@ export async function getPawnWarnings(
           return {
             ...pawn,
             latestPaymentDate,
-            reason: reason || 'Cần kiểm tra',
+            reason: reason,
             needsWarning: needsWarning,
             actualLoanAmount: actualLoanAmount || pawn.loan_amount,
             oldDebt: oldDebt,
@@ -283,7 +283,7 @@ export async function getPawnWarnings(
     
     // Filter out nulls and only include warnings if needed
     const warningPawns = processedPawns
-      .filter(pawn => pawn !== null) as PawnWithCustomerAndCollateral[];
+      .filter(pawn => pawn?.needsWarning) as PawnWithCustomerAndCollateral[];
     
     // Sort by loan date (oldest first)
     warningPawns.sort((a, b) => {
