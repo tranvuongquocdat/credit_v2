@@ -23,6 +23,7 @@ import { InstallmentStatus } from '@/models/installment';
 import Spinner from '@/components/ui/spinner';
 import { useToast } from '@/components/ui/use-toast';
 import { useStore } from '@/contexts/StoreContext';
+import { MoneyInput } from '@/components/ui/money-input';
 
 interface InstallmentCreateModalProps {
   isOpen: boolean;
@@ -111,14 +112,14 @@ export function InstallmentCreateModal({
   
   // Handle amount change for trả góp
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value.replace(/\./g, '');
+    const rawValue = e.target.value;
     setAmountGiven(rawValue);
     setFormattedAmountGiven(formatNumber(rawValue));
   };
   
   // Handle amount change for tiền đưa khách
   const handleCustomerAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value.replace(/\./g, '');
+    const rawValue = e.target.value;
     setCustomerAmount(rawValue);
     setFormattedCustomerAmount(formatNumber(rawValue));
   };
@@ -473,13 +474,11 @@ export function InstallmentCreateModal({
               Tiền trả góp <span className="text-red-500">*</span>
             </Label>
             <div className="flex items-center gap-3">
-              <Input 
+              <MoneyInput 
                 id="amountGiven"
-                type="text"
-                value={formattedAmountGiven}
+                value={amountGiven}
                 onChange={handleAmountChange}
                 required
-                inputMode="numeric"
                 className="w-48"
                 placeholder="0"
               />
@@ -492,13 +491,11 @@ export function InstallmentCreateModal({
               Tiền đưa khách <span className="text-red-500">*</span>
             </Label>
             <div className="flex items-center gap-3">
-              <Input 
+              <MoneyInput 
                 id="tiendua"
-                type="text"
-                value={formattedCustomerAmount}
+                value={customerAmount}
                 onChange={handleCustomerAmountChange}
                 required
-                inputMode="numeric"
                 className="w-48"
                 placeholder="0"
               />

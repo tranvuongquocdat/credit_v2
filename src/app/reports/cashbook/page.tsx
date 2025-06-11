@@ -118,6 +118,24 @@ export default function CashbookPage() {
       const startDateObj = parse(startDate, 'yyyy-MM-dd', new Date());
       const utcDate = format(startDateObj, 'yyyy-MM-dd');
       
+      // Fetch store creation date to check if this is the first day
+      const { data: storeData, error: storeError } = await supabase
+        .from('stores')
+        .select('created_at')
+        .eq('id', currentStore.id)
+        .single();
+      
+      if (storeError) throw storeError;
+      
+      // Check if the date being viewed is the store creation date
+      if (storeData && storeData.created_at) {
+        const storeCreationDate = format(new Date(storeData.created_at), 'yyyy-MM-dd');
+        // If the date we're checking is the store creation date, opening balance should be 0
+        if (storeCreationDate === utcDate) {
+          return 0;
+        }
+      }
+      
       // Fetch the closest record before or on the start date
       const { data, error } = await supabase
         .from('store_total_fund')

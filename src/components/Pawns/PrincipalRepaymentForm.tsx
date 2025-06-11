@@ -6,6 +6,7 @@ import { toast } from '@/components/ui/use-toast';
 import { getPawnById } from '@/lib/pawn';
 import { getLatestPaymentPaidDate } from '@/lib/Pawns/get_latest_payment_paid_date';
 import { PawnWithCustomerAndCollateral } from '@/models/pawn';
+import { MoneyInput } from '@/components/ui/money-input';
 
 interface PrincipalRepaymentFormProps {
   onSubmit: (data: {
@@ -44,7 +45,7 @@ export function PrincipalRepaymentForm({ onSubmit, pawnId, disabled = false, onS
 
   // Handle amount change
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value.replace(/\./g, '');
+    const rawValue = e.target.value;
     setAmount(Number(rawValue));
     setFormattedAmount(formatNumber(rawValue));
   };
@@ -224,16 +225,12 @@ export function PrincipalRepaymentForm({ onSubmit, pawnId, disabled = false, onS
             <span className="text-red-500 ml-1">*</span>
           </label>
           <div className="w-64">
-            <input
+            <MoneyInput
               id="amount"
-              type="text"
-              className={`border rounded px-2 py-1 w-full ${
-                amount > actualLoanAmount && actualLoanAmount > 0 ? 'border-red-500 bg-red-50' : ''
-              }`}
-              value={formattedAmount}
+              value={amount.toString()}
               onChange={handleAmountChange}
               placeholder="0"
-              inputMode="numeric"
+              className={amount > actualLoanAmount && actualLoanAmount > 0 ? 'border-red-500 bg-red-50' : ''}
               disabled={disabled || loadingActualAmount}
             />
             {amount > actualLoanAmount && actualLoanAmount > 0 && (

@@ -6,6 +6,7 @@ import { toast } from '@/components/ui/use-toast';
 import { getPawnById } from '@/lib/pawn';
 import { getLatestPaymentPaidDate } from '@/lib/Pawns/get_latest_payment_paid_date';
 import { PawnWithCustomerAndCollateral } from '@/models/pawn';
+import { MoneyInput } from '@/components/ui/money-input';
 
 interface AdditionalLoanFormProps {
   onSubmit: (data: {
@@ -36,7 +37,7 @@ export function AdditionalLoanForm({ onSubmit, pawnId, disabled = false, onSucce
 
   // Handle amount change
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value.replace(/\./g, '');
+    const rawValue = e.target.value;
     setAmount(Number(rawValue));
     setFormattedAmount(formatNumber(rawValue));
   };
@@ -162,14 +163,11 @@ export function AdditionalLoanForm({ onSubmit, pawnId, disabled = false, onSucce
             Số tiền vay thêm
             <span className="text-red-500 ml-1">*</span>
           </label>
-          <input
+          <MoneyInput
             id="amount"
-            type="text"
-            className="border rounded px-2 py-1 w-64"
-            value={formattedAmount}
+            value={amount.toString()}
             onChange={handleAmountChange}
             placeholder="0"
-            inputMode="numeric"
             disabled={disabled}
           />
         </div>

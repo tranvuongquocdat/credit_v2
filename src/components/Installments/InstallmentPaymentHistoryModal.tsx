@@ -23,6 +23,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
 import { toast } from "@/components/ui/use-toast";
 import { DatePicker } from "@/components/ui/date-picker";
+import { MoneyInput } from "@/components/ui/money-input";
 import {
   InstallmentAmountHistory,
   getInstallmentAmountHistory,
@@ -813,41 +814,12 @@ export function InstallmentPaymentHistoryModal({
 
   // Calculate customer receive amount
   const calculateCustomerReceiveAmount = (): number => {
-    const downPayment = parseFormattedNumber(rotationDownPayment);
-    console.log("downPayment", rotationDownPayment);
+    const downPayment = parseFloat(rotationDownPayment) || 0;
     const amountToPay = Math.max(0, calculateRemainingToPay(installment, totalPaidAmount));
     const remainingDebt = 0 - (debtAmount || 0);
 
     // Customer receives: downPayment - remainingDebt
     return downPayment - amountToPay - remainingDebt;
-  };
-
-  // Handle rotation loan amount change
-  const handleRotationLoanAmountChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const value = e.target.value.replace(/\./g, "");
-    const numberValue = parseInt(value, 10);
-
-    if (!isNaN(numberValue)) {
-      setRotationLoanAmount(formatNumberWithDot(numberValue));
-    } else if (value === "") {
-      setRotationLoanAmount("");
-    }
-  };
-
-  // Handle rotation down payment change
-  const handleRotationDownPaymentChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const value = e.target.value.replace(/\./g, "");
-    const numberValue = parseInt(value, 10);
-
-    if (!isNaN(numberValue)) {
-      setRotationDownPayment(formatNumberWithDot(numberValue));
-    } else if (value === "") {
-      setRotationDownPayment("");
-    }
   };
 
   // Handler for rotating the contract (creating a new one and closing the current)
@@ -883,8 +855,8 @@ export function InstallmentPaymentHistoryModal({
         customer_id: installment.customer_id,
         employee_id: installment.employee_id,
         contract_code: `${installment.contract_code}-R`, // Add "R" suffix for rotated
-        down_payment: parseFormattedNumber(rotationDownPayment),
-        installment_amount: parseFormattedNumber(rotationLoanAmount),
+        down_payment: parseFloat(rotationDownPayment) || 0,
+        installment_amount: parseFloat(rotationLoanAmount) || 0,
         loan_period: parseInt(rotationDuration, 10),
         payment_period: parseInt(rotationPaymentPeriod, 10),
         loan_date: rotationLoanDate,
@@ -1640,11 +1612,9 @@ export function InstallmentPaymentHistoryModal({
                       </label>
                     </div>
                     <div className="flex-1 max-w-xs">
-                      <input
-                        type="text"
-                        className="border rounded p-2 w-full"
-                        value={formatNumberWithDot(parseFormattedNumber(rotationLoanAmount))}
-                        onChange={handleRotationLoanAmountChange}
+                      <MoneyInput 
+                        value={rotationLoanAmount}
+                        onChange={(e) => setRotationLoanAmount(e.target.value)}
                         disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
                       />
                     </div>
@@ -1660,11 +1630,9 @@ export function InstallmentPaymentHistoryModal({
                       </label>
                     </div>
                     <div className="flex-1 max-w-xs">
-                      <input
-                        type="text"
-                        className="border rounded p-2 w-full"
-                        value={formatNumberWithDot(parseFormattedNumber(rotationDownPayment))}
-                        onChange={handleRotationDownPaymentChange}
+                      <MoneyInput 
+                        value={rotationDownPayment}
+                        onChange={(e) => setRotationDownPayment(e.target.value)}
                         disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
                       />
                     </div>
@@ -1691,10 +1659,10 @@ export function InstallmentPaymentHistoryModal({
                       />
                     </div>
                     <div className="ml-3 text-sm text-gray-500">
-                      Ngày =&gt; ( {parseFormattedNumber(rotationLoanAmount) /
+                      Ngày =&gt; ( {(parseFloat(rotationLoanAmount) || 0) /
                         parseInt(rotationDuration, 10) || 0
                         ? formatCurrency(
-                            parseFormattedNumber(rotationLoanAmount) /
+                            (parseFloat(rotationLoanAmount) || 0) /
                               parseInt(rotationDuration, 10),
                           )
                         : formatCurrency(0)}

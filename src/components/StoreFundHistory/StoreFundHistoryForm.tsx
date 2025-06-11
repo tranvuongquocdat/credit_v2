@@ -132,11 +132,11 @@ export function StoreFundHistoryForm({
       {/* Customer Name */}
       <div>
         <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-          Tên KH
+          Người góp vốn
         </label>
         <Input
           id="name"
-          placeholder="Nhập tên khách hàng"
+          placeholder="Nhập tên người góp vốn"
           value={formData.name || ''}
           onChange={(e) => handleChange('name', e.target.value)}
           disabled={isSubmitting}

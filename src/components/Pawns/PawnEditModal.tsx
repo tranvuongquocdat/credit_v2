@@ -21,6 +21,7 @@ import { getCollateralById, getCollateralsByStore } from '@/lib/collateral';
 import { Customer } from '@/models/customer';
 import { PawnStatus, UpdatePawnParams, Pawn, InterestType } from '@/models/pawn';
 import { toast } from '@/components/ui/use-toast';
+import { MoneyInput } from '@/components/ui/money-input';
 import { Collateral } from '@/models/collateral';
 
 interface PawnEditModalProps {
@@ -130,7 +131,7 @@ export function PawnEditModal({
   
   // Handle loan amount change
   const handleLoanAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value.replace(/\./g, '');
+    const rawValue = e.target.value;
     setLoanAmount(rawValue);
     setFormattedLoanAmount(formatNumber(rawValue));
   };
@@ -541,49 +542,13 @@ export function PawnEditModal({
               <Label htmlFor="loanAmount" className="text-right">
                 Tổng số tiền vay <span className="text-red-500">*</span>
               </Label>
-              <div>
-                <Input 
-                  id="loanAmount"
-                  type="text"
-                  value={formattedLoanAmount}
-                  onChange={handleLoanAmountChange}
-                  required
-                  inputMode="numeric"
-                  placeholder="0"
-                  disabled={hasPayments}
-                />
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {loanAmountPresets.map(amount => (
-                    <Button 
-                      key={amount}
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => adjustLoanAmount(amount * 1000000)}
-                      className="px-2 py-1 h-auto"
-                      disabled={hasPayments}
-                    >
-                      {amount > 0 ? '+' : ''}{amount}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label className="text-right">Hình thức lãi</Label>
-              <select 
-                className="border rounded-md p-2 w-full"
-                value={interestType}
-                onChange={(e) => handleInterestTypeChange(e.target.value)}
-                disabled={hasPayments}
-              >
-                <option value="daily">Lãi phí ngày</option>
-                <option value="monthly_30">Lãi phí tháng (%) (30 ngày)</option>
-                <option value="monthly_custom">Lãi phí tháng (%) (Định kỳ)</option>
-                <option value="weekly_percent">Lãi phí tuần (%)</option>
-                <option value="weekly_k">Lãi phí tuần (k)</option>
-              </select>
+              <MoneyInput 
+                id="loanAmount"
+                value={loanAmount}
+                onChange={handleLoanAmountChange}
+                required
+                placeholder="0"
+              />
             </div>
             
             <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">

@@ -534,7 +534,7 @@ export default function CapitalPage() {
                   <TableRow>
                     <TableHead className="py-2 px-3 text-left font-medium w-12 border-b border-r border-gray-200">#</TableHead>
                     <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Thời gian</TableHead>
-                    <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Tên KH</TableHead>
+                    <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Người góp vốn</TableHead>
                     <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Loại giao dịch</TableHead>
                     <TableHead className="py-2 px-3 text-right font-medium border-b border-r border-gray-200">Số tiền</TableHead>
                     <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Ghi chú</TableHead>

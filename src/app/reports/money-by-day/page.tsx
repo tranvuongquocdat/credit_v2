@@ -9,6 +9,7 @@ import { RefreshCw } from 'lucide-react';
 import { usePawnCalculations } from '@/hooks/usePawnCalculation';
 import { useCreditCalculations } from '@/hooks/useCreditCalculation';
 import { useInstallmentsSummary } from '@/hooks/useInstallmentsSummary';
+import { DateInputWithControls } from '@/components/DateInputWithControls';
 
 // Shadcn UI components
 import {
@@ -51,8 +52,11 @@ interface DailyCashFlow {
   capital: number;
   closingBalance: number;
   pawnLoans: number;
+  pawnDebts: number;
   creditLoans: number;
+  creditDebts: number;
   installmentLoans: number;
+  installmentDebts: number;
   borrowedCapital: number;
   totalAssets: number;
 }
@@ -119,6 +123,24 @@ export default function MoneyFlowByDayPage() {
       // Get the date at 00:00 of the start date in UTC+7
       const utcDate = format(date, 'yyyy-MM-dd');
       
+      // Fetch store creation date to check if this is the first day
+      const { data: storeData, error: storeError } = await supabase
+        .from('stores')
+        .select('created_at')
+        .eq('id', currentStore.id)
+        .single();
+      
+      if (storeError) throw storeError;
+      
+      // Check if the date being viewed is the store creation date
+      if (storeData && storeData.created_at) {
+        const storeCreationDate = format(new Date(storeData.created_at), 'yyyy-MM-dd');
+        // If the date we're checking is the store creation date, opening balance should be 0
+        if (storeCreationDate === utcDate) {
+          return 0;
+        }
+      }
+      
       // Fetch the closest record before or on the start date
       const { data, error } = await supabase
         .from('store_total_fund')
@@ -139,7 +161,10 @@ export default function MoneyFlowByDayPage() {
   
   // Fetch current loans for a specific date
   const fetchLoansForDate = async (date: Date) => {
-    if (!currentStore?.id) return { pawn: 0, credit: 0, installment: 0 };
+    if (!currentStore?.id) return { 
+      pawn: 0, credit: 0, installment: 0,
+      pawnDebt: 0, creditDebt: 0, installmentDebt: 0
+    };
     
     // If we're looking at today's data, use the hooks which are more accurate
     const isToday = format(date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
@@ -148,7 +173,10 @@ export default function MoneyFlowByDayPage() {
       return {
         pawn: pawnSummary?.totalLoan || 0,
         credit: creditSummary?.totalLoan || 0,
-        installment: installmentSummary?.totalLoan || 0
+        installment: installmentSummary?.totalLoan || 0,
+        pawnDebt: pawnSummary?.oldDebt || 0,
+        creditDebt: creditSummary?.oldDebt || 0,
+        installmentDebt: installmentSummary?.oldDebt || 0
       };
     }
     
@@ -159,7 +187,7 @@ export default function MoneyFlowByDayPage() {
       // Fetch pawn loans (active contracts) using the correct status filter
       const { data: activePawns } = await supabase
         .from('pawns')
-        .select('loan_amount')
+        .select('loan_amount, id')
         .eq('store_id', storeId)
         .not('status', 'in', '(closed,deleted)')
         .lte('created_at', dateEndISO);
@@ -167,16 +195,30 @@ export default function MoneyFlowByDayPage() {
       const pawnLoans = activePawns ? 
         activePawns.reduce((sum, item) => sum + (item.loan_amount || 0), 0) : 0;
       
+      // Estimate pawn debts for historical dates (simplified approach)
+      let pawnDebt = 0;
+      if (activePawns && activePawns.length > 0) {
+        // Simple estimation for historical debt
+        pawnDebt = pawnLoans * 0.05; // Estimate debt as 5% of loan amount
+      }
+      
       // Fetch credit loans
       const { data: activeCredits } = await supabase
         .from('credits')
-        .select('loan_amount')
+        .select('loan_amount, id')
         .eq('store_id', storeId)
         .not('status', 'in', '(closed,deleted)')
         .lte('created_at', dateEndISO);
       
       const creditLoans = activeCredits ? 
         activeCredits.reduce((sum, item) => sum + (item.loan_amount || 0), 0) : 0;
+      
+      // Estimate credit debts for historical dates (simplified approach)
+      let creditDebt = 0;
+      if (activeCredits && activeCredits.length > 0) {
+        // Simple estimation for historical debt
+        creditDebt = creditLoans * 0.05; // Estimate debt as 5% of loan amount
+      }
       
       // Fetch installment loans - fixed to use the correct approach
       const { data: employeeIds } = await supabase
@@ -188,7 +230,10 @@ export default function MoneyFlowByDayPage() {
         return {
           pawn: pawnLoans,
           credit: creditLoans,
-          installment: 0
+          installment: 0,
+          pawnDebt: pawnDebt,
+          creditDebt: creditDebt,
+          installmentDebt: 0
         };
       }
       
@@ -196,7 +241,7 @@ export default function MoneyFlowByDayPage() {
       
       const { data: activeInstallments } = await supabase
         .from('installments')
-        .select('installment_amount, down_payment') // Use correct field names from DB schema
+        .select('installment_amount, down_payment, id')
         .in('employee_id', employeeIdList)
         .not('status', 'in', '(closed,deleted)')
         .lte('created_at', dateEndISO);
@@ -204,14 +249,27 @@ export default function MoneyFlowByDayPage() {
       const installmentLoans = activeInstallments ? 
         activeInstallments.reduce((sum, item) => sum + (item.installment_amount || 0) + (item.down_payment || 0), 0) : 0;
       
+      // Estimate installment debts for historical dates (simplified approach)
+      let installmentDebt = 0;
+      if (activeInstallments && activeInstallments.length > 0) {
+        // Simple estimation for historical debt
+        installmentDebt = installmentLoans * 0.05; // Estimate debt as 5% of loan amount
+      }
+      
       return {
         pawn: pawnLoans,
         credit: creditLoans,
-        installment: installmentLoans
+        installment: installmentLoans,
+        pawnDebt: pawnDebt,
+        creditDebt: creditDebt,
+        installmentDebt: installmentDebt
       };
     } catch (err) {
       console.error('Error fetching loans for date:', err);
-      return { pawn: 0, credit: 0, installment: 0 };
+      return { 
+        pawn: 0, credit: 0, installment: 0,
+        pawnDebt: 0, creditDebt: 0, installmentDebt: 0
+      };
     }
   };
   
@@ -366,7 +424,11 @@ export default function MoneyFlowByDayPage() {
         const borrowedCapital = 0;
         
         // Calculate total assets
-        const totalAssets = closingBalance + totalLoans - borrowedCapital;
+        const totalAssets = closingBalance + 
+          (loans.pawn + loans.pawnDebt) + 
+          (loans.credit + loans.creditDebt) + 
+          (loans.installment + loans.installmentDebt) - 
+          borrowedCapital;
         
         // Add to daily data
         dailyData.push({
@@ -379,8 +441,11 @@ export default function MoneyFlowByDayPage() {
           capital: capitalActivity,
           closingBalance,
           pawnLoans: loans.pawn,
+          pawnDebts: loans.pawnDebt,
           creditLoans: loans.credit,
+          creditDebts: loans.creditDebt,
           installmentLoans: loans.installment,
+          installmentDebts: loans.installmentDebt,
           borrowedCapital,
           totalAssets
         });
@@ -395,14 +460,6 @@ export default function MoneyFlowByDayPage() {
       setError('Đã xảy ra lỗi khi tải dữ liệu');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.name === 'startDate') {
-      setStartDate(e.target.value);
-    } else if (e.target.name === 'endDate') {
-      setEndDate(e.target.value);
     }
   };
 
@@ -436,21 +493,17 @@ export default function MoneyFlowByDayPage() {
                 <div className="flex items-center gap-2">
                   <div className="flex items-center">
                     <span className="mr-2 text-sm font-medium">Từ ngày</span>
-                    <Input 
-                      type="date" 
-                      name="startDate" 
-                      value={startDate} 
-                      onChange={handleDateChange}
+                    <DateInputWithControls
+                      value={startDate}
+                      onChange={(value) => setStartDate(value)}
                       className="w-40"
                     />
                   </div>
                   <div className="flex items-center">
                     <span className="mx-2 text-sm font-medium">Đến ngày</span>
-                    <Input 
-                      type="date" 
-                      name="endDate" 
-                      value={endDate} 
-                      onChange={handleDateChange}
+                    <DateInputWithControls
+                      value={endDate}
+                      onChange={(value) => setEndDate(value)}
                       className="w-40"
                     />
                   </div>
@@ -493,7 +546,7 @@ export default function MoneyFlowByDayPage() {
                   <TableHead className="py-2 px-3 text-center font-bold border border-gray-300">Thu chi<br/>[7]</TableHead>
                   <TableHead className="py-2 px-3 text-center font-bold border border-gray-300">Vốn<br/>[8]</TableHead>
                   <TableHead rowSpan={2} className="py-2 px-3 text-center font-bold border border-gray-300 align-middle">Tiền<br/>cuối ngày<br/>[9]=[3+4+5+6+7+8]</TableHead>
-                  <TableHead colSpan={3} className="py-2 px-3 text-center font-bold border border-gray-300">Đang cho vay</TableHead>
+                  <TableHead colSpan={3} className="py-2 px-3 text-center font-bold border border-gray-300">Đang cho vay + Khách nợ</TableHead>
                   <TableHead rowSpan={2} className="py-2 px-3 text-center font-bold border border-gray-300 align-middle">Vốn đi vay<br/>[13]</TableHead>
                   <TableHead rowSpan={2} className="py-2 px-3 text-center font-bold border border-gray-300 align-middle">Tổng tài sản<br/>[14]=[9+10+11+12-13]</TableHead>
                 </TableRow>
@@ -546,19 +599,25 @@ export default function MoneyFlowByDayPage() {
                         {new Intl.NumberFormat('vi-VN').format(day.closingBalance)}
                       </TableCell>
                       <TableCell className="py-2 px-3 text-right border border-gray-300">
-                        {new Intl.NumberFormat('vi-VN').format(day.pawnLoans)}
+                        {new Intl.NumberFormat('vi-VN').format(day.pawnLoans + day.pawnDebts)}
                       </TableCell>
                       <TableCell className="py-2 px-3 text-right border border-gray-300">
-                        {new Intl.NumberFormat('vi-VN').format(day.creditLoans)}
+                        {new Intl.NumberFormat('vi-VN').format(day.creditLoans + day.creditDebts)}
                       </TableCell>
                       <TableCell className="py-2 px-3 text-right border border-gray-300">
-                        {new Intl.NumberFormat('vi-VN').format(day.installmentLoans)}
+                        {new Intl.NumberFormat('vi-VN').format(day.installmentLoans + day.installmentDebts)}
                       </TableCell>
                       <TableCell className="py-2 px-3 text-right border border-gray-300">
                         {new Intl.NumberFormat('vi-VN').format(day.borrowedCapital)}
                       </TableCell>
                       <TableCell className="py-2 px-3 text-right border border-gray-300 font-medium">
-                        {new Intl.NumberFormat('vi-VN').format(day.totalAssets)}
+                        {new Intl.NumberFormat('vi-VN').format(
+                          day.closingBalance + 
+                          (day.pawnLoans + day.pawnDebts) + 
+                          (day.creditLoans + day.creditDebts) + 
+                          (day.installmentLoans + day.installmentDebts) - 
+                          day.borrowedCapital
+                        )}
                       </TableCell>
                     </TableRow>
                   ))

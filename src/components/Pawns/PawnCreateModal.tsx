@@ -24,6 +24,7 @@ import { CreatePawnParams, InterestType, PawnStatus } from '@/models/pawn';
 import { getStoreFinancialData } from '@/lib/store';
 import { AlertCircle } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
+import { MoneyInput } from '@/components/ui/money-input';
 
 interface PawnCreateModalProps {
   isOpen: boolean;
@@ -136,7 +137,7 @@ export function PawnCreateModal({
   
   // Handle loan amount change
   const handleLoanAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value.replace(/\./g, '');
+    const rawValue = e.target.value;
     setLoanAmount(rawValue);
     setFormattedLoanAmount(formatNumber(rawValue));
   };
@@ -653,13 +654,11 @@ export function PawnCreateModal({
               Tổng số tiền vay <span className="text-red-500">*</span>
             </Label>
             <div>
-              <Input 
+              <MoneyInput 
                 id="loanAmount"
-                type="text"
-                value={formattedLoanAmount}
+                value={loanAmount}
                 onChange={handleLoanAmountChange}
                 required
-                inputMode="numeric"
                 placeholder="0"
               />
               {fundError && (
