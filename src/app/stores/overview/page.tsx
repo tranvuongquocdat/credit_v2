@@ -3,11 +3,14 @@
 import { useEffect, useState } from 'react';
 import { Layout } from '@/components/Layout';
 import { useStore } from '@/contexts/StoreContext';
-import { usePawnCalculations } from '@/hooks/usePawnCalculation';
-import { useCreditCalculations } from '@/hooks/useCreditCalculation';
-import { useInstallmentsSummary } from '@/hooks/useInstallmentsSummary';
 import { supabase } from '@/lib/supabase';
 import { RefreshCw } from 'lucide-react';
+import {
+  FinancialSummary,
+  getPawnFinancialsForStore,
+  getCreditFinancialsForStore,
+  getInstallmentFinancialsForStore
+} from '@/lib/overview';
 
 // Shadcn UI components
 import {
@@ -26,16 +29,18 @@ interface StoreData {
   investment: number;
 }
 
+interface StoreSummary {
+  pawn: FinancialSummary;
+  credit: FinancialSummary;
+  installment: FinancialSummary;
+}
+
 export default function OverviewPage() {
   const { currentStore } = useStore();
   const [stores, setStores] = useState<StoreData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Fetch data from hooks
-  const { summary: pawnSummary, loading: pawnLoading } = usePawnCalculations();
-  const { summary: creditSummary, loading: creditLoading } = useCreditCalculations();
-  const { data: installmentSummary, loading: installmentLoading } = useInstallmentsSummary();
+  const [storeSummaries, setStoreSummaries] = useState<Record<string, StoreSummary>>({});
 
   // Format currency
   const formatCurrency = (value: number | undefined | null) => {
@@ -43,22 +48,36 @@ export default function OverviewPage() {
     return new Intl.NumberFormat('vi-VN').format(value);
   };
 
-  // Fetch stores data
-  const fetchStores = async () => {
+  // Fetch all data for all stores
+  const fetchAllData = async () => {
     setIsLoading(true);
     setError(null);
     
     try {
-      const { data, error } = await supabase
+      const { data: storesData, error: storesError } = await supabase
         .from('stores')
         .select('id, name, cash_fund, investment')
         .order('name', { ascending: true });
       
-      if (error) {
-        throw new Error(error.message);
+      if (storesError) {
+        throw new Error(storesError.message);
       }
       
-      setStores(data || []);
+      setStores(storesData || []);
+
+      const summaries: Record<string, StoreSummary> = {};
+      
+      await Promise.all(storesData.map(async (store) => {
+        const [pawn, credit, installment] = await Promise.all([
+          getPawnFinancialsForStore(store.id),
+          getCreditFinancialsForStore(store.id),
+          getInstallmentFinancialsForStore(store.id)
+        ]);
+        summaries[store.id] = { pawn, credit, installment };
+      }));
+      
+      setStoreSummaries(summaries);
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Đã xảy ra lỗi khi tải dữ liệu');
     } finally {
@@ -68,35 +87,47 @@ export default function OverviewPage() {
 
   // Load data on mount and when store changes
   useEffect(() => {
-    fetchStores();
+    fetchAllData();
     
-    // Set up auto refresh interval (every 30 seconds)
     const intervalId = setInterval(() => {
-      fetchStores();
+      fetchAllData();
     }, 30000);
     
-    // Clean up interval on unmount
     return () => clearInterval(intervalId);
-  }, [currentStore?.id]);
+  }, []);
 
   // Calculate totals
   const calculateTotals = () => {
     let totalCashFund = 0;
     let totalInvestment = 0;
+    let totalPawnLoan = 0;
+    let totalCreditLoan = 0;
+    let totalInstallmentLoan = 0;
+    let totalExpectedProfit = 0;
+    let totalCollectedProfit = 0;
 
     stores.forEach(store => {
       totalCashFund += store.cash_fund || 0;
       totalInvestment += store.investment || 0;
+      
+      const summary = storeSummaries[store.id];
+      if (summary) {
+        totalPawnLoan += summary.pawn.totalLoan;
+        totalCreditLoan += summary.credit.totalLoan;
+        totalInstallmentLoan += summary.installment.totalLoan;
+        totalExpectedProfit += summary.pawn.profit + summary.credit.profit + summary.installment.profit;
+        totalCollectedProfit += summary.pawn.collectedInterest + summary.credit.collectedInterest + summary.installment.collectedInterest;
+      }
     });
 
     return {
       totalCashFund,
       totalInvestment,
-      totalPawnLoan: pawnSummary?.totalLoan || 0,
-      totalCreditLoan: creditSummary?.totalLoan || 0,
-      totalInstallmentLoan: installmentSummary?.totalLoan || 0,
-      totalExpectedProfit: (pawnSummary?.profit || 0) + (creditSummary?.profit || 0) + (installmentSummary?.profit || 0),
-      totalCollectedProfit: (pawnSummary?.collectedInterest || 0) + (creditSummary?.collectedInterest || 0) + (installmentSummary?.collectedInterest || 0)
+      totalPawnLoan,
+      totalCreditLoan,
+      totalInstallmentLoan,
+      totalExpectedProfit,
+      totalCollectedProfit
     };
   };
 
@@ -120,7 +151,7 @@ export default function OverviewPage() {
         )}
         
         {/* Loading indicator */}
-        {(isLoading || pawnLoading || creditLoading || installmentLoading) && (
+        {isLoading && (
           <div className="flex items-center justify-center p-4">
             <RefreshCw className="h-6 w-6 animate-spin mr-2" />
             <span>Đang tải dữ liệu...</span>
@@ -147,36 +178,39 @@ export default function OverviewPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {stores.map((store) => (
-                  <TableRow key={store.id} className="hover:bg-gray-50 transition-colors">
-                    <TableCell className="py-3 px-3 border-b border-r border-gray-200 font-medium">
-                      {store.name}
-                    </TableCell>
-                    <TableCell className="py-3 px-3 border-b border-r border-gray-200">
-                      {formatCurrency(store.cash_fund)}
-                    </TableCell>
-                    <TableCell className="py-3 px-3 border-b border-r border-gray-200">
-                      {formatCurrency(store.investment)}
-                    </TableCell>
-                    <TableCell className="py-3 px-3 border-b border-r border-gray-200">
-                      {store.id === currentStore?.id ? formatCurrency(pawnSummary?.totalLoan) : '0'}
-                    </TableCell>
-                    <TableCell className="py-3 px-3 border-b border-r border-gray-200">
-                      {store.id === currentStore?.id ? formatCurrency(creditSummary?.totalLoan) : '0'}
-                    </TableCell>
-                    <TableCell className="py-3 px-3 border-b border-r border-gray-200">
-                      {store.id === currentStore?.id ? formatCurrency(installmentSummary?.totalLoan) : '0'}
-                    </TableCell>
-                    <TableCell className="py-3 px-3 border-b border-r border-gray-200">
-                      {store.id === currentStore?.id ? 
-                        formatCurrency((pawnSummary?.profit || 0) + (creditSummary?.profit || 0) + (installmentSummary?.profit || 0)) : '0'}
-                    </TableCell>
-                    <TableCell className="py-3 px-3 border-b border-gray-200">
-                      {store.id === currentStore?.id ? 
-                        formatCurrency((pawnSummary?.collectedInterest || 0) + (creditSummary?.collectedInterest || 0) + (installmentSummary?.collectedInterest || 0)) : '0'}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {stores.map((store) => {
+                  const summary = storeSummaries[store.id];
+                  return (
+                    <TableRow key={store.id} className="hover:bg-gray-50 transition-colors">
+                      <TableCell className="py-3 px-3 border-b border-r border-gray-200 font-medium">
+                        {store.name}
+                      </TableCell>
+                      <TableCell className="py-3 px-3 border-b border-r border-gray-200">
+                        {formatCurrency(store.cash_fund)}
+                      </TableCell>
+                      <TableCell className="py-3 px-3 border-b border-r border-gray-200">
+                        {formatCurrency(store.investment)}
+                      </TableCell>
+                      <TableCell className="py-3 px-3 border-b border-r border-gray-200">
+                        {summary ? formatCurrency(summary.pawn.totalLoan) : '...'}
+                      </TableCell>
+                      <TableCell className="py-3 px-3 border-b border-r border-gray-200">
+                        {summary ? formatCurrency(summary.credit.totalLoan) : '...'}
+                      </TableCell>
+                      <TableCell className="py-3 px-3 border-b border-r border-gray-200">
+                        {summary ? formatCurrency(summary.installment.totalLoan) : '...'}
+                      </TableCell>
+                      <TableCell className="py-3 px-3 border-b border-r border-gray-200">
+                        {summary ? 
+                          formatCurrency(summary.pawn.profit + summary.credit.profit + summary.installment.profit) : '...'}
+                      </TableCell>
+                      <TableCell className="py-3 px-3 border-b border-gray-200">
+                        {summary ? 
+                          formatCurrency(summary.pawn.collectedInterest + summary.credit.collectedInterest + summary.installment.collectedInterest) : '...'}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
                 
                 {/* Totals row */}
                 <TableRow className="bg-yellow-50">
