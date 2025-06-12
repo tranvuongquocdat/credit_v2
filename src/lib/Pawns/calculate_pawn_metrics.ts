@@ -39,18 +39,18 @@ export async function calculatePawnMetrics(
     // Calculate actual loan amount including additional loans and principal repayments
     const actualLoanAmount = await calculateActualLoanAmount(pawn.id);
     
-    // Calculate old debt from payment history
+    // Get payment history from the beginning of this current month to the end of the current month
     const { data: paymentHistory } = await supabase
       .from('pawn_history')
-      .select('credit_amount, debit_amount, transaction_type, is_deleted')
+      .select('credit_amount')
       .eq('pawn_id', pawn.id)
       .eq('is_deleted', false)
-      .order('created_at', { ascending: true });
+      .eq('transaction_type', 'payment')
+      .gte('effective_date', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())
+      .lte('effective_date', new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString())
     
     // Calculate paid interest
-    const paidInterest = paymentHistory
-      ?.filter(record => record.transaction_type === 'payment')
-      .reduce((sum, record) => sum + (record.credit_amount || 0), 0) || 0;
+    const paidInterest = paymentHistory?.reduce((sum, record) => sum + (record.credit_amount || 0), 0) || 0;
     
     // Calculate old debt (similar to credits logic)
     const oldDebt = await calculateDebtToLatestPaidPeriod(pawn.id);

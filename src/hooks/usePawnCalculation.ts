@@ -53,6 +53,13 @@ export function usePawnCalculations() {
         .eq('store_id', storeId)
         .eq('status', PawnStatus.ON_TIME);
       
+      // 2b. Lấy danh sách pawns CLOSED cho việc tính lãi phí đã thu
+      const { data: closedPawnsData } = await supabase
+        .from('pawns')
+        .select('id, loan_amount, loan_date, interest_value, interest_type, loan_period, interest_period')
+        .eq('store_id', storeId)
+        .eq('status', PawnStatus.CLOSED);
+      
       let totalLoan = 0;
       let totalOldDebt = 0;
       let totalProfit = 0;
@@ -60,16 +67,16 @@ export function usePawnCalculations() {
       const newDetails: Record<string, PawnFinancialDetail> = {};
       
       if (activePawnsData?.length) {
-        console.time('Calculate all pawns');
+        console.time('Calculate all active pawns');
         
-        // 3. Xử lý song song tất cả pawns
+        // 3. Xử lý song song tất cả pawns đang hoạt động
         const results = await Promise.all(
           activePawnsData.map(pawn => calculatePawnMetrics(pawn))
         );
         
-        console.timeEnd('Calculate all pawns');
+        console.timeEnd('Calculate all active pawns');
         
-        // 4. Aggregate results
+        // 4. Aggregate results từ pawns đang hoạt động
         results.forEach(result => {
           if (result) {
             newDetails[result.pawnId] = {
@@ -90,6 +97,23 @@ export function usePawnCalculations() {
         });
       }
       
+      // 5. Xử lý lãi phí đã thu từ pawns đã đóng
+      if (closedPawnsData?.length) {
+        console.time('Calculate closed pawns interest');
+        
+        const closedResults = await Promise.all(
+          closedPawnsData.map(pawn => calculatePawnMetrics(pawn))
+        );
+        
+        console.timeEnd('Calculate closed pawns interest');
+        
+        // Chỉ tính lãi phí đã thu từ pawns đã đóng
+        closedResults.forEach(result => {
+          if (result) {
+            totalCollectedInterest += result.paidInterest;
+          }
+        });
+      }
       
       // 6. Set results
       setSummary({

@@ -33,6 +33,8 @@ export function useInstallmentsSummary() {
           id,
           contract_code,
           down_payment,
+          loan_period,
+          loan_date,
           installment_amount,
           status,
           store_id,
