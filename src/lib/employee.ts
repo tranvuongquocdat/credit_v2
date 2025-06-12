@@ -270,16 +270,31 @@ export async function updateEmployee(id: string, params: UpdateEmployeeParams) {
  */
 export async function deactivateEmployee(id: string) {
   try {
-    const { data: transactionData, error: transactionError } = await supabase
-      .rpc('deactivate_employee_transaction', { 
-        employee_id: id 
-      });
+    //  Cập nhật status của employee
+    const { data, error } = await supabase
+      .from('employees')
+      .update({ status: EmployeeStatus.INACTIVE, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
 
-    if (transactionError) {
-      throw transactionError;
+    if (error) {
+      throw error;
     }
 
-    return { data: transactionData, error: null };
+    // Cập nhật is_banned trong profile
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles') 
+      .update({ is_banned: true, updated_at: new Date().toISOString() })
+      .eq('id', data?.user_id)
+      .select()
+      .single();
+
+    if (profileError) {
+      throw profileError;
+    }
+
+    return { data: profileData, error: null };
   } catch (error) {
     console.error('Error deactivating employee:', error);
     return { data: null, error };
@@ -291,16 +306,29 @@ export async function deactivateEmployee(id: string) {
  */
 export async function activateEmployee(id: string) {
   try {
-    const { data: transactionData, error: transactionError } = await supabase
-      .rpc('activate_employee_transaction', { 
-        employee_id: id 
-      });
-
-    if (transactionError) {
-      throw transactionError;
+    // Cập nhật status của employee
+    const { data, error } = await supabase
+      .from('employees')
+      .update({ status: EmployeeStatus.WORKING, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) {
+      throw error;
     }
 
-    return { data: transactionData, error: null };
+    // Cập nhật is_banned trong profile
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .update({ is_banned: false, updated_at: new Date().toISOString() })
+      .eq('id', data?.user_id)
+      .select()
+      .single();
+    if (profileError) {
+      throw profileError;
+    }
+
+    return { data: profileData, error: null };
   } catch (error) {
     console.error('Error activating employee:', error);
     return { data: null, error };

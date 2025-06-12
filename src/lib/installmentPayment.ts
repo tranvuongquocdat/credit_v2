@@ -74,7 +74,7 @@ export async function updateInstallmentStatus(installmentId: string, status: Ins
   try {
     const { data, error } = await supabase
       .from('installments')
-      .update({ status: status.toString() as any })
+      .update({ status: status.toString() as any, updated_at: new Date().toISOString() })
       .eq('id', installmentId)
       .select()
       .single();
