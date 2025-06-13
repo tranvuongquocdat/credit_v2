@@ -141,8 +141,7 @@ export async function recordPawnContractDeletion(
         transaction_type: 'contract_delete',
         credit_amount: loanAmount, // Positive for credit (returning the loan amount)
         debit_amount: 0,
-        transaction_date: new Date().toISOString(),
-        notes: description || 'Xóa hợp đồng cầm đồ',
+        description: description || 'Xóa hợp đồng cầm đồ',
         created_by: userId
       } as any)
       .select()

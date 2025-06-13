@@ -1,4 +1,5 @@
 import { getCurrentUser } from './auth';
+import { calculateActualLoanAmount } from './Pawns/calculate_actual_loan_amount';
 import { supabase } from './supabase';
 import { 
   Pawn, 
@@ -394,17 +395,20 @@ export async function deletePawn(id: string) {
     // Lấy thông tin hợp đồng để ghi lịch sử
     const { data: pawnData, error: pawnError } = await supabase
       .from('pawns')
-      .select('loan_amount, contract_code')
+      .select('contract_code')
       .eq('id', id)
       .single();
     
     if (pawnError) throw pawnError;
     
+    // Get actual loan amount
+    const loan_amount = await calculateActualLoanAmount(id);
+
     // Ghi lịch sử xóa hợp đồng
     const { recordPawnContractDeletion } = await import('@/lib/pawn-amount-history');
     await recordPawnContractDeletion(
       id,
-      pawnData.loan_amount,
+      loan_amount,
       `Xóa hợp đồng cầm đồ ${pawnData.contract_code || id}`
     );
     

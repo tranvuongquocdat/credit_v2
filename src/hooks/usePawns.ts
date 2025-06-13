@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { PawnStatus, PawnWithCustomer, PawnFilters } from '@/models/pawn';
 import { toast } from '@/components/ui/use-toast';
-import { getPawns } from '@/lib/pawn';
+import { deletePawn, getPawns } from '@/lib/pawn';
 import { useStore } from '@/contexts/StoreContext';
 
 // Default values for pagination
@@ -143,17 +143,23 @@ export function usePawns() {
   // Handle delete pawn
   const handleDelete = async (pawnId: string) => {
     try {
-      // In a real implementation, this would make an API call to delete the pawn
-      // For now, we'll simulate the response
-      
-      // Simulated delete operation
-      // await fetch(`/api/pawns/${pawnId}`, { method: 'DELETE' });
-      
-      // Update local state after successful delete
-      setPawns(prevPawns => prevPawns.filter(pawn => pawn.id !== pawnId));
-      setTotalItems(prev => prev - 1);
-      
-      return { success: true };
+      const result = await deletePawn(pawnId);
+
+      if (result.error) {
+        return result;
+      }
+
+      // Remove from local state
+      setPawns(prev => prev.filter(pawn => pawn.id !== pawnId));
+
+      // Refetch if we might have deleted the last item on a page
+      if (pawns.length === 1 && currentPage > 1) {
+        setCurrentPage(prev => prev - 1);
+      } else {
+        fetchPawns();
+      }
+
+      return result;
     } catch (error) {
       console.error('Error deleting pawn:', error);
       return { error: 'Có lỗi xảy ra khi xóa hợp đồng' };

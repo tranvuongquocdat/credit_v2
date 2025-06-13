@@ -1,4 +1,5 @@
 import { getCurrentUser } from './auth';
+import { calculateActualLoanAmount } from './Credits/calculate_actual_loan_amount';
 import { supabase } from './supabase';
 import { 
   Credit, 
@@ -405,17 +406,20 @@ export async function deleteCredit(id: string) {
     // Lấy thông tin hợp đồng để ghi lịch sử
     const { data: creditData, error: creditError } = await supabase
       .from('credits')
-      .select('loan_amount, contract_code')
+      .select('contract_code')
       .eq('id', id)
       .single();
     
     if (creditError) throw creditError;
+
+    // Get actual loan amount
+    const loan_amount = await calculateActualLoanAmount(id);
     
     // Ghi lịch sử xóa hợp đồng
     const { recordContractDeletion } = await import('@/lib/Credits/credit-amount-history');
     await recordContractDeletion(
       id,
-      creditData.loan_amount,
+      loan_amount,
       `Xóa hợp đồng ${creditData.contract_code || id}`
     );
     
