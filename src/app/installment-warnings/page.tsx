@@ -249,7 +249,7 @@ export default function InstallmentWarningsPage() {
             // Last day gets the adjustment
             dayAmount = dailyAmount + lastDayAdjustment;
           }
-          
+          const transactionDate = new Date().setUTCHours(0, 0, 0, 0);
           const dailyRecord = {
             installment_id: installment.id,
             transaction_type: 'payment' as const,
@@ -259,7 +259,7 @@ export default function InstallmentWarningsPage() {
             debit_amount: 0,
             description: `Thanh toán nhanh kỳ ${periodIndex + 1}/${numberOfPeriods}, ngày ${dayOffset + 1}/${actualPeriodDays}`,
             is_deleted: false,
-            transaction_date: new Date().toISOString(),
+            transaction_date: new Date(transactionDate).toISOString(),
             created_by: userId || installment.employee_id
           };
 

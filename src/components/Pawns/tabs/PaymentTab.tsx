@@ -29,16 +29,6 @@ type PaymentTabProps = {
   onDataChange?: () => void;
 };
 
-// Helper function to format number with thousand separators for input
-const formatNumberInput = (num: number): string => {
-  return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-};
-
-// Helper function to parse formatted number back to number
-const parseFormattedNumber = (str: string): number => {
-  return parseInt(str.replace(/\./g, "")) || 0;
-};
-
 export function PaymentTab({
   pawn,
   loading,
@@ -599,14 +589,7 @@ export function PaymentTab({
                   </td>
                     <td className="px-2 py-2 text-right border">{formatCurrency(other)}</td>
                     <td className="px-2 py-2 text-right border">{formatCurrency(total)}</td>
-                    <td className="px-2 py-2 text-right border">
-                        <span 
-                        className={`${!hasPayments && !isDisabled && !isProcessingCheckbox ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
-                        onClick={!hasPayments && !isDisabled && !isProcessingCheckbox ? () => handleCheckboxChange(period, true, index) : undefined}
-                        >
-                        {formatCurrency(actual)}
-                        </span>
-                    </td>
+                    <td className="px-2 py-2 text-right border">{formatCurrency(actual)}</td>
                     <td className="px-2 py-2 text-center border">
                       {isLoading ? (
                         <div className="flex justify-center">

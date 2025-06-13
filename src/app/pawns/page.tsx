@@ -27,6 +27,7 @@ import { usePawns } from '@/hooks/usePawns';
 // Import types and API functions
 import { PawnStatus, PawnWithCustomer } from '@/models/pawn';
 import { usePawnCalculations } from '@/hooks/usePawnCalculation';
+import { calculatePawnStatus } from '@/lib/Pawns/calculate_pawn_status';
 
 
 // Map trạng thái thành nhãn và màu sắc
@@ -153,7 +154,9 @@ export default function PawnsPage() {
   };
   
   // Handle opening payment history modal
-  const handleOpenPaymentHistory = (pawn: PawnWithCustomer) => {
+  const handleOpenPaymentHistory = async (pawn: PawnWithCustomer) => {
+    const status = await calculatePawnStatus(pawn.id);
+    pawn.status = status.status as PawnStatus;
     setPaymentHistoryPawn(pawn);
     setIsPaymentHistoryModalOpen(true);
   };

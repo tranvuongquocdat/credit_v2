@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { PawnStatus } from '@/models/pawn';
 import { useStore } from '@/contexts/StoreContext';
 import { calculatePawnMetrics } from '@/lib/Pawns/calculate_pawn_metrics';
+import { calculateTotalCollectedInterest } from '@/lib/Pawns/calculate_collected_interest';
 
 // Interface cho dữ liệu tài chính tổng hợp
 export interface StoreFinancialData {
@@ -36,8 +37,8 @@ export function usePawnCalculations() {
   const fetchAllData = async () => {
     try {
       setLoading(true);
-      
-      const storeId = currentStore?.id || '1';
+      if (!currentStore) return;
+      const storeId = currentStore?.id;
       
       // 1. Lấy thông tin store
       const { data: storeData } = await supabase
@@ -53,6 +54,13 @@ export function usePawnCalculations() {
         .eq('store_id', storeId)
         .eq('status', PawnStatus.ON_TIME);
       
+      // 2b. Lấy danh sách pawns CLOSED cho việc tính lãi phí đã thu
+      const { data: closedPawnsData } = await supabase
+        .from('pawns')
+        .select('id, loan_amount, loan_date, interest_value, interest_type, loan_period, interest_period')
+        .eq('store_id', storeId)
+        .eq('status', PawnStatus.CLOSED);
+      
       let totalLoan = 0;
       let totalOldDebt = 0;
       let totalProfit = 0;
@@ -60,16 +68,16 @@ export function usePawnCalculations() {
       const newDetails: Record<string, PawnFinancialDetail> = {};
       
       if (activePawnsData?.length) {
-        console.time('Calculate all pawns');
+        console.time('Calculate all active pawns');
         
-        // 3. Xử lý song song tất cả pawns
+        // 3. Xử lý song song tất cả pawns đang hoạt động
         const results = await Promise.all(
           activePawnsData.map(pawn => calculatePawnMetrics(pawn))
         );
         
-        console.timeEnd('Calculate all pawns');
+        console.timeEnd('Calculate all active pawns');
         
-        // 4. Aggregate results
+        // 4. Aggregate results từ pawns đang hoạt động
         results.forEach(result => {
           if (result) {
             newDetails[result.pawnId] = {
@@ -90,6 +98,16 @@ export function usePawnCalculations() {
         });
       }
       
+      // 5. Xử lý lãi phí đã thu từ pawns đã đóng
+      if (closedPawnsData?.length) {
+        console.time('Calculate closed pawns interest');
+        
+        // Sử dụng hàm mới để tính toán lãi phí đã thu từ tất cả pawns đã đóng trong một truy vấn
+        const closedPawnIds = closedPawnsData.map(pawn => pawn.id);
+        totalCollectedInterest += await calculateTotalCollectedInterest(closedPawnIds);
+        
+        console.timeEnd('Calculate closed pawns interest');
+      }
       
       // 6. Set results
       setSummary({

@@ -104,6 +104,7 @@ export const PaymentTab: React.FC<PaymentTabProps> = ({
                             handleSaveDate(period, date);
                           }}
                           className="w-32 text-center mx-auto"
+                          maxDate={format(new Date(), "yyyy-MM-dd")}
                           disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
                         />
                       ) : (
@@ -131,7 +132,7 @@ export const PaymentTab: React.FC<PaymentTabProps> = ({
                             value={formatNumberWithDot(paymentAmount)}
                             onChange={(e) =>
                               setPaymentAmount(
-                                parseFloat(e.target.value.replace(/\./g, "")) || 0
+                                parseFloat(e.target.value.replace(/\./g, "")) || 1
                               )
                             }
                             autoFocus

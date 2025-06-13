@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useState, useEffect, memo, useCallback } from "react";
 import { useStore } from "@/contexts/StoreContext";
 import { useRouter } from "next/navigation";
-import { countOverdueInstallments } from "@/lib/installmentPayment";
+import { countInstallmentWarnings } from "@/lib/installmentPayment";
 import { countPawnWarnings } from "@/lib/pawn-warnings";
 import { countCreditWarnings } from "@/lib/credit-warnings";
 import { getCurrentUser } from "@/lib/auth";
@@ -163,22 +163,22 @@ export function TopNavbar({ onToggleSidebar }: TopNavbarProps) {
       const fetchNotificationsForStore = async () => {
         try {
           // Get real count of overdue installments
-          const { count: overdueInstallments, error: installmentError } = await countOverdueInstallments(currentStore.id);
-          
+          const { count: overdueInstallments, error: installmentError } = await countInstallmentWarnings(currentStore.id);
+          console.log('overdueInstallments', overdueInstallments);
           if (installmentError) {
             console.error('Error fetching overdue installments count:', installmentError);
           }
           
           // Get real count of pawn warnings
           const { count: pawnWarningsCount, error: pawnError } = await countPawnWarnings(currentStore.id);
-          
+          console.log('pawnWarningsCount', pawnWarningsCount);
           if (pawnError) {
             console.error('Error fetching pawn warnings count:', pawnError);
           }
           
           // Get real count of credit warnings
           const { count: creditWarningsCount, error: creditError } = await countCreditWarnings(currentStore.id);
-          
+          console.log('creditWarningsCount', creditWarningsCount);
           if (creditError) {
             console.error('Error fetching credit warnings count:', creditError);
           }

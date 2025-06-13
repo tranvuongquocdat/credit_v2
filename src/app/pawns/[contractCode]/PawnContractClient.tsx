@@ -24,6 +24,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle 
 } from '@/components/ui/alert-dialog';
 import { toast } from '@/components/ui/use-toast';
+import { calculatePawnStatus } from '@/lib/Pawns/calculate_pawn_status';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -158,7 +159,9 @@ export function PawnContractClient({ contractCode }: PawnContractClientProps) {
   };
   
   // Handle opening payment history modal
-  const handleOpenPaymentHistory = (pawn: PawnWithCustomer) => {
+  const handleOpenPaymentHistory = async (pawn: PawnWithCustomer) => {
+    const status = await calculatePawnStatus(pawn.id);
+    pawn.status = status.status as PawnStatus;
     setPaymentHistoryPawn(pawn);
     setIsPaymentHistoryModalOpen(true);
   };

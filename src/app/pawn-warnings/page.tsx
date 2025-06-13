@@ -13,6 +13,7 @@ import { Download, Search } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { Input } from '@/components/ui/input';
 import { PawnWarningsPagination } from '@/components/Pawns/PawnWarningsPagination';
+import { calculatePawnStatus } from '@/lib/Pawns/calculate_pawn_status';
 
 export default function PawnWarningsPage() {
   const router = useRouter();
@@ -101,7 +102,9 @@ export default function PawnWarningsPage() {
   };
 
   // Handle view detail
-  const handleViewDetail = (pawn: PawnWithCustomerAndCollateral) => {
+  const handleViewDetail = async (pawn: PawnWithCustomerAndCollateral) => {
+    const status = await calculatePawnStatus(pawn.id);
+    pawn.status = status.status as PawnStatus;
     setSelectedPawn(pawn);
     setIsHistoryModalOpen(true);
   };

@@ -227,4 +227,102 @@ export async function hasPaymentOnDate(installmentId: string, date: string): Pro
   }
 
   return (data && data.length > 0);
+}
+
+/**
+ * Lấy toàn bộ lịch sử thanh toán với transaction_type=payment và is_deleted=false
+ * Có xử lý phân trang để tránh giới hạn của Supabase
+ * @param installmentId - ID của hợp đồng installment
+ * @param endDate - Ngày kết thúc để lọc (YYYY-MM-DD), nếu có
+ * @returns Promise<PaymentHistoryRecord[]> - Danh sách lịch sử thanh toán
+ */
+export async function getAllValidPaymentHistory(
+  installmentId: string,
+  endDate?: string
+): Promise<PaymentHistoryRecord[]> {
+  const allRecords: PaymentHistoryRecord[] = [];
+  const pageSize = 1000; // Kích thước trang để tránh giới hạn Supabase
+  let page = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    let query = supabase
+      .from('installment_history')
+      .select('*')
+      .eq('installment_id', installmentId)
+      .eq('transaction_type', 'payment')
+      .eq('is_deleted', false)
+      .range(page * pageSize, (page + 1) * pageSize - 1)
+      .order('transaction_date', { ascending: true });
+
+    // Thêm điều kiện lọc theo ngày nếu có
+    if (endDate) {
+      query = query.lte('transaction_date', endDate + 'T23:59:59Z');
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching valid payment history:', error);
+      throw new Error(`Failed to fetch valid payment history: ${error.message}`);
+    }
+
+    if (data && data.length > 0) {
+      allRecords.push(...data);
+      hasMore = data.length === pageSize; // Nếu trả về đủ pageSize thì có thể còn trang tiếp theo
+    } else {
+      hasMore = false;
+    }
+
+    page++;
+  }
+
+  return allRecords;
+}
+
+/**
+ * Lấy toàn bộ lịch sử thanh toán với transaction_type=payment và is_deleted=false trong khoảng thời gian
+ * @param installmentId - ID của hợp đồng installment
+ * @param startDate - Ngày bắt đầu (YYYY-MM-DD)
+ * @param endDate - Ngày kết thúc (YYYY-MM-DD)
+ * @returns Promise<PaymentHistoryRecord[]> - Danh sách lịch sử thanh toán trong khoảng thời gian
+ */
+export async function getAllValidPaymentHistoryByDateRange(
+  installmentId: string,
+  startDate: string,
+  endDate: string
+): Promise<PaymentHistoryRecord[]> {
+  const allRecords: PaymentHistoryRecord[] = [];
+  const pageSize = 1000;
+  let page = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from('installment_history')
+      .select('*')
+      .eq('installment_id', installmentId)
+      .eq('transaction_type', 'payment')
+      .eq('is_deleted', false)
+      .gte('transaction_date', startDate)
+      .lte('transaction_date', endDate + 'T23:59:59Z')
+      .range(page * pageSize, (page + 1) * pageSize - 1)
+      .order('transaction_date', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching valid payment history by date range:', error);
+      throw new Error(`Failed to fetch valid payment history: ${error.message}`);
+    }
+
+    if (data && data.length > 0) {
+      allRecords.push(...data);
+      hasMore = data.length === pageSize;
+    } else {
+      hasMore = false;
+    }
+
+    page++;
+  }
+
+  return allRecords;
 } 

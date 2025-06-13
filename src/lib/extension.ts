@@ -56,7 +56,7 @@ export async function addExtension(extension: Extension): Promise<Extension> {
       .insert({
         credit_id: extension.credit_id,
         days: extension.days,
-        from_date: extension.from_date!,
+        from_date: format(addDays(new Date(creditData.loan_date), creditData.loan_period -1), 'yyyy-MM-dd'),
         notes: extension.notes || null,
       })
       .select()
@@ -84,8 +84,8 @@ export async function addExtension(extension: Extension): Promise<Extension> {
       .from('credit_history')
       .insert({
         credit_id: extension.credit_id,
-        description: extension.notes || null,
-        effective_date: extension.from_date!,
+        description: extension.notes || "Gia hạn hợp đồng",
+        effective_date: format(addDays(new Date(creditData.loan_date), creditData.loan_period -1), 'yyyy-MM-dd'),
         transaction_type: 'contract_extension',
         created_by: userId
       })

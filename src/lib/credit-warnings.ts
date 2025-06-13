@@ -11,6 +11,107 @@ export async function countCreditWarnings(storeId: string): Promise<{ count: num
       return { count: 0, error: "Không có cửa hàng" };
     }
     
+    // Sử dụng stored function để lấy credits với ngày thanh toán mới nhất trong một truy vấn
+    const { data: creditsWithPayments, error: creditsError } = await (supabase as any)
+      .rpc('get_credits_with_latest_payments', {
+        store_id: storeId
+      });
+    
+    if (creditsError) {
+      console.error("Error fetching credits with payments:", creditsError);
+      // Fallback to original method if RPC fails
+      return await countCreditWarningsOriginal(storeId);
+    }
+    
+    if (!creditsWithPayments || !Array.isArray(creditsWithPayments) || creditsWithPayments.length === 0) {
+      return { count: 0, error: null };
+    }
+    
+    // Đếm số lượng credits cần cảnh báo
+    const today = new Date();
+    let warningCount = 0;
+    
+    // Process each credit to check if it needs a warning
+    for (const creditData of creditsWithPayments as any[]) {
+      try {
+        const credit = {
+          id: creditData.credit_id,
+          loan_date: creditData.loan_date,
+          loan_period: creditData.loan_period,
+          interest_period: creditData.interest_period
+        };
+        
+        // Ngày thanh toán mới nhất đã có sẵn từ query (hoặc null)
+        const latestPaymentDate = creditData.latest_payment_date;
+        
+        // Calculate contract end date
+        const loanDate = new Date(credit.loan_date || '');
+        const contractEndDate = new Date(loanDate);
+        contractEndDate.setDate(loanDate.getDate() + (credit.loan_period || 0) - 1);
+        
+        // Is contract overdue?
+        const isOverdue = today > contractEndDate;
+        
+        // Check warning conditions
+        let needsWarning = false;
+        
+        if (latestPaymentDate) {
+          // Has payment history - check days since last payment
+          const latestPaymentDateTime = new Date(latestPaymentDate);
+          
+          // Tính số ngày từ lần thanh toán cuối đến hôm nay (hoặc ngày kết thúc hợp đồng nếu đã quá hạn)
+          // Đây là sửa đổi chính: sử dụng Math.min để đảm bảo chỉ tính đến ngày kết thúc hợp đồng
+          const endDateForCalculation = isOverdue ? contractEndDate : today;
+          const daysSinceLastPayment = Math.floor(
+            (endDateForCalculation.getTime() - latestPaymentDateTime.getTime()) / (1000 * 60 * 60 * 24)
+          );
+          
+          // Calculate late periods
+          const interestPeriod = credit.interest_period || 10;
+          const latePeriods = Math.floor(daysSinceLastPayment / interestPeriod);
+          
+          // If late by one or more periods, it needs warning
+          if (latePeriods > 0) {
+            needsWarning = true;
+          }
+        } else {
+          // No payments yet - check days since loan date
+          // Chỉ tính đến ngày kết thúc hợp đồng nếu đã quá hạn
+          const endDateForCalculation = isOverdue ? contractEndDate : today;
+          const daysSinceLoan = Math.floor(
+            (endDateForCalculation.getTime() - loanDate.getTime()) / (1000 * 60 * 60 * 24) + 1
+          );
+          
+          // Calculate late periods
+          const interestPeriod = credit.interest_period || 10;
+          const latePeriods = Math.floor(daysSinceLoan / interestPeriod);
+          
+          // If late by one or more periods, it needs warning
+          if (latePeriods > 0) {
+            needsWarning = true;
+          }
+        }
+        
+        // Add to warning count if needs warning or is overdue
+        if (needsWarning || isOverdue) {
+          warningCount++;
+        }
+      } catch (err) {
+        console.error(`Error processing credit ${creditData.credit_id} for count:`, err);
+        // Continue with other credits even if this one fails
+      }
+    }
+    
+    return { count: warningCount, error: null };
+  } catch (err) {
+    console.error("Error in countCreditWarnings:", err);
+    return { count: 0, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
+// Fallback to original method if RPC fails
+async function countCreditWarningsOriginal(storeId: string): Promise<{ count: number; error: any }> {
+  try {
     // Lấy tất cả credits với trạng thái on_time thuộc store
     const { data: credits, error: creditsError } = await supabase
       .from('credits')
@@ -102,7 +203,7 @@ export async function countCreditWarnings(storeId: string): Promise<{ count: num
     
     return { count: warningCount, error: null };
   } catch (err) {
-    console.error("Error in countCreditWarnings:", err);
+    console.error("Error in countCreditWarningsOriginal:", err);
     return { count: 0, error: err instanceof Error ? err.message : "Unknown error" };
   }
 }

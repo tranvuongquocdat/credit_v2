@@ -205,13 +205,9 @@ export async function recordContractReopening(installmentId: string) {
  * Ghi lịch sử khi đảo hợp đồng
  */
 export async function recordContractRotation(
-  oldInstallmentId: string, 
   newInstallmentId: string, 
-  remainingDebt: number
 ) {
-  // Ghi lịch sử đóng hợp đồng cũ
-  await recordContractClosure(oldInstallmentId);
-  
+
   // Ghi lịch sử tạo hợp đồng mới
   return createInstallmentAmountHistory({
     installmentId: newInstallmentId,

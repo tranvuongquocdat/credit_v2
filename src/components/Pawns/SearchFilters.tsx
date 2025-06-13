@@ -32,6 +32,7 @@ interface SearchFiltersProps {
 export interface SearchFilters {
   contractCode: string;
   customerName: string;
+  duration?: number;
   startDate: string;
   endDate: string;
   status: string;
@@ -48,6 +49,7 @@ export function SearchFilters({
   const [filters, setFilters] = useState<SearchFilters>({
     contractCode: '',
     customerName: '',
+    duration: undefined,
     startDate: '',
     endDate: '',
     status: 'on_time' // Fixed default, không dùng initialFilters ở đây
@@ -68,6 +70,7 @@ export function SearchFilters({
       const newFilters = {
         contractCode: '',
         customerName: '',
+        duration: undefined,
         startDate: '',
         endDate: '',
         status: defaultStatus,
@@ -111,11 +114,40 @@ export function SearchFilters({
   const handleSearch = () => {
     onSearch(filters);
   };
+  const handleDurationChange = (value: string) => {
+    const newFilters = {
+      ...filters,
+      duration: value === 'all' ? undefined : parseInt(value)
+    };
+    
+    setFilters(newFilters);
+    
+    // Auto-search when duration changes
+    onSearch(newFilters);
+  };
+
+  const handleCustomDurationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const numValue = value === '' ? undefined : parseInt(value);
+    
+    const newFilters = {
+      ...filters,
+      duration: numValue
+    };
+    
+    setFilters(newFilters);
+    
+    // Auto-search when custom duration changes (with debounce effect)
+    if (value === '' || (!isNaN(numValue!) && numValue! > 0)) {
+      onSearch(newFilters);
+    }
+  };
 
   const handleReset = () => {
     setFilters({
       contractCode: '',
       customerName: '',
+      duration: undefined,
       startDate: '',
       endDate: '',
       status: 'on_time'
@@ -125,7 +157,7 @@ export function SearchFilters({
 
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-4">
         <div>
           <label htmlFor="contractCode" className="block text-sm font-medium text-gray-700 mb-1">
             Mã HD
@@ -194,6 +226,45 @@ export function SearchFilters({
           />
         </div>
         
+        <div>
+          <label htmlFor="duration" className="block text-sm font-medium text-gray-700 mb-1">
+            Thời gian vay
+          </label>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Select 
+                onValueChange={handleDurationChange} 
+                value={filters.duration?.toString() || 'all'}
+              >
+                <SelectTrigger id="duration" className="w-full">
+                  <SelectValue placeholder="Chọn nhanh" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả</SelectItem>
+                  <SelectItem value="7">7 ngày</SelectItem>
+                  <SelectItem value="14">14 ngày</SelectItem>
+                  <SelectItem value="30">30 ngày</SelectItem>
+                  <SelectItem value="50">50 ngày</SelectItem>
+                  <SelectItem value="60">60 ngày</SelectItem>
+                  <SelectItem value="90">90 ngày</SelectItem>
+                  <SelectItem value="100">100 ngày</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex-1">
+              <Input
+                type="number"
+                placeholder="Nhập số ngày"
+                className="w-full"
+                value={filters.duration?.toString() || ''}
+                onChange={handleCustomDurationChange}
+                min="1"
+                max="9999"
+              />
+            </div>
+          </div>
+        </div>
+
         <div>
           <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
             Trạng thái hợp đồng

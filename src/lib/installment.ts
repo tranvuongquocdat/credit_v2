@@ -3,6 +3,7 @@ import { CreateInstallmentParams, Installment, InstallmentFilters, InstallmentSt
 import { Customer } from '@/models/customer';
 import { formatCurrency } from '@/lib/utils';
 import { calculateDebtToLatestPaidPeriod } from './Installments/calculate_remaining_debt';
+import { getCurrentUser } from './auth';
 
 // Get all installments with pagination and filters
 export async function getInstallments(
@@ -260,6 +261,7 @@ export async function createInstallment(installment: CreateInstallmentParams) {
     
     // Get employee info to find store_id
     let storeId = '1'; // Default store_id
+    const userId = (await getCurrentUser())?.id;
     try {
       const { data: employeeData } = await supabase
         .from('employees')
@@ -301,9 +303,27 @@ export async function createInstallment(installment: CreateInstallmentParams) {
     if (error) {
       throw error;
     }
+
     
     if (!data) {
       throw new Error('Failed to create installment');
+    }
+
+    // Insert into installment_history
+    const { data: installmentHistoryData, error: installmentHistoryError } = await supabase
+      .from('installment_history')
+      .insert({
+        installment_id: data.id,
+        debit_amount: data.down_payment,
+        transaction_type: 'initial_loan',
+        description: 'Khoản vay ban đầu',
+        created_by: userId
+      })
+      .select()
+      .single();
+
+    if (installmentHistoryError) {
+      throw installmentHistoryError;
     }
     
     // Ensure values are not null

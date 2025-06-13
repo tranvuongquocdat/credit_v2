@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { calculateActualLoanAmount } from './calculate_actual_loan_amount';
 import { calculateDebtToLatestPaidPeriod } from './calculate_remaining_debt';
 import { getExpectedMoney } from './get_expected_money';
+import { calculateCollectedInterest } from './calculate_collected_interest';
 
 export interface PawnMetrics {
   pawnId: string;
@@ -39,18 +40,8 @@ export async function calculatePawnMetrics(
     // Calculate actual loan amount including additional loans and principal repayments
     const actualLoanAmount = await calculateActualLoanAmount(pawn.id);
     
-    // Calculate old debt from payment history
-    const { data: paymentHistory } = await supabase
-      .from('pawn_history')
-      .select('credit_amount, debit_amount, transaction_type, is_deleted')
-      .eq('pawn_id', pawn.id)
-      .eq('is_deleted', false)
-      .order('created_at', { ascending: true });
-    
-    // Calculate paid interest
-    const paidInterest = paymentHistory
-      ?.filter(record => record.transaction_type === 'payment')
-      .reduce((sum, record) => sum + (record.credit_amount || 0), 0) || 0;
+    // Calculate paid interest using the new function
+    const paidInterest = await calculateCollectedInterest(pawn.id);
     
     // Calculate old debt (similar to credits logic)
     const oldDebt = await calculateDebtToLatestPaidPeriod(pawn.id);
@@ -74,7 +65,7 @@ export async function calculatePawnMetrics(
       actualLoanAmount: Math.round(actualLoanAmount),
       loading: false,
       // Lãi phí đã thu
-      paidInterest: Math.round(paidInterest),
+      paidInterest: paidInterest,
       // For summary
       // Tiền cho vay
       summaryLoan: actualLoanAmount,

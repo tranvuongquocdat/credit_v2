@@ -11,7 +11,7 @@ export async function getExpectedMoney(pawnId: string, countUntilToday: boolean 
     // sắp xếp theo effective_date tăng dần
     const { data: principalPaymentHistory, error } = await supabase
         .from('pawn_history')
-        .select('*')
+        .select('effective_date, transaction_type, debit_amount, credit_amount')
         .eq('pawn_id', pawnId)
         .in('transaction_type', ['principal_repayment', 'additional_loan'])
         .eq('is_deleted', false)
@@ -23,7 +23,7 @@ export async function getExpectedMoney(pawnId: string, countUntilToday: boolean 
     // lấy ra pawn từ database
     const { data: pawn, error: pawnError } = await supabase
         .from('pawns')
-        .select('*')
+        .select('loan_amount, loan_period, loan_date, interest_ui_type, interest_notation, interest_value')
         .eq('id', pawnId)
         .single();
 

@@ -12,6 +12,106 @@ export async function countPawnWarnings(storeId: string): Promise<{ count: numbe
       return { count: 0, error: "Không có cửa hàng" };
     }
     
+    // Sử dụng stored function để lấy pawns với ngày thanh toán mới nhất trong một truy vấn
+    const { data: pawnsWithPayments, error: pawnsError } = await (supabase as any)
+      .rpc('get_pawns_with_latest_payments', {
+        store_id: storeId
+      });
+    
+    if (pawnsError) {
+      console.error("Error fetching pawns with payments:", pawnsError);
+      // Fallback to original method if RPC fails
+      return await countPawnWarningsOriginal(storeId);
+    }
+    
+    if (!pawnsWithPayments || !Array.isArray(pawnsWithPayments) || pawnsWithPayments.length === 0) {
+      return { count: 0, error: null };
+    }
+    
+    // Đếm số lượng pawns cần cảnh báo
+    const today = new Date();
+    let warningCount = 0;
+    
+    // Process each pawn to check if it needs a warning
+    for (const pawnData of pawnsWithPayments as any[]) {
+      try {
+        const pawn = {
+          id: pawnData.pawn_id,
+          loan_date: pawnData.loan_date,
+          loan_period: pawnData.loan_period,
+          interest_period: pawnData.interest_period
+        };
+        
+        // Ngày thanh toán mới nhất đã có sẵn từ query (hoặc null)
+        const latestPaymentDate = pawnData.latest_payment_date;
+        
+        // Calculate contract end date
+        const loanDate = new Date(pawn.loan_date || '');
+        const contractEndDate = new Date(loanDate);
+        contractEndDate.setDate(loanDate.getDate() + (pawn.loan_period || 0) - 1);
+        
+        // Is contract overdue?
+        const isOverdue = today > contractEndDate;
+        
+        // Check warning conditions
+        let needsWarning = false;
+        
+        if (latestPaymentDate) {
+          // Has payment history - check days since last payment
+          const latestPaymentDateTime = new Date(latestPaymentDate);
+          
+          // Tính số ngày từ lần thanh toán cuối đến ngày kết thúc hợp đồng (nếu đã quá hạn) hoặc đến hôm nay
+          const endDateForCalculation = isOverdue ? contractEndDate : today;
+          const daysSinceLastPayment = Math.floor(
+            (endDateForCalculation.getTime() - latestPaymentDateTime.getTime()) / (1000 * 60 * 60 * 24)
+          );
+          
+          // Calculate late periods
+          const interestPeriod = pawn.interest_period || 30;
+          const latePeriods = Math.floor(daysSinceLastPayment / interestPeriod);
+          
+          // If late by one or more periods, it needs warning
+          if (latePeriods > 0) {
+            needsWarning = true;
+          }
+        } else {
+          // No payments yet - check days since loan date
+          // Tính số ngày từ ngày vay đến ngày kết thúc hợp đồng (nếu đã quá hạn) hoặc đến hôm nay
+          const endDateForCalculation = isOverdue ? contractEndDate : today;
+          const daysSinceLoan = Math.floor(
+            (endDateForCalculation.getTime() - loanDate.getTime()) / (1000 * 60 * 60 * 24) + 1
+          );
+          
+          // Calculate late periods
+          const interestPeriod = pawn.interest_period || 30;
+          const latePeriods = Math.floor(daysSinceLoan / interestPeriod);
+          
+          // If late by one or more periods, it needs warning
+          if (latePeriods > 0) {
+            needsWarning = true;
+          }
+        }
+        
+        // If overdue or needs warning, increment counter
+        if (isOverdue || needsWarning) {
+          warningCount++;
+        }
+      } catch (err) {
+        console.error(`Error processing pawn ${pawnData.pawn_id} for count:`, err);
+        // Continue with other pawns even if this one fails
+      }
+    }
+    
+    return { count: warningCount, error: null };
+  } catch (err) {
+    console.error("Error in countPawnWarnings:", err);
+    return { count: 0, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
+// Fallback to original method if RPC fails
+async function countPawnWarningsOriginal(storeId: string): Promise<{ count: number; error: any }> {
+  try {
     // Lấy tất cả pawns với trạng thái không phải CLOSED hoặc DELETED
     const { data: pawns, error: pawnsError } = await supabase
       .from('pawns')
@@ -102,7 +202,7 @@ export async function countPawnWarnings(storeId: string): Promise<{ count: numbe
     
     return { count: warningCount, error: null };
   } catch (err) {
-    console.error("Error in countPawnWarnings:", err);
+    console.error("Error in countPawnWarningsOriginal:", err);
     return { count: 0, error: err instanceof Error ? err.message : "Unknown error" };
   }
 }

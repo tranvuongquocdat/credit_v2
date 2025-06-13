@@ -70,11 +70,10 @@ export async function calculateDebtToLatestPaidPeriod(pawnId: string): Promise<n
     // truy vấn lịch sử thanh toán nợ
     const { data: debtHistory, error: debtHistoryError } = await supabase
       .from('pawn_history')
-      .select('effective_date, credit_amount, debit_amount')
+      .select('credit_amount, debit_amount')
       .eq('pawn_id', pawnId)
       .eq('transaction_type', 'debt_payment')
       .eq('is_deleted', false)
-      .order('effective_date', { ascending: true });
 
     if (debtHistoryError) {
       throw new Error('Error fetching debt history');

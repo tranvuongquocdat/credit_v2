@@ -498,17 +498,6 @@ export function InstallmentPaymentHistoryModal({
     (sum, period) => sum + (period.actualAmount || 0),
     0,
   );
-  const remainingAmount = totalCustomerPayments - totalFees;
-
-  // Calculate remaining periods
-  const calculateRemainingPeriods = () => {
-    return calcRemainingPeriods(installment, paymentPeriods);
-  };
-
-  // Helper function to format number with dots
-  const formatNumberWithDot = (num: number): string => {
-    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  };
 
   const isPeriodInDatabase = (
     period: InstallmentPaymentPeriod | undefined,
@@ -649,7 +638,9 @@ export function InstallmentPaymentHistoryModal({
             if (dayOffset === cycleDays - 1) {
               dayAmount = dailyAmount + lastDayAdjustment;
             }
-            
+            const transactionDate = selectedDate 
+            ? new Date(selectedDate)
+            : new Date().setUTCHours(0, 0, 0, 0);
             const dailyRecord = {
               installment_id: installment.id,
               transaction_type: 'payment' as const,
@@ -660,7 +651,7 @@ export function InstallmentPaymentHistoryModal({
               description: `Thanh toán chu kỳ ${cycleIndex + 1}/${cycles.length}, ngày ${dayOffset + 1}/${cycleDays} đến kỳ ${period.periodNumber}`,
               is_deleted: false,
               created_by: userId || installment.employee_id,
-              ...(cycles.length === 1 && selectedDate && { transaction_date: selectedDate })
+              transaction_date: new Date(transactionDate).toISOString(),
             };
             
             allRecords.push(dailyRecord);
@@ -695,7 +686,6 @@ export function InstallmentPaymentHistoryModal({
             await updateInstallmentPaymentDueDate(installment.id, newDueDate.toISOString());
           }
         }
-        
         toast({
           title: 'Thành công',
           description: `Đã tạo ${allRecords.length} bản ghi thanh toán đến kỳ ${period.periodNumber}`,
@@ -844,12 +834,35 @@ export function InstallmentPaymentHistoryModal({
       // Reset debt amount to 0
       await resetInstallmentDebtAmount(installment.id);
 
+      // Check if there are remaining unpaid periods and fill them before closing
+      const remainingAmount = calculateRemainingToPay(installment, totalPaidAmount);
+      
+      if (remainingAmount > 0) {
+        console.log('🔄 Filling remaining periods before closing contract for rotation. Remaining amount:', remainingAmount);
+        
+        // Fill all remaining unpaid periods
+        const fillResult = await fillRemainingPeriods(installment.id);
+        
+        if (!fillResult.success) {
+          throw new Error(fillResult.error || 'Failed to fill remaining periods');
+        }
+        
+        console.log('✅ Successfully filled', fillResult.periodsAdded, 'remaining periods before rotation');
+        
+        if (fillResult.periodsAdded && fillResult.periodsAdded > 0) {
+          toast({
+            title: "Thông báo",
+            description: `Đã tự động đóng ${fillResult.periodsAdded} kỳ còn lại trước khi đảo hợp đồng.`,
+          });
+        }
+      }
+
       // Update installment status to closed
       await updateInstallmentStatus(installment.id, InstallmentStatus.CLOSED);
 
       // Record in transaction history
       await recordContractClosure(installment.id);
-
+      
       // Create a new contract
       const newContract = {
         customer_id: installment.customer_id,
@@ -862,8 +875,13 @@ export function InstallmentPaymentHistoryModal({
         loan_date: rotationLoanDate,
         notes: `Đảo từ hợp đồng ${installment.contract_code}. Khách thực nhận: ${formatCurrency(calculateCustomerReceiveAmount())}`,
         status: InstallmentStatus.ON_TIME,
+        payment_due_date: '', // Add payment_due_date property
       };
-
+      // Calculate initial payment_due_date as start_date + paymentPeriod - 1
+      const startDateObj = new Date(rotationLoanDate);
+      const paymentDueDate = new Date(startDateObj);
+      paymentDueDate.setDate(startDateObj.getDate() + newContract.payment_period - 1);
+      newContract.payment_due_date = format(paymentDueDate, 'yyyy-MM-dd');
       const { data, error } = await createInstallment(newContract);
 
       if (error) {
@@ -872,11 +890,7 @@ export function InstallmentPaymentHistoryModal({
 
       // Record rotation in transaction history
       if (data) {
-        await recordContractRotation(
-          installment.id,
-          data.id,
-          Math.max(0, calculateRemainingToPay(installment, totalPaidAmount)),
-        );
+        await recordContractRotation(data.id);
       }
 
       // Show success message

@@ -296,6 +296,13 @@ export function PaymentTab({
           is_deleted: boolean;
         }> = [];
         
+        // Kiểm tra nếu đang chỉnh sửa và có giá trị paymentAmount
+        const isCustomPayment = editingPeriodId === periodId && paymentAmount > 0;
+        const expectedTotal = period.expected_amount || 0;
+        
+        // Nếu đang chỉnh sửa và có giá trị paymentAmount, sử dụng tỷ lệ để phân bổ
+        const paymentRatio = isCustomPayment ? paymentAmount / expectedTotal : 1;
+        
         cycles.forEach((cycle, cycleIndex) => {
           const cycleStartDate = cycle.start;
           const cycleEndDate = cycle.end;
@@ -308,6 +315,9 @@ export function PaymentTab({
             // Tính index ngày so với ngày vay để lấy expected amount
             const dayIndex = Math.floor((currentDate.getTime() - loanStart.getTime()) / (1000 * 60 * 60 * 24));
             const dayAmount = (dayIndex >= 0 && dayIndex < dailyAmounts.length) ? dailyAmounts[dayIndex] : 0;
+            
+            // Áp dụng tỷ lệ nếu đang chỉnh sửa
+            const adjustedDayAmount = isCustomPayment ? Math.round(dayAmount * paymentRatio) : Math.round(dayAmount);
             
             // Xác định date_status cho chu kỳ này
             let dateStatus: string | null = null;
@@ -324,7 +334,7 @@ export function PaymentTab({
               transaction_type: 'payment' as const,
               effective_date: currentDate.toISOString(),
               date_status: dateStatus,
-              credit_amount: Math.round(dayAmount),
+              credit_amount: adjustedDayAmount,
               debit_amount: 0,
               description: `Thanh toán chu kỳ ${cycleIndex + 1}/${cycles.length}, ngày ${dayOffset + 1}/${cycleDays} đến kỳ ${period.period_number}`,
               is_deleted: false,
@@ -349,9 +359,17 @@ export function PaymentTab({
         
         console.log(`Successfully inserted ${allRecords.length} payment records`);
         
+        // Reset editing state
+        setEditingPeriodId(null);
+        
+        // Hiển thị thông báo thành công
+        const paymentDescription = isCustomPayment 
+          ? `Đã tạo ${allRecords.length} bản ghi thanh toán với số tiền ${formatCurrency(paymentAmount)} cho kỳ ${period.period_number}`
+          : `Đã tạo ${allRecords.length} bản ghi thanh toán đến kỳ ${period.period_number}`;
+        
         toast({
           title: 'Thành công',
-          description: `Đã tạo ${allRecords.length} bản ghi thanh toán đến kỳ ${period.period_number}`,
+          description: paymentDescription,
         });
         
       } else {
@@ -377,7 +395,7 @@ export function PaymentTab({
         
         const { data, error } = await supabase
           .from('credit_history')
-          .update({ is_deleted: true, updated_by: userId })
+          .update({ is_deleted: true, updated_by: userId, updated_at: new Date().toISOString()})
           .eq('credit_id', credit.id)
           .eq('transaction_type', 'payment')
           .eq('is_deleted', false)

@@ -1,3 +1,4 @@
+import { getCurrentUser } from './auth';
 import { supabase } from './supabase';
 import { 
   Credit, 
@@ -15,6 +16,7 @@ export interface CreditFilters {
   end_date?: string;
   status?: CreditStatus | "all";
   store_id?: string;
+  duration?: number;
 }
 
 /**
@@ -85,6 +87,10 @@ export async function getCredits(
       
       if (filters.store_id) {
         query = query.eq('store_id', filters.store_id);
+      }
+
+      if (filters.duration) {
+        query = query.eq('loan_period', filters.duration);
       }
     }
     
@@ -189,6 +195,7 @@ export async function getCreditById(id: string) {
  */
 export async function createCredit(params: CreateCreditParams) {
   try {
+    const userId = (await getCurrentUser())?.id;
     // Chuyển đổi Date object thành string nếu cần
     const loanDate = params.loan_date instanceof Date 
       ? params.loan_date.toISOString() 
@@ -223,6 +230,21 @@ export async function createCredit(params: CreateCreditParams) {
       .single();
     
     if (error) throw error;
+    
+    // Insert into credit_history
+    const { error: creditHistoryError } = await supabase
+      .from('credit_history')
+      .insert({
+        credit_id: data.id,
+        transaction_type: 'initial_loan',
+        debit_amount: params.loan_amount,
+        description: 'Khoản vay ban đầu',
+        created_by: userId
+      })
+      .select()
+      .single();
+
+    if (creditHistoryError) throw creditHistoryError;
     
     return { data: data as CreditWithCustomer, error: null };
   } catch (error) {
