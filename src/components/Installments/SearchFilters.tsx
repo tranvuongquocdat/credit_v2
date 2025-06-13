@@ -47,7 +47,7 @@ export function SearchFilters({
   initialFilters
 }: SearchFiltersProps) {
   // Get store context
-  const { currentStore, stores, setCurrentStore } = useStore();
+  const { currentStore } = useStore();
   
   const [filters, setFilters] = useState<SearchFilters>({
     contract_code: '',
@@ -144,14 +144,6 @@ export function SearchFilters({
     onSearch(newFilters);
   };
   
-  const handleStoreChange = (value: string) => {
-    // Find the store object from the stores array
-    const selectedStore = stores.find(store => store.id === value);
-    if (selectedStore) {
-      // Update the store in context
-      setCurrentStore(selectedStore);
-    }
-  };
 
   const handleSearch = () => {
     console.log('🔍 SearchFilters handleSearch called with filters:', filters);
@@ -255,8 +247,10 @@ export function SearchFilters({
               <SelectItem value="7">7 ngày</SelectItem>
               <SelectItem value="14">14 ngày</SelectItem>
               <SelectItem value="30">30 ngày</SelectItem>
+              <SelectItem value="50">50 ngày</SelectItem>
               <SelectItem value="60">60 ngày</SelectItem>
               <SelectItem value="90">90 ngày</SelectItem>
+              <SelectItem value="100">100 ngày</SelectItem>
             </SelectContent>
           </Select>
         </div>

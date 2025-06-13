@@ -16,6 +16,7 @@ interface SearchFilters {
   status?: string;
   startDate?: string;
   endDate?: string;
+  duration?: number;
 }
 
 export function usePawns() {
@@ -73,6 +74,7 @@ export function usePawns() {
         start_date: filters.startDate,
         end_date: filters.endDate,
         status: filters.status as any || 'on_time',
+        loan_period: filters.duration || undefined,
         store_id: currentStore.id // Sử dụng currentStore.id trực tiếp thay vì || ''
       };
       

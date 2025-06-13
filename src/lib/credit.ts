@@ -16,6 +16,7 @@ export interface CreditFilters {
   end_date?: string;
   status?: CreditStatus | "all";
   store_id?: string;
+  duration?: number;
 }
 
 /**
@@ -86,6 +87,10 @@ export async function getCredits(
       
       if (filters.store_id) {
         query = query.eq('store_id', filters.store_id);
+      }
+
+      if (filters.duration) {
+        query = query.eq('loan_period', filters.duration);
       }
     }
     

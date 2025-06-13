@@ -16,6 +16,7 @@ export function useCredits(initialFilters?: Partial<SearchFilters>) {
     customer_name: initialFilters?.customer_name || '',
     start_date: initialFilters?.start_date || '',
     end_date: initialFilters?.end_date || '',
+    duration: initialFilters?.duration || undefined,
     status: initialFilters?.status || 'on_time'
   });
   
@@ -33,6 +34,7 @@ export function useCredits(initialFilters?: Partial<SearchFilters>) {
       start_date: searchFilters.start_date || undefined,
       end_date: searchFilters.end_date || undefined,
       status: searchFilters.status ? (searchFilters.status as CreditStatus) : undefined,
+      duration: searchFilters.duration || undefined,
       store_id: currentStore?.id // Sử dụng currentStore?.id để tránh lỗi null
     };
   }, [currentStore]);
