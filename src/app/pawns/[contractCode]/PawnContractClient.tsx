@@ -47,7 +47,7 @@ export function PawnContractClient({ contractCode }: PawnContractClientProps) {
   const initialFilters = useMemo(() => ({
     contractCode: contractCode || '',
     customerName: '',
-    status: ''
+    status: 'all'
   }), [contractCode]);
   
   // Use our custom hook for pawns data and operations
