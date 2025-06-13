@@ -1,7 +1,7 @@
 import { getExpectedMoney } from './get_expected_money';
 import { calculateDebtToLatestPaidPeriod } from './calculate_remaining_debt';
 import { calculateActualLoanAmount } from './calculate_actual_loan_amount';
-import { getCreditPaymentHistory } from './payment_history';
+import { calculateCollectedInterest } from './calculate_collected_interest';
 import { supabase } from '../supabase';
 
 export interface CreditMetrics {
@@ -33,22 +33,15 @@ export async function calculateCreditMetrics(
   credit: CreditData
 ): Promise<CreditMetrics | null> {
   try {
-    const [loanAmount, oldDebt, dailyAmounts, paymentHistory] = await Promise.all([
+    // Tính toán song song các chỉ số cần thiết
+    const [loanAmount, oldDebt, dailyAmounts, paidInterest] = await Promise.all([
       calculateActualLoanAmount(credit.id),
       calculateDebtToLatestPaidPeriod(credit.id),
       getExpectedMoney(credit.id),
-      await supabase
-        .from('credit_history')
-        .select('credit_amount')
-        .eq('credit_id', credit.id)
-        .eq('is_deleted', false)
-        .eq('transaction_type', 'payment')
-        .gte('effective_date', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())
-        .lte('effective_date', new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString())
+      calculateCollectedInterest(credit.id) // Sử dụng hàm mới với xử lý phân trang
     ]);
     
     const expectedProfit = dailyAmounts.reduce((sum, amount) => sum + amount, 0);
-    const paidInterest = paymentHistory.data?.reduce((sum, record) => sum + (record.credit_amount || 0), 0) || 0;
     
     // Tính interest to today
     const today = new Date();
@@ -63,8 +56,8 @@ export async function calculateCreditMetrics(
       interestToday: Math.round(interestToday),
       actualLoanAmount: Math.round(loanAmount),
       loading: false,
-      // Lãi phí đã thu
-      paidInterest: Math.round(paidInterest),
+      // Lãi phí đã thu - đã được tính bằng hàm mới
+      paidInterest: paidInterest,
       // Tiền cho vay
       summaryLoan: loanAmount,
       // Nợ cũ

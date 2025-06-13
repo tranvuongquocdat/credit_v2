@@ -72,7 +72,7 @@ export function usePawns() {
         customer_name: filters.customerName,
         start_date: filters.startDate,
         end_date: filters.endDate,
-        status: filters.status as any,
+        status: filters.status as any || 'on_time',
         store_id: currentStore.id // Sử dụng currentStore.id trực tiếp thay vì || ''
       };
       

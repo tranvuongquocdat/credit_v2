@@ -1,4 +1,4 @@
-import { getinstallmentPaymentHistory, getinstallmentPaymentHistoryByDateRange } from './payment_history';
+import { getinstallmentPaymentHistory, getinstallmentPaymentHistoryByDateRange, getAllValidPaymentHistory, getAllValidPaymentHistoryByDateRange } from './payment_history';
 import { calculateDebtToLatestPaidPeriod } from './calculate_remaining_debt';
 
 export interface InstallmentMetrics {
@@ -51,7 +51,7 @@ export async function calculateInstallmentMetrics(
     // 2. Calculate profit collected based on the new formula
     const profitCollected = await calculateProfitCollectedInCurrentMonth(
       installment.id,
-      interestStartDate
+      installment.down_payment || 0
     );
     
     // Log profit collected for debugging
@@ -122,7 +122,6 @@ function calculateInterestStartDate(
     const loanDateObj = new Date(loanDate);
     const interestStartDateObj = new Date(loanDateObj);
     interestStartDateObj.setDate(loanDateObj.getDate() + daysToBreakEven);
-    console.log('interestStartDateObj', interestStartDateObj);
     return interestStartDateObj.toISOString();
   } catch (error) {
     console.error('Error calculating interest start date:', error);
@@ -131,58 +130,69 @@ function calculateInterestStartDate(
 }
 
 /**
- * Tính lãi phí đã thu trong tháng hiện tại và sau ngày bắt đầu lãi
+ * Tính lãi phí đã thu theo công thức mới
+ * A = Tổng credit_amount từ đầu đến cuối tháng trước - down_payment (nếu âm thì = 0)
+ * B = Tổng credit_amount từ đầu đến cuối tháng này - down_payment (nếu âm thì = 0)
+ * Kết quả = B - A
  * @param installmentId - ID của hợp đồng installment
- * @param interestStartDate - Ngày bắt đầu tính lãi
+ * @param downPayment - Số tiền đặt cọc của hợp đồng
  * @returns Promise<number> - Lãi phí đã thu
  */
 async function calculateProfitCollectedInCurrentMonth(
   installmentId: string,
-  interestStartDate: string
+  downPayment: number
 ): Promise<number> {
   try {
-    // Lấy mùng 1 của tháng hiện tại
     const today = new Date();
-    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     
-    // Lấy ngày cuối cùng của tháng hiện tại
-    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    // Tính ngày cuối cùng của tháng trước
+    const lastDayOfPreviousMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+    const lastDayOfPreviousMonthStr = lastDayOfPreviousMonth.toISOString().split('T')[0];
     
-    // Format dates as YYYY-MM-DD
-    const firstDayStr = firstDayOfMonth.toISOString().split('T')[0];
-    const lastDayStr = lastDayOfMonth.toISOString().split('T')[0];
+    // Tính ngày cuối cùng của tháng hiện tại
+    const lastDayOfCurrentMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    const lastDayOfCurrentMonthStr = lastDayOfCurrentMonth.toISOString().split('T')[0];
     
-    // Chuyển interestStartDate thành Date object để so sánh
-    const interestStartDateObj = new Date(interestStartDate);
-    const interestStartDateStr = interestStartDateObj.toISOString().split('T')[0];
-    
-    // Lấy lịch sử giao dịch trong tháng hiện tại
-    const monthlyHistory = await getinstallmentPaymentHistoryByDateRange(
+    // Lấy toàn bộ lịch sử thanh toán với is_deleted=false từ đầu đến cuối tháng trước
+    const historyToLastMonth = await getAllValidPaymentHistory(
       installmentId,
-      firstDayStr,
-      lastDayStr
+      lastDayOfPreviousMonthStr
     );
     
-    // Lọc các giao dịch có effective_date >= ngày bắt đầu lãi
-    const profitRecords = monthlyHistory.filter(record => {
-      if (!record.effective_date) return false;
-      
-      // Extract date part and create Date object for comparison
-      const recordDateStr = record.effective_date.split('T')[0];
-      const recordDate = new Date(recordDateStr);
-      
-      // Compare dates
-      return recordDate >= interestStartDateObj;
-    });
+    // Lấy toàn bộ lịch sử thanh toán với is_deleted=false từ đầu đến cuối tháng hiện tại
+    const historyToCurrentMonth = await getAllValidPaymentHistory(
+      installmentId,
+      lastDayOfCurrentMonthStr
+    );
     
-    // Tổng lãi phí đã thu = tổng các giao dịch thỏa điều kiện
-    const profitCollected = profitRecords.reduce((sum, record) => {
+    // Tính A: Tổng credit_amount đến cuối tháng trước - down_payment
+    const totalCreditToLastMonth = historyToLastMonth.reduce((sum, record) => {
       return sum + (record.credit_amount || 0);
     }, 0);
+    const a = Math.max(0, totalCreditToLastMonth - downPayment);
+    
+    // Tính B: Tổng credit_amount đến cuối tháng hiện tại - down_payment
+    const totalCreditToCurrentMonth = historyToCurrentMonth.reduce((sum, record) => {
+      return sum + (record.credit_amount || 0);
+    }, 0);
+    const b = Math.max(0, totalCreditToCurrentMonth - downPayment);
+    
+    // Kết quả = B - A
+    const profitCollected = b - a;
+    
+    // Log để debug
+    console.debug(`Installment ${installmentId} - Profit calculation:`, {
+      totalCreditToLastMonth,
+      totalCreditToCurrentMonth,
+      downPayment,
+      a,
+      b,
+      profitCollected
+    });
     
     return profitCollected;
   } catch (error) {
-    console.error('Error calculating profit collected in current month:', error);
+    console.error('Error calculating profit collected with new formula:', error);
     return 0; // Return 0 in case of error
   }
 } 

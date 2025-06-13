@@ -16,7 +16,7 @@ export function useCredits(initialFilters?: Partial<SearchFilters>) {
     customer_name: initialFilters?.customer_name || '',
     start_date: initialFilters?.start_date || '',
     end_date: initialFilters?.end_date || '',
-    status: initialFilters?.status || 'all'
+    status: initialFilters?.status || 'on_time'
   });
   
   // Get current store from store context

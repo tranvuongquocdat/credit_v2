@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { PawnStatus } from '@/models/pawn';
 import { useStore } from '@/contexts/StoreContext';
 import { calculatePawnMetrics } from '@/lib/Pawns/calculate_pawn_metrics';
+import { calculateTotalCollectedInterest } from '@/lib/Pawns/calculate_collected_interest';
 
 // Interface cho dữ liệu tài chính tổng hợp
 export interface StoreFinancialData {
@@ -36,8 +37,8 @@ export function usePawnCalculations() {
   const fetchAllData = async () => {
     try {
       setLoading(true);
-      
-      const storeId = currentStore?.id || '1';
+      if (!currentStore) return;
+      const storeId = currentStore?.id;
       
       // 1. Lấy thông tin store
       const { data: storeData } = await supabase
@@ -101,18 +102,11 @@ export function usePawnCalculations() {
       if (closedPawnsData?.length) {
         console.time('Calculate closed pawns interest');
         
-        const closedResults = await Promise.all(
-          closedPawnsData.map(pawn => calculatePawnMetrics(pawn))
-        );
+        // Sử dụng hàm mới để tính toán lãi phí đã thu từ tất cả pawns đã đóng trong một truy vấn
+        const closedPawnIds = closedPawnsData.map(pawn => pawn.id);
+        totalCollectedInterest += await calculateTotalCollectedInterest(closedPawnIds);
         
         console.timeEnd('Calculate closed pawns interest');
-        
-        // Chỉ tính lãi phí đã thu từ pawns đã đóng
-        closedResults.forEach(result => {
-          if (result) {
-            totalCollectedInterest += result.paidInterest;
-          }
-        });
       }
       
       // 6. Set results

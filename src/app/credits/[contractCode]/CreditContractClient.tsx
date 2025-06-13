@@ -46,7 +46,7 @@ export function CreditContractClient({ contractCode }: CreditContractClientProps
   const initialFilters = {
     contract_code: contractCode || '',
     customer_name: '',
-    status: ''
+    status: 'all'
   };
   
   // Use our custom hook for credits data and operations

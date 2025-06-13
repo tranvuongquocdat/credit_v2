@@ -124,7 +124,7 @@ export async function fillRemainingPeriods(
         if (dayOffset === totalDays - 1) {
           dayAmount = dailyAmount + lastDayAdjustment;
         }
-
+        const transactionDate = new Date().setUTCHours(0, 0, 0, 0)
         const dailyRecord = {
           installment_id: installmentId,
           transaction_type: 'payment' as const,
@@ -134,7 +134,8 @@ export async function fillRemainingPeriods(
           debit_amount: 0,
           description: `Đóng hợp đồng - Thanh toán ngày ${dayOffset + 1}/${totalDays} của kỳ ${period.periodNumber}`,
           created_by: userId,
-          is_deleted: false
+          is_deleted: false,
+          transaction_date: new Date(transactionDate).toISOString()
         };
 
         allDailyRecords.push(dailyRecord);

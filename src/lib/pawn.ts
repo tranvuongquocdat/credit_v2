@@ -221,6 +221,7 @@ export async function getPawnById(id: string, signal?: AbortSignal) {
  */
 export async function createPawn(params: CreatePawnParams) {
   try {
+    const userId = (await getCurrentUser())?.id;
     // Chuyển đổi Date object thành string nếu cần
     const loanDate = params.loan_date instanceof Date 
       ? params.loan_date.toISOString() 
@@ -259,6 +260,21 @@ export async function createPawn(params: CreatePawnParams) {
       .single();
     
     if (error) throw error;
+
+    // Insert into pawn_history
+    const { error: pawnHistoryError } = await supabase
+      .from('pawn_history')
+      .insert({
+        pawn_id: data.id,
+        transaction_type: 'initial_loan',
+        debit_amount: data.loan_amount,
+        description: 'Khoản vay ban đầu',
+        created_by: userId
+      })
+      .select()
+      .single();
+
+    if (pawnHistoryError) throw pawnHistoryError;
     
     // Temporarily return basic pawn data without customer/collateral joins
     const pawnWithRelations = {

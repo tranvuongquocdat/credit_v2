@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { CreditStatus } from '@/models/credit';
 import { useStore } from '@/contexts/StoreContext';
 import { calculateCreditMetrics } from '@/lib/Credits/calculate_credit_metrics';
+import { calculateTotalCollectedInterest } from '@/lib/Credits/calculate_collected_interest';
 
 // Interface cho dữ liệu tài chính tổng hợp
 export interface StoreFinancialData {
@@ -52,23 +53,29 @@ export function useCreditCalculations() {
         .eq('store_id', storeId)
         .eq('status', CreditStatus.ON_TIME);
       
+      // 3. Lấy danh sách credits đã đóng
+      const { data: closedCreditsData } = await supabase
+        .from('credits')
+        .select('id')
+        .eq('store_id', storeId)
+        .eq('status', CreditStatus.CLOSED);
+      
       let totalLoan = 0;
       let totalOldDebt = 0;
       let totalProfit = 0;
-      let totalPaidInterest = 0;
+      let totalCollectedInterest = 0;
       const newDetails: Record<string, CreditFinancialDetail> = {};
       
       if (activeCreditsData?.length) {
-        console.time('Calculate all credits');
+        console.time('Calculate all active credits');
         
-        // 3. Xử lý song song tất cả credits
         const results = await Promise.all(
           activeCreditsData.map(credit => calculateCreditMetrics(credit))
         );
         
-        console.timeEnd('Calculate all credits');
+        console.timeEnd('Calculate all active credits');
         
-        // 4. Aggregate results
+        // Aggregate results
         results.forEach(result => {
           if (result) {
             newDetails[result.creditId] = {
@@ -84,9 +91,20 @@ export function useCreditCalculations() {
             totalLoan += result.summaryLoan;
             totalOldDebt += result.summaryDebt;
             totalProfit += result.summaryProfit;
-            totalPaidInterest += result.paidInterest;
+            totalCollectedInterest += result.paidInterest;
           }
         });
+      }
+      
+      // Xử lý lãi phí đã thu từ credits đã đóng
+      if (closedCreditsData?.length) {
+        console.time('Calculate closed credits interest');
+        
+        // Sử dụng hàm mới để tính toán lãi phí đã thu từ tất cả credits đã đóng trong một truy vấn
+        const closedCreditIds = closedCreditsData.map(credit => credit.id);
+        totalCollectedInterest += await calculateTotalCollectedInterest(closedCreditIds);
+        
+        console.timeEnd('Calculate closed credits interest');
       }
       
       // 6. Set results
@@ -96,7 +114,7 @@ export function useCreditCalculations() {
         totalLoan: Math.round(totalLoan),
         oldDebt: Math.round(totalOldDebt),
         profit: Math.round(totalProfit),
-        collectedInterest: Math.round(totalPaidInterest)
+        collectedInterest: Math.round(totalCollectedInterest)
       });
       
       setDetails(newDetails);
