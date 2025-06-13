@@ -118,7 +118,7 @@ const sidebarItems: SidebarItem[] = [
       { title: 'Báo cáo đang cho vay', path: '/reports/report-pawn-holding', icon: <FiPackage size={18} /> },
       { title: 'Báo cáo chuộc đồ, đóng HĐ', path: '/reports/contractClose', icon: <FiPackage size={18} /> },
       { title: 'Báo cáo thanh lý đồ', path: '/reports/report-pawn-new-liquidation', icon: <FiPackage size={18} /> },
-      { title: 'Báo cáo hợp đồng đã xóa', path: '/reports/report-contract-cancel', icon: <FiPackage size={18} /> },
+      { title: 'Báo cáo hợp đồng đã xóa', path: '/reports/contractDeleted', icon: <FiPackage size={18} /> },
       { title: 'Bàn giao ca', path: '/reports/inventory', icon: <FiPackage size={18} /> },
       { title: 'Dòng tiền theo ngày', path: '/reports/money-by-day', icon: <FiPackage size={18} /> },
     ]
