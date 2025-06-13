@@ -104,17 +104,15 @@ const sidebarItems: SidebarItem[] = [
   { 
     title: 'Quỹ', 
     path: '/total-fund', 
-    icon: <FiActivity size={20} />,
-    redColor: true,
+    icon: <FiActivity size={20} />
   },
   { 
     title: 'Báo cáo', 
     path: '/reports', 
     icon: <FiActivity size={20} />,
-    redColor: true,
     submenu: [
       { title: 'Số quỹ tiền mặt', path: '/reports/cashbook', icon: <FiDollarSign size={18} /> },
-      { title: 'Tổng kết giao dịch', path: '/reports/report-balance', icon: <FiAlertTriangle size={18} /> },
+      { title: 'Tổng kết giao dịch', path: '/reports/transactionSummary', icon: <FiAlertTriangle size={18} /> },
       { title: 'Tổng kết lợi nhuận', path: '/reports/profit', icon: <FiPackage size={18} /> },
       { title: 'Chi tiết tiền lãi', path: '/reports/receive-interest', icon: <FiPackage size={18} /> },
       { title: 'Báo cáo đang cho vay', path: '/reports/report-pawn-holding', icon: <FiPackage size={18} /> },
