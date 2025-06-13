@@ -91,6 +91,8 @@ export async function getInstallmentFinancialsForStore(storeId: string): Promise
       contract_code,
       down_payment,
       installment_amount,
+      loan_date,
+      loan_period,
       status,
       store_id,
       debt_amount
