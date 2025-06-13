@@ -655,7 +655,7 @@ export async function deleteInstallment(id: string) {
     // Update status to DELETED instead of hard delete
     const { error } = await supabase
       .from('installments')
-      .update({ status: InstallmentStatus.DELETED.toString() as any })
+      .update({ status: InstallmentStatus.DELETED.toString() as any, updated_at: new Date().toISOString() })
       .eq('id', id);
       
     if (error) throw error;
