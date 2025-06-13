@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { useStore } from '@/contexts/StoreContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { DateInputWithControls } from '@/components/DateInputWithControls';
 import { format, startOfDay } from 'date-fns';
 import {
   Table,
@@ -355,13 +356,12 @@ export default function TotalFundPage() {
     }
   };
 
-  const handleDateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = event.target;
-    if (name === 'startDate') {
-      setStartDate(value);
-    } else if (name === 'endDate') {
-      setEndDate(value);
-    }
+  const handleStartDateChange = (value: string) => {
+    setStartDate(value);
+  };
+
+  const handleEndDateChange = (value: string) => {
+    setEndDate(value);
   };
 
   const filteredHistory = useMemo(() => activeTab === 'all' 
@@ -423,9 +423,9 @@ export default function TotalFundPage() {
             <CardTitle>Biến động quỹ</CardTitle>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <input type="date" name="startDate" value={startDate} onChange={handleDateChange} className="px-3 py-2 border rounded-md" />
+                <DateInputWithControls value={startDate} onChange={handleStartDateChange} className="px-3 py-2" />
                 <span>đến</span>
-                <input type="date" name="endDate" value={endDate} onChange={handleDateChange} className="px-3 py-2 border rounded-md" />
+                <DateInputWithControls value={endDate} onChange={handleEndDateChange} className="px-3 py-2" />
               </div>
               <Button onClick={handleRefresh}>
                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Làm mới'}

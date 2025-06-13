@@ -23,6 +23,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { DateInputWithControls } from '@/components/DateInputWithControls';
 import {
   Select,
   SelectContent,
@@ -249,13 +250,12 @@ export default function ContractClosePage() {
   };
 
   // Handle date changes
-  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    if (name === 'startDate') {
-      setStartDate(value);
-    } else if (name === 'endDate') {
-      setEndDate(value);
-    }
+  const handleStartDateChange = (value: string) => {
+    setStartDate(value);
+  };
+
+  const handleEndDateChange = (value: string) => {
+    setEndDate(value);
   };
 
   // Handle refresh
@@ -294,21 +294,17 @@ export default function ContractClosePage() {
               <div className="flex items-center gap-4">
                 <div className="flex items-center">
                   <span className="mr-2 text-sm font-medium">Từ ngày</span>
-                  <Input 
-                    type="date" 
-                    name="startDate" 
+                  <DateInputWithControls
                     value={startDate} 
-                    onChange={handleDateChange}
+                    onChange={handleStartDateChange}
                     className="w-40"
                   />
                 </div>
                 <div className="flex items-center">
                   <span className="mx-2 text-sm font-medium">Đến ngày</span>
-                  <Input 
-                    type="date" 
-                    name="endDate" 
+                  <DateInputWithControls
                     value={endDate} 
-                    onChange={handleDateChange}
+                    onChange={handleEndDateChange}
                     className="w-40"
                   />
                 </div>

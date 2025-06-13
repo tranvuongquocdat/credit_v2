@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { DateInputWithControls } from '@/components/DateInputWithControls';
 
 // Custom components for different tables
 import PawnTable from './components/PawnTable';
@@ -428,12 +429,12 @@ export default function CashbookPage() {
     }
   };
 
-  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.name === 'startDate') {
-      setStartDate(e.target.value);
-    } else if (e.target.name === 'endDate') {
-      setEndDate(e.target.value);
-    }
+  const handleStartDateChange = (value: string) => {
+    setStartDate(value);
+  };
+
+  const handleEndDateChange = (value: string) => {
+    setEndDate(value);
   };
 
   // Load data when component mounts or when date range or store changes
@@ -471,21 +472,17 @@ export default function CashbookPage() {
                 <div className="flex items-center gap-2">
                   <div className="flex items-center">
                     <span className="mr-2 text-sm font-medium">Từ ngày</span>
-                    <Input 
-                      type="date" 
-                      name="startDate" 
+                    <DateInputWithControls
                       value={startDate} 
-                      onChange={handleDateChange}
+                      onChange={handleStartDateChange}
                       className="w-40"
                     />
                   </div>
                   <div className="flex items-center">
                     <span className="mx-2 text-sm font-medium">Đến ngày</span>
-                    <Input 
-                      type="date" 
-                      name="endDate" 
+                    <DateInputWithControls
                       value={endDate} 
-                      onChange={handleDateChange}
+                      onChange={handleEndDateChange}
                       className="w-40"
                     />
                   </div>
