@@ -23,7 +23,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { DateInputWithControls } from '@/components/DateInputWithControls';
+import { DatePickerWithControls } from '@/components/ui/date-picker-with-controls';
 import {
   Select,
   SelectContent,
@@ -294,17 +294,19 @@ export default function ContractClosePage() {
               <div className="flex items-center gap-4">
                 <div className="flex items-center">
                   <span className="mr-2 text-sm font-medium">Từ ngày</span>
-                  <DateInputWithControls
+                  <DatePickerWithControls
                     value={startDate} 
                     onChange={handleStartDateChange}
+                    placeholder="Chọn ngày bắt đầu"
                     className="w-40"
                   />
                 </div>
                 <div className="flex items-center">
                   <span className="mx-2 text-sm font-medium">Đến ngày</span>
-                  <DateInputWithControls
+                  <DatePickerWithControls
                     value={endDate} 
                     onChange={handleEndDateChange}
+                    placeholder="Chọn ngày kết thúc"
                     className="w-40"
                   />
                 </div>

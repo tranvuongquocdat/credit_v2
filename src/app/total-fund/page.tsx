@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { useStore } from '@/contexts/StoreContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { DateInputWithControls } from '@/components/DateInputWithControls';
+import { DatePickerWithControls } from '@/components/ui/date-picker-with-controls';
 import { format, startOfDay } from 'date-fns';
 import {
   Table,
@@ -423,9 +423,9 @@ export default function TotalFundPage() {
             <CardTitle>Biến động quỹ</CardTitle>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <DateInputWithControls value={startDate} onChange={handleStartDateChange} className="px-3 py-2" />
+                <DatePickerWithControls value={startDate} onChange={handleStartDateChange} placeholder="Chọn ngày bắt đầu" className="px-3 py-2" />
                 <span>đến</span>
-                <DateInputWithControls value={endDate} onChange={handleEndDateChange} className="px-3 py-2" />
+                <DatePickerWithControls value={endDate} onChange={handleEndDateChange} placeholder="Chọn ngày kết thúc" className="px-3 py-2" />
               </div>
               <Button onClick={handleRefresh}>
                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Làm mới'}

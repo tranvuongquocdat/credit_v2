@@ -9,7 +9,7 @@ import { RefreshCw } from 'lucide-react';
 import { usePawnCalculations } from '@/hooks/usePawnCalculation';
 import { useCreditCalculations } from '@/hooks/useCreditCalculation';
 import { useInstallmentsSummary } from '@/hooks/useInstallmentsSummary';
-import { DateInputWithControls } from '@/components/DateInputWithControls';
+import { DatePickerWithControls } from '@/components/ui/date-picker-with-controls';
 
 // Shadcn UI components
 import {
@@ -493,17 +493,19 @@ export default function MoneyFlowByDayPage() {
                 <div className="flex items-center gap-2">
                   <div className="flex items-center">
                     <span className="mr-2 text-sm font-medium">Từ ngày</span>
-                    <DateInputWithControls
+                    <DatePickerWithControls
                       value={startDate}
-                      onChange={(value) => setStartDate(value)}
+                      onChange={(value: string) => setStartDate(value)}
+                      placeholder="Chọn ngày bắt đầu"
                       className="w-40"
                     />
                   </div>
                   <div className="flex items-center">
                     <span className="mx-2 text-sm font-medium">Đến ngày</span>
-                    <DateInputWithControls
+                    <DatePickerWithControls
                       value={endDate}
-                      onChange={(value) => setEndDate(value)}
+                      onChange={(value: string) => setEndDate(value)}
+                      placeholder="Chọn ngày kết thúc"
                       className="w-40"
                     />
                   </div>
