@@ -19,6 +19,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 import {
   Select,
   SelectContent,
@@ -277,13 +278,12 @@ export default function ContractDeletedPage() {
     fetchDeletedContracts();
   }, [currentStore?.id, startDate, endDate, selectedContractType]);
 
-  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    if (name === 'startDate') {
-      setStartDate(value);
-    } else if (name === 'endDate') {
-      setEndDate(value);
-    }
+  const handleStartDateChange = (value: string) => {
+    setStartDate(value);
+  };
+
+  const handleEndDateChange = (value: string) => {
+    setEndDate(value);
   };
 
   const handleRefresh = () => {
@@ -326,11 +326,10 @@ export default function ContractDeletedPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Từ ngày
                   </label>
-                  <Input
-                    type="date"
-                    name="startDate"
+                  <DatePicker
                     value={startDate}
-                    onChange={handleDateChange}
+                    onChange={handleStartDateChange}
+                    placeholder="Chọn ngày bắt đầu"
                     className="w-full"
                   />
                 </div>
@@ -340,11 +339,10 @@ export default function ContractDeletedPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Đến ngày
                   </label>
-                  <Input
-                    type="date"
-                    name="endDate"
+                  <DatePicker
                     value={endDate}
-                    onChange={handleDateChange}
+                    onChange={handleEndDateChange}
+                    placeholder="Chọn ngày kết thúc"
                     className="w-full"
                   />
                 </div>

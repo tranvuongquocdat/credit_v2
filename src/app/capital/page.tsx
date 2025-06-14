@@ -14,6 +14,7 @@ import { getCurrentUser } from '@/lib/auth';
 // Shadcn UI components
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Select,
   SelectContent,
@@ -425,36 +426,24 @@ export default function CapitalPage() {
               <label htmlFor="dateFrom" className="block text-sm font-medium text-gray-700 mb-1">
                 Từ ngày
               </label>
-              <div className="relative">
-                <Input
-                  id="dateFrom"
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="w-full"
-                />
-                <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400">
-                  <CalendarIcon className="h-4 w-4" />
-                </div>
-              </div>
+              <DatePicker
+                value={dateFrom}
+                onChange={setDateFrom}
+                placeholder="Chọn ngày bắt đầu"
+                className="w-full"
+              />
             </div>
 
             <div>
               <label htmlFor="dateTo" className="block text-sm font-medium text-gray-700 mb-1">
                 Đến ngày
               </label>
-              <div className="relative">
-                <Input
-                  id="dateTo"
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="w-full"
-                />
-                <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400">
-                  <CalendarIcon className="h-4 w-4" />
-                </div>
-              </div>
+              <DatePicker
+                value={dateTo}
+                onChange={setDateTo}
+                placeholder="Chọn ngày kết thúc"
+                className="w-full"
+              />
             </div>
 
             <div>

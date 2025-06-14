@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { DateInputWithControls } from '@/components/DateInputWithControls';
+import { DatePickerWithControls } from '@/components/ui/date-picker-with-controls';
 
 // Custom components for different tables
 import PawnTable from './components/PawnTable';
@@ -472,17 +472,19 @@ export default function CashbookPage() {
                 <div className="flex items-center gap-2">
                   <div className="flex items-center">
                     <span className="mr-2 text-sm font-medium">Từ ngày</span>
-                    <DateInputWithControls
+                    <DatePickerWithControls
                       value={startDate} 
                       onChange={handleStartDateChange}
+                      placeholder="Chọn ngày bắt đầu"
                       className="w-40"
                     />
                   </div>
                   <div className="flex items-center">
                     <span className="mx-2 text-sm font-medium">Đến ngày</span>
-                    <DateInputWithControls
+                    <DatePickerWithControls
                       value={endDate} 
                       onChange={handleEndDateChange}
+                      placeholder="Chọn ngày kết thúc"
                       className="w-40"
                     />
                   </div>
