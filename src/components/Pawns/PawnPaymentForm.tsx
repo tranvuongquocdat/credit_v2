@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
 import { format, addDays, differenceInDays } from 'date-fns';
 import { PawnWithCustomerAndCollateral } from '@/models/pawn';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface PawnPaymentFormProps {
   isOpen: boolean;
@@ -79,7 +80,7 @@ export function PawnPaymentForm({
 
   // State để track việc đang tính toán
   const [isCalculating, setIsCalculating] = useState(false);
-
+  const { hasPermission } = usePermissions();
   // Recalculate end date when days change
   useEffect(() => {
     const start = new Date(startDate);
@@ -261,7 +262,7 @@ export function PawnPaymentForm({
             <Button 
               type="submit" 
               className="bg-blue-600 hover:bg-blue-700" 
-              disabled={disabled || isCalculating}
+              disabled={disabled || isCalculating || !hasPermission('dong_lai_cam_do')}
             >
               {isCalculating ? 'Đang tính...' : 'Đóng lãi'}
             </Button>
