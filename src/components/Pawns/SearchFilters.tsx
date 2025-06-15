@@ -12,6 +12,7 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { PlusIcon } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface StatusMapType {
   [key: string]: { 
@@ -46,6 +47,12 @@ export function SearchFilters({
   onExportExcel,
   initialFilters
 }: SearchFiltersProps) {
+  // Sử dụng hook kiểm tra quyền
+  const { hasPermission } = usePermissions();
+  
+  // Kiểm tra quyền tạo mới hợp đồng cầm đồ
+  const canCreatePawn = hasPermission('tao_moi_hop_dong_cam_do');
+  
   const [filters, setFilters] = useState<SearchFilters>({
     contractCode: '',
     customerName: '',
@@ -288,7 +295,9 @@ export function SearchFilters({
           <Button 
             onClick={onCreateNew}
             size="sm"
-            className="text-white bg-green-600 hover:bg-green-700"
+            className={`text-white bg-green-600 hover:bg-green-700 ${!canCreatePawn ? 'opacity-50 cursor-not-allowed' : ''}`}
+            disabled={!canCreatePawn}
+            title={!canCreatePawn ? 'Bạn không có quyền tạo mới hợp đồng' : ''}
           >
             <PlusIcon className="mr-1 h-3.5 w-3.5" />
             Thêm mới

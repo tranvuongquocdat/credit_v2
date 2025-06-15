@@ -1,20 +1,23 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { PawnStatus, PawnWithCustomerAndCollateral } from '@/models/pawn';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
-import { updatePawn } from '@/lib/pawn';
+import { updatePawn, updatePawnStatus } from '@/lib/pawn';
 import { useToast } from '@/components/ui/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
 import { calculateCloseContractInterest } from '@/lib/Pawns/calculate_close_contract_interest';
-import { processPawnRedemption } from '@/lib/Pawns/process_redeem';
 import { calculateDebtToLatestPaidPeriod } from '@/lib/Pawns/calculate_remaining_debt';
 import { recordDailyPayments } from '@/lib/Pawns/record_daily_payments';
 import { getUnpaidStartDate } from '@/lib/Pawns/get_unpaid_start_date';
 import { calculateActualLoanAmount } from '@/lib/Pawns/calculate_actual_loan_amount';
 import { getCurrentUser } from '@/lib/auth';
+import { format, addDays, isAfter, isBefore } from "date-fns";
+import { vi } from 'date-fns/locale';
+import { DatePicker } from '@/components/ui/date-picker';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface RedeemTabProps {
   pawn: PawnWithCustomerAndCollateral;
@@ -30,8 +33,76 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [actualLoanAmount, setActualLoanAmount] = useState(0);
   const [payDebt, setPayDebt] = useState(true); // Track whether to pay debt or not
-  
+  const today = useMemo(() => new Date().toISOString().split('T')[0], []); // Ngày hôm nay
+  const { hasPermission } = usePermissions();
   const isClosed = pawn?.status === PawnStatus.CLOSED || pawn?.status === PawnStatus.DELETED;
+  
+  // Ngày bắt đầu hợp đồng
+  const startDate = useMemo(() => {
+    if (!pawn?.loan_date) return today;
+    return pawn.loan_date;
+  }, [pawn?.loan_date, today]);
+  
+  // Tính toán ngày kết thúc hợp đồng
+  const endDate = useMemo(() => {
+    if (!pawn?.loan_date || !pawn?.loan_period) return today;
+    
+    const loanStartDate = new Date(pawn.loan_date);
+    const loanEndDate = addDays(loanStartDate, pawn.loan_period - 1);
+    
+    // Format to YYYY-MM-DD
+    return loanEndDate.toISOString().split('T')[0];
+  }, [pawn?.loan_date, pawn?.loan_period, today]);
+
+  // Mặc định là ngày hiện tại nếu ngày hiện tại nằm trong khoảng hợp đồng
+  // Nếu ngày hiện tại nằm ngoài khoảng, sử dụng ngày cuối cùng của hợp đồng
+  const defaultDate = useMemo(() => {
+    const currentDate = new Date();
+    const contractStartDate = new Date(startDate);
+    const contractEndDate = new Date(endDate);
+    
+    if (currentDate >= contractStartDate && currentDate <= contractEndDate) {
+      return today;
+    }
+    
+    return endDate;
+  }, [today, startDate, endDate]);
+  
+  const [redemptionDate, setRedemptionDate] = useState<string>(defaultDate);
+  
+  // Xác thực ngày được chọn
+  const validateAndSetDate = (date: string) => {
+    const selectedDate = new Date(date);
+    const contractStartDate = new Date(startDate);
+    const contractEndDate = new Date(endDate);
+    
+    // Reset hours để so sánh chỉ theo ngày
+    selectedDate.setHours(0, 0, 0, 0);
+    contractStartDate.setHours(0, 0, 0, 0);
+    contractEndDate.setHours(0, 0, 0, 0);
+    
+    // Nếu ngày được chọn trước ngày bắt đầu hợp đồng
+    if (isBefore(selectedDate, contractStartDate)) {
+      toast({
+        title: "Lưu ý",
+        description: "Ngày chuộc đồ không thể trước ngày bắt đầu hợp đồng. Đã điều chỉnh thành ngày bắt đầu.",
+      });
+      setRedemptionDate(startDate);
+      return;
+    }
+    
+    // Nếu ngày được chọn sau ngày kết thúc hợp đồng
+    if (isAfter(selectedDate, contractEndDate)) {
+      toast({
+        title: "Lưu ý",
+        description: "Ngày chuộc đồ không thể sau ngày kết thúc hợp đồng. Đã điều chỉnh thành ngày kết thúc.",
+      });
+      setRedemptionDate(endDate);
+      return;
+    }
+    
+    setRedemptionDate(date);
+  };
 
   const handleRedeemPawn = async (pawnId: string, shouldPayDebt: boolean = true) => {
     console.log('Redeeming pawn:', pawnId, 'Pay debt:', shouldPayDebt);
@@ -64,16 +135,16 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
         console.log('Remaining interest > 0, processing redemption...');
         // Lấy ngày bắt đầu chưa đóng
         const unpaidStartDate = await getUnpaidStartDate(pawnId);
-        const today = new Date().toISOString().split('T')[0];
+        const selectedDate = redemptionDate; // Already in YYYY-MM-DD format
         
         console.log('Unpaid start date:', unpaidStartDate);
-        console.log('Today:', today);
+        console.log('Selected date:', selectedDate);
 
         if (!unpaidStartDate) {
           throw new Error('Không thể xác định ngày bắt đầu chưa đóng');
         }
         // Xử lý chuộc đồ với logic phức tạp (tạo periods, tính toán lãi)
-        await recordDailyPayments(pawnId, unpaidStartDate, today);
+        await recordDailyPayments(pawnId, unpaidStartDate, selectedDate);
 
         
         // Ghi lịch sử hoàn/trả gốc (contract_close)
@@ -108,9 +179,7 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
       }
 
       // Update pawn status to closed
-      const { error: updateError } = await updatePawn(pawnId, { 
-        status: PawnStatus.CLOSED
-      });
+      const { error: updateError } = await updatePawnStatus(pawnId, PawnStatus.CLOSED);
 
       if (updateError) {
         throw new Error('Không thể cập nhật trạng thái hợp đồng');
@@ -142,43 +211,49 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
     }
   };
 
-  useEffect(() => {
-    async function fetchCalculatedAmounts() {
-      if (!pawn?.id) return;
-      
-      setIsCalculating(true);
-      
-      try {
-        // Tính số tiền vay thực tế
-        const actualAmount = await calculateActualLoanAmount(pawn.id);
-        setActualLoanAmount(actualAmount);
-        
-        const today = new Date().toISOString().split('T')[0];
-        const interestAmount = await calculateCloseContractInterest(pawn.id, today);
-        setRemainingAmount(interestAmount);
-
-        // Tính nợ cũ bằng hàm có sẵn
-        const debtAmount = await calculateDebtToLatestPaidPeriod(pawn.id);
-        setOldDebt(debtAmount);
-        
-      } catch (error) {
-        console.error('Error calculating amounts:', error);
-        setActualLoanAmount(pawn?.loan_amount || 0);
-        setRemainingAmount(0);
-        setOldDebt(0);
-        
-        toast({
-          title: "Lỗi",
-          description: "Không thể tính toán số tiền. Sử dụng giá trị mặc định.",
-          variant: "destructive"
-        });
-      } finally {
-        setIsCalculating(false);
-      }
-    }
+  // Function to recalculate interest based on selected date
+  const calculateAmounts = async () => {
+    if (!pawn?.id) return;
     
-    fetchCalculatedAmounts();
-  }, [pawn?.id]);
+    setIsCalculating(true);
+    
+    try {
+      // Tính số tiền vay thực tế
+      const actualAmount = await calculateActualLoanAmount(pawn.id);
+      setActualLoanAmount(actualAmount);
+      
+      // Use the selected date for calculation
+      const selectedDate = redemptionDate; // Already in YYYY-MM-DD format
+      const interestAmount = await calculateCloseContractInterest(pawn.id, selectedDate);
+      setRemainingAmount(interestAmount);
+
+      // Tính nợ cũ bằng hàm có sẵn
+      const debtAmount = await calculateDebtToLatestPaidPeriod(pawn.id);
+      setOldDebt(debtAmount);
+      
+    } catch (error) {
+      console.error('Error calculating amounts:', error);
+      setActualLoanAmount(pawn?.loan_amount || 0);
+      setRemainingAmount(0);
+      setOldDebt(0);
+      
+      toast({
+        title: "Lỗi",
+        description: "Không thể tính toán số tiền. Sử dụng giá trị mặc định.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsCalculating(false);
+    }
+  };
+
+  // Initial calculation on load
+  useEffect(() => {
+    calculateAmounts();
+  }, [pawn?.id, redemptionDate]);
+
+  const formattedStartDate = format(new Date(startDate), 'dd/MM/yyyy', { locale: vi });
+  const formattedEndDate = format(new Date(endDate), 'dd/MM/yyyy', { locale: vi });
 
   return (
     <div className="p-4">
@@ -198,6 +273,22 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
             <span className="text-orange-700">Đang xử lý chuộc đồ...</span>
           </div>
         )}
+        
+        {/* Date picker for selecting redemption date */}
+        <div className="mb-4">
+          <label className="text-sm font-medium text-gray-700 block mb-1">
+            Ngày chuộc đồ (từ {formattedStartDate} đến {formattedEndDate})
+          </label>
+          <DatePicker
+            value={redemptionDate}
+            onChange={(date) => validateAndSetDate(date)}
+            placeholder="Chọn ngày chuộc đồ"
+            className="w-full"
+            maxDate={endDate}
+            minDate={startDate}
+            disabled={isClosed || !hasPermission('sua_ngay_chuoc_do_cam_do')}
+          />
+        </div>
         
         <div className="mb-4 border rounded-md overflow-hidden">
           <table className="w-full border-collapse">
@@ -309,12 +400,15 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
             
             <div className="bg-gray-50 p-3 rounded">
               <p className="text-sm">
+                <strong>Ngày chuộc đồ:</strong> {format(new Date(redemptionDate), 'dd/MM/yyyy', { locale: vi })}
+              </p>
+              <p className="text-sm mt-1">
                 <strong>Xử lý:</strong> {remainingAmount <= 0 
                   ? "Chỉ cần chuộc đồ (không còn lãi phí)" 
                   : `Sẽ tạo lịch sử thanh toán cho lãi phí ${formatCurrency(remainingAmount)} và xử lý chuộc đồ`}
               </p>
               {oldDebt !== 0 && (
-                <p className="text-sm mt-2">
+                <p className="text-sm mt-1">
                   <strong>Nợ cũ:</strong> {payDebt 
                     ? `Sẽ thanh toán nợ cũ ${formatCurrency(Math.abs(oldDebt))}` 
                     : `Sẽ giữ nguyên nợ cũ ${formatCurrency(Math.abs(oldDebt))}`}

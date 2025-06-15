@@ -518,3 +518,18 @@ export async function hasCreditAnyPayments(id: string) {
       error: null
     };
 }
+
+
+/**
+ * Cập nhật trạng thái của hợp đồng tín chấp
+ */
+export async function updateCreditStatus(id: string, status: CreditStatus) {
+  const { data, error } = await supabase
+    .from('credits')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+    if (error) throw error;
+    return { data: data as Credit, error: null };
+}

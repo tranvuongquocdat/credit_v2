@@ -26,6 +26,7 @@ import { reopenContract } from '@/lib/Pawns/reopen_contract';
 import { useToast } from '@/components/ui/use-toast';
 import { calculateMultiplePawnStatus, PawnStatusResult } from '@/lib/Pawns/calculate_pawn_status';
 import { calculateActualLoanAmount } from '@/lib/Pawns/calculate_actual_loan_amount';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface StatusMapType {
   [key: string]: { 
@@ -60,6 +61,15 @@ export function PawnTable({
   const [sortField, setSortField] = useState<string>('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const { toast } = useToast();
+  
+  // Sử dụng hook kiểm tra quyền
+  const { hasPermission } = usePermissions();
+  
+  // Kiểm tra quyền sửa hợp đồng cầm đồ
+  const canEditPawn = hasPermission('sua_hop_dong_cam_do');
+  
+  // Kiểm tra quyền xóa hợp đồng cầm đồ
+  const canDeletePawn = hasPermission('xoa_hop_dong_cam_do');
   
   // State để lưu trữ thông tin có kỳ thanh toán đã được thanh toán hay không cho mỗi pawn
   const [hasPaidPaymentPeriods, setHasPaidPaymentPeriods] = useState<Record<string, boolean>>({});
@@ -204,6 +214,14 @@ export function PawnTable({
         description: error instanceof Error ? error.message : "Có lỗi xảy ra khi mở lại hợp đồng",
         variant: "destructive",
       });
+    }
+  };
+
+  // Hàm xử lý khi click vào mã hợp đồng
+  const handleContractCodeClick = (pawnId: string) => {
+    // Chỉ kích hoạt callback khi có quyền sửa hợp đồng
+    if (canEditPawn) {
+      onEdit(pawnId);
     }
   };
 
@@ -380,8 +398,9 @@ export function PawnTable({
               <TableRow key={pawn.id} className="hover:bg-gray-50 transition-colors">
                 <TableCell className="py-3 px-3 text-gray-500 text-center border-b border-r border-gray-200">{index + 1}</TableCell>
                 <TableCell 
-                  className="py-3 px-3 font-medium text-blue-600 cursor-pointer text-center border-b border-r border-gray-200" 
-                  onClick={() => onEdit(pawn.id)}
+                  className={`py-3 px-3 font-medium text-blue-600 text-center border-b border-r border-gray-200 ${canEditPawn ? 'cursor-pointer hover:text-blue-800 hover:underline' : ''}`}
+                  onClick={() => handleContractCodeClick(pawn.id)}
+                  title={canEditPawn ? 'Nhấn để chỉnh sửa hợp đồng' : 'Bạn không có quyền chỉnh sửa hợp đồng'}
                 >
                   {pawn.contract_code}
                 </TableCell>
@@ -426,7 +445,7 @@ export function PawnTable({
                 <TableCell className="py-3 px-3 border-b border-gray-200">
                   <div className="flex justify-center space-x-1">
                     {/* Hiển thị nút dựa trên trạng thái */}
-                    {pawn.status === PawnStatus.CLOSED ? (
+                    {pawn.status === PawnStatus.CLOSED && hasPermission('huy_chuoc_do_cam_do') ? (
                       <>
                         {/* Nút mở lại hợp đồng cho hợp đồng đã đóng */}
                         <Button 
@@ -481,7 +500,7 @@ export function PawnTable({
                             </DropdownMenuItem>
                           )}
                           {/* Hiển thị "Xóa hợp đồng" cho hợp đồng chưa có kỳ thanh toán đã được thanh toán */}
-                          {!hasPaidPaymentPeriods[pawn.id] && pawn.status !== PawnStatus.CLOSED && (
+                          {!hasPaidPaymentPeriods[pawn.id] && pawn.status !== PawnStatus.CLOSED && canDeletePawn && (
                             <DropdownMenuItem onClick={() => handleDelete(pawn.id)} className="cursor-pointer text-red-600 focus:text-red-600">
                               <Trash2 className="mr-2 h-4 w-4" />
                               <span>Xóa hợp đồng</span>

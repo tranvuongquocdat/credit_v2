@@ -28,7 +28,7 @@ import { usePawns } from '@/hooks/usePawns';
 import { PawnStatus, PawnWithCustomer } from '@/models/pawn';
 import { usePawnCalculations } from '@/hooks/usePawnCalculation';
 import { useAutoUpdateCashFund } from '@/hooks/useCashFundUpdater';
-import { calculatePawnStatus } from '@/lib/Pawns/calculate_pawn_status';
+import { usePermissions } from '@/hooks/usePermissions';
 
 
 // Map trạng thái thành nhãn và màu sắc
@@ -61,6 +61,12 @@ export default function PawnsPage() {
     handleDelete,
     refetch
   } = usePawns();
+  
+  // Sử dụng hook kiểm tra quyền
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  
+  // Kiểm tra quyền xem danh sách hợp đồng cầm đồ
+  const canViewPawnsList = hasPermission('xem_danh_sach_hop_dong_cam_do');
   
   // Lấy dữ liệu tài chính tổng hợp
   const { summary: financialSummary, refresh: refreshFinancial } = usePawnCalculations();
@@ -166,8 +172,6 @@ export default function PawnsPage() {
   
   // Handle opening payment history modal
   const handleOpenPaymentHistory = async (pawn: PawnWithCustomer) => {
-    const status = await calculatePawnStatus(pawn.id);
-    pawn.status = status.status as PawnStatus;
     setPaymentHistoryPawn(pawn);
     setIsPaymentHistoryModalOpen(true);
   };
@@ -200,52 +204,70 @@ export default function PawnsPage() {
           </div>
         </div>
         
-        {/* Thông tin tài chính */}
-        <FinancialSummary 
-          fundStatus={financialSummary || undefined}
-          onRefresh={refreshFinancial}
-          autoFetch={false}
-          enableCashFundUpdate={true}
+        {/* Thông tin tài chính - Chỉ hiển thị nếu có quyền */}
+        {permissionsLoading ? (
+          <div className="p-4 border rounded-md mb-4 bg-gray-50">
+            <p className="text-center text-gray-500">Đang tải...</p>
+          </div>
+        ) : hasPermission('xem_thong_tin_cam_do') ? (
+          <FinancialSummary 
+            fundStatus={financialSummary || undefined}
+            onRefresh={refreshFinancial}
+            autoFetch={false}
+            enableCashFundUpdate={true}
         />
+        ) : null}
         
-        {/* Bộ lọc và tìm kiếm */}
-        <SearchFilters
-          statusMap={statusMap}
-          onSearch={handleSearchFilters}
-          onReset={handleReset}
-          onCreateNew={handleCreatePawn}
-          onExportExcel={handleExportExcel}
-          initialFilters={initialFilters}
-        />
+        {/* Kiểm tra quyền xem danh sách hợp đồng */}
+        {permissionsLoading ? (
+          <div className="p-4 border rounded-md mb-4 bg-gray-50">
+            <p className="text-center text-gray-500">Đang tải...</p>
+          </div>
+        ) : canViewPawnsList ? (
+          <>
+            {/* Bộ lọc và tìm kiếm */}
+            <SearchFilters
+              statusMap={statusMap}
+              onSearch={handleSearchFilters}
+              onReset={handleReset}
+              onCreateNew={handleCreatePawn}
+              onExportExcel={handleExportExcel}
+              initialFilters={initialFilters}
+            />
 
-        {/* Bảng dữ liệu hợp đồng */}
-        <PawnTable
-          pawns={pawns}
-          loading={loading}
-          statusMap={statusMap}
-          onEdit={handleEditPawn}
-          onViewDetail={handleOpenPaymentHistory}
-          onDelete={(pawnId: string) => {
-            const pawn = pawns.find(p => p.id === pawnId);
-            if (pawn) handleOpenDeleteDialog(pawn);
-          }}
-          onExtend={(pawnId: string) => {
-            console.log('Extend pawn:', pawnId);
-          }}
-          onRedeem={(pawnId: string) => {
-            console.log('Redeem pawn:', pawnId);
-          }}
-        />
-        
-        {/* Phân trang */}
-        <PawnsPagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          totalItems={totalItems}
-          itemsPerPage={itemsPerPage}
-          onPageChange={handlePageChange}
-        />
-        
+            {/* Bảng dữ liệu hợp đồng */}
+            <PawnTable
+              pawns={pawns}
+              loading={loading}
+              statusMap={statusMap}
+              onEdit={handleEditPawn}
+              onViewDetail={handleOpenPaymentHistory}
+              onDelete={(pawnId: string) => {
+                const pawn = pawns.find(p => p.id === pawnId);
+                if (pawn) handleOpenDeleteDialog(pawn);
+              }}
+              onExtend={(pawnId: string) => {
+                console.log('Extend pawn:', pawnId);
+              }}
+              onRedeem={(pawnId: string) => {
+                console.log('Redeem pawn:', pawnId);
+              }}
+            />
+            
+            {/* Phân trang */}
+            <PawnsPagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              itemsPerPage={itemsPerPage}
+              onPageChange={handlePageChange}
+            />
+          </>
+        ) : (
+          <div className="p-8 border rounded-md mb-4 bg-gray-50 text-center">
+            <p className="text-gray-500">Bạn không có quyền xem danh sách hợp đồng cầm đồ.</p>
+          </div>
+        )}
         
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

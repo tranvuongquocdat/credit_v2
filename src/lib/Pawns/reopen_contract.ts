@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import { updatePawn } from '../pawn';
+import { updatePawnStatus } from '../pawn';
 import { PawnStatus } from '@/models/pawn';
 import { getCurrentUser } from '../auth';
 
@@ -87,9 +87,7 @@ export async function reopenContract(pawnId: string): Promise<void> {
     }
 
     // 4. Cập nhật status hợp đồng về on_time
-    const { error: updateStatusError } = await updatePawn(pawnId, {
-      status: 'on_time' as PawnStatus
-    });
+    const { error: updateStatusError } = await updatePawnStatus(pawnId, PawnStatus.ON_TIME);
 
     if (updateStatusError) {
       throw new Error('Không thể cập nhật trạng thái hợp đồng');

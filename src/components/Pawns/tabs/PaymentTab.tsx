@@ -16,6 +16,7 @@ import { getLatestPaymentPaidDate } from '@/lib/Pawns/get_latest_payment_paid_da
 import { getExpectedMoney } from '@/lib/Pawns/get_expected_money';
 import { convertFromHistoryToTimeArrayWithStatus } from '@/lib/Pawns/convert_from_history_to_time_array';
 import { getCurrentUser } from '@/lib/auth';
+import { usePermissions } from '@/hooks/usePermissions';
 
 type PaymentTabProps = {
   pawn: PawnWithCustomerAndCollateral | null;
@@ -47,6 +48,9 @@ export function PaymentTab({
   // State for generated periods from getExpectedMoney
   const [generatedPeriods, setGeneratedPeriods] = useState<PawnPaymentPeriod[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  
+  // Get user permissions
+  const { hasPermission } = usePermissions();
 
   // Generate periods using convertFromHistoryToTimeArrayWithStatus + getExpectedMoney
   useEffect(() => {
@@ -168,6 +172,26 @@ export function PaymentTab({
   // Updated checkbox handler - simplified using cycles like Credit and Installment
   const handleCheckboxChange = async (period: PawnPaymentPeriod, checked: boolean, index: number) => {
     if (!pawn?.id || isProcessingCheckbox) return;
+    
+    // Kiểm tra quyền
+    if (checked && !hasPermission('dong_lai_cam_do')) {
+      toast({
+        variant: "destructive",
+        title: "Không có quyền",
+        description: "Bạn không có quyền đóng lãi"
+      });
+      return;
+    }
+    
+    if (!checked && !hasPermission('huy_dong_lai_cam_do')) {
+      toast({
+        variant: "destructive",
+        title: "Không có quyền",
+        description: "Bạn không có quyền hủy đóng lãi"
+      });
+      return;
+    }
+    
     const { id: userId } = await getCurrentUser();
     
     // Set global loading state

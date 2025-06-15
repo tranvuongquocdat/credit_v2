@@ -1,8 +1,6 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { format } from 'date-fns';
-import { vi } from 'date-fns/locale';
 import { 
   Dialog, 
   DialogContent, 
@@ -12,11 +10,14 @@ import {
 import { PawnWithCustomerAndCollateral } from '@/models/pawn';
 import { getPawnInterestDisplayString } from '@/lib/interest-calculator';
 import { PawnActionTabs, DEFAULT_PAWN_TABS, PawnTabId } from './PawnActionTabs';
-import { AdditionalLoanTab, BadPawnTab, RedeemTab, DocumentsTab, ExtensionTab, PaymentTab, PrincipalRepaymentTab, LiquidationTab } from './tabs';
+import { AdditionalLoanTab, BadPawnTab, RedeemTab, DocumentsTab, PaymentTab, PrincipalRepaymentTab } from './tabs';
 import { getPawnById } from '@/lib/pawn';
 import { PawnHistoryRecord, PawnTransactionType, getPawnAmountHistory } from '@/lib/pawn-amount-history';
 import { formatCurrency, calculateDaysBetween, formatDate, formatDateTime } from '@/lib/utils';
 import { calculateActualLoanAmount } from '@/lib/Pawns/calculate_actual_loan_amount';
+import { usePermissions } from '@/hooks/usePermissions';
+import { Badge } from '@/components/ui/badge';
+import { calculatePawnStatus, PawnStatusResult } from '@/lib/Pawns/calculate_pawn_status';
 
 interface PawnHistoryModalProps {
   isOpen: boolean;
@@ -39,9 +40,13 @@ export function PawnHistoryModal({
   const [historyLoading, setHistoryLoading] = useState(false);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [actualLoanAmount, setActualLoanAmount] = useState<number>(0);
+  const [pawnStatus, setPawnStatus] = useState<PawnStatusResult | null>(null);
   
   // State to track if data has changed
   const [hasDataChanged, setHasDataChanged] = useState(false);
+  
+  // Get user permissions
+  const { hasPermission } = usePermissions();
 
   // Load initial data when modal opens
   useEffect(() => {
@@ -49,6 +54,8 @@ export function PawnHistoryModal({
       setInitialLoadComplete(true);
       // Load actual loan amount
       loadActualLoanAmount();
+      // Load pawn status
+      loadPawnStatus();
     }
     
     // Reset when modal closes
@@ -57,6 +64,19 @@ export function PawnHistoryModal({
       setError(null);
     }
   }, [isOpen, pawn?.id, initialLoadComplete]);
+
+  // Load pawn status
+  const loadPawnStatus = async () => {
+    if (!pawn?.id) return;
+    
+    try {
+      const status = await calculatePawnStatus(pawn.id);
+      setPawnStatus(status);
+    } catch (error) {
+      console.error('Error loading pawn status:', error);
+      setPawnStatus(null);
+    }
+  };
 
   // Load actual loan amount
   const loadActualLoanAmount = async () => {
@@ -68,6 +88,50 @@ export function PawnHistoryModal({
     } catch (error) {
       console.error('Error loading actual loan amount:', error);
       setActualLoanAmount(pawn.loan_amount || 0);
+    }
+  };
+
+  // Get status badge component based on status code
+  const getStatusBadge = () => {
+    if (!pawnStatus) {
+      return <Badge className="bg-gray-100 text-gray-800 border-gray-200">
+        {currentPawn?.status || 'Đang tải...'}
+      </Badge>;
+    }
+    
+    // Áp dụng màu sắc dựa trên statusCode
+    switch (pawnStatus.statusCode) {
+      case 'CLOSED':
+        return (
+          <Badge className="bg-gray-100 text-gray-800 border-gray-200">
+            {pawnStatus.status}
+          </Badge>
+        );
+      case 'DELETED':
+        return (
+          <Badge className="bg-gray-100 text-gray-800 border-gray-200">
+            {pawnStatus.status}
+          </Badge>
+        );
+      case 'OVERDUE':
+        return (
+          <Badge className="bg-red-100 text-red-800 border-red-200">
+            {pawnStatus.status}
+          </Badge>
+        );
+      case 'LATE_INTEREST':
+        return (
+          <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
+            {pawnStatus.status}
+          </Badge>
+        );
+      case 'ACTIVE':
+      default:
+        return (
+          <Badge className="bg-green-100 text-green-800 border-green-200">
+            {pawnStatus.status}
+          </Badge>
+        );
     }
   };
 
@@ -91,6 +155,9 @@ export function PawnHistoryModal({
       
       // Reload actual loan amount
       await loadActualLoanAmount();
+      
+      // Reload pawn status
+      await loadPawnStatus();
     } catch (err) {
       console.error('Error refreshing data:', err);
     }
@@ -197,6 +264,14 @@ export function PawnHistoryModal({
           />
         );
       case 'principal-repayment':
+        // Check permission for principal repayment
+        if (!hasPermission('tra_bot_goc_cam_do')) {
+          return (
+            <div className="p-4 text-center">
+              <p className="text-red-500">Bạn không có quyền trả bớt gốc</p>
+            </div>
+          );
+        }
         return (
           <PrincipalRepaymentTab
             pawn={currentPawn}
@@ -206,29 +281,31 @@ export function PawnHistoryModal({
           />
         );
       case 'additional-loan':
+        // Check permission for additional loan
+        if (!hasPermission('vay_them_goc_cam_do')) {
+          return (
+            <div className="p-4 text-center">
+              <p className="text-red-500">Bạn không có quyền vay thêm gốc</p>
+            </div>
+          );
+        }
         return (
           <AdditionalLoanTab
             pawn={currentPawn}
             onDataChange={handleDataChange}
           />
         );
-      case 'extension':
-        return (
-          <ExtensionTab
-            pawn={currentPawn}
-            onDataChange={handleDataChange}
-          />
-        );
       case 'redeem':
+        // Check permission for redeeming
+        if (!hasPermission('chuoc_do_cam_do')) {
+          return (
+            <div className="p-4 text-center">
+              <p className="text-red-500">Bạn không có quyền chuộc đồ</p>
+            </div>
+          );
+        }
         return (
           <RedeemTab
-            pawn={currentPawn}
-            onClose={onClose}
-          />
-        );
-      case 'liquidation':
-        return (
-          <LiquidationTab
             pawn={currentPawn}
             onClose={onClose}
           />
@@ -383,6 +460,21 @@ export function PawnHistoryModal({
   useEffect(() => {
     setCurrentPawn(pawn);
   }, [pawn]);
+  
+  // Reset active tab if user doesn't have permission for the current tab
+  useEffect(() => {
+    const checkPermissionForActiveTab = () => {
+      if (activeTab === 'additional-loan' && !hasPermission('vay_them_goc_cam_do')) {
+        setActiveTab('payment');
+      } else if (activeTab === 'principal-repayment' && !hasPermission('tra_bot_goc_cam_do')) {
+        setActiveTab('payment');
+      } else if (activeTab === 'redeem' && !hasPermission('chuoc_do_cam_do')) {
+        setActiveTab('payment');
+      }
+    };
+    
+    checkPermissionForActiveTab();
+  }, [activeTab, hasPermission]);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(hasDataChanged)}>
@@ -426,7 +518,9 @@ export function PawnHistoryModal({
                 <tbody>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Trạng thái</td>
-                    <td className="py-1 px-2 text-right border">{currentPawn?.status || '-'}</td>
+                    <td className="py-1 px-2 text-right border">
+                      {getStatusBadge()}
+                    </td>
                   </tr>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Mã hợp đồng</td>
@@ -446,9 +540,26 @@ export function PawnHistoryModal({
             </div>
           </div>
 
-          {/* Tabs */}
+          {/* Tabs - Filter tabs based on permissions */}
           <PawnActionTabs
-            tabs={DEFAULT_PAWN_TABS}
+            tabs={DEFAULT_PAWN_TABS.filter(tab => {
+              // Hide AdditionalLoanTab if user doesn't have vay_them_goc_cam_do permission
+              if (tab.id === 'additional-loan' && !hasPermission('vay_them_goc_cam_do')) {
+                return false;
+              }
+              
+              // Hide PrincipalRepaymentTab if user doesn't have tra_bot_goc_cam_do permission
+              if (tab.id === 'principal-repayment' && !hasPermission('tra_bot_goc_cam_do')) {
+                return false;
+              }
+              
+              // Hide RedeemTab if user doesn't have chuoc_do_cam_do permission
+              if (tab.id === 'redeem' && !hasPermission('chuoc_do_cam_do')) {
+                return false;
+              }
+              
+              return true;
+            })}
             activeTab={activeTab}
             onChangeTab={(tabId: PawnTabId) => setActiveTab(tabId)}
             variant="scrollable"

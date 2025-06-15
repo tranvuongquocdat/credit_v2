@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Layout } from '@/components/Layout';
 import { EmployeePermissionModal } from '@/components/Permissions/EmployeePermissionModal';
 import { getEmployees } from '@/lib/employee';
-import { initializeDefaultPermissions } from '@/lib/permission';
 import { getCurrentUser } from '@/lib/auth';
 import { EmployeeWithProfile } from '@/models/employee';
 import { 
@@ -34,6 +33,7 @@ import {
 } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
+import { useStore } from '@/contexts/StoreContext';
 
 interface EmployeePermissionFilters {
   search: string;
@@ -52,11 +52,14 @@ export default function EmployeePermissionsPage() {
   const [pageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
   
+  // Get current store
+  const { currentStore, loading: storeLoading } = useStore();
+
   // Filters
   const [filters, setFilters] = useState<EmployeePermissionFilters>({
     search: '',
     status: 'all',
-    store: ''
+    store: ''  // Initialize empty, will be set when currentStore loads
   });
   
   // Modal state
@@ -65,32 +68,48 @@ export default function EmployeePermissionsPage() {
   
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadData();
-    initializePermissions();
-  }, []);
-
-  useEffect(() => {
-    applyFilters();
-  }, [employees, filters]);
-
-  useEffect(() => {
-    updatePagination();
-  }, [filteredEmployees, currentPage]);
-
-  const loadData = async () => {
+  // Define loadData function using useCallback
+  const loadData = useCallback(async () => {
+    // Không tải dữ liệu nếu store context đang tải
+    if (storeLoading) {
+      console.log('Skipping data loading because store context is still initializing');
+      return;
+    }
+    
     setIsLoading(true);
     try {
       // Load current user
       const user = await getCurrentUser();
       setCurrentUser(user);
+      
+      // Debug logs
+      console.log('Loading data with filters:', filters);
+      console.log('Current store when loading:', currentStore?.id);
 
-      // Load employees
-      const { data, error } = await getEmployees(1, 1000); // Load all employees
+      // Nếu không có currentStore, không fetch
+      if (!currentStore?.id) {
+        console.log('No current store available, skipping fetch');
+        setEmployees([]);
+        setIsLoading(false);
+        return;
+      }
+
+      // Load employees with current store ID directly
+      console.log('Using store ID for filtering:', currentStore.id);
+      
+      const { data, error } = await getEmployees(
+        1, 
+        1000, 
+        filters.search,
+        currentStore.id, 
+        filters.status !== 'all' ? filters.status : ''
+      );
+      
       if (error) {
         throw new Error('Không thể tải danh sách nhân viên');
       }
       
+      console.log(`Loaded ${data?.length} employees`);
       setEmployees(data || []);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -102,15 +121,35 @@ export default function EmployeePermissionsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentStore, filters.search, filters.status, toast, storeLoading]);
 
-  const initializePermissions = async () => {
-    try {
-      await initializeDefaultPermissions();
-    } catch (error) {
-      console.error('Error initializing permissions:', error);
+  useEffect(() => {
+    if (currentStore?.id) {
+      console.log('Store changed to:', currentStore.name, currentStore.id);
+      setFilters(prev => {
+        console.log('Updating filters with new store:', currentStore.id);
+        return { ...prev, store: currentStore.id };
+      });
     }
-  };
+  }, [currentStore]);
+  
+  // Effect to load data when filters or store changes - similar to employees page
+  useEffect(() => {
+    loadData();
+  }, [currentStore, filters.search, filters.status, loadData]);
+
+  // Initialize permissions once
+  useEffect(() => {
+    // No longer needed since permissions are hard-coded
+  }, []);
+
+  useEffect(() => {
+    applyFilters();
+  }, [employees, filters]);
+
+  useEffect(() => {
+    updatePagination();
+  }, [filteredEmployees, currentPage]);
 
   const applyFilters = () => {
     let filtered = [...employees];
@@ -182,6 +221,24 @@ export default function EmployeePermissionsPage() {
     }
   };
 
+  // Hiển thị trạng thái loading khi store chưa khởi tạo xong
+  if (storeLoading) {
+    return (
+      <Layout>
+        <div className="max-w-full">
+          <div className="flex items-center justify-between border-b pb-2 mb-2">
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold">Phân quyền nhân viên</h1>
+            </div>
+          </div>
+          <div className="flex items-center justify-center h-64">
+            <div className="text-gray-500">Đang tải dữ liệu cửa hàng...</div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -244,8 +301,8 @@ export default function EmployeePermissionsPage() {
 
         {/* Employee Table */}
         <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
+          <CardContent>
+            <div className="overflow-x-auto gap-4">
               <Table>
                 <TableHeader>
                   <TableRow>

@@ -29,79 +29,285 @@ export interface EmployeePermissionFormData {
 // Predefined permissions structure
 export const DEFAULT_PERMISSIONS = [
   {
-    id: 'database',
-    name: 'Cơ sở dữ liệu',
-    module: 'database',
+    id: 'cam_do',
+    name: 'Càm đồ',
+    module: 'cam_do',
     children: [
-      { id: 'database.view_scale', name: 'Xem thông tin quy mô, tên đăng ký, tỷ lệ tăng trưởng, tỷ lệ nợ xấu' },
-      { id: 'database.view_customer', name: 'Xem danh sách khách hàng' },
-      { id: 'database.view_interest', name: 'Tài mật lãi đăng' },
-      { id: 'database.view_stats', name: 'Số ngày vay' },
-      { id: 'database.view_loan_stats', name: 'Số lượng đăng' },
-      { id: 'database.view_debt_stats', name: 'Đồng tài' },
-      { id: 'database.view_growth', name: 'Tỷ lệ tăng trưởng tài' },
-      { id: 'database.view_debt_ratio', name: 'Tỷ lệ nợ xấu tài' },
-      { id: 'database.view_customer_debt', name: 'Chỉ nợ khách hàng tài' },
-      { id: 'database.view_payment_debt', name: 'Chỉ nợ nợ tài' },
-      { id: 'database.view_thank_you', name: 'Thành lý tài' }
+      { 
+        id: 'xem_thong_tin_cam_do', 
+        name: 'Xem thông tin quỹ tiền mặt, tiền đang vay, lãi dự kiến, lãi đã thu' 
+      },
+      { 
+        id: 'xem_danh_sach_hop_dong_cam_do', 
+        name: 'Xem danh sách hợp đồng' 
+      },
+      { 
+        id: 'tao_moi_hop_dong_cam_do', 
+        name: 'Tạo mới hợp đồng' 
+      },
+      { 
+        id: 'sua_ngay_vay_cam_do', 
+        name: 'Sửa ngày vay' 
+      },
+      { 
+        id: 'sua_hop_dong_cam_do', 
+        name: 'Sửa hợp đồng' 
+      },
+      { 
+        id: 'xoa_hop_dong_cam_do', 
+        name: 'Xóa hợp đồng' 
+      },
+      { 
+        id: 'dong_lai_cam_do', 
+        name: 'Đóng lãi' 
+      },
+      { 
+        id: 'huy_dong_lai_cam_do', 
+        name: 'Hủy đóng lãi' 
+      },
+      { 
+        id: 'vay_them_goc_cam_do', 
+        name: 'Vay thêm gốc' 
+      },
+      { 
+        id: 'tra_bot_goc_cam_do', 
+        name: 'Trả bớt gốc' 
+      },
+      { 
+        id: 'chuoc_do_cam_do', 
+        name: 'Chuộc đồ' 
+      },
+      { 
+        id: 'sua_ngay_chuoc_do_cam_do', 
+        name: 'Sửa ngày chuộc đồ' 
+      },
+      { 
+        id: 'huy_chuoc_do_cam_do', 
+        name: 'Hủy chuộc đồ' 
+      }
     ]
   },
   {
-    id: 'finance',
-    name: 'Tài chính',
-    module: 'finance',
+    id: 'tin_chap',
+    name: 'Tín chấp',
+    module: 'tin_chap',
     children: [
-      { id: 'finance.view_scale', name: 'Xem thông tin quy mô, tên đăng ký, tỷ lệ tăng trưởng, tỷ lệ nợ xấu' },
-      { id: 'finance.view_customer', name: 'Xem danh sách khách hàng' },
-      { id: 'finance.view_interest', name: 'Tài mật lãi đăng' },
-      { id: 'finance.view_stats', name: 'Số ngày vay' },
-      { id: 'finance.view_loan_stats', name: 'Số lượng đăng' },
-      { id: 'finance.view_debt_stats', name: 'Đồng tài' },
-      { id: 'finance.view_growth', name: 'Tỷ lệ tăng trưởng tài' },
-      { id: 'finance.view_debt_ratio', name: 'Tỷ lệ nợ xấu tài' },
-      { id: 'finance.view_customer_debt', name: 'Chỉ nợ khách hàng tài' },
-      { id: 'finance.view_payment_debt', name: 'Chỉ nợ nợ tài' },
-      { id: 'finance.view_thank_you', name: 'Thành lý tài' }
+      { 
+        id: 'xem_thong_tin_tin_chap', 
+        name: 'Xem thông tin quỹ tiền mặt, tiền đang vay, lãi dự kiến, lãi đã thu' 
+      },
+      { 
+        id: 'xem_danh_sach_hop_dong_tin_chap', 
+        name: 'Xem danh sách hợp đồng' 
+      },
+      { 
+        id: 'tao_moi_hop_dong_tin_chap', 
+        name: 'Tạo mới hợp đồng' 
+      },
+      { 
+        id: 'sua_ngay_vay_tin_chap', 
+        name: 'Sửa ngày vay' 
+      },
+      { 
+        id: 'sua_hop_dong_tin_chap', 
+        name: 'Sửa hợp đồng' 
+      },
+      { 
+        id: 'xoa_hop_dong_tin_chap', 
+        name: 'Xóa hợp đồng' 
+      },
+      { 
+        id: 'dong_lai_tin_chap', 
+        name: 'Đóng lãi' 
+      },
+      { 
+        id: 'huy_dong_lai_tin_chap', 
+        name: 'Hủy đóng lãi' 
+      },
+      { 
+        id: 'vay_them_goc_tin_chap', 
+        name: 'Vay thêm gốc' 
+      },
+      { 
+        id: 'tra_bot_goc_tin_chap', 
+        name: 'Trả bớt gốc' 
+      },
+      { 
+        id: 'gia_han_tin_chap', 
+        name: 'Gia hạn' 
+      },
+      { 
+        id: 'dong_hop_dong_tin_chap', 
+        name: 'Đóng hợp đồng' 
+      },
+      { 
+        id: 'sua_ngay_dong_hop_dong_tin_chap', 
+        name: 'Sửa ngày đóng hợp đồng' 
+      },
+      { 
+        id: 'huy_dong_hop_dong_tin_chap', 
+        name: 'Hủy đóng hợp đồng' 
+      }
     ]
   },
   {
-    id: 'financial_management',
-    name: 'Quản lý tài chính',
-    module: 'financial_management',
+    id: 'tra_gop',
+    name: 'Trả góp',
+    module: 'tra_gop',
     children: [
-      { id: 'financial_management.view_scale', name: 'Xem thông tin quy mô, tên đăng ký, tỷ lệ tăng trưởng, tỷ lệ nợ xấu' },
-      { id: 'financial_management.view_customer', name: 'Xem danh sách khách hàng' },
-      { id: 'financial_management.view_interest', name: 'Tài mật lãi đăng' },
-      { id: 'financial_management.view_stats', name: 'Số ngày vay' },
-      { id: 'financial_management.view_loan_stats', name: 'Số lượng đăng' },
-      { id: 'financial_management.view_debt_stats', name: 'Đồng tài' },
-      { id: 'financial_management.view_growth', name: 'Tỷ lệ tăng trưởng tài' },
-      { id: 'financial_management.view_debt_ratio', name: 'Tỷ lệ nợ xấu tài' },
-      { id: 'financial_management.view_customer_debt', name: 'Chỉ nợ khách hàng tài' },
-      { id: 'financial_management.view_payment_debt', name: 'Chỉ nợ nợ tài' },
-      { id: 'financial_management.view_thank_you', name: 'Thành lý tài' }
+      { 
+        id: 'xem_thong_tin_tra_gop', 
+        name: 'Xem thông tin quỹ tiền mặt, tiền đang vay, lãi dự kiến, lãi đã thu' 
+      },
+      { 
+        id: 'xem_danh_sach_hop_dong_tra_gop', 
+        name: 'Xem danh sách hợp đồng' 
+      },
+      { 
+        id: 'tao_moi_hop_dong_tra_gop', 
+        name: 'Tạo mới hợp đồng' 
+      },
+      { 
+        id: 'sua_hop_dong_tra_gop', 
+        name: 'Sửa hợp đồng' 
+      },
+      { 
+        id: 'xoa_hop_dong_tra_gop', 
+        name: 'Xóa hợp đồng' 
+      },
+      { 
+        id: 'dong_lai_tra_gop', 
+        name: 'Đóng lãi' 
+      },
+      { 
+        id: 'huy_dong_lai_tra_gop', 
+        name: 'Hủy đóng lãi' 
+      },
+      { 
+        id: 'dong_hop_dong_tra_gop', 
+        name: 'Đóng hợp đồng' 
+      },
+      { 
+        id: 'huy_dong_hop_dong_tra_gop', 
+        name: 'Hủy đóng hợp đồng' 
+      }
     ]
   },
   {
-    id: 'employee_management',
+    id: 'quan_ly_cua_hang',
+    name: 'Quản lý cửa hàng',
+    module: 'quan_ly_cua_hang',
+    children: [
+      { 
+        id: 'tong_quat_chuoi_cua_hang', 
+        name: 'Tổng quát chuỗi cửa hàng' 
+      },
+      { 
+        id: 'thong_tin_chi_tiet_cua_hang', 
+        name: 'Thông tin chi tiết cửa hàng' 
+      },
+      { 
+        id: 'danh_sach_cua_hang', 
+        name: 'Danh sách cửa hàng' 
+      },
+      { 
+        id: 'cau_hinh_hang_hoa', 
+        name: 'Cấu hình hàng hóa' 
+      },
+      { 
+        id: 'nhap_tien_quy_dau_ngay', 
+        name: 'Nhập tiền quỹ đầu ngày' 
+      }
+    ]
+  },
+  {
+    id: 'quan_ly_khach_hang',
+    name: 'Quản lý khách hàng',
+    module: 'quan_ly_khach_hang',
+    children: [
+      { 
+        id: 'xem_danh_sach_khach_hang', 
+        name: 'Xem danh sách khách hàng' 
+      }
+    ]
+  },
+  {
+    id: 'quan_ly_nguon_von',
+    name: 'Quản lý nguồn vốn',
+    module: 'quan_ly_nguon_von',
+    children: [
+      { 
+        id: 'quan_ly_khau_von', 
+        name: 'Quản lý khẩu vốn' 
+      }
+    ]
+  },
+  {
+    id: 'quan_ly_nhan_vien',
     name: 'Quản lý nhân viên',
-    module: 'employee_management',
+    module: 'quan_ly_nhan_vien',
     children: [
-      { id: 'employee_management.view', name: 'Xem danh sách nhân viên' },
-      { id: 'employee_management.create', name: 'Tạo nhân viên mới' },
-      { id: 'employee_management.edit', name: 'Sửa thông tin nhân viên' },
-      { id: 'employee_management.delete', name: 'Xóa nhân viên' },
-      { id: 'employee_management.permissions', name: 'Quản lý phân quyền' }
+      { 
+        id: 'danh_sach_nhan_vien', 
+        name: 'Danh sách nhân viên' 
+      },
+      { 
+        id: 'phan_quyen_nhan_vien', 
+        name: 'Phân quyền nhân viên' 
+      }
+    ]
+  },{
+    id: 'thong_ke',
+    name: 'Thống kê',
+    module: 'thong_ke',
+    children: [
+      { 
+        id: 'thu_tien_tin_chap', 
+        name: 'Thu tiền tín chấp' 
+      },
+      { 
+        id: 'thu_tien_tra_gop', 
+        name: 'Thu tiền trả góp' 
+      }
     ]
   },
   {
-    id: 'statistics',
-    name: 'Thống kê',
-    module: 'statistics',
+    id: 'bao_cao',
+    name: 'Báo cáo',
+    module: 'bao_cao',
     children: [
-      { id: 'statistics.view_reports', name: 'Xem báo cáo' },
-      { id: 'statistics.export', name: 'Xuất báo cáo' },
-      { id: 'statistics.dashboard', name: 'Xem dashboard' }
+      { 
+        id: 'so_quy_tien_mat', 
+        name: 'Sổ quỹ tiền mặt' 
+      },
+      { 
+        id: 'tong_ket_giao_dich', 
+        name: 'Tổng kết giao dịch' 
+      },
+      { 
+        id: 'tong_ket_loi_nhuan', 
+        name: 'Tổng kết lợi nhuận' 
+      },
+      { 
+        id: 'chi_tiet_tien_lai', 
+        name: 'Chi tiết tiền lãi' 
+      },
+      { 
+        id: 'bao_cao_dang_cho_vay', 
+        name: 'Báo cáo đang cho vay' 
+      },
+      { 
+        id: 'bao_cao_dong_hop_dong', 
+        name: 'Báo cáo đóng hợp đồng' 
+      },
+      { 
+        id: 'bao_cao_hop_dong_da_xoa', 
+        name: 'Báo cáo hợp đồng đã xóa' 
+      },
+      { 
+        id: 'dong_tien_theo_ngay', 
+        name: 'Dòng tiền theo ngày' 
+      }
     ]
   }
 ]; 

@@ -39,7 +39,7 @@ export function PawnPaymentForm({
   loanPeriod = 30,
   interestPeriod = 10,
   lastPaymentEndDate,
-  disabled = false
+  disabled
 }: PawnPaymentFormProps) {
   // Format number with thousand separators
   const formatNumber = (value: string | number): string => {

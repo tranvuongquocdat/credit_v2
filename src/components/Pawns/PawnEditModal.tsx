@@ -23,6 +23,7 @@ import { PawnStatus, UpdatePawnParams, Pawn, InterestType } from '@/models/pawn'
 import { toast } from '@/components/ui/use-toast';
 import { MoneyInput } from '@/components/ui/money-input';
 import { Collateral } from '@/models/collateral';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface PawnEditModalProps {
   isOpen: boolean;
@@ -39,6 +40,9 @@ export function PawnEditModal({
 }: PawnEditModalProps) {
   // Get current store from context
   const { currentStore } = useStore();
+  
+  // Get user permissions
+  const { hasPermission } = usePermissions();
   
   // State for form values
   const [customerName, setCustomerName] = useState('');
@@ -702,7 +706,7 @@ export function PawnEditModal({
               <DatePicker
                 value={loanDate}
                 onChange={(value) => setLoanDate(value)}
-                disabled={hasPayments}
+                disabled={hasPayments || !hasPermission('sua_ngay_vay_cam_do')}
               />
             </div>
             

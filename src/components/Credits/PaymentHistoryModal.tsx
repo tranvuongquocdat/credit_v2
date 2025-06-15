@@ -18,6 +18,8 @@ import { getExpectedMoney } from '@/lib/Credits/get_expected_money';
 import { calculateDebtToLatestPaidPeriod } from '@/lib/Credits/calculate_remaining_debt';
 import { getCreditPaymentHistory } from '@/lib/Credits/payment_history';
 import { calculateActualLoanAmount } from '@/lib/Credits/calculate_actual_loan_amount';
+import { Badge } from '@/components/ui/badge';
+import { calculateCreditStatus, CreditStatusResult } from '@/lib/Credits/calculate_credit_status';
 
 
 interface PaymentHistoryModalProps {
@@ -58,10 +60,83 @@ export function PaymentHistoryModal({
   const [actualLoanAmount, setActualLoanAmount] = useState<number>(0);
   const [loadingActualAmount, setLoadingActualAmount] = useState(false);
   
+  // Thêm state cho credit status
+  const [creditStatus, setCreditStatus] = useState<CreditStatusResult | null>(null);
+  const [loadingStatus, setLoadingStatus] = useState(false);
+  
   // Cập nhật state credit khi initialCredit thay đổi
   useEffect(() => {
     setCredit(initialCredit);
   }, [initialCredit]);
+
+  // Load credit status khi credit thay đổi hoặc có sự thay đổi dữ liệu
+  useEffect(() => {
+    const loadCreditStatus = async () => {
+      if (!credit?.id) {
+        setCreditStatus(null);
+        return;
+      }
+      
+      setLoadingStatus(true);
+      try {
+        const status = await calculateCreditStatus(credit.id);
+        setCreditStatus(status);
+      } catch (error) {
+        console.error('Error calculating credit status:', error);
+        setCreditStatus(null);
+      } finally {
+        setLoadingStatus(false);
+      }
+    };
+    
+    loadCreditStatus();
+  }, [credit?.id, dataChangeCounter]);
+  
+  // Hiển thị status badge dựa trên kết quả tính toán
+  const getStatusBadge = () => {
+    if (loadingStatus) {
+      return <Badge className="bg-gray-100 text-gray-500">Đang tải...</Badge>;
+    }
+    
+    if (!creditStatus) {
+      return <Badge className="bg-gray-100 text-gray-800">
+        {credit?.status === 'closed' ? 'Đã đóng' : 'Đang vay'}
+      </Badge>;
+    }
+    
+    // Áp dụng màu sắc dựa trên statusCode
+    switch (creditStatus.statusCode) {
+      case 'CLOSED':
+        return <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+          {creditStatus.status}
+        </Badge>;
+      case 'DELETED':
+        return <Badge className="bg-gray-100 text-gray-800 border-gray-200">
+          {creditStatus.status}
+        </Badge>;
+      case 'FINISHED':
+        return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">
+          {creditStatus.status}
+        </Badge>;
+      case 'BAD_DEBT':
+        return <Badge className="bg-purple-100 text-purple-800 border-purple-200">
+          {creditStatus.status}
+        </Badge>;
+      case 'OVERDUE':
+        return <Badge className="bg-red-100 text-red-800 border-red-200">
+          {creditStatus.status}
+        </Badge>;
+      case 'LATE_INTEREST':
+        return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
+          {creditStatus.status}
+        </Badge>;
+      case 'ACTIVE':
+      default:
+        return <Badge className="bg-green-100 text-green-800 border-green-200">
+          {creditStatus.status}
+        </Badge>;
+    }
+  };
 
   // Hàm reload thông tin hợp đồng
   const reloadCreditInfo = async () => {
@@ -338,8 +413,8 @@ export function PaymentHistoryModal({
                   </tr>
                   <tr>
                     <td className="py-1 px-2 border font-bold">Trạng thái</td>
-                    <td className="py-1 px-2 text-right border">
-                      {credit?.status === 'closed' ? 'Đã đóng' : 'Đang vay'}
+                    <td className="py-1 px-2 text-right border flex justify-end items-center">
+                      {getStatusBadge()}
                     </td>
                   </tr>
                 </tbody>

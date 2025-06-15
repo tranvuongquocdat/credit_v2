@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { CreditStatus, CreditWithCustomer } from '@/models/credit';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
-import { updateCredit } from '@/lib/credit';
+import { updateCredit, updateCreditStatus } from '@/lib/credit';
 import { useToast } from '@/components/ui/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
@@ -14,6 +14,9 @@ import { getUnpaidStartDate } from '@/lib/Credits/get_unpaid_start_date';
 import { recordDailyPayments } from '@/lib/Credits/record_daily_payments';
 import { calculateActualLoanAmount } from '@/lib/Credits/calculate_actual_loan_amount';
 import { getCurrentUser } from '@/lib/auth';
+import { DatePicker } from '@/components/ui/date-picker';
+import { format, addDays, isAfter, isBefore } from "date-fns";
+import { vi } from 'date-fns/locale';
 
 interface CloseTabProps {
   credit: CreditWithCustomer;
@@ -29,10 +32,78 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
   const [isClosing, setIsClosing] = useState(false);
   const [loanAmount, setLoanAmount] = useState(0);
   const [payDebt, setPayDebt] = useState(true); // Track whether to pay debt or not
+  const today = useMemo(() => new Date().toISOString().split('T')[0], []); // Ngày hôm nay
+  // Ngày bắt đầu hợp đồng
+  const startDate = useMemo(() => {
+    if (!credit?.loan_date) return today;
+    return credit.loan_date;
+  }, [credit?.loan_date, today]);
+  
+  // Tính toán ngày kết thúc hợp đồng
+  const endDate = useMemo(() => {
+    if (!credit?.loan_date || !credit?.loan_period) return today;
+    
+    const loanStartDate = new Date(credit.loan_date);
+    const loanEndDate = addDays(loanStartDate, credit.loan_period - 1);
+    
+    // Format to YYYY-MM-DD
+    return loanEndDate.toISOString().split('T')[0];
+  }, [credit?.loan_date, credit?.loan_period, today]);
+
+  // Mặc định là ngày hiện tại nếu ngày hiện tại nằm trong khoảng hợp đồng
+  // Nếu ngày hiện tại nằm ngoài khoảng, sử dụng ngày cuối cùng của hợp đồng
+  const defaultDate = useMemo(() => {
+    const currentDate = new Date();
+    const contractStartDate = new Date(startDate);
+    const contractEndDate = new Date(endDate);
+    
+    if (currentDate >= contractStartDate && currentDate <= contractEndDate) {
+      return today;
+    }
+    
+    return endDate;
+  }, [today, startDate, endDate]);
+  
+  const [closingDate, setClosingDate] = useState<string>(defaultDate);
+  
   const isClosed = credit?.status === CreditStatus.CLOSED || credit?.status === CreditStatus.DELETED;
   
+  // Xác thực ngày được chọn
+  const validateAndSetDate = (date: string) => {
+    const selectedDate = new Date(date);
+    const contractStartDate = new Date(startDate);
+    const contractEndDate = new Date(endDate);
+    
+    // Reset hours để so sánh chỉ theo ngày
+    selectedDate.setHours(0, 0, 0, 0);
+    contractStartDate.setHours(0, 0, 0, 0);
+    contractEndDate.setHours(0, 0, 0, 0);
+    
+    // Nếu ngày được chọn trước ngày bắt đầu hợp đồng
+    if (isBefore(selectedDate, contractStartDate)) {
+      toast({
+        title: "Lưu ý",
+        description: "Ngày đóng không thể trước ngày bắt đầu hợp đồng. Đã điều chỉnh thành ngày bắt đầu.",
+      });
+      setClosingDate(startDate);
+      return;
+    }
+    
+    // Nếu ngày được chọn sau ngày kết thúc hợp đồng
+    if (isAfter(selectedDate, contractEndDate)) {
+      toast({
+        title: "Lưu ý",
+        description: "Ngày đóng không thể sau ngày kết thúc hợp đồng. Đã điều chỉnh thành ngày kết thúc.",
+      });
+      setClosingDate(endDate);
+      return;
+    }
+    
+    setClosingDate(date);
+  };
+  
   const handleCloseCredit = async (creditId: string, shouldPayDebt: boolean = true) => {
-    console.log('Closing credit:', creditId, 'Pay debt:', shouldPayDebt);
+    console.log('Closing credit:', creditId, 'Pay debt:', shouldPayDebt, 'Closing date:', closingDate);
     const { id: userId } = await getCurrentUser();
     
     setIsClosing(true);
@@ -57,23 +128,24 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
             created_by: userId
           } as any);
       } 
-      // Case 2: Nếu lãi phí > 0, cần thêm lịch sử từ ngày bắt đầu chưa đóng đến hôm nay
+      // Case 2: Nếu lãi phí > 0, cần thêm lịch sử từ ngày bắt đầu chưa đóng đến ngày đã chọn
       else if (remainingAmount > 0) {
         console.log('Remaining interest > 0, adding daily payment history...');
         
         // Lấy ngày bắt đầu chưa đóng
         const unpaidStartDate = await getUnpaidStartDate(creditId);
-        const today = new Date().toISOString().split('T')[0];
+        // Sử dụng ngày đã chọn thay vì today
+        const selectedDate = closingDate;
         
         console.log('Unpaid start date:', unpaidStartDate);
-        console.log('Today:', today);
+        console.log('Selected date:', selectedDate);
         
         if (!unpaidStartDate) {
           throw new Error('Không thể xác định ngày bắt đầu chưa đóng');
         }
         
         // Thêm lịch sử thanh toán từng ngày với date_status phù hợp
-        await recordDailyPayments(creditId, unpaidStartDate, today);
+        await recordDailyPayments(creditId, unpaidStartDate, selectedDate);
         
         // Ghi lịch sử hoàn/trả gốc (contract_close)
         await supabase
@@ -121,10 +193,7 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
       }
 
       // Update credit status to closed and debt_amount based on whether debt is paid
-      const { error: updateError } = await updateCredit(creditId, { 
-        status: 'closed' as CreditStatus, 
-        debt_amount: shouldPayDebt ? 0 : oldDebt
-      });
+      const { error: updateError } = await updateCreditStatus(creditId, CreditStatus.CLOSED);
 
       if (updateError) {
         throw new Error('Không thể cập nhật trạng thái hợp đồng');
@@ -156,37 +225,40 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
     }
   };
 
-  useEffect(() => {
-    async function fetchCalculatedAmounts() {
-      if (!credit?.id) return;
-      
-      setIsCalculating(true);
-      
-      try {
-        const debtAmount = await calculateDebtToLatestPaidPeriod(credit.id);
-        setOldDebt(debtAmount);
-        
-        const today = new Date().toISOString().split('T')[0];
-        const interestAmount = await calculateCloseContractInterest(credit.id, today);
-        setRemainingAmount(interestAmount);
-        
-      } catch (error) {
-        console.error('Error calculating amounts:', error);
-        setOldDebt(credit.debt_amount || 0);
-        setRemainingAmount(0);
-        
-        toast({
-          title: "Lỗi",
-          description: "Không thể tính toán số tiền. Sử dụng giá trị mặc định.",
-          variant: "destructive"
-        });
-      } finally {
-        setIsCalculating(false);
-      }
-    }
+  // Hàm tính toán lại các giá trị dựa trên ngày đã chọn
+  const calculateAmounts = async () => {
+    if (!credit?.id) return;
     
-    fetchCalculatedAmounts();
-  }, [credit?.id, credit?.debt_amount]);
+    setIsCalculating(true);
+    
+    try {
+      const debtAmount = await calculateDebtToLatestPaidPeriod(credit.id);
+      setOldDebt(debtAmount);
+      
+      // Sử dụng ngày đã chọn thay vì today
+      const selectedDate = closingDate;
+      const interestAmount = await calculateCloseContractInterest(credit.id, selectedDate);
+      setRemainingAmount(interestAmount);
+      
+    } catch (error) {
+      console.error('Error calculating amounts:', error);
+      setOldDebt(credit.debt_amount || 0);
+      setRemainingAmount(0);
+      
+      toast({
+        title: "Lỗi",
+        description: "Không thể tính toán số tiền. Sử dụng giá trị mặc định.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsCalculating(false);
+    }
+  };
+
+  // Tính toán số tiền khi component được load hoặc khi ngày đóng hợp đồng thay đổi
+  useEffect(() => {
+    calculateAmounts();
+  }, [credit?.id, credit?.debt_amount, closingDate]);
 
   useEffect(() => {
     async function fetchLoanAmount() {
@@ -200,6 +272,9 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
     
     fetchLoanAmount();
   }, [credit.id]);
+
+  const formattedStartDate = format(new Date(startDate), 'dd/MM/yyyy', { locale: vi });
+  const formattedEndDate = format(new Date(endDate), 'dd/MM/yyyy', { locale: vi });
   
   return (
     <div className="p-4">
@@ -219,6 +294,21 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
             <span className="text-orange-700">Đang xử lý đóng hợp đồng...</span>
           </div>
         )}
+
+        {/* Date picker cho ngày đóng hợp đồng */}
+        <div className="mb-4">
+          <label className="text-sm font-medium text-gray-700 block mb-1">
+            Ngày đóng hợp đồng (từ {formattedStartDate} đến {formattedEndDate})
+          </label>
+          <DatePicker
+            value={closingDate}
+            onChange={(date) => validateAndSetDate(date)}
+            placeholder="Chọn ngày đóng hợp đồng"
+            className="w-full"
+            maxDate={endDate}
+            minDate={startDate}
+          />
+        </div>
 
         <div className="mb-4 border rounded-md overflow-hidden">
           <table className="w-full border-collapse">
@@ -327,8 +417,16 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
             <p>Bạn có chắc chắn muốn đóng hợp đồng này không? Sau khi đóng, hợp đồng sẽ không thể chỉnh sửa.</p>
             
             <div className="bg-gray-50 p-3 rounded">
+              <p className="text-sm">
+                <strong>Ngày đóng hợp đồng:</strong> {format(new Date(closingDate), 'dd/MM/yyyy', { locale: vi })}
+              </p>
+              <p className="text-sm mt-1">
+                <strong>Xử lý:</strong> {remainingAmount <= 0 
+                  ? "Chỉ cần đóng hợp đồng (không còn lãi phí)" 
+                  : `Sẽ tạo lịch sử thanh toán cho lãi phí ${formatCurrency(remainingAmount)} và xử lý đóng hợp đồng`}
+              </p>
               {oldDebt !== 0 && (
-                <p className="text-sm mt-2">
+                <p className="text-sm mt-1">
                   <strong>Nợ cũ:</strong> {payDebt 
                     ? `Sẽ thanh toán nợ cũ ${formatCurrency(Math.abs(oldDebt))}` 
                     : `Sẽ giữ nguyên nợ cũ ${formatCurrency(Math.abs(oldDebt))}`}

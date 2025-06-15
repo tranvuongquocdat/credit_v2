@@ -40,6 +40,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { getinstallmentPaymentHistory } from "@/lib/Installments/payment_history";
 import { calculateMultipleInstallmentStatus, InstallmentStatusResult } from "@/lib/Installments/calculate_installment_status";
+import { recordContractReopening } from "@/lib/installmentAmountHistory";
 
 // Define status info interface
 interface StatusInfo {
@@ -351,6 +352,9 @@ export function InstallmentsTable({
         installment.id, 
         InstallmentStatus.ON_TIME
       );
+
+      // Ghi lịch sử mở lại hợp đồng
+      await recordContractReopening(installment.id);
       
       if (error) {
         console.error("Error unlocking installment:", error);

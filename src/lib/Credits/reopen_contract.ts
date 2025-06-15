@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import { updateCredit } from '../credit';
+import { updateCredit, updateCreditStatus } from '../credit';
 import { CreditStatus } from '@/models/credit';
 import { getCurrentUser } from '../auth';
 
@@ -86,9 +86,7 @@ export async function reopenContract(creditId: string): Promise<void> {
     }
 
     // 4. Cập nhật status hợp đồng về on_time
-    const { error: updateStatusError } = await updateCredit(creditId, {
-      status: 'on_time' as CreditStatus
-    });
+    const { error: updateStatusError } = await updateCreditStatus(creditId, CreditStatus.ON_TIME);
 
     if (updateStatusError) {
       throw new Error('Không thể cập nhật trạng thái hợp đồng');
