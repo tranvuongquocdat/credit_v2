@@ -26,7 +26,11 @@ import {
   FiCheckCircle,
   FiUserCheck,
   FiUserPlus,
-  FiShield
+  FiShield,
+  FiPercent,
+  FiXCircle,
+  FiCalendar,
+  FiPieChart
 } from 'react-icons/fi';
 
 interface SubMenuItem {
@@ -104,7 +108,7 @@ const sidebarItems: SidebarItem[] = [
   { 
     title: 'Quỹ', 
     path: '/total-fund', 
-    icon: <FiActivity size={20} />
+    icon: <FiPieChart size={20} />
   },
   { 
     title: 'Báo cáo', 
@@ -113,12 +117,12 @@ const sidebarItems: SidebarItem[] = [
     submenu: [
       { title: 'Số quỹ tiền mặt', path: '/reports/cashbook', icon: <FiDollarSign size={18} /> },
       { title: 'Tổng kết giao dịch', path: '/reports/transactionSummary', icon: <FiAlertTriangle size={18} /> },
-      { title: 'Tổng kết lợi nhuận', path: '/reports/profit', icon: <FiPackage size={18} /> },
-      { title: 'Chi tiết tiền lãi', path: '/reports/interestDetail', icon: <FiPackage size={18} /> },
-      { title: 'Báo cáo đang cho vay', path: '/reports/report-pawn-holding', icon: <FiPackage size={18} /> },
-      { title: 'Báo cáo chuộc đồ, đóng HĐ', path: '/reports/contractClose', icon: <FiPackage size={18} /> },
-      { title: 'Báo cáo hợp đồng đã xóa', path: '/reports/contractDeleted', icon: <FiPackage size={18} /> },
-      { title: 'Dòng tiền theo ngày', path: '/reports/money-by-day', icon: <FiPackage size={18} /> },
+      { title: 'Tổng kết lợi nhuận', path: '/reports/profit', icon: <FiTrendingUp size={18} /> },
+      { title: 'Chi tiết tiền lãi', path: '/reports/interestDetail', icon: <FiPercent size={18} /> },
+      { title: 'Báo cáo đang cho vay', path: '/reports/report-pawn-holding', icon: <FiClock size={18} /> },
+      { title: 'Báo cáo chuộc đồ, đóng HĐ', path: '/reports/contractClose', icon: <FiCheckCircle size={18} /> },
+      { title: 'Báo cáo hợp đồng đã xóa', path: '/reports/contractDeleted', icon: <FiXCircle size={18} /> },
+      { title: 'Dòng tiền theo ngày', path: '/reports/money-by-day', icon: <FiCalendar size={18} /> },
     ]
   },
   // SuperAdmin section
