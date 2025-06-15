@@ -7,6 +7,14 @@ import { useStore } from '@/contexts/StoreContext';
 import { format, startOfDay, endOfDay, parse } from 'date-fns';
 import { RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 
+// Import status calculation functions
+import { calculatePawnStatus } from '@/lib/Pawns/calculate_pawn_status';
+import { calculateCreditStatus } from '@/lib/Credits/calculate_credit_status';
+import { calculateInstallmentStatus } from '@/lib/Installments/calculate_installment_status';
+
+// Import Excel Export component
+import ExcelExport from './components/ExcelExport';
+
 // Shadcn UI components
 import {
   Table,
@@ -39,6 +47,7 @@ interface LoanReportItem {
   loanAmount: number;
   loanDate: string;
   status: string;
+  statusCode: string;
   type: 'Cầm đồ' | 'Tín chấp' | 'Trả góp';
 }
 
@@ -47,6 +56,7 @@ export default function LoanReportPage() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [loanReports, setLoanReports] = useState<LoanReportItem[]>([]);
+  const [allLoanReports, setAllLoanReports] = useState<LoanReportItem[]>([]);
   const [totalLoanAmount, setTotalLoanAmount] = useState<number>(0);
   
   // Pagination states
@@ -63,115 +73,37 @@ export default function LoanReportPage() {
   const [selectedContractType, setSelectedContractType] = useState<string>('all');
 
   // Function to get status display text
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'on_time':
+  const getStatusText = (statusCode: string) => {
+    switch (statusCode) {
+      case 'ACTIVE':
         return 'Đang vay';
-      case 'late_interest':
+      case 'LATE_INTEREST':
         return 'Chậm trả';
-      case 'overdue':
+      case 'OVERDUE':
         return 'Trễ hạn';
       default:
-        return status;
+        return statusCode;
     }
   };
 
   // Function to get status color
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'on_time':
+  const getStatusColor = (statusCode: string) => {
+    switch (statusCode) {
+      case 'ACTIVE':
         return 'bg-green-100 text-green-800';
-      case 'late_interest':
+      case 'LATE_INTEREST':
         return 'bg-yellow-100 text-yellow-800';
-      case 'overdue':
+      case 'OVERDUE':
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
   };
 
-  // Function to count total records
-  const countTotalRecords = async () => {
-    if (!currentStore?.id) return 0;
-    
-    const storeId = currentStore.id;
-    let totalCount = 0;
-    let totalAmount = 0;
-    
-    // Count pawns
-    if (selectedContractType === 'all' || selectedContractType === 'Cầm đồ') {
-      let pawnQuery = supabase
-        .from('pawns')
-        .select('loan_amount', { count: 'exact' })
-        .eq('store_id', storeId)
-        .in('status', ['on_time', 'late_interest', 'overdue']);
-
-      // Apply date filters if provided
-      if (startDate && endDate) {
-        const startDateObj = startOfDay(parse(startDate, 'yyyy-MM-dd', new Date()));
-        const endDateObj = endOfDay(parse(endDate, 'yyyy-MM-dd', new Date()));
-        pawnQuery = pawnQuery
-          .gte('loan_date', startDateObj.toISOString())
-          .lte('loan_date', endDateObj.toISOString());
-      }
-
-      const { count: pawnCount, data: pawnData } = await pawnQuery;
-      
-      totalCount += pawnCount || 0;
-      if (pawnData) {
-        totalAmount += pawnData.reduce((sum, item) => sum + (item.loan_amount || 0), 0);
-      }
-    }
-    
-    // Count credits
-    if (selectedContractType === 'all' || selectedContractType === 'Tín chấp') {
-      let creditQuery = supabase
-        .from('credits')
-        .select('loan_amount', { count: 'exact' })
-        .eq('store_id', storeId)
-        .in('status', ['on_time', 'late_interest', 'overdue']);
-
-      // Apply date filters if provided
-      if (startDate && endDate) {
-        const startDateObj = startOfDay(parse(startDate, 'yyyy-MM-dd', new Date()));
-        const endDateObj = endOfDay(parse(endDate, 'yyyy-MM-dd', new Date()));
-        creditQuery = creditQuery
-          .gte('loan_date', startDateObj.toISOString())
-          .lte('loan_date', endDateObj.toISOString());
-      }
-
-      const { count: creditCount, data: creditData } = await creditQuery;
-      
-      totalCount += creditCount || 0;
-      if (creditData) {
-        totalAmount += creditData.reduce((sum, item) => sum + (item.loan_amount || 0), 0);
-      }
-    }
-    
-    // Count installments (using view)
-    if (selectedContractType === 'all' || selectedContractType === 'Trả góp') {
-      let installmentQuery = supabase
-        .from('installments_by_store')
-        .select('installment_amount', { count: 'exact' })
-        .eq('store_id', storeId)
-        .in('status', ['on_time', 'late_interest', 'overdue']);
-
-      // Apply date filters if provided
-      if (startDate && endDate) {
-        const startDateObj = startOfDay(parse(startDate, 'yyyy-MM-dd', new Date()));
-        const endDateObj = endOfDay(parse(endDate, 'yyyy-MM-dd', new Date()));
-        installmentQuery = installmentQuery
-          .gte('loan_date', startDateObj.toISOString())
-          .lte('loan_date', endDateObj.toISOString());
-      }
-
-      const { count: installmentCount, data: installmentData } = await installmentQuery;
-      
-      totalCount += installmentCount || 0;
-      if (installmentData) {
-        totalAmount += installmentData.reduce((sum, item) => sum + (item.installment_amount || 0), 0);
-      }
-    }
+  // Function to count total records (simplified - will be calculated after status evaluation)
+  const countTotalRecords = async (filteredItems: LoanReportItem[]) => {
+    const totalCount = filteredItems.length;
+    const totalAmount = filteredItems.reduce((sum, item) => sum + item.loanAmount, 0);
     
     setTotalRecords(totalCount);
     setTotalLoanAmount(totalAmount);
@@ -188,17 +120,10 @@ export default function LoanReportPage() {
     setError(null);
     
     try {
-      // First count total records
-      await countTotalRecords();
-      
       const storeId = currentStore.id;
-      
-      const allLoanReports: LoanReportItem[] = [];
-      
-      const offset = (currentPage - 1) * itemsPerPage;
-      let itemsToFetch = itemsPerPage;
+      const allRawData: any[] = [];
 
-      // Fetch pawns
+      // Fetch pawns (all records, no status filtering)
       if (selectedContractType === 'all' || selectedContractType === 'Cầm đồ') {
         let pawnQuery = supabase
           .from('pawns')
@@ -212,9 +137,7 @@ export default function LoanReportPage() {
             collateral_detail
           `)
           .eq('store_id', storeId)
-          .in('status', ['on_time', 'late_interest', 'overdue'])
-          .order('loan_date', { ascending: false })
-          .range(offset, offset + itemsToFetch - 1);
+          .order('loan_date', { ascending: false });
 
         // Apply date filters if provided
         if (startDate && endDate) {
@@ -223,6 +146,9 @@ export default function LoanReportPage() {
           pawnQuery = pawnQuery
             .gte('loan_date', startDateObj.toISOString())
             .lte('loan_date', endDateObj.toISOString());
+        } else {
+          // Limit to recent records when no date filter to improve performance
+          pawnQuery = pawnQuery.limit(500);
         }
 
         const { data: pawnData, error: pawnError } = await pawnQuery;
@@ -231,34 +157,12 @@ export default function LoanReportPage() {
           console.error('Error fetching pawns:', pawnError);
         } else if (pawnData) {
           for (const item of pawnData) {
-            let itemName = '';
-            try {
-              if (item.collateral_detail) {
-                const detail = typeof item.collateral_detail === 'string' 
-                  ? JSON.parse(item.collateral_detail) 
-                  : item.collateral_detail;
-                itemName = detail.name || '';
-              }
-            } catch (e) {
-              console.error('Error parsing collateral_detail:', e);
-            }
-
-            allLoanReports.push({
-              id: `pawn-${item.id}`,
-              contractId: item.id,
-              contractCode: item.contract_code || '',
-              customerName: item.customers?.name || '',
-              itemName,
-              loanAmount: item.loan_amount || 0,
-              loanDate: item.loan_date ? format(new Date(item.loan_date), 'dd-MM-yyyy') : '',
-              status: item.status || '',
-              type: 'Cầm đồ'
-            });
+            allRawData.push({ ...item, type: 'Cầm đồ' });
           }
         }
       }
 
-      // Fetch credits
+      // Fetch credits (all records, no status filtering)
       if (selectedContractType === 'all' || selectedContractType === 'Tín chấp') {
         let creditQuery = supabase
           .from('credits')
@@ -272,9 +176,7 @@ export default function LoanReportPage() {
             collateral
           `)
           .eq('store_id', storeId)
-          .in('status', ['on_time', 'late_interest', 'overdue'])
-          .order('loan_date', { ascending: false })
-          .range(offset, offset + itemsToFetch - 1);
+          .order('loan_date', { ascending: false });
 
         // Apply date filters if provided
         if (startDate && endDate) {
@@ -283,6 +185,9 @@ export default function LoanReportPage() {
           creditQuery = creditQuery
             .gte('loan_date', startDateObj.toISOString())
             .lte('loan_date', endDateObj.toISOString());
+        } else {
+          // Limit to recent records when no date filter to improve performance
+          creditQuery = creditQuery.limit(500);
         }
 
         const { data: creditData, error: creditError } = await creditQuery;
@@ -291,22 +196,12 @@ export default function LoanReportPage() {
           console.error('Error fetching credits:', creditError);
         } else if (creditData) {
           for (const item of creditData) {
-            allLoanReports.push({
-              id: `credit-${item.id}`,
-              contractId: item.id,
-              contractCode: item.contract_code || '',
-              customerName: item.customers?.name || '',
-              itemName: item.collateral || 'Tín chấp',
-              loanAmount: item.loan_amount || 0,
-              loanDate: item.loan_date ? format(new Date(item.loan_date), 'dd-MM-yyyy') : '',
-              status: item.status || '',
-              type: 'Tín chấp'
-            });
+            allRawData.push({ ...item, type: 'Tín chấp' });
           }
         }
       }
 
-      // Fetch installments
+      // Fetch installments (all records, no status filtering)
       if (selectedContractType === 'all' || selectedContractType === 'Trả góp') {
         let installmentQuery = supabase
           .from('installments_by_store')
@@ -319,9 +214,7 @@ export default function LoanReportPage() {
             customers(name)
           `)
           .eq('store_id', storeId)
-          .in('status', ['on_time', 'late_interest', 'overdue'])
-          .order('loan_date', { ascending: false })
-          .range(offset, offset + itemsToFetch - 1);
+          .order('loan_date', { ascending: false });
 
         // Apply date filters if provided
         if (startDate && endDate) {
@@ -330,6 +223,9 @@ export default function LoanReportPage() {
           installmentQuery = installmentQuery
             .gte('loan_date', startDateObj.toISOString())
             .lte('loan_date', endDateObj.toISOString());
+        } else {
+          // Limit to recent records when no date filter to improve performance
+          installmentQuery = installmentQuery.limit(500);
         }
 
         const { data: installmentData, error: installmentError } = await installmentQuery;
@@ -338,25 +234,106 @@ export default function LoanReportPage() {
           console.error('Error fetching installments:', installmentError);
         } else if (installmentData) {
           for (const item of installmentData) {
-            allLoanReports.push({
-              id: `installment-${item.id}`,
-              contractId: item.id || '',
-              contractCode: item.contract_code || '',
-              customerName: item.customers?.name || '',
-              itemName: 'Trả góp',
-              loanAmount: item.installment_amount || 0,
-              loanDate: item.loan_date ? format(new Date(item.loan_date), 'dd-MM-yyyy') : '',
-              status: item.status || '',
-              type: 'Trả góp'
-            });
+            allRawData.push({ ...item, type: 'Trả góp' });
           }
         }
       }
 
-      // Sort by loan date descending
-      allLoanReports.sort((a, b) => new Date(b.loanDate.split('-').reverse().join('-')).getTime() - new Date(a.loanDate.split('-').reverse().join('-')).getTime());
+      // Calculate status for each item in parallel and filter only active loan contracts
+      const processedData: LoanReportItem[] = [];
       
-      setLoanReports(allLoanReports);
+      // Process in chunks to avoid overwhelming the system
+      const chunkSize = 20;
+      const chunks = [];
+      for (let i = 0; i < allRawData.length; i += chunkSize) {
+        chunks.push(allRawData.slice(i, i + chunkSize));
+      }
+      
+      for (const chunk of chunks) {
+        // Process each chunk in parallel
+        const chunkResults = await Promise.allSettled(
+          chunk.map(async (item) => {
+            try {
+              let statusResult;
+              
+              // Calculate status based on type
+              if (item.type === 'Cầm đồ') {
+                statusResult = await calculatePawnStatus(item.id);
+              } else if (item.type === 'Tín chấp') {
+                statusResult = await calculateCreditStatus(item.id);
+              } else if (item.type === 'Trả góp') {
+                statusResult = await calculateInstallmentStatus(item.id);
+              }
+              
+              // Only include contracts that are currently active (being loaned)
+              if (statusResult && ['ACTIVE', 'LATE_INTEREST', 'OVERDUE'].includes(statusResult.statusCode)) {
+                let itemName = '';
+                let loanAmount = 0;
+                
+                // Get item name based on type
+                if (item.type === 'Cầm đồ') {
+                  try {
+                    if (item.collateral_detail) {
+                      const detail = typeof item.collateral_detail === 'string' 
+                        ? JSON.parse(item.collateral_detail) 
+                        : item.collateral_detail;
+                      itemName = detail.name || '';
+                    }
+                  } catch (e) {
+                    console.error('Error parsing collateral_detail:', e);
+                  }
+                  loanAmount = item.loan_amount || 0;
+                } else if (item.type === 'Tín chấp') {
+                  itemName = item.collateral || 'Tín chấp';
+                  loanAmount = item.loan_amount || 0;
+                } else if (item.type === 'Trả góp') {
+                  itemName = 'Trả góp';
+                  loanAmount = item.installment_amount || 0;
+                }
+
+                return {
+                  id: `${item.type.toLowerCase().replace(' ', '')}-${item.id}`,
+                  contractId: item.id || '',
+                  contractCode: item.contract_code || '',
+                  customerName: item.customers?.name || '',
+                  itemName,
+                  loanAmount,
+                  loanDate: item.loan_date ? format(new Date(item.loan_date), 'dd-MM-yyyy') : '',
+                  status: statusResult.status,
+                  statusCode: statusResult.statusCode,
+                  type: item.type
+                };
+              }
+              return null;
+            } catch (error) {
+              console.error(`Error calculating status for ${item.type} ${item.id}:`, error);
+              return null;
+            }
+          })
+        );
+        
+        // Add successful results to processedData
+        chunkResults.forEach((result) => {
+          if (result.status === 'fulfilled' && result.value) {
+            processedData.push(result.value);
+          }
+        });
+      }
+
+      // Sort by loan date descending
+      processedData.sort((a, b) => new Date(b.loanDate.split('-').reverse().join('-')).getTime() - new Date(a.loanDate.split('-').reverse().join('-')).getTime());
+      
+      // Store all processed data for Excel export
+      setAllLoanReports(processedData);
+      
+      // Update total counts
+      await countTotalRecords(processedData);
+      
+      // Apply pagination
+      const offset = (currentPage - 1) * itemsPerPage;
+      const paginatedData = processedData.slice(offset, offset + itemsPerPage);
+      
+      setLoanReports(paginatedData);
       
     } catch (error) {
       console.error('Error fetching loan reports:', error);
@@ -416,6 +393,14 @@ export default function LoanReportPage() {
               <CardTitle className="text-xl font-semibold text-blue-600">
                 Báo cáo hợp đồng đang cho vay
               </CardTitle>
+              <ExcelExport 
+                data={allLoanReports}
+                storeId={currentStore?.id}
+                startDate={startDate}
+                endDate={endDate}
+                storeName={currentStore?.name || 'Unknown'}
+                selectedContractType={selectedContractType}
+              />
             </div>
           </CardHeader>
           <CardContent>
@@ -552,8 +537,8 @@ export default function LoanReportPage() {
                             <span className="font-medium text-blue-600">{formatCurrency(item.loanAmount)}</span>
                           </TableCell>
                           <TableCell className="py-2 px-3 text-center border-b border-gray-200">
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(item.status)}`}>
-                              {getStatusText(item.status)}
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(item.statusCode)}`}>
+                              {getStatusText(item.statusCode)}
                             </span>
                           </TableCell>
                         </TableRow>
