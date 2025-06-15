@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Layout } from '@/components/Layout';
 import { supabase } from '@/lib/supabase';
 import { useStore } from '@/contexts/StoreContext';
@@ -72,6 +72,35 @@ export default function InterestDetailPage() {
   // Filter states
   const [selectedContractType, setSelectedContractType] = useState<string>('all');
 
+  // Debounce timer for data fetching
+  const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
+
+  // Memoized fetch function to avoid unnecessary re-fetches
+  const debouncedFetchData = useCallback(() => {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+    
+    const timer = setTimeout(() => {
+      fetchInterestDetails();
+    }, 300); // 300ms debounce
+    
+    setDebounceTimer(timer);
+  }, [startDate, endDate, selectedContractType, currentStore?.id]);
+
+  // Effect to trigger debounced data fetching when filters change
+  useEffect(() => {
+    if (currentStore?.id) {
+      debouncedFetchData();
+    }
+    
+    return () => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+    };
+  }, [currentStore?.id, debouncedFetchData]);
+
   // Function to fetch all data from a query with pagination
   const fetchAllData = async (query: any, pageSize: number = 1000) => {
     let allData: any[] = [];
@@ -96,6 +125,20 @@ export default function InterestDetailPage() {
     }
 
     return allData;
+  };
+
+  // Optimized function to fetch data in chunks with better pagination
+  const fetchDataOptimized = async (query: any, pageSize: number = 2000) => {
+    const { data, error, count } = await query
+      .range(0, pageSize - 1)
+      .order('created_at', { ascending: false }); // Add ordering for consistent results
+    
+    if (error) {
+      console.error('Error fetching data:', error);
+      return [];
+    }
+
+    return data || [];
   };
 
   // Calculate interest amount for contract close/reopen transactions
@@ -131,535 +174,569 @@ export default function InterestDetailPage() {
       
       const allInterestDetails: InterestDetailItem[] = [];
 
-      // Fetch pawn interest details
+      // Create parallel query promises based on selected contract type
+      const queryPromises: Promise<void>[] = [];
+
+      // Pawn interest details - run all pawn queries in parallel
       if (selectedContractType === 'all' || selectedContractType === 'Cầm đồ') {
-        // Fetch payment transactions (Đóng lãi and Huỷ đóng lãi)
-        const pawnPaymentQuery = supabase
-          .from('pawn_history')
-          .select(`
-            id,
-            pawn_id,
-            transaction_type,
-            credit_amount,
-            debit_amount,
-            created_at,
-            is_deleted,
-            pawns!inner(
+        const pawnQueries = [
+          // Payment transactions query
+          supabase
+            .from('pawn_history')
+            .select(`
               id,
-              contract_code,
-              loan_amount,
-              updated_at,
-              customers(name),
-              collateral_detail
-            )
-          `)
-          .eq('pawns.store_id', storeId)
-          .eq('transaction_type', 'payment');
+              pawn_id,
+              transaction_type,
+              credit_amount,
+              debit_amount,
+              created_at,
+              is_deleted,
+              pawns!inner(
+                id,
+                contract_code,
+                loan_amount,
+                updated_at,
+                customers(name),
+                collateral_detail
+              )
+            `)
+            .eq('pawns.store_id', storeId)
+            .eq('transaction_type', 'payment'),
 
-        // Apply date filter for payment transactions
-        const pawnPaymentData = await fetchAllData(
-          pawnPaymentQuery.gte('created_at', startDateISO).lte('created_at', endDateISO)
-        );
+          // Contract close transactions query
+          supabase
+            .from('pawn_history')
+            .select(`
+              id,
+              pawn_id,
+              transaction_type,
+              created_at,
+              pawns!inner(
+                id,
+                contract_code,
+                loan_amount,
+                customers(name),
+                collateral_detail
+              )
+            `)
+            .eq('pawns.store_id', storeId)
+            .eq('transaction_type', 'contract_close')
+            .gte('created_at', startDateISO)
+            .lte('created_at', endDateISO),
 
-        // Process payment transactions
-        for (const item of pawnPaymentData || []) {
-          let itemName = '';
-          try {
-            if (item.pawns?.collateral_detail) {
-              const detail = typeof item.pawns.collateral_detail === 'string' 
-                ? JSON.parse(item.pawns.collateral_detail) 
-                : item.pawns.collateral_detail;
-              itemName = detail.name || '';
+          // Contract reopen transactions query
+          supabase
+            .from('pawn_history')
+            .select(`
+              id,
+              pawn_id,
+              transaction_type,
+              created_at,
+              pawns!inner(
+                id,
+                contract_code,
+                loan_amount,
+                customers(name),
+                collateral_detail
+              )
+            `)
+            .eq('pawns.store_id', storeId)
+            .eq('transaction_type', 'contract_reopen')
+            .gte('created_at', startDateISO)
+            .lte('created_at', endDateISO),
+
+          // Debt payment transactions query
+          supabase
+            .from('pawn_history')
+            .select(`
+              id,
+              pawn_id,
+              transaction_type,
+              debit_amount,
+              created_at,
+              pawns!inner(
+                id,
+                contract_code,
+                loan_amount,
+                customers(name),
+                collateral_detail
+              )
+            `)
+            .eq('pawns.store_id', storeId)
+            .eq('transaction_type', 'debt_payment')
+            .gte('created_at', startDateISO)
+            .lte('created_at', endDateISO)
+        ];
+
+        // Execute all pawn queries in parallel
+        queryPromises.push(
+          Promise.all([
+            fetchAllData(pawnQueries[0].gte('created_at', startDateISO).lte('created_at', endDateISO)),
+            fetchAllData(pawnQueries[1]),
+            fetchAllData(pawnQueries[2]),
+            fetchAllData(pawnQueries[3])
+          ]).then(async ([pawnPaymentData, pawnCloseData, pawnReopenData, pawnDebtData]) => {
+            // Process payment transactions
+            for (const item of pawnPaymentData || []) {
+              let itemName = '';
+              try {
+                if (item.pawns?.collateral_detail) {
+                  const detail = typeof item.pawns.collateral_detail === 'string' 
+                    ? JSON.parse(item.pawns.collateral_detail) 
+                    : item.pawns.collateral_detail;
+                  itemName = detail.name || '';
+                }
+              } catch (e) {
+                console.error('Error parsing collateral_detail:', e);
+              }
+
+              const transactionDate = item.is_deleted ? item.pawns.updated_at : item.created_at;
+              const interestAmount = item.is_deleted ? -(item.credit_amount || 0) : (item.credit_amount || 0);
+              const transactionType = item.is_deleted ? 'Huỷ đóng lãi' : 'Đóng lãi';
+
+              // Only include if transaction date is within range
+              if (new Date(transactionDate) >= startDateObj && new Date(transactionDate) <= endDateObj) {
+                allInterestDetails.push({
+                  id: `pawn-payment-${item.id}`,
+                  contractId: item.pawn_id,
+                  contractCode: item.pawns?.contract_code || '',
+                  customerName: item.pawns?.customers?.name || '',
+                  itemName,
+                  loanAmount: item.pawns?.loan_amount || 0,
+                  transactionDate: new Date(transactionDate).toLocaleString('vi-VN'),
+                  transactionDateTime: new Date(transactionDate).toLocaleString('vi-VN'),
+                  interestAmount,
+                  otherAmount: 0,
+                  totalAmount: interestAmount,
+                  transactionType,
+                  type: 'Cầm đồ'
+                });
+              }
             }
-          } catch (e) {
-            console.error('Error parsing collateral_detail:', e);
-          }
 
-          const transactionDate = item.is_deleted ? item.pawns.updated_at : item.created_at;
-          const interestAmount = item.is_deleted ? -(item.credit_amount || 0) : (item.credit_amount || 0);
-          const transactionType = item.is_deleted ? 'Huỷ đóng lãi' : 'Đóng lãi';
+            // Process contract close transactions in parallel
+            const closePromises = (pawnCloseData || []).map(async (item) => {
+              let itemName = '';
+              try {
+                if (item.pawns?.collateral_detail) {
+                  const detail = typeof item.pawns.collateral_detail === 'string' 
+                    ? JSON.parse(item.pawns.collateral_detail) 
+                    : item.pawns.collateral_detail;
+                  itemName = detail.name || '';
+                }
+              } catch (e) {
+                console.error('Error parsing collateral_detail:', e);
+              }
 
-          // Only include if transaction date is within range
-          if (new Date(transactionDate) >= startDateObj && new Date(transactionDate) <= endDateObj) {
-            allInterestDetails.push({
-              id: `pawn-payment-${item.id}`,
-              contractId: item.pawn_id,
-              contractCode: item.pawns?.contract_code || '',
-              customerName: item.pawns?.customers?.name || '',
-              itemName,
-              loanAmount: item.pawns?.loan_amount || 0,
-              transactionDate: new Date(transactionDate).toLocaleString('vi-VN'),
-              transactionDateTime: new Date(transactionDate).toLocaleString('vi-VN'),
-              interestAmount,
-              otherAmount: 0,
-              totalAmount: interestAmount,
-              transactionType,
-              type: 'Cầm đồ'
+              const interestAmount = await calculateInterestAmount(item.pawn_id, 'Cầm đồ', item.created_at);
+
+                              return {
+                  id: `pawn-close-${item.id}`,
+                  contractId: item.pawn_id,
+                  contractCode: item.pawns?.contract_code || '',
+                  customerName: item.pawns?.customers?.name || '',
+                  itemName,
+                  loanAmount: item.pawns?.loan_amount || 0,
+                  transactionDate: new Date(item.created_at).toLocaleString('vi-VN'),
+                  transactionDateTime: new Date(item.created_at).toLocaleString('vi-VN'),
+                  interestAmount,
+                  otherAmount: 0,
+                  totalAmount: interestAmount,
+                  transactionType: 'Chuộc đồ',
+                  type: 'Cầm đồ' as const
+                };
             });
-          }
-        }
 
-        // Fetch contract_close transactions (Chuộc đồ)
-        const pawnCloseQuery = supabase
-          .from('pawn_history')
-          .select(`
-            id,
-            pawn_id,
-            transaction_type,
-            created_at,
-            pawns!inner(
-              id,
-              contract_code,
-              loan_amount,
-              customers(name),
-              collateral_detail
-            )
-          `)
-          .eq('pawns.store_id', storeId)
-          .eq('transaction_type', 'contract_close')
-          .gte('created_at', startDateISO)
-          .lte('created_at', endDateISO);
+            // Process contract reopen transactions in parallel
+            const reopenPromises = (pawnReopenData || []).map(async (item) => {
+              let itemName = '';
+              try {
+                if (item.pawns?.collateral_detail) {
+                  const detail = typeof item.pawns.collateral_detail === 'string' 
+                    ? JSON.parse(item.pawns.collateral_detail) 
+                    : item.pawns.collateral_detail;
+                  itemName = detail.name || '';
+                }
+              } catch (e) {
+                console.error('Error parsing collateral_detail:', e);
+              }
 
-        const pawnCloseData = await fetchAllData(pawnCloseQuery);
+              // Calculate interest amount as negative of contract close
+              const interestAmount = -(await calculateInterestAmount(item.pawn_id, 'Cầm đồ', item.created_at));
 
-        for (const item of pawnCloseData || []) {
-          let itemName = '';
-          try {
-            if (item.pawns?.collateral_detail) {
-              const detail = typeof item.pawns.collateral_detail === 'string' 
-                ? JSON.parse(item.pawns.collateral_detail) 
-                : item.pawns.collateral_detail;
-              itemName = detail.name || '';
-            }
-          } catch (e) {
-            console.error('Error parsing collateral_detail:', e);
-          }
-
-          const interestAmount = await calculateInterestAmount(item.pawn_id, 'Cầm đồ', item.created_at);
-
-          allInterestDetails.push({
-            id: `pawn-close-${item.id}`,
-            contractId: item.pawn_id,
-            contractCode: item.pawns?.contract_code || '',
-            customerName: item.pawns?.customers?.name || '',
-            itemName,
-            loanAmount: item.pawns?.loan_amount || 0,
-            transactionDate: new Date(item.created_at).toLocaleString('vi-VN'),
-            transactionDateTime: new Date(item.created_at).toLocaleString('vi-VN'),
-            interestAmount,
-            otherAmount: 0,
-            totalAmount: interestAmount,
-            transactionType: 'Chuộc đồ',
-            type: 'Cầm đồ'
-          });
-        }
-
-        // Fetch contract_reopen transactions (Huỷ chuộc đồ)
-        const pawnReopenQuery = supabase
-          .from('pawn_history')
-          .select(`
-            id,
-            pawn_id,
-            transaction_type,
-            created_at,
-            pawns!inner(
-              id,
-              contract_code,
-              loan_amount,
-              customers(name),
-              collateral_detail
-            )
-          `)
-          .eq('pawns.store_id', storeId)
-          .eq('transaction_type', 'contract_reopen')
-          .gte('created_at', startDateISO)
-          .lte('created_at', endDateISO);
-
-        const pawnReopenData = await fetchAllData(pawnReopenQuery);
-
-        for (const item of pawnReopenData || []) {
-          let itemName = '';
-          try {
-            if (item.pawns?.collateral_detail) {
-              const detail = typeof item.pawns.collateral_detail === 'string' 
-                ? JSON.parse(item.pawns.collateral_detail) 
-                : item.pawns.collateral_detail;
-              itemName = detail.name || '';
-            }
-          } catch (e) {
-            console.error('Error parsing collateral_detail:', e);
-          }
-
-          // Calculate interest amount as negative of contract close
-          const interestAmount = -(await calculateInterestAmount(item.pawn_id, 'Cầm đồ', item.created_at));
-
-          allInterestDetails.push({
-            id: `pawn-reopen-${item.id}`,
-            contractId: item.pawn_id,
-            contractCode: item.pawns?.contract_code || '',
-            customerName: item.pawns?.customers?.name || '',
-            itemName,
-            loanAmount: item.pawns?.loan_amount || 0,
-            transactionDate: new Date(item.created_at).toLocaleString('vi-VN'),
-            transactionDateTime: new Date(item.created_at).toLocaleString('vi-VN'),
-            interestAmount,
-            otherAmount: 0,
-            totalAmount: interestAmount,
-            transactionType: 'Huỷ chuộc đồ',
-            type: 'Cầm đồ'
-          });
-        }
-
-        // Fetch debt_payment transactions (Trả nợ)
-        const pawnDebtQuery = supabase
-          .from('pawn_history')
-          .select(`
-            id,
-            pawn_id,
-            transaction_type,
-            debit_amount,
-            created_at,
-            pawns!inner(
-              id,
-              contract_code,
-              loan_amount,
-              customers(name),
-              collateral_detail
-            )
-          `)
-          .eq('pawns.store_id', storeId)
-          .eq('transaction_type', 'debt_payment')
-          .gte('created_at', startDateISO)
-          .lte('created_at', endDateISO);
-
-        const pawnDebtData = await fetchAllData(pawnDebtQuery);
-
-        for (const item of pawnDebtData || []) {
-          let itemName = '';
-          try {
-            if (item.pawns?.collateral_detail) {
-              const detail = typeof item.pawns.collateral_detail === 'string' 
-                ? JSON.parse(item.pawns.collateral_detail) 
-                : item.pawns.collateral_detail;
-              itemName = detail.name || '';
-            }
-          } catch (e) {
-            console.error('Error parsing collateral_detail:', e);
-          }
-
-          const interestAmount = item.debit_amount || 0;
-
-          allInterestDetails.push({
-            id: `pawn-debt-${item.id}`,
-            contractId: item.pawn_id,
-            contractCode: item.pawns?.contract_code || '',
-            customerName: item.pawns?.customers?.name || '',
-            itemName,
-            loanAmount: item.pawns?.loan_amount || 0,
-            transactionDate: new Date(item.created_at).toLocaleString('vi-VN'),
-            transactionDateTime: new Date(item.created_at).toLocaleString('vi-VN'),
-            interestAmount,
-            otherAmount: 0,
-            totalAmount: interestAmount,
-            transactionType: 'Trả nợ',
-            type: 'Cầm đồ'
-          });
-        }
-      }
-
-      // Fetch credit interest details
-      if (selectedContractType === 'all' || selectedContractType === 'Tín chấp') {
-        // Fetch payment transactions (Đóng lãi and Huỷ đóng lãi)
-        const creditPaymentQuery = supabase
-          .from('credit_history')
-          .select(`
-            id,
-            credit_id,
-            transaction_type,
-            credit_amount,
-            debit_amount,
-            created_at,
-            updated_at,
-            is_deleted,
-            credits!inner(
-              id,
-              contract_code,
-              loan_amount,
-              customers(name)
-            )
-          `)
-          .eq('credits.store_id', storeId)
-          .eq('transaction_type', 'payment');
-
-        const creditPaymentData = await fetchAllData(creditPaymentQuery);
-
-        // Process payment transactions
-        for (const item of creditPaymentData || []) {
-          const transactionDate = item.is_deleted ? item.updated_at : item.created_at;
-          const interestAmount = item.is_deleted ? -(item.credit_amount || 0) : (item.credit_amount || 0);
-          const transactionType = item.is_deleted ? 'Huỷ đóng lãi' : 'Đóng lãi';
-
-          // Only include if transaction date is within range
-          if (new Date(transactionDate) >= startDateObj && new Date(transactionDate) <= endDateObj) {
-            allInterestDetails.push({
-              id: `credit-payment-${item.id}`,
-              contractId: item.credit_id,
-              contractCode: item.credits?.contract_code || '',
-              customerName: item.credits?.customers?.name || '',
-              itemName: 'Tín chấp',
-              loanAmount: item.credits?.loan_amount || 0,
-              transactionDate: new Date(transactionDate).toLocaleString('vi-VN'),
-              transactionDateTime: new Date(transactionDate).toLocaleString('vi-VN'),
-              interestAmount,
-              otherAmount: 0,
-              totalAmount: interestAmount,
-              transactionType,
-              type: 'Tín chấp'
+                              return {
+                  id: `pawn-reopen-${item.id}`,
+                  contractId: item.pawn_id,
+                  contractCode: item.pawns?.contract_code || '',
+                  customerName: item.pawns?.customers?.name || '',
+                  itemName,
+                  loanAmount: item.pawns?.loan_amount || 0,
+                  transactionDate: new Date(item.created_at).toLocaleString('vi-VN'),
+                  transactionDateTime: new Date(item.created_at).toLocaleString('vi-VN'),
+                  interestAmount,
+                  otherAmount: 0,
+                  totalAmount: interestAmount,
+                  transactionType: 'Huỷ chuộc đồ',
+                  type: 'Cầm đồ' as const
+                };
             });
-          }
-        }
 
-        // Fetch contract_close transactions (Đóng HĐ)
-        const creditCloseQuery = supabase
-          .from('credit_history')
-          .select(`
-            id,
-            credit_id,
-            transaction_type,
-            created_at,
-            credits!inner(
-              id,
-              contract_code,
-              loan_amount,
-              customers(name)
-            )
-          `)
-          .eq('credits.store_id', storeId)
-          .eq('transaction_type', 'contract_close')
-          .gte('created_at', startDateISO)
-          .lte('created_at', endDateISO);
+            // Process debt payment transactions
+            for (const item of pawnDebtData || []) {
+              let itemName = '';
+              try {
+                if (item.pawns?.collateral_detail) {
+                  const detail = typeof item.pawns.collateral_detail === 'string' 
+                    ? JSON.parse(item.pawns.collateral_detail) 
+                    : item.pawns.collateral_detail;
+                  itemName = detail.name || '';
+                }
+              } catch (e) {
+                console.error('Error parsing collateral_detail:', e);
+              }
 
-        const creditCloseData = await fetchAllData(creditCloseQuery);
+              const interestAmount = item.debit_amount || 0;
 
-        for (const item of creditCloseData || []) {
-          const interestAmount = await calculateInterestAmount(item.credit_id, 'Tín chấp', item.created_at);
-
-          allInterestDetails.push({
-            id: `credit-close-${item.id}`,
-            contractId: item.credit_id,
-            contractCode: item.credits?.contract_code || '',
-            customerName: item.credits?.customers?.name || '',
-            itemName: 'Tín chấp',
-            loanAmount: item.credits?.loan_amount || 0,
-            transactionDate: new Date(item.created_at).toLocaleString('vi-VN'),
-            transactionDateTime: new Date(item.created_at).toLocaleString('vi-VN'),
-            interestAmount,
-            otherAmount: 0,
-            totalAmount: interestAmount,
-            transactionType: 'Đóng HĐ',
-            type: 'Tín chấp'
-          });
-        }
-
-        // Fetch contract_reopen transactions (Huỷ đóng HĐ)
-        const creditReopenQuery = supabase
-          .from('credit_history')
-          .select(`
-            id,
-            credit_id,
-            transaction_type,
-            created_at,
-            credits!inner(
-              id,
-              contract_code,
-              loan_amount,
-              customers(name)
-            )
-          `)
-          .eq('credits.store_id', storeId)
-          .eq('transaction_type', 'contract_reopen')
-          .gte('created_at', startDateISO)
-          .lte('created_at', endDateISO);
-
-        const creditReopenData = await fetchAllData(creditReopenQuery);
-
-        for (const item of creditReopenData || []) {
-          // Calculate interest amount as negative of contract close
-          const interestAmount = -(await calculateInterestAmount(item.credit_id, 'Tín chấp', item.created_at));
-
-          allInterestDetails.push({
-            id: `credit-reopen-${item.id}`,
-            contractId: item.credit_id,
-            contractCode: item.credits?.contract_code || '',
-            customerName: item.credits?.customers?.name || '',
-            itemName: 'Tín chấp',
-            loanAmount: item.credits?.loan_amount || 0,
-            transactionDate: new Date(item.created_at).toLocaleString('vi-VN'),
-            transactionDateTime: new Date(item.created_at).toLocaleString('vi-VN'),
-            interestAmount,
-            otherAmount: 0,
-            totalAmount: interestAmount,
-            transactionType: 'Huỷ đóng HĐ',
-            type: 'Tín chấp'
-          });
-        }
-
-        // Fetch debt_payment transactions (Trả nợ)
-        const creditDebtQuery = supabase
-          .from('credit_history')
-          .select(`
-            id,
-            credit_id,
-            transaction_type,
-            debit_amount,
-            created_at,
-            credits!inner(
-              id,
-              contract_code,
-              loan_amount,
-              customers(name)
-            )
-          `)
-          .eq('credits.store_id', storeId)
-          .eq('transaction_type', 'debt_payment')
-          .gte('created_at', startDateISO)
-          .lte('created_at', endDateISO);
-
-        const creditDebtData = await fetchAllData(creditDebtQuery);
-
-        for (const item of creditDebtData || []) {
-          const interestAmount = item.debit_amount || 0;
-
-          allInterestDetails.push({
-            id: `credit-debt-${item.id}`,
-            contractId: item.credit_id,
-            contractCode: item.credits?.contract_code || '',
-            customerName: item.credits?.customers?.name || '',
-            itemName: 'Tín chấp',
-            loanAmount: item.credits?.loan_amount || 0,
-            transactionDate: new Date(item.created_at).toLocaleString('vi-VN'),
-            transactionDateTime: new Date(item.created_at).toLocaleString('vi-VN'),
-            interestAmount,
-            otherAmount: 0,
-            totalAmount: interestAmount,
-            transactionType: 'Trả nợ',
-            type: 'Tín chấp'
-          });
-        }
-      }
-
-      // Fetch installment interest details
-      if (selectedContractType === 'all' || selectedContractType === 'Trả góp') {
-        // Query installment_history with proper joins like in TransactionDetailsTable
-        const installmentHistoryQuery = supabase
-          .from('installment_history')
-          .select(`
-            *,
-            installments!inner (
-              id,
-              contract_code,
-              down_payment,
-              installment_amount,
-              employee_id,
-              employees!inner (store_id),
-              customers (name)
-            )
-          `)
-          .eq('installments.employees.store_id', storeId)
-          .eq('transaction_type', 'payment')
-          .or('is_deleted.is.null,is_deleted.eq.false');
-
-        const installmentHistoryData = await fetchAllData(installmentHistoryQuery);
-
-        if (installmentHistoryData && installmentHistoryData.length > 0) {
-          // Group by contract to calculate interest per contract
-          const contractsMap = new Map<string, {
-            contract: any;
-            payments: Array<{
-              id: string;
-              credit_amount: number;
-              transaction_date: string | null;
-            }>;
-          }>();
-          
-          installmentHistoryData.forEach((item: any) => {
-            const contractId = item.installments?.id;
-            if (!contractId) return;
-            
-            if (!contractsMap.has(contractId)) {
-              contractsMap.set(contractId, {
-                contract: item.installments,
-                payments: []
+              allInterestDetails.push({
+                id: `pawn-debt-${item.id}`,
+                contractId: item.pawn_id,
+                contractCode: item.pawns?.contract_code || '',
+                customerName: item.pawns?.customers?.name || '',
+                itemName,
+                loanAmount: item.pawns?.loan_amount || 0,
+                transactionDate: new Date(item.created_at).toLocaleString('vi-VN'),
+                transactionDateTime: new Date(item.created_at).toLocaleString('vi-VN'),
+                interestAmount,
+                otherAmount: 0,
+                totalAmount: interestAmount,
+                transactionType: 'Trả nợ',
+                type: 'Cầm đồ'
               });
             }
-            
-            contractsMap.get(contractId)!.payments.push({
-              id: item.id,
-              credit_amount: item.credit_amount || 0,
-              transaction_date: item.transaction_date
+
+            // Wait for all parallel interest calculations to complete
+            const [closeResults, reopenResults] = await Promise.all([
+              Promise.all(closePromises),
+              Promise.all(reopenPromises)
+            ]);
+
+            allInterestDetails.push(...closeResults, ...reopenResults);
+          })
+        );
+      }
+
+      // Credit interest details - run all credit queries in parallel
+      if (selectedContractType === 'all' || selectedContractType === 'Tín chấp') {
+        const creditQueries = [
+          // Payment transactions query
+          supabase
+            .from('credit_history')
+            .select(`
+              id,
+              credit_id,
+              transaction_type,
+              credit_amount,
+              debit_amount,
+              created_at,
+              updated_at,
+              is_deleted,
+              credits!inner(
+                id,
+                contract_code,
+                loan_amount,
+                customers(name)
+              )
+            `)
+            .eq('credits.store_id', storeId)
+            .eq('transaction_type', 'payment'),
+
+          // Contract close transactions query
+          supabase
+            .from('credit_history')
+            .select(`
+              id,
+              credit_id,
+              transaction_type,
+              created_at,
+              credits!inner(
+                id,
+                contract_code,
+                loan_amount,
+                customers(name)
+              )
+            `)
+            .eq('credits.store_id', storeId)
+            .eq('transaction_type', 'contract_close')
+            .gte('created_at', startDateISO)
+            .lte('created_at', endDateISO),
+
+          // Contract reopen transactions query
+          supabase
+            .from('credit_history')
+            .select(`
+              id,
+              credit_id,
+              transaction_type,
+              created_at,
+              credits!inner(
+                id,
+                contract_code,
+                loan_amount,
+                customers(name)
+              )
+            `)
+            .eq('credits.store_id', storeId)
+            .eq('transaction_type', 'contract_reopen')
+            .gte('created_at', startDateISO)
+            .lte('created_at', endDateISO),
+
+          // Debt payment transactions query
+          supabase
+            .from('credit_history')
+            .select(`
+              id,
+              credit_id,
+              transaction_type,
+              debit_amount,
+              created_at,
+              credits!inner(
+                id,
+                contract_code,
+                loan_amount,
+                customers(name)
+              )
+            `)
+            .eq('credits.store_id', storeId)
+            .eq('transaction_type', 'debt_payment')
+            .gte('created_at', startDateISO)
+            .lte('created_at', endDateISO)
+        ];
+
+        // Execute all credit queries in parallel
+        queryPromises.push(
+          Promise.all([
+            fetchAllData(creditQueries[0]),
+            fetchAllData(creditQueries[1]),
+            fetchAllData(creditQueries[2]),
+            fetchAllData(creditQueries[3])
+          ]).then(async ([creditPaymentData, creditCloseData, creditReopenData, creditDebtData]) => {
+            // Process payment transactions
+            for (const item of creditPaymentData || []) {
+              const transactionDate = item.is_deleted ? item.updated_at : item.created_at;
+              const interestAmount = item.is_deleted ? -(item.credit_amount || 0) : (item.credit_amount || 0);
+              const transactionType = item.is_deleted ? 'Huỷ đóng lãi' : 'Đóng lãi';
+
+              // Only include if transaction date is within range
+              if (new Date(transactionDate) >= startDateObj && new Date(transactionDate) <= endDateObj) {
+                allInterestDetails.push({
+                  id: `credit-payment-${item.id}`,
+                  contractId: item.credit_id,
+                  contractCode: item.credits?.contract_code || '',
+                  customerName: item.credits?.customers?.name || '',
+                  itemName: 'Tín chấp',
+                  loanAmount: item.credits?.loan_amount || 0,
+                  transactionDate: new Date(transactionDate).toLocaleString('vi-VN'),
+                  transactionDateTime: new Date(transactionDate).toLocaleString('vi-VN'),
+                  interestAmount,
+                  otherAmount: 0,
+                  totalAmount: interestAmount,
+                  transactionType,
+                  type: 'Tín chấp'
+                });
+              }
+            }
+
+            // Process contract close transactions in parallel
+            const closePromises = (creditCloseData || []).map(async (item) => {
+              const interestAmount = await calculateInterestAmount(item.credit_id, 'Tín chấp', item.created_at);
+
+                              return {
+                  id: `credit-close-${item.id}`,
+                  contractId: item.credit_id,
+                  contractCode: item.credits?.contract_code || '',
+                  customerName: item.credits?.customers?.name || '',
+                  itemName: 'Tín chấp',
+                  loanAmount: item.credits?.loan_amount || 0,
+                  transactionDate: new Date(item.created_at).toLocaleString('vi-VN'),
+                  transactionDateTime: new Date(item.created_at).toLocaleString('vi-VN'),
+                  interestAmount,
+                  otherAmount: 0,
+                  totalAmount: interestAmount,
+                  transactionType: 'Đóng HĐ',
+                  type: 'Tín chấp' as const
+                };
             });
-          });
 
-          // Process each contract
-          for (const [contractId, contractData] of contractsMap) {
-            const contract = contractData.contract;
-            const payments = contractData.payments;
-            
-            if (!contract || !payments.length) continue;
+            // Process contract reopen transactions in parallel
+            const reopenPromises = (creditReopenData || []).map(async (item) => {
+              // Calculate interest amount as negative of contract close
+              const interestAmount = -(await calculateInterestAmount(item.credit_id, 'Tín chấp', item.created_at));
 
-            // Calculate total credit amount for this contract
-            const totalCreditAmount = payments.reduce((sum, payment) => sum + payment.credit_amount, 0);
-            const downPayment = contract.down_payment || 0;
+                              return {
+                  id: `credit-reopen-${item.id}`,
+                  contractId: item.credit_id,
+                  contractCode: item.credits?.contract_code || '',
+                  customerName: item.credits?.customers?.name || '',
+                  itemName: 'Tín chấp',
+                  loanAmount: item.credits?.loan_amount || 0,
+                  transactionDate: new Date(item.created_at).toLocaleString('vi-VN'),
+                  transactionDateTime: new Date(item.created_at).toLocaleString('vi-VN'),
+                  interestAmount,
+                  otherAmount: 0,
+                  totalAmount: interestAmount,
+                  transactionType: 'Huỷ đóng HĐ',
+                  type: 'Tín chấp' as const
+                };
+            });
 
-            // Only include if total credit amount > down payment (means there's interest)
-            if (totalCreditAmount > downPayment) {
-              // Group by transaction_date to show only one row per date
-              const transactionDates = [...new Set(payments.map(p => p.transaction_date?.split('T')[0]))].filter(Boolean) as string[];
+            // Process debt payment transactions
+            for (const item of creditDebtData || []) {
+              const interestAmount = item.debit_amount || 0;
+
+              allInterestDetails.push({
+                id: `credit-debt-${item.id}`,
+                contractId: item.credit_id,
+                contractCode: item.credits?.contract_code || '',
+                customerName: item.credits?.customers?.name || '',
+                itemName: 'Tín chấp',
+                loanAmount: item.credits?.loan_amount || 0,
+                transactionDate: new Date(item.created_at).toLocaleString('vi-VN'),
+                transactionDateTime: new Date(item.created_at).toLocaleString('vi-VN'),
+                interestAmount,
+                otherAmount: 0,
+                totalAmount: interestAmount,
+                transactionType: 'Trả nợ',
+                type: 'Tín chấp'
+              });
+            }
+
+            // Wait for all parallel interest calculations to complete
+            const [closeResults, reopenResults] = await Promise.all([
+              Promise.all(closePromises),
+              Promise.all(reopenPromises)
+            ]);
+
+            allInterestDetails.push(...closeResults, ...reopenResults);
+          })
+        );
+      }
+
+      // Installment interest details
+      if (selectedContractType === 'all' || selectedContractType === 'Trả góp') {
+        queryPromises.push(
+          fetchAllData(
+            supabase
+              .from('installment_history')
+              .select(`
+                *,
+                installments!inner (
+                  id,
+                  contract_code,
+                  down_payment,
+                  installment_amount,
+                  employee_id,
+                  employees!inner (store_id),
+                  customers (name)
+                )
+              `)
+              .eq('installments.employees.store_id', storeId)
+              .eq('transaction_type', 'payment')
+              .or('is_deleted.is.null,is_deleted.eq.false')
+          ).then((installmentHistoryData) => {
+            if (installmentHistoryData && installmentHistoryData.length > 0) {
+              // Group by contract to calculate interest per contract
+              const contractsMap = new Map<string, {
+                contract: any;
+                payments: Array<{
+                  id: string;
+                  credit_amount: number;
+                  transaction_date: string | null;
+                }>;
+              }>();
               
-              for (const transactionDateStr of transactionDates) {
-                const dateTransactionTime = new Date(transactionDateStr + 'T00:00:00');
+              installmentHistoryData.forEach((item: any) => {
+                const contractId = item.installments?.id;
+                if (!contractId) return;
                 
-                // Only include transactions within our date range
-                if (dateTransactionTime >= startDateObj && dateTransactionTime <= endDateObj) {
-                  // Calculate cumulative credit amount up to and including this date
-                  const cumulativeCreditAmount = payments
-                    .filter(p => p.transaction_date && new Date(p.transaction_date).toDateString() <= dateTransactionTime.toDateString())
-                    .reduce((sum: number, payment: any) => sum + payment.credit_amount, 0);
+                if (!contractsMap.has(contractId)) {
+                  contractsMap.set(contractId, {
+                    contract: item.installments,
+                    payments: []
+                  });
+                }
+                
+                contractsMap.get(contractId)!.payments.push({
+                  id: item.id,
+                  credit_amount: item.credit_amount || 0,
+                  transaction_date: item.transaction_date
+                });
+              });
+
+              // Process each contract
+              for (const [contractId, contractData] of contractsMap) {
+                const contract = contractData.contract;
+                const payments = contractData.payments;
+                
+                if (!contract || !payments.length) continue;
+
+                // Calculate total credit amount for this contract
+                const totalCreditAmount = payments.reduce((sum, payment) => sum + payment.credit_amount, 0);
+                const downPayment = contract.down_payment || 0;
+
+                // Only include if total credit amount > down payment (means there's interest)
+                if (totalCreditAmount > downPayment) {
+                  // Group by transaction_date to show only one row per date
+                  const transactionDates = [...new Set(payments.map(p => p.transaction_date?.split('T')[0]))].filter(Boolean) as string[];
                   
-                  // Only show interest if cumulative amount > down payment
-                  if (cumulativeCreditAmount > downPayment) {
-                    // For each date, show the total interest amount earned so far
-                    const totalInterestAmount = cumulativeCreditAmount - downPayment;
+                  for (const transactionDateStr of transactionDates) {
+                    const dateTransactionTime = new Date(transactionDateStr + 'T00:00:00');
                     
-                    // Get the actual transaction time from payments on this date
-                    const datePayments = payments.filter((p: any) => 
-                      p.transaction_date && new Date(p.transaction_date).toDateString() === dateTransactionTime.toDateString()
-                    );
-                    const actualTransactionTime = datePayments.length > 0 && datePayments[0].transaction_date ? 
-                      new Date(datePayments[0].transaction_date) : dateTransactionTime;
-                    
-                    allInterestDetails.push({
-                      id: `installment-interest-${contractId}-${transactionDateStr}`,
-                      contractId: contractId,
-                      contractCode: contract.contract_code || '',
-                      customerName: contract.customers?.name || '',
-                      itemName: 'Trả góp',
-                      loanAmount: contract.installment_amount || 0,
-                      transactionDate: actualTransactionTime.toLocaleString('vi-VN'),
-                      transactionDateTime: actualTransactionTime.toLocaleString('vi-VN'),
-                      interestAmount: totalInterestAmount,
-                      otherAmount: 0,
-                      totalAmount: totalInterestAmount,
-                      transactionType: 'Lãi họ',
-                      type: 'Trả góp'
-                    });
+                    // Only include transactions within our date range
+                    if (dateTransactionTime >= startDateObj && dateTransactionTime <= endDateObj) {
+                      // Calculate cumulative credit amount up to and including this date
+                      const cumulativeCreditAmount = payments
+                        .filter(p => p.transaction_date && new Date(p.transaction_date).toDateString() <= dateTransactionTime.toDateString())
+                        .reduce((sum: number, payment: any) => sum + payment.credit_amount, 0);
+                        
+                      // Only show interest if cumulative amount > down payment
+                      if (cumulativeCreditAmount > downPayment) {
+                        // For each date, show the total interest amount earned so far
+                        const totalInterestAmount = cumulativeCreditAmount - downPayment;
+                        
+                        // Get the actual transaction time from payments on this date
+                        const datePayments = payments.filter((p: any) => 
+                          p.transaction_date && new Date(p.transaction_date).toDateString() === dateTransactionTime.toDateString()
+                        );
+                        const actualTransactionTime = datePayments.length > 0 && datePayments[0].transaction_date ? 
+                          new Date(datePayments[0].transaction_date) : dateTransactionTime;
+                        
+                        allInterestDetails.push({
+                          id: `installment-interest-${contractId}-${transactionDateStr}`,
+                          contractId: contractId,
+                          contractCode: contract.contract_code || '',
+                          customerName: contract.customers?.name || '',
+                          itemName: 'Trả góp',
+                          loanAmount: contract.installment_amount || 0,
+                          transactionDate: actualTransactionTime.toLocaleString('vi-VN'),
+                          transactionDateTime: actualTransactionTime.toLocaleString('vi-VN'),
+                          interestAmount: totalInterestAmount,
+                          otherAmount: 0,
+                          totalAmount: totalInterestAmount,
+                          transactionType: 'Lãi họ',
+                          type: 'Trả góp'
+                        });
+                      }
+                    }
                   }
                 }
               }
             }
-          }
-        }
+          })
+        );
       }
+
+      // Wait for all queries to complete in parallel
+      await Promise.all(queryPromises);
 
       // Sort by transaction date (newest first)
       allInterestDetails.sort((a, b) => new Date(b.transactionDateTime).getTime() - new Date(a.transactionDateTime).getTime());
@@ -672,11 +749,6 @@ export default function InterestDetailPage() {
       setIsLoading(false);
     }
   };
-
-  // Load data when component mounts or filters change
-  useEffect(() => {
-    fetchInterestDetails();
-  }, [currentStore, startDate, endDate, selectedContractType]);
 
   const handleStartDateChange = (value: string) => {
     setStartDate(value);
