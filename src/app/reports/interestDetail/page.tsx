@@ -575,7 +575,7 @@ export default function InterestDetailPage() {
             payments: Array<{
               id: string;
               credit_amount: number;
-              created_at: string | null;
+              transaction_date: string | null;
             }>;
           }>();
           
@@ -593,7 +593,7 @@ export default function InterestDetailPage() {
             contractsMap.get(contractId)!.payments.push({
               id: item.id,
               credit_amount: item.credit_amount || 0,
-              created_at: item.created_at
+              transaction_date: item.transaction_date
             });
           });
 
@@ -610,8 +610,8 @@ export default function InterestDetailPage() {
 
             // Only include if total credit amount > down payment (means there's interest)
             if (totalCreditAmount > downPayment) {
-              // Group by created_at date to show only one row per date
-              const transactionDates = [...new Set(payments.map(p => p.created_at?.split('T')[0]))].filter(Boolean) as string[];
+              // Group by transaction_date to show only one row per date
+              const transactionDates = [...new Set(payments.map(p => p.transaction_date?.split('T')[0]))].filter(Boolean) as string[];
               
               for (const transactionDateStr of transactionDates) {
                 const dateTransactionTime = new Date(transactionDateStr + 'T00:00:00');
@@ -620,7 +620,7 @@ export default function InterestDetailPage() {
                 if (dateTransactionTime >= startDateObj && dateTransactionTime <= endDateObj) {
                   // Calculate cumulative credit amount up to and including this date
                   const cumulativeCreditAmount = payments
-                    .filter(p => p.created_at && new Date(p.created_at).toDateString() <= dateTransactionTime.toDateString())
+                    .filter(p => p.transaction_date && new Date(p.transaction_date).toDateString() <= dateTransactionTime.toDateString())
                     .reduce((sum: number, payment: any) => sum + payment.credit_amount, 0);
                   
                   // Only show interest if cumulative amount > down payment
@@ -630,10 +630,10 @@ export default function InterestDetailPage() {
                     
                     // Get the actual transaction time from payments on this date
                     const datePayments = payments.filter((p: any) => 
-                      p.created_at && new Date(p.created_at).toDateString() === dateTransactionTime.toDateString()
+                      p.transaction_date && new Date(p.transaction_date).toDateString() === dateTransactionTime.toDateString()
                     );
-                    const actualTransactionTime = datePayments.length > 0 && datePayments[0].created_at ? 
-                      new Date(datePayments[0].created_at) : dateTransactionTime;
+                    const actualTransactionTime = datePayments.length > 0 && datePayments[0].transaction_date ? 
+                      new Date(datePayments[0].transaction_date) : dateTransactionTime;
                     
                     allInterestDetails.push({
                       id: `installment-interest-${contractId}-${transactionDateStr}`,
