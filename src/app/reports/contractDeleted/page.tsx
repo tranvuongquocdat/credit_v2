@@ -217,7 +217,7 @@ export default function ContractDeletedPage() {
             contract_code,
             loan_date,
             updated_at,
-            down_payment,
+            installment_amount,
             customers (name)
           `)
           .eq('status', 'deleted');
@@ -254,7 +254,7 @@ export default function ContractDeletedPage() {
                 loanDate: item.loan_date || '',
                 deletedDate: new Date(item.updated_at).toLocaleDateString('vi-VN'),
                 deletedDateTime: new Date(item.updated_at).toLocaleString('vi-VN'),
-                loanAmount: item.down_payment || 0,
+                loanAmount: item.installment_amount || 0,
                 type: 'Trả góp'
               });
             });
