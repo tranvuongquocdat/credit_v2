@@ -34,6 +34,9 @@ import {
 } from "@/components/ui/select";
 import Link from 'next/link';
 
+// Import Excel Export component
+import ExcelExport from './components/ExcelExport';
+
 // Interface for interest detail data
 interface InterestDetailItem {
   id: string;
@@ -707,9 +710,19 @@ export default function InterestDetailPage() {
         {/* Header */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl font-semibold text-blue-600">
-              Báo cáo thu tiền lãi phí
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xl font-semibold text-blue-600">
+                Báo cáo thu tiền lãi phí
+              </CardTitle>
+              <ExcelExport 
+                data={interestDetails}
+                storeId={currentStore?.id}
+                startDate={startDate}
+                endDate={endDate}
+                storeName={currentStore?.name || 'Unknown'}
+                selectedContractType={selectedContractType}
+              />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
