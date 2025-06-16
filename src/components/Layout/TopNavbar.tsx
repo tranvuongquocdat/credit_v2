@@ -224,7 +224,8 @@ export function TopNavbar() {
       
       fetchNotificationsForStore();
     }
-  }, [currentStore, storeVersion, hasPermission]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStore, storeVersion]); // Removed hasPermission from dependencies
   
   // Helper function to render notification badge
   const renderNotificationBadge = (count: number) => {

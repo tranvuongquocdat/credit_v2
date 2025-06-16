@@ -254,6 +254,35 @@ export default function Sidebar() {
             : null;
         }
         
+        // Check permission for Customers menu
+        if (item.path === '/customers') {
+          return hasPermission('xem_danh_sach_khach_hang') ? item : null;
+        }
+        
+        // Check permission for Capital menu
+        if (item.path === '/capital') {
+          return hasPermission('quan_ly_nguon_von') ? item : null;
+        }
+        
+        // Check permissions for Income/Outgoing menu
+        if (item.path === '/income' && item.submenu) {
+          const filteredSubmenu = item.submenu.filter(subItem => {
+            // Check permission for each submenu item
+            if (subItem.path === '/income') {
+              return hasPermission('hoat_dong_thu');
+            }
+            if (subItem.path === '/outgoing') {
+              return hasPermission('hoat_dong_chi');
+            }
+            return true; // Keep other submenu items
+          });
+          
+          // Only return the item if it has submenu items
+          return filteredSubmenu.length > 0 
+            ? { ...item, submenu: filteredSubmenu } 
+            : null;
+        }
+        
         return item;
       })
       .filter(Boolean) as SidebarItem[]; // Filter out null items

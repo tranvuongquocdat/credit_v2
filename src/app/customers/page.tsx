@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Layout } from '@/components/Layout';
 import { useStore } from '@/contexts/StoreContext';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RefreshCw } from 'lucide-react';
 
 // Import custom components
 import {
@@ -36,6 +38,10 @@ const debugLog = (message: string, data?: any) => {
 export default function CustomersPage() {
   const router = useRouter();
   const { currentStore, loading: storeLoading } = useStore();
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  
+  // Kiểm tra quyền truy cập
+  const canAccessCustomers = hasPermission('xem_danh_sach_khach_hang');
   
   debugLog('Rendering with currentStore:', currentStore?.name);
   debugLog('Store loading state:', storeLoading);
@@ -66,6 +72,13 @@ export default function CustomersPage() {
   
   // Pagination
   const totalPages = Math.ceil(totalCustomers / pageSize);
+
+  // Redirect nếu không có quyền
+  useEffect(() => {
+    if (!permissionsLoading && !canAccessCustomers) {
+      router.push('/');
+    }
+  }, [permissionsLoading, canAccessCustomers, router]);
   
   // Effect to update filters when store changes
   useEffect(() => {
@@ -97,9 +110,9 @@ export default function CustomersPage() {
   
   // Memoized loadCustomers function to prevent recreating on every render
   const loadCustomers = useCallback(async () => {
-    // Không tải dữ liệu nếu store context đang tải
-    if (storeLoading) {
-      debugLog('Skipping customer loading because store context is still initializing');
+    // Không tải dữ liệu nếu store context đang tải hoặc không có quyền
+    if (storeLoading || !canAccessCustomers) {
+      debugLog('Skipping customer loading because store context is still initializing or no permission');
       return;
     }
     
@@ -147,7 +160,7 @@ export default function CustomersPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, pageSize, searchFilters, currentStore, storeLoading]);
+  }, [currentPage, pageSize, searchFilters, currentStore, storeLoading, canAccessCustomers]);
   
   // Effect to load customers when filters change
   useEffect(() => {
@@ -226,6 +239,31 @@ export default function CustomersPage() {
   const handleViewCredits = (customerId: string) => {
     router.push(`/credits?customer_id=${customerId}`);
   };
+  
+  // Loading state cho permission
+  if (permissionsLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center p-4">
+          <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+          <span>Đang kiểm tra quyền truy cập...</span>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Access denied state
+  if (!canAccessCustomers) {
+    return (
+      <Layout>
+        <div className="p-4 border rounded-md mb-4 bg-gray-50">
+          <p className="text-center text-gray-500">
+            Bạn không có quyền truy cập chức năng này
+          </p>
+        </div>
+      </Layout>
+    );
+  }
   
   // Hiển thị trạng thái loading khi store chưa khởi tạo xong
   if (storeLoading) {

@@ -11,6 +11,8 @@ import { format } from 'date-fns';
 import { FinancialSummary } from '@/components/common/FinancialSummary';
 import { useAutoUpdateCashFund } from '@/hooks/useCashFundUpdater';
 import { getCurrentUser } from '@/lib/auth';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useRouter } from 'next/navigation';
 
 // Shadcn UI components
 import { Button } from "@/components/ui/button";
@@ -74,6 +76,11 @@ import { Badge } from "@/components/ui/badge";
 export default function CapitalPage() {
   // Get current store from context
   const { currentStore } = useStore();
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  const router = useRouter();
+  
+  // Kiểm tra quyền truy cập
+  const canAccessCapital = hasPermission('quan_ly_nguon_von');
   
   // Current user state
   const [currentUser, setCurrentUser] = useState<{ id: string, username: string | null } | null>(null);
@@ -114,6 +121,13 @@ export default function CapitalPage() {
   const [selectedRecord, setSelectedRecord] = useState<StoreFundHistory | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Redirect nếu không có quyền
+  useEffect(() => {
+    if (!permissionsLoading && !canAccessCapital) {
+      router.push('/');
+    }
+  }, [permissionsLoading, canAccessCapital, router]);
+
   // Format currency
   const formatCurrency = (value: number | undefined | null) => {
     if (value === undefined || value === null) return '0 ₫';
@@ -132,7 +146,7 @@ export default function CapitalPage() {
 
   // Load store fund history
   const fetchFundHistory = async () => {
-    if (!currentStore?.id) return;
+    if (!currentStore?.id || !canAccessCapital) return;
     
     setIsLoading(true);
     setError(null);
@@ -182,10 +196,10 @@ export default function CapitalPage() {
 
   // Effect to load fund history when component mounts and when filters change
   useEffect(() => {
-    if (currentStore?.id) {
+    if (currentStore?.id && canAccessCapital) {
       fetchFundHistory();
     }
-  }, [currentStore?.id, currentPage, pageSize, dateFrom, dateTo, transactionTypeFilter]);
+  }, [currentStore?.id, currentPage, pageSize, dateFrom, dateTo, transactionTypeFilter, canAccessCapital]);
 
   // Handle search
   const handleSearch = () => {
@@ -408,6 +422,31 @@ export default function CapitalPage() {
       </div>
     );
   };
+
+  // Loading state cho permission
+  if (permissionsLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center p-4">
+          <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+          <span>Đang kiểm tra quyền truy cập...</span>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Access denied state
+  if (!canAccessCapital) {
+    return (
+      <Layout>
+        <div className="p-4 border rounded-md mb-4 bg-gray-50">
+          <p className="text-center text-gray-500">
+            Bạn không có quyền truy cập chức năng này
+          </p>
+        </div>
+      </Layout>
+    );
+  }
   
   return (
     <Layout>

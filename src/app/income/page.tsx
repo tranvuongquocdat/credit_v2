@@ -9,6 +9,8 @@ import { Plus, Pencil, Trash2, RefreshCw, MoreVertical, FilterIcon, CalendarIcon
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/auth';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useRouter } from 'next/navigation';
 
 // Shadcn UI components
 import { Button } from "@/components/ui/button";
@@ -169,6 +171,13 @@ export default function IncomePage() {
   // Get current store from context
   const { currentStore } = useStore();
   
+  // Use permissions hook
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  const router = useRouter();
+  
+  // Check access permission
+  const canAccessIncome = hasPermission('hoat_dong_thu');
+  
   // Use auto update cash fund hook
   const { triggerUpdate } = useAutoUpdateCashFund();
   
@@ -225,6 +234,13 @@ export default function IncomePage() {
   const [newCustomerAddress, setNewCustomerAddress] = useState('');
   const [newCustomerIdNumber, setNewCustomerIdNumber] = useState('');
 
+  // Redirect if no permission
+  useEffect(() => {
+    if (!permissionsLoading && !canAccessIncome) {
+      router.push('/');
+    }
+  }, [permissionsLoading, canAccessIncome, router]);
+
   // Load current user
   useEffect(() => {
     const loadCurrentUser = async () => {
@@ -270,7 +286,7 @@ export default function IncomePage() {
 
   // Load transactions with customer names and employee names
   const fetchTransactions = async () => {
-    if (!currentStore?.id) return;
+    if (!currentStore?.id || !canAccessIncome) return;
 
     setIsLoading(true);
     setError(null);
@@ -391,10 +407,10 @@ export default function IncomePage() {
 
   // Effect to load transactions when component mounts and when filters change
   useEffect(() => {
-    if (currentStore?.id) {
+    if (currentStore?.id && canAccessIncome) {
       fetchTransactions();
     }
-  }, [currentStore?.id, currentPage, pageSize, dateFrom, dateTo, transactionTypeFilter]);
+  }, [currentStore?.id, currentPage, pageSize, dateFrom, dateTo, transactionTypeFilter, canAccessIncome]);
 
   // Handle search
   const handleSearch = () => {
@@ -742,6 +758,31 @@ export default function IncomePage() {
     setNewCustomerIdNumber('');
   };
 
+  // Loading state for permissions
+  if (permissionsLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center p-4">
+          <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+          <span>Đang kiểm tra quyền truy cập...</span>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Access denied state
+  if (!canAccessIncome) {
+    return (
+      <Layout>
+        <div className="p-4 border rounded-md mb-4 bg-gray-50">
+          <p className="text-center text-gray-500">
+            Bạn không có quyền truy cập chức năng này
+          </p>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="container mx-auto px-4 py-6">
@@ -927,6 +968,7 @@ export default function IncomePage() {
                           >
                             <Pencil className="h-4 w-4 text-gray-500" />
                           </Button>
+                          {hasPermission('xoa_hoat_dong_thu_chi') && (
                           <Button 
                             variant="ghost" 
                             className="h-8 w-8 p-0" 
@@ -934,6 +976,7 @@ export default function IncomePage() {
                           >
                             <Trash2 className="h-4 w-4 text-gray-500" />
                           </Button>
+                          )}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" className="h-8 w-8 p-0">
@@ -951,10 +994,12 @@ export default function IncomePage() {
                                 In phiếu
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
+                              {hasPermission('xoa_hoat_dong_thu_chi') && (
                               <DropdownMenuItem onClick={() => openDeleteModal(record)} className="text-red-600">
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Xóa giao dịch
                               </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>

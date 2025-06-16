@@ -233,8 +233,8 @@ export const DEFAULT_PERMISSIONS = [
     module: 'quan_ly_nguon_von',
     children: [
       { 
-        id: 'quan_ly_khau_von', 
-        name: 'Quản lý khẩu vốn' 
+        id: 'quan_ly_nguon_von', 
+        name: 'Quản lý nguồn vốn' 
       }
     ]
   },
@@ -264,6 +264,10 @@ export const DEFAULT_PERMISSIONS = [
       { 
         id: 'hoat_dong_chi', 
         name: 'Hoạt động chi' 
+      },
+      {
+        id: 'xoa_hoat_dong_thu_chi',
+        name: 'Xóa hoạt động thu chi'
       }
     ]
   },
