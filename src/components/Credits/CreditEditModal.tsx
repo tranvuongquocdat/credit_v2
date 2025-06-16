@@ -21,7 +21,8 @@ import { UpdateCreditParams, InterestType, CreditStatus, Credit } from '@/models
 import { toast } from '@/components/ui/use-toast';
 import { AlertCircle } from 'lucide-react';
 import { MoneyInput } from '@/components/ui/money-input';
-
+import { usePermissions } from '@/hooks/usePermissions';
+import { DatePicker } from '../ui/date-picker';
 interface CreditEditModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -37,7 +38,7 @@ export function CreditEditModal({
 }: CreditEditModalProps) {
   // Get current store from context
   const { currentStore } = useStore();
-  
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
   // State for form values
   const [customerName, setCustomerName] = useState('');
   const [contractCode, setContractCode] = useState('');
@@ -775,13 +776,12 @@ export function CreditEditModal({
               <Label htmlFor="loanDate" className="text-right">
                 Ngày vay <span className="text-red-500">*</span>
               </Label>
-              <Input 
+              <DatePicker 
                 id="loanDate"
-                type="date"
                 value={loanDate}
-                onChange={(e) => setLoanDate(e.target.value)}
+                onChange={(date) => setLoanDate(date)}
                 required
-                disabled={hasPayments}
+                disabled={hasPayments || !hasPermission('sua_ngay_vay_tin_chap')}
               />
             </div>
             

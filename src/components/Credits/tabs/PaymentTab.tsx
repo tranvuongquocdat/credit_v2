@@ -16,7 +16,7 @@ import {
 } from '@/lib/Credits/save_custom_payment';
 import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_date';
 import { getCurrentUser } from '@/lib/auth';
-
+import { usePermissions } from '@/hooks/usePermissions';
 type PaymentTabProps = {
   credit: CreditWithCustomer | null;
   loading?: boolean;
@@ -56,7 +56,7 @@ export function PaymentTab({
   // Add loading state for checkbox operations
   const [loadingPeriods, setLoadingPeriods] = useState<Record<string, boolean>>({});
   const [isProcessingCheckbox, setIsProcessingCheckbox] = useState(false);
-  
+  const { hasPermission } = usePermissions();
   // State for generated periods from getExpectedMoney
   const [generatedPeriods, setGeneratedPeriods] = useState<CreditPaymentPeriod[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -211,7 +211,24 @@ export function PaymentTab({
   // Updated checkbox handler - simplified version using getLatestPaymentPaidDate
   const handleCheckboxChange = async (period: CreditPaymentPeriod, checked: boolean) => {
     if (!credit?.id || isProcessingCheckbox) return;
+    // Kiểm tra quyền
+    if (checked && !hasPermission('dong_lai_tin_chap')) {
+      toast({
+        variant: "destructive",
+        title: "Không có quyền",
+        description: "Bạn không có quyền đóng lãi"
+      });
+      return;
+    }
     
+    if (!checked && !hasPermission('huy_dong_lai_tin_chap')) {
+      toast({
+        variant: "destructive",
+        title: "Không có quyền",
+        description: "Bạn không có quyền hủy đóng lãi"
+      });
+      return;
+    }
     // Set global loading state
     setIsProcessingCheckbox(true);
     

@@ -30,6 +30,7 @@ import { useToast } from '../ui/use-toast';
 import { CreditFinancialDetail } from '@/hooks/useCreditCalculation';
 import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_date';
 import { calculateMultipleCreditStatus, CreditStatusResult } from '@/lib/Credits/calculate_credit_status';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface StatusMapType {
   [key: string]: { 
@@ -105,6 +106,15 @@ export function CreditsTable({
 
   // Toast hook
   const { toast } = useToast();
+  
+  // Sử dụng hook kiểm tra quyền
+  const { hasPermission } = usePermissions();
+  
+  // Kiểm tra quyền sửa hợp đồng tín chấp
+  const canEditCredit = hasPermission('sua_hop_dong_tin_chap');
+  
+  // Kiểm tra quyền xóa hợp đồng tín chấp
+  const canDeleteCredit = hasPermission('xoa_hop_dong_tin_chap');
   
   // Format tiền tệ
   const formatCurrency = (amount: number): string => {
@@ -386,6 +396,13 @@ export function CreditsTable({
     }
   }, [credits, calculateCreditPayment, calculateNextPaymentDate, calculateInterestToday, checkHasPaidPaymentPeriods, calculateActualLoanAmountInfo]);
 
+  // Hàm xử lý khi click vào mã hợp đồng
+  const handleContractCodeClick = (creditId: string) => {
+    if (canEditCredit) {
+      onEdit(creditId);
+    }
+  };
+
   return (
     <div className="rounded-md border overflow-hidden mb-4">
       <Table className="border-collapse">
@@ -418,7 +435,8 @@ export function CreditsTable({
                 <TableCell className="py-3 px-3 text-gray-500 text-center border-b border-r border-gray-200">{index + 1}</TableCell>
                 <TableCell 
                   className="py-3 px-3 font-medium text-blue-600 cursor-pointer text-center border-b border-r border-gray-200" 
-                  onClick={() => onEdit(credit.id)}
+                  onClick={() => handleContractCodeClick(credit.id)}
+                  title={canEditCredit ? 'Nhấn để chỉnh sửa hợp đồng' : 'Bạn không có quyền chỉnh sửa hợp đồng'}
                 >
                   {credit.contract_code || '-'}
                 </TableCell>
@@ -620,7 +638,7 @@ export function CreditsTable({
                 <TableCell className="py-3 px-3 border-b border-gray-200">
                   <div className="flex justify-center space-x-1">
                     {onShowPaymentHistory && (
-                      credit.status === 'closed' ? (
+                      credit.status === 'closed' && hasPermission('huy_dong_hop_dong_tin_chap') ? (
                         <>
                           <Button 
                             variant="ghost" 
@@ -692,7 +710,7 @@ export function CreditsTable({
                             </DropdownMenuItem>
                           )}
                           {/* Hiển thị "Xóa hợp đồng" cho hợp đồng chưa có kỳ thanh toán đã được thanh toán */}
-                          {credit.status !== 'closed' && (
+                          {credit.status !== 'closed' && hasPermission('xoa_hop_dong_tin_chap') && (
                             <DropdownMenuItem onClick={() => onDelete(credit)} className="text-red-600">
                               Xóa hợp đồng
                             </DropdownMenuItem>

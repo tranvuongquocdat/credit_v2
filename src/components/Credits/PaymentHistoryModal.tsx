@@ -20,7 +20,7 @@ import { getCreditPaymentHistory } from '@/lib/Credits/payment_history';
 import { calculateActualLoanAmount } from '@/lib/Credits/calculate_actual_loan_amount';
 import { Badge } from '@/components/ui/badge';
 import { calculateCreditStatus, CreditStatusResult } from '@/lib/Credits/calculate_credit_status';
-
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface PaymentHistoryModalProps {
   isOpen: boolean;
@@ -33,6 +33,7 @@ export function PaymentHistoryModal({
   onClose,
   credit: initialCredit
 }: PaymentHistoryModalProps) {
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
   // Properly declare the variables to fix TypeScript errors
   const [credit, setCredit] = useState<CreditWithCustomer>(initialCredit);
   const creditId = credit?.id || '';
@@ -181,6 +182,23 @@ export function PaymentHistoryModal({
     
     loadCreditHistory();
   }, [credit?.id, activeTab, refreshRepayments, refreshAdditionalLoans]);
+
+  // Reset active tab if user doesn't have permission for the current tab
+  useEffect(() => {
+    const checkPermissionForActiveTab = () => {
+      if (activeTab === 'additional-loan' && !hasPermission('vay_them_goc_tin_chap')) {
+        setActiveTab('payment');
+      } else if (activeTab === 'principal-repayment' && !hasPermission('tra_bot_goc_tin_chap')) {
+        setActiveTab('payment');
+      } else if (activeTab === 'extension' && !hasPermission('gia_han_tin_chap')) {
+        setActiveTab('payment');
+      } else if (activeTab === 'close' && !hasPermission('dong_hop_dong_tin_chap')) {
+        setActiveTab('payment');
+      }
+    };
+    
+    checkPermissionForActiveTab();
+  }, [activeTab, hasPermission]);
 
   // Helper function to get transaction type display text
   const getTransactionTypeDisplay = (type: CreditTransactionType | string): string => {
@@ -424,7 +442,25 @@ export function PaymentHistoryModal({
           
           {/* Tabs */}
           <CreditActionTabs 
-            tabs={DEFAULT_CREDIT_TABS} 
+            tabs={DEFAULT_CREDIT_TABS.filter(tab => {
+              // Hide AdditionalLoanTab if user doesn't have vay_them_goc_tin_chap permission
+              if (tab.id === 'additional-loan' && !hasPermission('vay_them_goc_tin_chap')) {
+                return false;
+              }
+              // Hide ExtensionTab if user doesn't have gia_han_tin_chap permission
+              if (tab.id === 'extension' && !hasPermission('gia_han_tin_chap')) {
+                return false;
+              }
+              // Hide CloseTab if user doesn't have dong_hop_dong_tin_chap permission
+              if (tab.id === 'close' && !hasPermission('dong_hop_dong_tin_chap')) {
+                return false;
+              }
+              // Hide PrincipalRepaymentTab if user doesn't have tra_bo_goc_tin_chap permission
+              if (tab.id === 'principal-repayment' && !hasPermission('tra_bot_goc_tin_chap')) {
+                return false;
+              }
+              return true;
+            })} 
             activeTab={activeTab} 
             onChangeTab={(tabId: TabId) => setActiveTab(tabId)} 
             variant="scrollable"
@@ -448,7 +484,7 @@ export function PaymentHistoryModal({
             />
           )}
           
-          {activeTab === 'principal-repayment' && (
+          {activeTab === 'principal-repayment' && hasPermission('tra_bot_goc_tin_chap') && (
             <PrincipalRepaymentTab
               credit={credit}
               refreshRepayments={refreshRepayments}
@@ -462,7 +498,7 @@ export function PaymentHistoryModal({
             />
           )}
           
-          {activeTab === 'additional-loan' && (
+          {activeTab === 'additional-loan' && hasPermission('vay_them_goc_tin_chap') && (
             <AdditionalLoanTab 
               credit={credit}
               key={refreshAdditionalLoans}
@@ -474,7 +510,7 @@ export function PaymentHistoryModal({
             />
           )}
           
-          {activeTab === 'extension' && (
+          {activeTab === 'extension' && hasPermission('gia_han_tin_chap') && (
             <ExtensionTab 
               credit={credit} 
               onDataChange={() => {
@@ -484,7 +520,7 @@ export function PaymentHistoryModal({
             />
           )}
           
-          {activeTab === 'close' && (
+          {activeTab === 'close' && hasPermission('dong_hop_dong_tin_chap') && (
             <CloseTab credit={credit} onClose={() => onClose(dataChangeCounter > 0)} />
           )}
           

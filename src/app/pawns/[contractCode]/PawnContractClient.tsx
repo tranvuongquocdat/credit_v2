@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from '@/components/ui/use-toast';
 import { calculatePawnStatus } from '@/lib/Pawns/calculate_pawn_status';
+import { usePermissions } from '@/hooks/usePermissions';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -42,7 +43,9 @@ interface PawnContractClientProps {
 
 export function PawnContractClient({ contractCode }: PawnContractClientProps) {
   const router = useRouter();
-  
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  // Kiểm tra quyền xem danh sách hợp đồng cầm đồ
+  const canViewPawnsList = hasPermission('xem_danh_sach_hop_dong_cam_do');
   // Memoize initialFilters to prevent re-creation on every render
   const initialFilters = useMemo(() => ({
     contractCode: contractCode || '',
@@ -198,12 +201,24 @@ export function PawnContractClient({ contractCode }: PawnContractClientProps) {
         </div>
         
         {/* Thông tin tài chính */}
+        {permissionsLoading ? (
+          <div className="p-4 border rounded-md mb-4 bg-gray-50">
+            <p className="text-center text-gray-500">Đang tải...</p>
+          </div>
+        ) : hasPermission('xem_thong_tin_cam_do') ? (
         <FinancialSummary 
           fundStatus={financialSummary || undefined}
           onRefresh={refreshFinancial}
           autoFetch={false}
         />
-        
+        ) : null}
+
+        {permissionsLoading ? (
+          <div className="p-4 border rounded-md mb-4 bg-gray-50">
+            <p className="text-center text-gray-500">Đang tải...</p>
+          </div>
+        ) : canViewPawnsList ? (
+          <>
         {/* Bộ lọc và tìm kiếm */}
         <SearchFilters
           statusMap={statusMap}
@@ -241,7 +256,13 @@ export function PawnContractClient({ contractCode }: PawnContractClientProps) {
           itemsPerPage={itemsPerPage}
           onPageChange={handlePageChange}
         />
-        
+        </>
+        ) : (
+          <div className="p-8 border rounded-md mb-4 bg-gray-50 text-center">
+            <p className="text-gray-500">Bạn không có quyền xem danh sách hợp đồng cầm đồ.</p>
+          </div>
+        )}
+
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <AlertDialogContent>

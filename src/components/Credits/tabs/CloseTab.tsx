@@ -17,7 +17,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { DatePicker } from '@/components/ui/date-picker';
 import { format, addDays, isAfter, isBefore } from "date-fns";
 import { vi } from 'date-fns/locale';
-
+import { usePermissions } from '@/hooks/usePermissions';
 interface CloseTabProps {
   credit: CreditWithCustomer;
   onClose: () => void;
@@ -38,7 +38,7 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
     if (!credit?.loan_date) return today;
     return credit.loan_date;
   }, [credit?.loan_date, today]);
-  
+  const { hasPermission } = usePermissions();
   // Tính toán ngày kết thúc hợp đồng
   const endDate = useMemo(() => {
     if (!credit?.loan_date || !credit?.loan_period) return today;
@@ -307,6 +307,7 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
             className="w-full"
             maxDate={endDate}
             minDate={startDate}
+            disabled={isClosed || !hasPermission('sua_ngay_dong_hop_dong_tin_chap')}
           />
         </div>
 

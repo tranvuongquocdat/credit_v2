@@ -27,6 +27,7 @@ import { CreditStatus, CreditWithCustomer } from '@/models/credit';
 import { useCreditCalculations } from '@/hooks/useCreditCalculation';
 import { useAutoUpdateCashFund } from '@/hooks/useCashFundUpdater';
 
+import { usePermissions } from '@/hooks/usePermissions';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -74,7 +75,10 @@ export default function CreditsPage() {
     handleUpdateStatus: updateCreditStatus,
     refetch
   } = useCredits(initialFilters);
-  
+  // Sử dụng hook kiểm tra quyền
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  // Kiểm tra quyền xem danh sách hợp đồng tín chấp
+  const canViewCreditsList = hasPermission('xem_danh_sach_hop_dong_tin_chap');
   // Track if initial filters have been processed
   const [hasProcessedInitialFilters, setHasProcessedInitialFilters] = useState(false);
   
@@ -270,14 +274,26 @@ export default function CreditsPage() {
         </div>
         
         {/* Thông tin tài chính */}
-        <FinancialSummary 
-          fundStatus={financialSummary || undefined}
-          onRefresh={refreshFinancial}
-          autoFetch={false}
-          enableCashFundUpdate={true}
+        {permissionsLoading ? (
+          <div className="p-4 border rounded-md mb-4 bg-gray-50">
+            <p className="text-center text-gray-500">Đang tải...</p>
+          </div>
+        ) : hasPermission('xem_thong_tin_tin_chap') ? (
+          <FinancialSummary 
+            fundStatus={financialSummary || undefined}
+            onRefresh={refreshFinancial}
+            autoFetch={false}
+            enableCashFundUpdate={true}
         />
+        ) : null}
         
         {/* Bộ lọc và tìm kiếm */}
+        {permissionsLoading ? (
+          <div className="p-4 border rounded-md mb-4 bg-gray-50">
+            <p className="text-center text-gray-500">Đang tải...</p>
+          </div>
+        ) : canViewCreditsList ? (
+        <>
         <SearchFilters
           statusMap={statusMap}
           onSearch={handleSearchFilters}
@@ -308,7 +324,12 @@ export default function CreditsPage() {
           itemsPerPage={itemsPerPage}
           onPageChange={handlePageChange}
         />
-        
+        </>
+        ) : (
+          <div className="p-8 border rounded-md mb-4 bg-gray-50 text-center">
+            <p className="text-gray-500">Bạn không có quyền xem danh sách hợp đồng tín chấp.</p>
+          </div>
+        )}
         
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

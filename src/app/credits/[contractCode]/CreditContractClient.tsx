@@ -24,6 +24,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle 
 } from '@/components/ui/alert-dialog';
 import { toast } from '@/components/ui/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -41,7 +42,9 @@ interface CreditContractClientProps {
 
 export function CreditContractClient({ contractCode }: CreditContractClientProps) {
   const router = useRouter();
-  
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  // Kiểm tra quyền xem danh sách hợp đồng tín chấp
+  const canViewCreditsList = hasPermission('xem_danh_sach_hop_dong_tin_chap');
   // Initialize with filter by contract code
   const initialFilters = {
     contract_code: contractCode || '',
@@ -229,12 +232,24 @@ export function CreditContractClient({ contractCode }: CreditContractClientProps
         </div>
         
         {/* Thông tin tài chính */}
+        {permissionsLoading ? (
+          <div className="p-4 border rounded-md mb-4 bg-gray-50">
+            <p className="text-center text-gray-500">Đang tải...</p>
+          </div>
+        ) : hasPermission('xem_thong_tin_tin_chap') ? (
         <FinancialSummary 
           fundStatus={financialSummary || undefined}
           onRefresh={refreshFinancial}
           autoFetch={false}
         />
-        
+        ) : null}
+
+        {permissionsLoading ? (
+          <div className="p-4 border rounded-md mb-4 bg-gray-50">
+            <p className="text-center text-gray-500">Đang tải...</p>
+          </div>
+        ) : canViewCreditsList ? (
+        <>
         {/* Bộ lọc và tìm kiếm */}
         <SearchFilters
           statusMap={statusMap}
@@ -266,7 +281,13 @@ export function CreditContractClient({ contractCode }: CreditContractClientProps
           itemsPerPage={itemsPerPage}
           onPageChange={handlePageChange}
         />
-        
+        </>
+        ) : (
+          <div className="p-8 border rounded-md mb-4 bg-gray-50 text-center">
+            <p className="text-gray-500">Bạn không có quyền xem danh sách hợp đồng tín chấp.</p>
+          </div>
+        )}
+
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <AlertDialogContent>

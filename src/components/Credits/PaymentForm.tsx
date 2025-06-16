@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
 import { format, addDays, differenceInDays } from 'date-fns';
 import { toast } from '@/components/ui/use-toast';
-
+import { usePermissions } from '@/hooks/usePermissions';
 interface PaymentFormProps {
   onClose: () => void;
   defaultStartDate?: Date;
@@ -41,6 +41,7 @@ export function PaymentForm({
   lastPaymentEndDate,
   disabled = false
 }: PaymentFormProps) {
+  const { hasPermission } = usePermissions();
   // Format number with thousand separators
   const formatNumber = (value: string | number): string => {
     const numericValue = value.toString().replace(/[^0-9]/g, '');
@@ -269,7 +270,7 @@ export function PaymentForm({
             <Button 
               type="submit" 
               className="bg-blue-600 hover:bg-blue-700" 
-              disabled={disabled || isCalculating}
+              disabled={disabled || isCalculating || !hasPermission('dong_lai_tin_chap')}
             >
               {isCalculating ? 'Đang tính...' : 'Đóng lãi'}
             </Button>

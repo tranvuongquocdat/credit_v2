@@ -10,7 +10,7 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { PlusIcon } from 'lucide-react';
-
+import { usePermissions } from '@/hooks/usePermissions';
 interface StatusMapType {
   [key: string]: { 
     label: string; 
@@ -53,7 +53,9 @@ export function SearchFilters({
     status: 'on_time',
     duration: undefined
   });
-
+  const { hasPermission } = usePermissions();
+  // Kiểm tra quyền tạo hợp đồng tín chấp
+  const canCreateCredit = hasPermission('tao_moi_hop_dong_tin_chap');
   // Apply initial filters when component mounts
   useEffect(() => {
     if (initialFilters) {
@@ -267,7 +269,9 @@ export function SearchFilters({
           <Button 
             onClick={onCreateNew}
             size="sm"
-            className="text-white bg-green-600 hover:bg-green-700"
+            className={`text-white bg-green-600 hover:bg-green-700 ${!canCreateCredit ? 'opacity-50 cursor-not-allowed' : ''}`}
+            disabled={!canCreateCredit}
+            title={!canCreateCredit ? 'Bạn không có quyền tạo hợp đồng' : ''}
           >
             <PlusIcon className="mr-1 h-3.5 w-3.5" />
             Thêm mới
