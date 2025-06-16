@@ -117,7 +117,7 @@ const sidebarItems: SidebarItem[] = [
     submenu: [
       { title: 'Số quỹ tiền mặt', path: '/reports/cashbook', icon: <FiDollarSign size={18} /> },
       { title: 'Tổng kết giao dịch', path: '/reports/transactionSummary', icon: <FiAlertTriangle size={18} /> },
-      { title: 'Tổng kết lợi nhuận', path: '/reports/profitDetail', icon: <FiTrendingUp size={18} /> },
+      { title: 'Tổng kết lợi nhuận', path: '/reports/profitSummary', icon: <FiTrendingUp size={18} /> },
       { title: 'Chi tiết tiền lãi', path: '/reports/interestDetail', icon: <FiPercent size={18} /> },
       { title: 'Báo cáo đang cho vay', path: '/reports/loanReport', icon: <FiClock size={18} /> },
       { title: 'Báo cáo chuộc đồ, đóng HĐ', path: '/reports/contractClose', icon: <FiCheckCircle size={18} /> },

@@ -206,6 +206,7 @@ export default function TransactionSummaryPage() {
             pawns!inner (contract_code, store_id)
           `)
           .eq('pawns.store_id', storeId)
+          .or('is_deleted.is.null,is_deleted.eq.false')
           .gte('created_at', startDateISO)
           .lte('created_at', endDateISO)
       );
@@ -219,6 +220,7 @@ export default function TransactionSummaryPage() {
             credits!inner (contract_code, store_id)
           `)
           .eq('credits.store_id', storeId)
+          .or('is_deleted.is.null,is_deleted.eq.false')
           .gte('created_at', startDateISO)
           .lte('created_at', endDateISO)
       );
@@ -235,6 +237,7 @@ export default function TransactionSummaryPage() {
           )
         `)
         .eq('installments.employees.store_id', storeId)
+        .or('is_deleted.is.null,is_deleted.eq.false')
         .gte('created_at', startDateISO)
         .lte('created_at', endDateISO)
         .limit(10000);

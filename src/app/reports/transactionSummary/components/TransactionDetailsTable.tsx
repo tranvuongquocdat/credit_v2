@@ -208,6 +208,7 @@ export default function TransactionDetailsTable({
             profiles:created_by (username)
           `)
           .eq('credits.store_id', storeId)
+          .or('is_deleted.is.null,is_deleted.eq.false')
       );
       
       if (creditHistoryData) {
@@ -233,6 +234,7 @@ export default function TransactionDetailsTable({
             profiles:created_by (username)
           `)
           .eq('pawns.store_id', storeId)
+          .or('is_deleted.is.null,is_deleted.eq.false')
       );
       
       if (pawnHistoryData) {
@@ -258,6 +260,7 @@ export default function TransactionDetailsTable({
             profiles:created_by (username)
           `)
           .eq('installments.employees.store_id', storeId)
+          .or('is_deleted.is.null,is_deleted.eq.false')
       );
       
       if (installmentHistoryData) {
@@ -282,6 +285,7 @@ export default function TransactionDetailsTable({
         .from('transactions')
         .select('*, customers:customer_id(name)')
         .eq('store_id', storeId)
+        .eq('is_deleted', false)
         .limit(10000);
       
       if (transactionsData) processItems(transactionsData, 'Thu chi');

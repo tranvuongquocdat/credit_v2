@@ -316,6 +316,7 @@ export default function MoneyFlowByDayPage() {
               pawns!inner (contract_code, store_id)
             `)
             .eq('pawns.store_id', storeId)
+            .or('is_deleted.is.null,is_deleted.eq.false')
             .gte('created_at', dayStartISO)
             .lte('created_at', dayEndISO)
         );
@@ -335,6 +336,7 @@ export default function MoneyFlowByDayPage() {
               credits!inner (contract_code, store_id)
             `)
             .eq('credits.store_id', storeId)
+            .or('is_deleted.is.null,is_deleted.eq.false')
             .gte('created_at', dayStartISO)
             .lte('created_at', dayEndISO)
         );
@@ -357,6 +359,7 @@ export default function MoneyFlowByDayPage() {
             )
           `)
           .eq('installments.employees.store_id', storeId)
+          .or('is_deleted.is.null,is_deleted.eq.false')
           .gte('created_at', dayStartISO)
           .lte('created_at', dayEndISO)
           .limit(10000);
@@ -374,6 +377,7 @@ export default function MoneyFlowByDayPage() {
           .from('transactions')
           .select('*')
           .eq('store_id', storeId)
+          .eq('is_deleted', false)
           .gte('created_at', dayStartISO)
           .lte('created_at', dayEndISO)
           .limit(10000);
