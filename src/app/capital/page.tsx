@@ -9,6 +9,7 @@ import { useStore } from '@/contexts/StoreContext';
 import { Plus, Pencil, Trash2, RefreshCw, MoreVertical, FilterIcon, CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { FinancialSummary } from '@/components/common/FinancialSummary';
+import { useAutoUpdateCashFund } from '@/hooks/useCashFundUpdater';
 import { getCurrentUser } from '@/lib/auth';
 
 // Shadcn UI components
@@ -79,6 +80,9 @@ export default function CapitalPage() {
   
   // Reference to FinancialSummary for manual refresh
   const [financialSummaryKey, setFinancialSummaryKey] = useState(0);
+  
+  // Use auto update cash fund hook
+  const { triggerUpdate } = useAutoUpdateCashFund();
   
   // Helper function to handle error messages
   const getErrorMessage = (error: unknown): string => {
@@ -216,6 +220,8 @@ export default function CapitalPage() {
       // Refresh fund history and financial summary
       fetchFundHistory();
       setFinancialSummaryKey(prev => prev + 1); // Force FinancialSummary to refresh
+      // Trigger cash fund update (capital already updates cash_fund directly)
+      triggerUpdate();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể tạo giao dịch mới');
     } finally {
@@ -250,6 +256,8 @@ export default function CapitalPage() {
       // Refresh fund history and financial summary
       fetchFundHistory();
       setFinancialSummaryKey(prev => prev + 1); // Force FinancialSummary to refresh
+      // Trigger cash fund update
+      triggerUpdate();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể cập nhật giao dịch');
     } finally {
@@ -275,6 +283,8 @@ export default function CapitalPage() {
       // Refresh fund history and financial summary
       fetchFundHistory();
       setFinancialSummaryKey(prev => prev + 1); // Force FinancialSummary to refresh
+      // Trigger cash fund update
+      triggerUpdate();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể xóa giao dịch');
     } finally {

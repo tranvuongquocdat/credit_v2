@@ -1,6 +1,6 @@
 import { RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { getStoreFinancialData, StoreFinancialData } from '@/lib/store';
+import { getStoreFinancialData, StoreFinancialData, updateCashFundFromAllSources } from '@/lib/store';
 import { useStore } from '@/contexts/StoreContext';
 
 interface FinancialSummaryProps {
@@ -8,13 +8,15 @@ interface FinancialSummaryProps {
   onRefresh?: () => void;          // Optional: cho phép truyền từ ngoài vào
   storeId?: string;                // ID của cửa hàng (nếu không truyền, lấy từ context)
   autoFetch?: boolean;             // Có tự động lấy dữ liệu không (mặc định là true)
+  enableCashFundUpdate?: boolean;  // Có cho phép cập nhật cash_fund không (mặc định là false)
 }
 
 export function FinancialSummary({ 
   fundStatus: externalFundStatus, 
   onRefresh: externalOnRefresh,
   storeId,
-  autoFetch = true
+  autoFetch = true,
+  enableCashFundUpdate = false
 }: FinancialSummaryProps) {
   // Get current store from context
   const { currentStore } = useStore();
@@ -40,6 +42,48 @@ export function FinancialSummary({
       setLoading(false);
     }
   };
+
+  // Hàm cập nhật cash_fund từ tất cả nguồn
+  const updateCashFund = async () => {
+    if (!enableCashFundUpdate) {
+      // Nếu không cho phép cập nhật cash_fund, chỉ refresh dữ liệu
+      if (externalOnRefresh) {
+        externalOnRefresh();
+      } else {
+        fetchData();
+      }
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Cập nhật cash_fund từ tất cả nguồn
+      const result = await updateCashFundFromAllSources(currentStoreId);
+      
+      if (result.success) {
+        console.log('Cash fund updated successfully:', result.newCashFund);
+      } else {
+        console.error('Error updating cash fund:', result.error);
+      }
+
+      // Sau khi cập nhật xong, refresh dữ liệu
+      if (externalOnRefresh) {
+        externalOnRefresh();
+      } else {
+        await fetchData();
+      }
+    } catch (error) {
+      console.error('Error updating cash fund from all sources:', error);
+      // Vẫn refresh dữ liệu ngay cả khi có lỗi
+      if (externalOnRefresh) {
+        externalOnRefresh();
+      } else {
+        await fetchData();
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
   
   // Gọi API khi component mount hoặc storeId thay đổi
   useEffect(() => {
@@ -50,9 +94,12 @@ export function FinancialSummary({
   
   // Sử dụng dữ liệu từ props nếu có, nếu không thì dùng state nội bộ
   const fundStatus = externalFundStatus || internalFundStatus;
+  
   // Sử dụng callback từ props nếu có, nếu không thì dùng hàm fetch nội bộ
   const onRefresh = () => {
-    if (externalOnRefresh) {
+    if (enableCashFundUpdate) {
+      updateCashFund();
+    } else if (externalOnRefresh) {
       externalOnRefresh();
     } else {
       fetchData();
@@ -80,7 +127,7 @@ export function FinancialSummary({
           <div className="flex items-center justify-center text-gray-500 text-sm mb-1">
             <span>Quỹ tiền mặt</span>
             <RefreshCw 
-              className="ml-1 h-3.5 w-3.5 cursor-pointer hover:text-blue-500" 
+              className={`ml-1 h-3.5 w-3.5 cursor-pointer hover:text-blue-500 ${loading ? 'animate-spin' : ''}`}
               onClick={onRefresh}
             />
           </div>
