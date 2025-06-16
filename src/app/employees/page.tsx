@@ -12,10 +12,17 @@ import { Edit, UserX, UserCheck, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useStore } from '@/contexts/StoreContext';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useRouter } from 'next/navigation';
 
 export default function EmployeesPage() {
   // Get current store from context
   const { currentStore } = useStore();
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  const router = useRouter();
+  
+  // Kiểm tra quyền truy cập
+  const canAccessEmployees = hasPermission('danh_sach_nhan_vien');
   
   // Trạng thái
   const [employees, setEmployees] = useState<EmployeeWithProfile[]>([]);
@@ -32,6 +39,13 @@ export default function EmployeesPage() {
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeWithProfile | null>(null);
+
+  // Redirect nếu không có quyền
+  useEffect(() => {
+    if (!permissionsLoading && !canAccessEmployees) {
+      router.push('/');
+    }
+  }, [permissionsLoading, canAccessEmployees, router]);
 
   // Fetch danh sách nhân viên
   const fetchEmployees = async () => {
@@ -75,8 +89,10 @@ export default function EmployeesPage() {
 
   // Fetch lại khi các dependency thay đổi
   useEffect(() => {
-    fetchEmployees();
-  }, [currentPage, searchQuery, statusFilter, currentStore]);
+    if (canAccessEmployees) {
+      fetchEmployees();
+    }
+  }, [currentPage, searchQuery, statusFilter, currentStore, canAccessEmployees]);
 
   // Mở modal chỉnh sửa
   const openEditModal = (employee: EmployeeWithProfile) => {
@@ -94,6 +110,31 @@ export default function EmployeesPage() {
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
+
+  // Loading state cho permission
+  if (permissionsLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center p-4">
+          <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+          <span>Đang kiểm tra quyền truy cập...</span>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Access denied state
+  if (!canAccessEmployees) {
+    return (
+      <Layout>
+        <div className="p-4 border rounded-md mb-4 bg-gray-50">
+          <p className="text-center text-gray-500">
+            Bạn không có quyền truy cập chức năng này
+          </p>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>

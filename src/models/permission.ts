@@ -253,17 +253,17 @@ export const DEFAULT_PERMISSIONS = [
       }
     ]
   },{
-    id: 'thong_ke',
-    name: 'Thống kê',
-    module: 'thong_ke',
+    id: 'quan_ly_thu_chi',
+    name: 'Quản lý thu chi',
+    module: 'quan_ly_thu_chi',
     children: [
       { 
-        id: 'thu_tien_tin_chap', 
-        name: 'Thu tiền tín chấp' 
+        id: 'hoat_dong_thu', 
+        name: 'Hoạt động thu' 
       },
       { 
-        id: 'thu_tien_tra_gop', 
-        name: 'Thu tiền trả góp' 
+        id: 'hoat_dong_chi', 
+        name: 'Hoạt động chi' 
       }
     ]
   },

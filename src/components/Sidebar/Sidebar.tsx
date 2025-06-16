@@ -235,6 +235,25 @@ export default function Sidebar() {
             : null;
         }
         
+        // Special handling for the Employees menu
+        if (item.path === '/employees' && item.submenu) {
+          const filteredSubmenu = item.submenu.filter(subItem => {
+            // Check permissions for each submenu item
+            if (subItem.path === '/employees') {
+              return hasPermission('danh_sach_nhan_vien');
+            }
+            if (subItem.path === '/employee-permissions') {
+              return hasPermission('phan_quyen_nhan_vien');
+            }
+            return true; // Keep other submenu items
+          });
+          
+          // Only return the item if it has submenu items
+          return filteredSubmenu.length > 0 
+            ? { ...item, submenu: filteredSubmenu } 
+            : null;
+        }
+        
         return item;
       })
       .filter(Boolean) as SidebarItem[]; // Filter out null items

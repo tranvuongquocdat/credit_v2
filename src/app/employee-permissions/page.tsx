@@ -34,6 +34,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
 import { useStore } from '@/contexts/StoreContext';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useRouter } from 'next/navigation';
 
 interface EmployeePermissionFilters {
   search: string;
@@ -54,6 +56,13 @@ export default function EmployeePermissionsPage() {
   
   // Get current store
   const { currentStore, loading: storeLoading } = useStore();
+  
+  // Permission handling
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  const router = useRouter();
+  
+  // Kiểm tra quyền truy cập
+  const canAccessPermissions = hasPermission('phan_quyen_nhan_vien');
 
   // Filters
   const [filters, setFilters] = useState<EmployeePermissionFilters>({
@@ -67,12 +76,19 @@ export default function EmployeePermissionsPage() {
   const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false);
   
   const { toast } = useToast();
+  
+  // Redirect nếu không có quyền
+  useEffect(() => {
+    if (!permissionsLoading && !canAccessPermissions) {
+      router.push('/');
+    }
+  }, [permissionsLoading, canAccessPermissions, router]);
 
   // Define loadData function using useCallback
   const loadData = useCallback(async () => {
-    // Không tải dữ liệu nếu store context đang tải
-    if (storeLoading) {
-      console.log('Skipping data loading because store context is still initializing');
+    // Không tải dữ liệu nếu store context đang tải hoặc không có quyền truy cập
+    if (storeLoading || !canAccessPermissions) {
+      console.log('Skipping data loading because store context is still initializing or no permission');
       return;
     }
     
@@ -121,7 +137,7 @@ export default function EmployeePermissionsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentStore, filters.search, filters.status, toast, storeLoading]);
+  }, [currentStore, filters.search, filters.status, toast, storeLoading, canAccessPermissions]);
 
   useEffect(() => {
     if (currentStore?.id) {
@@ -220,6 +236,31 @@ export default function EmployeePermissionsPage() {
         return <Badge variant="outline">{status}</Badge>;
     }
   };
+
+  // Loading state cho permission
+  if (permissionsLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center p-4">
+          <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+          <span>Đang kiểm tra quyền truy cập...</span>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Access denied state
+  if (!canAccessPermissions) {
+    return (
+      <Layout>
+        <div className="p-4 border rounded-md mb-4 bg-gray-50">
+          <p className="text-center text-gray-500">
+            Bạn không có quyền truy cập chức năng này
+          </p>
+        </div>
+      </Layout>
+    );
+  }
 
   // Hiển thị trạng thái loading khi store chưa khởi tạo xong
   if (storeLoading) {
