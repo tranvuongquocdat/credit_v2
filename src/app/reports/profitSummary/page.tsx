@@ -66,10 +66,11 @@ export default function ProfitSummaryPage() {
   const [profitData, setProfitData] = useState<ProfitSummaryRow[]>([]);
   const [transactionData, setTransactionData] = useState<TransactionSummary>({ income: 0, expense: 0 });
   
-  // Date range for filtering - default to today
+  // Date range for filtering - default to start of month to today
   const today = new Date();
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   const [startDate, setStartDate] = useState<string>(
-    format(today, 'yyyy-MM-dd')
+    format(startOfMonth, 'yyyy-MM-dd')
   );
   const [endDate, setEndDate] = useState<string>(
     format(today, 'yyyy-MM-dd')
@@ -91,7 +92,9 @@ export default function ProfitSummaryPage() {
     if (!currentStore?.id) return { all: [], filtered: [] };
 
     const storeId = currentStore.id;
-    let query;
+    const startDateObj = startOfDay(parse(startDate, 'yyyy-MM-dd', new Date()));
+    const endDateObj = endOfDay(parse(endDate, 'yyyy-MM-dd', new Date()));
+    
     let selectString = '';
 
     if (contractType === 'installments') {
@@ -104,11 +107,6 @@ export default function ProfitSummaryPage() {
         status,
         customers(name)
       `;
-      query = supabase
-        .from('installments_by_store')
-        .select(selectString)
-        .eq('store_id', storeId)
-        .order('loan_date', { ascending: false });
     } else {
       // For pawns and credits, use regular tables
       selectString = `
@@ -125,63 +123,126 @@ export default function ProfitSummaryPage() {
       } else if (contractType === 'credits') {
         selectString += ', collateral';
       }
+    }
 
-      query = supabase
+    // Strategy: Separate queries for better accuracy
+    // 1. Query for NEW contracts (within date range) - no limit needed
+    // 2. Query for ALL contracts for status counts - optimize differently
+    
+    let newQuery, allQuery;
+    
+    if (contractType === 'installments') {
+      // Query for new contracts in date range
+      newQuery = supabase
+        .from('installments_by_store')
+        .select(selectString)
+        .eq('store_id', storeId)
+        .gte('loan_date', startDateObj.toISOString())
+        .lte('loan_date', endDateObj.toISOString())
+        .order('loan_date', { ascending: false });
+        
+      // Query for all contracts for status calculation
+      allQuery = supabase
+        .from('installments_by_store')
+        .select(selectString)
+        .eq('store_id', storeId)
+        .order('loan_date', { ascending: false });
+        // Removed limit - get all for accurate counts
+    } else {
+      // Query for new contracts in date range
+      newQuery = supabase
+        .from(contractType)
+        .select(selectString)
+        .eq('store_id', storeId)
+        .gte('loan_date', startDateObj.toISOString())
+        .lte('loan_date', endDateObj.toISOString())
+        .order('loan_date', { ascending: false });
+        
+      // Query for all contracts for status calculation
+      allQuery = supabase
         .from(contractType)
         .select(selectString)
         .eq('store_id', storeId)
         .order('loan_date', { ascending: false });
+        // Removed limit - get all for accurate counts
     }
 
-    const { data: allContracts, error: allError } = await query;
+    // Execute both queries in parallel
+    const [
+      { data: newContracts, error: newError },
+      { data: allContracts, error: allError }
+    ] = await Promise.all([newQuery, allQuery]);
 
+    if (newError) {
+      console.error(`Error fetching new ${contractType}:`, newError);
+    }
+    
     if (allError) {
-      console.error(`Error fetching ${contractType}:`, allError);
-      return { all: [], filtered: [] };
+      console.error(`Error fetching all ${contractType}:`, allError);
+      return { all: [], filtered: newContracts || [] };
     }
 
-         // Filter contracts by date range for "new" contracts
-     const startDateObj = startOfDay(parse(startDate, 'yyyy-MM-dd', new Date()));
-     const endDateObj = endOfDay(parse(endDate, 'yyyy-MM-dd', new Date()));
+    // Get status for all contracts with batch processing for better performance
+    const batchSize = 20;
+    const contractsWithStatus = [];
+    
+    for (let i = 0; i < (allContracts || []).length; i += batchSize) {
+      const batch = (allContracts || []).slice(i, i + batchSize);
+      const batchResults = await Promise.all(
+        batch.map(async (contract: any) => {
+          try {
+            const statusResult = await calculateStatus(contract.id);
+            return {
+              ...contract,
+              calculatedStatus: statusResult.statusCode,
+              statusDescription: statusResult.description
+            };
+          } catch (error) {
+            console.error(`Error calculating status for ${contract.id}:`, error);
+            return {
+              ...contract,
+              calculatedStatus: 'ACTIVE',
+              statusDescription: 'Không thể tính trạng thái'
+            };
+          }
+        })
+      );
+      contractsWithStatus.push(...batchResults);
+    }
 
-     const filteredContracts = (allContracts || []).filter((contract: any) => {
-       if (!contract.loan_date) return false;
-       const loanDate = new Date(contract.loan_date);
-       return loanDate >= startDateObj && loanDate <= endDateObj;
-     });
+    // Also get status for new contracts
+    const newContractsWithStatus = [];
+    for (let i = 0; i < (newContracts || []).length; i += batchSize) {
+      const batch = (newContracts || []).slice(i, i + batchSize);
+      const batchResults = await Promise.all(
+        batch.map(async (contract: any) => {
+          try {
+            const statusResult = await calculateStatus(contract.id);
+            return {
+              ...contract,
+              calculatedStatus: statusResult.statusCode,
+              statusDescription: statusResult.description
+            };
+          } catch (error) {
+            console.error(`Error calculating status for ${contract.id}:`, error);
+            return {
+              ...contract,
+              calculatedStatus: 'ACTIVE',
+              statusDescription: 'Không thể tính trạng thái'
+            };
+          }
+        })
+      );
+      newContractsWithStatus.push(...batchResults);
+    }
 
-    // Get status for all contracts
-    const contractsWithStatus = await Promise.all(
-      (allContracts || []).map(async (contract: any) => {
-        try {
-          const statusResult = await calculateStatus(contract.id);
-          return {
-            ...contract,
-            calculatedStatus: statusResult.statusCode,
-            statusDescription: statusResult.description
-          };
-        } catch (error) {
-          console.error(`Error calculating status for ${contract.id}:`, error);
-          return {
-            ...contract,
-            calculatedStatus: 'ACTIVE',
-            statusDescription: 'Không thể tính trạng thái'
-          };
-        }
-      })
-    );
-
-         return {
-       all: contractsWithStatus,
-       filtered: contractsWithStatus.filter((contract: any) => {
-         if (!contract.loan_date) return false;
-         const loanDate = new Date(contract.loan_date);
-         return loanDate >= startDateObj && loanDate <= endDateObj;
-       })
-     };
+    return {
+      all: contractsWithStatus,
+      filtered: newContractsWithStatus
+    };
   };
 
-    // Get interest/profit data for date range by contract type
+  // Get interest/profit data for date range by contract type
   const getInterestDataForDateRange = async (contractType: 'pawns' | 'credits' | 'installments', contractIds: string[]) => {
     if (!currentStore?.id || contractIds.length === 0) return 0;
 
@@ -278,23 +339,7 @@ export default function ProfitSummaryPage() {
     return totalInterest;
   };
 
-  // Get customer debt data
-  const getCustomerDebtData = async (contractType: 'pawns' | 'credits' | 'installments') => {
-    if (!currentStore?.id) return 0;
 
-    try {
-      const financialData = contractType === 'pawns' 
-        ? await getPawnFinancialsForStore(currentStore.id)
-        : contractType === 'credits'
-        ? await getCreditFinancialsForStore(currentStore.id)
-        : await getInstallmentFinancialsForStore(currentStore.id);
-
-      return financialData.oldDebt || 0;
-    } catch (error) {
-      console.error(`Error fetching ${contractType} debt:`, error);
-      return 0;
-    }
-  };
 
   // Get transaction data for income/expense
   const getTransactionData = async () => {
@@ -359,7 +404,7 @@ export default function ProfitSummaryPage() {
     return counts;
   };
 
-  // Fetch all profit summary data
+    // Fetch all profit summary data
   const fetchProfitSummary = async () => {
     if (!currentStore?.id) return;
 
@@ -367,30 +412,31 @@ export default function ProfitSummaryPage() {
     setError(null);
 
     try {
-      // Get contracts data with status
-      const [pawnData, creditData, installmentData] = await Promise.all([
+      // Execute all data fetching in parallel for better performance
+      const [
+        pawnData,
+        creditData, 
+        installmentData,
+        pawnFinancials,
+        creditFinancials,
+        installmentFinancials,
+        transactionSummary
+      ] = await Promise.all([
         getContractsWithStatus('pawns', calculatePawnStatus),
         getContractsWithStatus('credits', calculateCreditStatus),
-        getContractsWithStatus('installments', calculateInstallmentStatus)
-      ]);
-
-      // Get financial data
-      const [pawnFinancials, creditFinancials, installmentFinancials] = await Promise.all([
+        getContractsWithStatus('installments', calculateInstallmentStatus),
         getPawnFinancialsForStore(currentStore.id),
         getCreditFinancialsForStore(currentStore.id),
-        getInstallmentFinancialsForStore(currentStore.id)
+        getInstallmentFinancialsForStore(currentStore.id),
+        getTransactionData()
       ]);
 
-             // Get customer debt data
-       const [pawnDebt, creditDebt, installmentDebt] = await Promise.all([
-         getCustomerDebtData('pawns'),
-         getCustomerDebtData('credits'),
-         getCustomerDebtData('installments')
-       ]);
+      setTransactionData(transactionSummary);
 
-       // Get transaction data
-       const transactionSummary = await getTransactionData();
-       setTransactionData(transactionSummary);
+      // Get customer debt data (these use the same financial functions)
+      const pawnDebt = pawnFinancials.oldDebt || 0;
+      const creditDebt = creditFinancials.oldDebt || 0;
+      const installmentDebt = installmentFinancials.oldDebt || 0;
 
        // Process data for each contract type
        const processContractData = async (
@@ -667,10 +713,10 @@ export default function ProfitSummaryPage() {
                     <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-center">
                       {row.deleted}
                     </TableCell>
-                    <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-right">
+                    <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-right text-blue-600">
                       {formatCurrency(row.totalLoanAmount)}
                     </TableCell>
-                    <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-right">
+                    <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-right text-blue-600">
                       {formatCurrency(row.currentLoanAmount)}
                     </TableCell>
                     <TableCell className={`py-3 px-3 border-b border-r border-gray-200 text-right ${
@@ -776,10 +822,10 @@ export default function ProfitSummaryPage() {
                   <TableCell className="py-3 px-3 font-bold text-center border-t-2 border-r border-gray-300">
                     {totals.deleted}
                   </TableCell>
-                  <TableCell className="py-3 px-3 font-bold text-right border-t-2 border-r border-gray-300">
+                  <TableCell className="py-3 px-3 font-bold text-right border-t-2 border-r border-gray-300 text-blue-600">
                     {formatCurrency(totals.totalLoanAmount)}
                   </TableCell>
-                  <TableCell className="py-3 px-3 font-bold text-right border-t-2 border-r border-gray-300">
+                  <TableCell className="py-3 px-3 font-bold text-right border-t-2 border-r border-gray-300 text-blue-600">
                     {formatCurrency(totals.currentLoanAmount)}
                   </TableCell>
                   <TableCell className={`py-3 px-3 font-bold text-right border-t-2 border-r border-gray-300 ${
