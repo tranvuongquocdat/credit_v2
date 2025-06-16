@@ -177,6 +177,7 @@ export default function CashbookPage() {
             pawns!inner (contract_code, store_id)
           `)
           .eq('pawns.store_id', storeId)
+          .or('is_deleted.is.null,is_deleted.eq.false')
           .gte('created_at', startDateISO)
           .lte('created_at', endDateISO)
       );
@@ -203,6 +204,7 @@ export default function CashbookPage() {
             credits!inner (contract_code, store_id)
           `)
           .eq('credits.store_id', storeId)
+          .or('is_deleted.is.null,is_deleted.eq.false')
           .gte('created_at', startDateISO)
           .lte('created_at', endDateISO)
       );
@@ -232,6 +234,7 @@ export default function CashbookPage() {
           )
         `)
         .eq('installments.employees.store_id', storeId)
+        .or('is_deleted.is.null,is_deleted.eq.false')
         .gte('created_at', startDateISO)
         .lte('created_at', endDateISO)
         .limit(10000);
@@ -254,6 +257,7 @@ export default function CashbookPage() {
         .from('transactions')
         .select('*')
         .eq('store_id', storeId)
+        .eq('is_deleted', false)
         .gte('created_at', startDateISO)
         .lte('created_at', endDateISO)
         .limit(10000);
