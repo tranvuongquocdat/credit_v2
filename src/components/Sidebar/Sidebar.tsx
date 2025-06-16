@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { signOut, getCurrentUser } from '@/lib/auth';
+import { usePermissions } from '@/hooks/usePermissions';
 import { 
   FiHome, 
   FiCreditCard, 
@@ -146,6 +147,7 @@ export default function Sidebar() {
   const [isFiltering, setIsFiltering] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
+  const { hasPermission } = usePermissions();
 
   // Get current user to check role
   useEffect(() => {
@@ -195,7 +197,7 @@ export default function Sidebar() {
     window.dispatchEvent(event);
   };
 
-  // Filter sidebar items based on user role
+  // Filter sidebar items based on user role and permissions
   const getFilteredSidebarItems = () => {
     if (isLoadingUser || isFiltering) return [];
     
@@ -204,8 +206,38 @@ export default function Sidebar() {
       return sidebarItems.filter(item => item.superAdminOnly);
     }
     
-    // For other users, show all items except SuperAdmin ones
-    return sidebarItems.filter(item => !item.superAdminOnly);
+    // For other users, filter based on permissions
+    return sidebarItems
+      .filter(item => !item.superAdminOnly)
+      .map(item => {
+        // Special handling for the Stores menu
+        if (item.path === '/stores' && item.submenu) {
+          const filteredSubmenu = item.submenu.filter(subItem => {
+            // Check permissions for each submenu item
+            if (subItem.path === '/stores/overview') {
+              return hasPermission('tong_quat_chuoi_cua_hang');
+            }
+            if (subItem.path === '/stores/detail') {
+              return hasPermission('thong_tin_chi_tiet_cua_hang');
+            }
+            if (subItem.path === '/stores') {
+              return hasPermission('danh_sach_cua_hang');
+            }
+            if (subItem.path === '/stores/collaterals') {
+              return hasPermission('cau_hinh_hang_hoa');
+            }
+            return true; // Keep other submenu items
+          });
+          
+          // Only return the item if it has submenu items
+          return filteredSubmenu.length > 0 
+            ? { ...item, submenu: filteredSubmenu } 
+            : null;
+        }
+        
+        return item;
+      })
+      .filter(Boolean) as SidebarItem[]; // Filter out null items
   };
 
   // Don't render content while filtering

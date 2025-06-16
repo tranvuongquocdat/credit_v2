@@ -213,10 +213,6 @@ export const DEFAULT_PERMISSIONS = [
       { 
         id: 'cau_hinh_hang_hoa', 
         name: 'Cấu hình hàng hóa' 
-      },
-      { 
-        id: 'nhap_tien_quy_dau_ngay', 
-        name: 'Nhập tiền quỹ đầu ngày' 
       }
     ]
   },
