@@ -27,6 +27,7 @@ import { usePawns } from '@/hooks/usePawns';
 // Import types and API functions
 import { PawnStatus, PawnWithCustomer } from '@/models/pawn';
 import { usePawnCalculations } from '@/hooks/usePawnCalculation';
+import { useAutoUpdateCashFund } from '@/hooks/useCashFundUpdater';
 import { calculatePawnStatus } from '@/lib/Pawns/calculate_pawn_status';
 
 
@@ -63,6 +64,14 @@ export default function PawnsPage() {
   
   // Lấy dữ liệu tài chính tổng hợp
   const { summary: financialSummary, refresh: refreshFinancial } = usePawnCalculations();
+  
+  // Use auto update cash fund hook
+  const { triggerUpdate } = useAutoUpdateCashFund({
+    onUpdate: (newCashFund) => {
+      console.log('Cash fund updated to:', newCashFund);
+      refreshFinancial(); // Refresh financial data after cash fund update
+    }
+  });
   // State for dialogs
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedPawn, setSelectedPawn] = useState<PawnWithCustomer | null>(null);
@@ -141,6 +150,8 @@ export default function PawnsPage() {
       
       // Refresh dữ liệu tài chính sau khi xóa thành công
       refreshFinancial();
+      // Trigger cash fund update
+      triggerUpdate();
     } catch (error) {
       console.error('Error in handleDeletePawn:', error);
       toast({
@@ -168,6 +179,8 @@ export default function PawnsPage() {
     // Only refresh data if there were actual changes
     if (hasDataChanged) {
       handleRefresh();
+      // Trigger cash fund update when payment history changes
+      triggerUpdate();
     }
   };
   
@@ -192,6 +205,7 @@ export default function PawnsPage() {
           fundStatus={financialSummary || undefined}
           onRefresh={refreshFinancial}
           autoFetch={false}
+          enableCashFundUpdate={true}
         />
         
         {/* Bộ lọc và tìm kiếm */}
@@ -271,6 +285,7 @@ export default function PawnsPage() {
           onSuccess={() => {
             setIsPawnCreateModalOpen(false);
             refetch(); // Refresh danh sách hợp đồng sau khi tạo mới
+            triggerUpdate(); // Trigger cash fund update
           }}
         />
         
@@ -283,6 +298,7 @@ export default function PawnsPage() {
             onSuccess={() => {
               setIsPawnEditModalOpen(false);
               refetch(); // Refresh danh sách hợp đồng sau khi cập nhật
+              triggerUpdate(); // Trigger cash fund update
             }}
           />
         )}

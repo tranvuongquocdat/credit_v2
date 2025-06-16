@@ -25,6 +25,7 @@ import { useCredits } from '@/hooks/useCredits';
 // Import types and API functions
 import { CreditStatus, CreditWithCustomer } from '@/models/credit';
 import { useCreditCalculations } from '@/hooks/useCreditCalculation';
+import { useAutoUpdateCashFund } from '@/hooks/useCashFundUpdater';
 
 
 // Map trạng thái thành nhãn và màu sắc
@@ -79,6 +80,14 @@ export default function CreditsPage() {
   
   // Lấy dữ liệu tài chính tổng hợp
   const { summary: financialSummary, details: creditDetails, refresh: refreshFinancial } = useCreditCalculations();
+  
+  // Use auto update cash fund hook
+  const { triggerUpdate } = useAutoUpdateCashFund({
+    onUpdate: (newCashFund) => {
+      console.log('Cash fund updated to:', newCashFund);
+      refreshFinancial(); // Refresh financial data after cash fund update
+    }
+  });
   // State for dialogs
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedCredit, setSelectedCredit] = useState<CreditWithCustomer | null>(null);
@@ -212,6 +221,8 @@ export default function CreditsPage() {
       
       // Refresh dữ liệu tài chính sau khi xóa thành công
       refreshFinancial();
+      // Trigger cash fund update
+      triggerUpdate();
     } catch (error) {
       console.error('Error in handleDeleteCredit:', error);
       toast({
@@ -237,6 +248,8 @@ export default function CreditsPage() {
     // Only refresh data if there were actual changes
     if (hasDataChanged) {
       handleRefresh();
+      // Trigger cash fund update when payment history changes
+      triggerUpdate();
     }
   };
   
@@ -261,6 +274,7 @@ export default function CreditsPage() {
           fundStatus={financialSummary || undefined}
           onRefresh={refreshFinancial}
           autoFetch={false}
+          enableCashFundUpdate={true}
         />
         
         {/* Bộ lọc và tìm kiếm */}
@@ -334,6 +348,7 @@ export default function CreditsPage() {
           onSuccess={() => {
             setIsCreditCreateModalOpen(false);
             refetch(); // Refresh danh sách hợp đồng sau khi tạo mới
+            triggerUpdate(); // Trigger cash fund update
           }}
         />
         
@@ -346,6 +361,7 @@ export default function CreditsPage() {
             onSuccess={() => {
               setIsCreditEditModalOpen(false);
               refetch(); // Refresh danh sách hợp đồng sau khi cập nhật
+              triggerUpdate(); // Trigger cash fund update
             }}
           />
         )}

@@ -23,6 +23,7 @@ import { InstallmentPaymentHistoryModal } from '@/components/Installments/Instal
 // Import custom hooks
 import { useInstallments } from '@/hooks/useInstallments';
 import { useInstallmentsSummary } from '@/hooks/useInstallmentsSummary';
+import { useAutoUpdateCashFund } from '@/hooks/useCashFundUpdater';
 import { useStore } from '@/contexts/StoreContext';
 
 // Import types and API functions
@@ -66,6 +67,14 @@ export default function InstallmentsPage() {
   
   // Sử dụng custom hook để lấy dữ liệu tài chính
   const { data: financialSummary, refresh: refreshFinancial } = useInstallmentsSummary();
+  
+  // Use auto update cash fund hook
+  const { triggerUpdate } = useAutoUpdateCashFund({
+    onUpdate: (newCashFund) => {
+      console.log('Cash fund updated to:', newCashFund);
+      refreshFinancial(); // Refresh financial data after cash fund update
+    }
+  });
   
   // Refresh financial data when store changes
   useEffect(() => {
@@ -146,6 +155,8 @@ export default function InstallmentsPage() {
     
     if (success) {
       handleCloseDeleteDialog();
+      // Trigger cash fund update
+      triggerUpdate();
     } else {
       console.error('Error deleting installment:', error);
     }
@@ -165,6 +176,8 @@ export default function InstallmentsPage() {
     if (hasDataChanged) {
       refetch();
       refreshFinancial();
+      // Trigger cash fund update when payment history changes
+      triggerUpdate();
     }
   };
 
@@ -183,6 +196,7 @@ export default function InstallmentsPage() {
           fundStatus={financialSummary || undefined}
           onRefresh={refreshFinancial}
           autoFetch={false}
+          enableCashFundUpdate={true}
         />
         
         {/* Search and filters */}
@@ -223,6 +237,7 @@ export default function InstallmentsPage() {
             setIsInstallmentCreateModalOpen(false);
             refetch();
             refreshFinancial();
+            triggerUpdate(); // Trigger cash fund update
           }}
         />
 
@@ -235,6 +250,7 @@ export default function InstallmentsPage() {
             onSuccess={() => {
               setIsInstallmentEditModalOpen(false);
               refetch();
+              triggerUpdate(); // Trigger cash fund update
             }}
           />
         )}

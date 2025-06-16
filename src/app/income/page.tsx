@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { Layout } from '@/components/Layout';
+import { FinancialSummary } from '@/components/common/FinancialSummary';
+import { useAutoUpdateCashFund } from '@/hooks/useCashFundUpdater';
 import { useStore } from '@/contexts/StoreContext';
 import { Plus, Pencil, Trash2, RefreshCw, MoreVertical, FilterIcon, CalendarIcon, Printer } from 'lucide-react';
 import { format } from 'date-fns';
@@ -166,6 +168,9 @@ const formatDate = (dateString: string | null) => {
 export default function IncomePage() {
   // Get current store from context
   const { currentStore } = useStore();
+  
+  // Use auto update cash fund hook
+  const { triggerUpdate } = useAutoUpdateCashFund();
   
   // Current user state
   const [currentUser, setCurrentUser] = useState<{ id: string, username: string | null } | null>(null);
@@ -504,6 +509,9 @@ export default function IncomePage() {
       
       // Reset form data
       resetFormData();
+      
+      // Trigger cash fund update
+      triggerUpdate();
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -558,6 +566,9 @@ export default function IncomePage() {
       setIsFormModalOpen(false);
       fetchTransactions();
       resetFormData();
+      
+      // Trigger cash fund update
+      triggerUpdate();
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -581,6 +592,9 @@ export default function IncomePage() {
       setIsDeleteModalOpen(false);
       setSelectedRecord(null);
       fetchTransactions();
+      
+      // Trigger cash fund update
+      triggerUpdate();
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -788,6 +802,11 @@ export default function IncomePage() {
               </Select>
             </div>
           </div>
+          
+          {/* Financial Summary */}
+          <FinancialSummary 
+            enableCashFundUpdate={true}
+          />
           
           <div className="flex flex-col sm:flex-row justify-between gap-2 mb-4">
             <div className="flex gap-2">
