@@ -41,7 +41,7 @@ import { supabase } from "@/lib/supabase";
 import { getinstallmentPaymentHistory } from "@/lib/Installments/payment_history";
 import { calculateMultipleInstallmentStatus, InstallmentStatusResult } from "@/lib/Installments/calculate_installment_status";
 import { recordContractReopening } from "@/lib/installmentAmountHistory";
-
+import { usePermissions } from '@/hooks/usePermissions';
 // Define status info interface
 interface StatusInfo {
   label: string;
@@ -101,7 +101,13 @@ export function InstallmentsTable({
   // Get current store and toast
   const { currentStore } = useStore();
   const { toast } = useToast();
-  
+  const { hasPermission } = usePermissions();
+  // Kiểm tra quyền xóa hợp đồng trả góp
+  const canDeleteInstallment = hasPermission('xoa_hop_dong_tra_gop');
+  // Kiểm tra quyền sửa hợp đồng trả góp
+  const canEditInstallment = hasPermission('sua_hop_dong_tra_gop');
+  // Kiểm tra quyền mở lại hợp đồng trả góp
+  const canUnlockInstallment = hasPermission('huy_dong_hop_dong_tra_gop');
   // Hàm kiểm tra xem installment có kỳ thanh toán nào đã được thanh toán không
   const checkHasPaidPaymentPeriods = useCallback(async (installmentId: string): Promise<boolean> => {
     try {
@@ -360,7 +366,11 @@ export function InstallmentsTable({
         console.error("Error unlocking installment:", error);
         return;
       }
-      
+      // Show success toast
+      toast({
+        title: "Thành công",
+        description: "Đã mở lại hợp đồng",
+      });
       // Reload data to get updated payment periods and status with fresh payment_due_date
       await loadPaymentData();
     } catch (err) {
@@ -400,6 +410,12 @@ export function InstallmentsTable({
     } finally {
       setIsUpdatingDueDate(false);
       setSelectedDateInstallmentId(null);
+    }
+  };
+
+  const handleContractCodeClick = (installmentId: string) => {
+    if (canEditInstallment) {
+      onEdit(installmentId);
     }
   };
 
@@ -462,7 +478,8 @@ export function InstallmentsTable({
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
                   <span 
                     className="text-blue-600 cursor-pointer hover:underline" 
-                    onClick={() => onEdit(installment.id)}
+                    onClick={() => handleContractCodeClick(installment.id)}
+                    title={canEditInstallment ? 'Nhấn để chỉnh sửa hợp đồng' : 'Bạn không có quyền chỉnh sửa hợp đồng'}
                   >
                     {installment.customer?.name || "N/A"}
                   </span>
@@ -545,9 +562,9 @@ export function InstallmentsTable({
                             installment.isDueToday ? 'text-amber-500 font-medium' : 
                             installment.nextPaymentDate === "Ngày mai" ? 'text-blue-500 font-medium' : ''
                           }`}
-                          disabled={isUpdatingDueDate || !installment.payment_due_date}
+                          disabled={isUpdatingDueDate || !installment.payment_due_date || !canEditInstallment}
                           onClick={() => setSelectedDateInstallmentId(installment.id)}
-                          title="Nhấn để thay đổi ngày đóng tiền"
+                          title={canEditInstallment ? 'Nhấn để thay đổi ngày đóng tiền' : 'Bạn không có quyền thay đổi ngày đóng tiền'}
                         >
                           {isUpdatingDueDate && selectedDateInstallmentId === installment.id ? (
                             <Spinner size="sm" className="mr-1" />
@@ -642,7 +659,7 @@ export function InstallmentsTable({
                     {/* Chỉ hiển thị các nút khác nếu hợp đồng chưa bị xóa */}
                     {installment.status !== InstallmentStatus.DELETED && (
                       <>
-                        {installment.status === InstallmentStatus.CLOSED && (
+                        {installment.status === InstallmentStatus.CLOSED && canUnlockInstallment && (
                           <Button 
                             variant="ghost" 
                             className="h-8 w-8 p-0" 
@@ -669,7 +686,7 @@ export function InstallmentsTable({
                                 </DropdownMenuItem>
                               )}
                               {/* Hiển thị "Xóa hợp đồng" cho hợp đồng chưa có kỳ thanh toán đã được thanh toán */}
-                              {installment.status !== InstallmentStatus.CLOSED && (
+                              {installment.status !== InstallmentStatus.CLOSED && canDeleteInstallment && (
                                 <DropdownMenuItem onClick={() => onDelete(installment)} className="text-red-600">
                                   Xóa hợp đồng
                                 </DropdownMenuItem>

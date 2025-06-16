@@ -18,7 +18,7 @@ import { getInstallmentById, updateInstallment } from '@/lib/installment';
 import { getCustomers } from '@/lib/customer';
 import { getEmployees } from '@/lib/employee';
 import { hasInstallmentAnyPayments } from '@/lib/installmentPayment';
-import { Installment } from '@/models/installment';
+import { Installment, InstallmentStatus } from '@/models/installment';
 import { Customer } from '@/models/customer';
 import { Employee } from '@/models/employee';
 import Spinner from '@/components/ui/spinner';
@@ -57,6 +57,7 @@ export function InstallmentEditModal({
   const [notes, setNotes] = useState('');
   const advancePayment = false;
   const [employeeId, setEmployeeId] = useState<string>('');
+  const [status, setStatus] = useState<string>('');
   
   // State for customers dropdown
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -136,6 +137,7 @@ export function InstallmentEditModal({
           setStartDate(installmentData.start_date ? format(new Date(installmentData.start_date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
           setSelectedCustomerId(installmentData.customer_id || '');
           setEmployeeId(installmentData.employee_id || '');
+          setStatus(installmentData.status || '');
         }
         
         if (installmentData.customer_id) {
@@ -476,7 +478,7 @@ export function InstallmentEditModal({
           <div className="flex justify-center pt-4">
             <Button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || status === InstallmentStatus.CLOSED || status === InstallmentStatus.DELETED}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               {isLoading ? <Spinner className="mr-2" /> : null}

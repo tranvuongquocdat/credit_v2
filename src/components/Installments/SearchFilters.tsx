@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/select';
 import { PlusIcon } from 'lucide-react';
 import { useStore } from '@/contexts/StoreContext';
-
+import { usePermissions } from '@/hooks/usePermissions';
 interface StatusMapType {
   [key: string]: { 
     label: string; 
@@ -48,7 +48,9 @@ export function SearchFilters({
 }: SearchFiltersProps) {
   // Get store context
   const { currentStore } = useStore();
-  
+  const { hasPermission } = usePermissions();
+  // Kiểm tra quyền tạo mới hợp đồng trả góp
+  const canCreateInstallment = hasPermission('tao_moi_hop_dong_tra_gop');
   const [filters, setFilters] = useState<SearchFilters>({
     contract_code: '',
     customer_name: '',
@@ -314,6 +316,8 @@ export function SearchFilters({
             onClick={onCreateNew}
             size="sm"
             className="text-white bg-green-600 hover:bg-green-700"
+            disabled={!canCreateInstallment}
+            title={!canCreateInstallment ? 'Bạn không có quyền tạo mới hợp đồng trả góp' : ''}
           >
             <PlusIcon className="mr-1 h-3.5 w-3.5" />
             Thêm mới

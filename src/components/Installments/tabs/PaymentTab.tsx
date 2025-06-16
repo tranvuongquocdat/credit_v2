@@ -5,7 +5,7 @@ import { InstallmentWithCustomer, InstallmentStatus } from "@/models/installment
 import { format } from "date-fns";
 import React from "react";
 import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
-
+import { usePermissions } from "@/hooks/usePermissions";
 interface PaymentTabProps {
   loading: boolean;
   error: string | null;
@@ -55,6 +55,9 @@ export const PaymentTab: React.FC<PaymentTabProps> = ({
   processingPeriodId,
   handleCheckboxChange,
 }) => {
+  const { hasPermission } = usePermissions();
+  // Kiểm tra quyền đóng lãi trả góp
+  const canPayInstallment = hasPermission('dong_lai_tra_gop');
   // Helper to format number with dot
   const formatNumberWithDot = (num: number): string => {
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
@@ -109,9 +112,9 @@ export const PaymentTab: React.FC<PaymentTabProps> = ({
                         />
                       ) : (
                         <span
-                          className={`${index === findOldestUnpaidPeriodIndex && !isPaid && installment.status !== InstallmentStatus.CLOSED && installment.status !== InstallmentStatus.DELETED ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
+                          className={`${index === findOldestUnpaidPeriodIndex && !isPaid && installment.status !== InstallmentStatus.CLOSED && installment.status !== InstallmentStatus.DELETED && canPayInstallment ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
                           onClick={
-                            index === findOldestUnpaidPeriodIndex && !isPaid && installment.status !== InstallmentStatus.CLOSED && installment.status !== InstallmentStatus.DELETED
+                            index === findOldestUnpaidPeriodIndex && !isPaid && installment.status !== InstallmentStatus.CLOSED && installment.status !== InstallmentStatus.DELETED && canPayInstallment
                               ? () => handleStartDateEditing(period, index)
                               : undefined
                           }
@@ -143,21 +146,21 @@ export const PaymentTab: React.FC<PaymentTabProps> = ({
                                 setSelectedPeriodId(null);
                               }
                             }}
-                            disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
+                            disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED || !canPayInstallment}
                           />
                           <button
                             className="text-xs bg-blue-500 text-white px-1 rounded"
                             onClick={() => handleSavePayment(period)}
-                            disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
+                            disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED || !canPayInstallment}
                           >
                             OK
                           </button>
                         </div>
                       ) : (
                         <span
-                          className={`${index === findOldestUnpaidPeriodIndex && !isPaid && installment.status !== InstallmentStatus.CLOSED && installment.status !== InstallmentStatus.DELETED ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
+                          className={`${index === findOldestUnpaidPeriodIndex && !isPaid && installment.status !== InstallmentStatus.CLOSED && installment.status !== InstallmentStatus.DELETED && canPayInstallment ? "text-blue-500 cursor-pointer" : "text-gray-600"}`}
                           onClick={
-                            index === findOldestUnpaidPeriodIndex && !isPaid && installment.status !== InstallmentStatus.CLOSED && installment.status !== InstallmentStatus.DELETED
+                            index === findOldestUnpaidPeriodIndex && !isPaid && installment.status !== InstallmentStatus.CLOSED && installment.status !== InstallmentStatus.DELETED && canPayInstallment
                               ? () => handleStartEditing(period, index)
                               : undefined
                           }

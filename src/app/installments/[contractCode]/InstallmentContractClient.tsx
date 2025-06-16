@@ -24,7 +24,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle 
 } from '@/components/ui/alert-dialog';
 import { toast } from '@/components/ui/use-toast';
-
+import { usePermissions } from '@/hooks/usePermissions';
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
   [InstallmentStatus.ON_TIME]: { label: 'Đang vay', color: 'bg-green-100 text-green-800 border-green-200' },
@@ -50,7 +50,9 @@ export function InstallmentContractClient({ contractCode }: InstallmentContractC
     customer_name: '',
     status: undefined // Use undefined instead of empty string to show all statuses
   }), [contractCode]);
-  
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  // Kiểm tra quyền xem danh sách hợp đồng tín chấp
+  const canViewInstallmentsList = hasPermission('xem_danh_sach_hop_dong_tra_gop');
   // Use our custom hook for installments data and operations
   const { 
     installments, 
@@ -204,13 +206,25 @@ export function InstallmentContractClient({ contractCode }: InstallmentContractC
         </div>
         
         {/* Thông tin tài chính */}
+        {permissionsLoading ? (
+          <div className="p-4 border rounded-md mb-4 bg-gray-50">
+            <p className="text-center text-gray-500">Đang tải...</p>
+          </div>
+        ) : hasPermission('xem_thong_tin_tra_gop') ? (
         <FinancialSummary 
           fundStatus={financialSummary || undefined}
           onRefresh={refreshFinancial}
           autoFetch={false}
         />
-        
+        ) : null}
+
         {/* Bộ lọc và tìm kiếm */}
+        {permissionsLoading ? (
+          <div className="p-4 border rounded-md mb-4 bg-gray-50">
+            <p className="text-center text-gray-500">Đang tải...</p>
+          </div>
+        ) : canViewInstallmentsList ? (
+        <>
         <SearchFilters
           statusMap={statusMap}
           onSearch={handleSearchFilters}
@@ -242,6 +256,12 @@ export function InstallmentContractClient({ contractCode }: InstallmentContractC
           itemsPerPage={itemsPerPage}
           onPageChange={handlePageChange}
         />
+        </>
+        ) : (
+          <div className="p-8 border rounded-md mb-4 bg-gray-50 text-center">
+            <p className="text-gray-500">Bạn không có quyền xem danh sách hợp đồng trả góp.</p>
+          </div>
+        )}
         
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

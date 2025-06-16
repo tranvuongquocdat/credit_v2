@@ -738,7 +738,7 @@ export function PawnEditModal({
               <Button 
                 type="submit" 
                 className="bg-blue-600 hover:bg-blue-700 text-white"
-                disabled={isLoading}
+                disabled={isLoading || pawn?.status === PawnStatus.CLOSED || pawn?.status === PawnStatus.DELETED}
               >
                 {isLoading ? 'Đang xử lý...' : 'Cập nhật'}
               </Button>

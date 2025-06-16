@@ -10,6 +10,7 @@ import { countInstallmentWarnings } from "@/lib/installmentPayment";
 import { countPawnWarnings } from "@/lib/pawn-warnings";
 import { countCreditWarnings } from "@/lib/credit-warnings";
 import { getCurrentUser } from "@/lib/auth";
+import { usePermissions } from "@/hooks/usePermissions";
 
 // This interface will represent the notification data structure
 interface NotificationCounts {
@@ -130,6 +131,9 @@ export function TopNavbar() {
   // State để theo dõi lần đầu component mount
   const [hasInitialized, setHasInitialized] = useState(false);
   
+  // Use permissions hook to check user permissions
+  const { hasPermission } = usePermissions();
+  
   // Handler for store selection - memoized to prevent recreating on every render
   const handleStoreChange = useCallback((store: any) => {
     console.log('handleStoreChange', store);
@@ -165,34 +169,51 @@ export function TopNavbar() {
       // Replace with your actual API call to get notifications for the selected store
       const fetchNotificationsForStore = async () => {
         try {
-          // Get real count of overdue installments
-          const { count: overdueInstallments, error: installmentError } = await countInstallmentWarnings(currentStore.id);
-          console.log('overdueInstallments', overdueInstallments);
-          if (installmentError) {
-            console.error('Error fetching overdue installments count:', installmentError);
+          // Initialize counts with zeros
+          let overdueInstallments = 0;
+          let pawnWarningsCount = 0;
+          let creditWarningsCount = 0;
+          
+          // Only fetch installment warnings if user has permission
+          if (hasPermission('xem_danh_sach_hop_dong_tra_gop')) {
+            const { count, error } = await countInstallmentWarnings(currentStore.id);
+            if (error) {
+              console.error('Error fetching overdue installments count:', error);
+            } else {
+              overdueInstallments = count;
+              console.log('overdueInstallments', overdueInstallments);
+            }
           }
           
-          // Get real count of pawn warnings
-          const { count: pawnWarningsCount, error: pawnError } = await countPawnWarnings(currentStore.id);
-          console.log('pawnWarningsCount', pawnWarningsCount);
-          if (pawnError) {
-            console.error('Error fetching pawn warnings count:', pawnError);
+          // Only fetch pawn warnings if user has permission
+          if (hasPermission('xem_danh_sach_hop_dong_cam_do')) {
+            const { count, error } = await countPawnWarnings(currentStore.id);
+            if (error) {
+              console.error('Error fetching pawn warnings count:', error);
+            } else {
+              pawnWarningsCount = count;
+              console.log('pawnWarningsCount', pawnWarningsCount);
+            }
           }
           
-          // Get real count of credit warnings
-          const { count: creditWarningsCount, error: creditError } = await countCreditWarnings(currentStore.id);
-          console.log('creditWarningsCount', creditWarningsCount);
-          if (creditError) {
-            console.error('Error fetching credit warnings count:', creditError);
+          // Only fetch credit warnings if user has permission
+          if (hasPermission('xem_danh_sach_hop_dong_tin_chap')) {
+            const { count, error } = await countCreditWarnings(currentStore.id);
+            if (error) {
+              console.error('Error fetching credit warnings count:', error);
+            } else {
+              creditWarningsCount = count;
+              console.log('creditWarningsCount', creditWarningsCount);
+            }
           }
           
-          // Simulate different notification counts based on store ID to demonstrate it works
+          // Update notification counts
           const mockData = {
             storeInvoices: 0,
             appointments: 0,
-            pawnInvoices: pawnError ? 0 : pawnWarningsCount, // Use real count if available
-            loanInvoices: creditError ? 0 : creditWarningsCount, // Use real count if available
-            installmentInvoices: installmentError ? 0 : overdueInstallments // Use real count if available
+            pawnInvoices: pawnWarningsCount,
+            loanInvoices: creditWarningsCount,
+            installmentInvoices: overdueInstallments
           };
           
           setNotificationCounts(mockData);
@@ -203,7 +224,7 @@ export function TopNavbar() {
       
       fetchNotificationsForStore();
     }
-  }, [currentStore, storeVersion]);
+  }, [currentStore, storeVersion, hasPermission]);
   
   // Helper function to render notification badge
   const renderNotificationBadge = (count: number) => {

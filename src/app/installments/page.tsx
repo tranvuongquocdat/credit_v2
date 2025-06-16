@@ -28,6 +28,7 @@ import { useStore } from '@/contexts/StoreContext';
 
 // Import types and API functions
 import { InstallmentStatus, InstallmentWithCustomer } from '@/models/installment';
+import { usePermissions } from '@/hooks/usePermissions';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -42,7 +43,9 @@ const statusMap: Record<string, { label: string, color: string }> = {
 };
 
 export default function InstallmentsPage() {
-  
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  // Kiểm tra quyền xem danh sách hợp đồng trả góp
+  const canViewInstallmentsList = hasPermission('xem_danh_sach_hop_dong_tra_gop');
   // Get current store from context
   const { currentStore } = useStore();
   
@@ -192,14 +195,25 @@ export default function InstallmentsPage() {
         </div>
         
         {/* Financial Summary */}
+        {permissionsLoading ? (
+          <div className="p-4 border rounded-md mb-4 bg-gray-50">
+            <p className="text-center text-gray-500">Đang tải...</p>
+          </div>
+        ) : hasPermission('xem_thong_tin_tra_gop') ? (
         <FinancialSummary
           fundStatus={financialSummary || undefined}
           onRefresh={refreshFinancial}
           autoFetch={false}
           enableCashFundUpdate={true}
         />
-        
+        ) : null}
         {/* Search and filters */}
+        {permissionsLoading ? (
+          <div className="p-4 border rounded-md mb-4 bg-gray-50">
+            <p className="text-center text-gray-500">Đang tải...</p>
+          </div>
+        ) : canViewInstallmentsList ? (
+        <>
         <SearchFilters
           statusMap={statusMap}
           onSearch={handleSearchFilters}
@@ -281,7 +295,12 @@ export default function InstallmentsPage() {
             onPageChange={handlePageChange}
           />
         </div>
-        
+        </>
+        ) : (
+          <div className="p-8 border rounded-md mb-4 bg-gray-50 text-center">
+            <p className="text-gray-500">Bạn không có quyền xem danh sách hợp đồng trả góp.</p>
+          </div>
+        )}
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <AlertDialogContent>

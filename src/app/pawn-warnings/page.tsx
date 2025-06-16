@@ -14,11 +14,14 @@ import { toast } from '@/components/ui/use-toast';
 import { Input } from '@/components/ui/input';
 import { PawnWarningsPagination } from '@/components/Pawns/PawnWarningsPagination';
 import { calculatePawnStatus } from '@/lib/Pawns/calculate_pawn_status';
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function PawnWarningsPage() {
   const router = useRouter();
   const { currentStore, loading: storeLoading } = useStore();
-  
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  // Kiểm tra quyền xem danh sách hợp đồng trả góp
+  const canViewPawnWarnings = hasPermission('xem_danh_sach_hop_dong_tra_gop');
   // State for pawns data
   const [pawns, setPawns] = useState<PawnWithCustomerAndCollateral[]>([]);
   const [loading, setLoading] = useState(true);
@@ -194,6 +197,16 @@ export default function PawnWarningsPage() {
   
   return (
     <Layout>
+      {permissionsLoading ? (
+        <div className="p-4 border rounded-md mb-4 bg-gray-50">
+          <p className="text-center text-gray-500">Đang tải...</p>
+        </div>
+      ) : !canViewPawnWarnings ? (
+        <div className="p-4 border rounded-md mb-4 bg-gray-50">
+          <p className="text-center text-gray-500">Bạn không có quyền xem cảnh báo cầm đồ</p>
+        </div>
+      ) : (
+      <>
       <div className="max-w-full">
         {/* Title */}
         <div className="flex items-center justify-between border-b pb-2 mb-2">
@@ -312,6 +325,8 @@ export default function PawnWarningsPage() {
           onClose={handleCloseHistoryModal}
           pawn={selectedPawn}
         />
+      )}
+      </>
       )}
     </Layout>
   );

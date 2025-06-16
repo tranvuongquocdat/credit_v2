@@ -21,6 +21,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { InstallmentWarningsTable } from "@/components/Installments/InstallmentWarningsTable";
 import { getInstallmentWarnings } from "@/lib/installment-warnings";
 import { InstallmentWarningsPagination } from "@/components/Installments/InstallmentWarningsPagination";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function InstallmentWarningsPage() {
   const [installments, setInstallments] = useState<InstallmentWithCustomer[]>([]);
@@ -37,13 +38,20 @@ export default function InstallmentWarningsPage() {
     installment: InstallmentWithCustomer;
     amount: number;
   } | null>(null);
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  // Kiểm tra quyền xem danh sách hợp đồng trả góp
+  const canViewInstallmentsList = hasPermission('xem_danh_sach_hop_dong_tra_gop');
+  // Kiểm tra quyền thanh toán nhanh
+  const canPayInstallment = hasPermission('dong_lai_tra_gop');
   
   const router = useRouter();
   
   // Load installments khi page load, store thay đổi, filter thay đổi hoặc trang thay đổi
   useEffect(() => {
-    loadInstallments();
-  }, [currentStore, customerNameFilter, currentPage]);
+    if (canViewInstallmentsList) {
+      loadInstallments();
+    }
+  }, [currentStore, customerNameFilter, currentPage, canViewInstallmentsList]);
   
   async function loadInstallments() {
     if (!currentStore?.id) return;
@@ -85,6 +93,14 @@ export default function InstallmentWarningsPage() {
   
   // Handle quick payment
   const handlePayment = async (installment: InstallmentWithCustomer, amount: number) => {
+    if (!canPayInstallment) {
+      toast({
+        title: "Không có quyền",
+        description: "Bạn không có quyền thanh toán nhanh trả góp",
+        variant: "destructive"
+      });
+      return;
+    }
     // Store the payment info for confirmation
     setSelectedPayment({
       installment,
@@ -322,71 +338,81 @@ export default function InstallmentWarningsPage() {
   
   return (
     <Layout>
-      <div className="container mx-auto">
-        {/* Title */}
-        <div className="flex items-center justify-between border-b pb-2 mb-2">
-          <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold">Cảnh báo trả góp</h1>
-          </div>
+      {permissionsLoading ? (
+        <div className="p-4 border rounded-md mb-4 bg-gray-50">
+          <p className="text-center text-gray-500">Đang tải...</p>
         </div>
-        
-        {/* Filter Section */}
-        <div className="my-4">
-          <div className="flex items-center gap-4">
-            <div className="relative flex-1 max-w-md">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                <Search className="h-4 w-4 text-gray-400" />
-              </div>
-              <Input
-                type="text"
-                placeholder="Tìm kiếm theo tên khách hàng..."
-                value={customerNameFilter}
-                onChange={(e) => setCustomerNameFilter(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                className="pl-10"
-              />
-            </div>
-            <Button 
-              variant="outline" 
-              onClick={clearFilter}
-              disabled={!customerNameFilter}
-            >
-              Xóa bộ lọc
-            </Button>
-          </div>
-          {/* Show filter info if active */}
-          {customerNameFilter && (
-            <div className="mt-2 text-sm text-blue-600">
-              Đang lọc theo tên khách hàng: <span className="font-semibold">{customerNameFilter}</span>
-              {totalItems > 0 ? 
-                ` (${totalItems} kết quả)` : 
-                " (Không có kết quả)"}
-            </div>
-          )}
+      ) : !canViewInstallmentsList ? (
+        <div className="p-4 border rounded-md mb-4 bg-gray-50">
+          <p className="text-center text-gray-500">Bạn không có quyền xem cảnh báo trả góp</p>
         </div>
-        
-        <div className="mt-6">
-          <InstallmentWarningsTable
-            installments={installments}
-            isLoading={isLoading}
-            onPayment={handlePayment}
-            onCustomerClick={handleCustomerClick}
-          />
+      ) : (
+        <div className="container mx-auto">
+          {/* Title */}
+          <div className="flex items-center justify-between border-b pb-2 mb-2">
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold">Cảnh báo trả góp</h1>
+            </div>
+          </div>
           
-          {/* Pagination Component */}
-          {totalPages > 1 && (
-            <div className="mt-4 flex justify-center">
-              <InstallmentWarningsPagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                totalItems={totalItems}
-                itemsPerPage={itemsPerPage}
-                onPageChange={handlePageChange}
-              />
+          {/* Filter Section */}
+          <div className="my-4">
+            <div className="flex items-center gap-4">
+              <div className="relative flex-1 max-w-md">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                  <Search className="h-4 w-4 text-gray-400" />
+                </div>
+                <Input
+                  type="text"
+                  placeholder="Tìm kiếm theo tên khách hàng..."
+                  value={customerNameFilter}
+                  onChange={(e) => setCustomerNameFilter(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  className="pl-10"
+                />
+              </div>
+              <Button 
+                variant="outline" 
+                onClick={clearFilter}
+                disabled={!customerNameFilter}
+              >
+                Xóa bộ lọc
+              </Button>
             </div>
-          )}
+            {/* Show filter info if active */}
+            {customerNameFilter && (
+              <div className="mt-2 text-sm text-blue-600">
+                Đang lọc theo tên khách hàng: <span className="font-semibold">{customerNameFilter}</span>
+                {totalItems > 0 ? 
+                  ` (${totalItems} kết quả)` : 
+                  " (Không có kết quả)"}
+              </div>
+            )}
+          </div>
+          
+          <div className="mt-6">
+            <InstallmentWarningsTable
+              installments={installments}
+              isLoading={isLoading}
+              onPayment={handlePayment}
+              onCustomerClick={handleCustomerClick}
+            />
+            
+            {/* Pagination Component */}
+            {totalPages > 1 && (
+              <div className="mt-4 flex justify-center">
+                <InstallmentWarningsPagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={totalItems}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={handlePageChange}
+                />
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
       
       {/* Payment Confirmation Dialog */}
       <Dialog open={paymentConfirmOpen} onOpenChange={setPaymentConfirmOpen}>

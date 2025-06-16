@@ -53,6 +53,7 @@ import { convertFromHistoryToTimeArrayWithStatus } from "@/lib/Installments/conv
 import { fillRemainingPeriods } from "@/lib/Installments/fill_remaining_periods";
 import { getLatestPaymentPaidDate } from "@/lib/Installments/get_latest_payment_paid_date";
 import { getCurrentUser } from "@/lib/auth";
+import { usePermissions } from "@/hooks/usePermissions";
 // Define the tabs for this modal
 export type TabId =
   | "payment"
@@ -132,6 +133,7 @@ export function InstallmentPaymentHistoryModal({
   onContractStatusChange,
   onPaymentUpdate,
 }: InstallmentPaymentHistoryModalProps) {
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
   // State variables
   const [installment, setInstallment] =
     useState<InstallmentWithCustomer>(initialInstallment);
@@ -426,6 +428,19 @@ export function InstallmentPaymentHistoryModal({
     }
   }, [isOpen, installment?.id]);
 
+  // Reset active tab if user doesn't have permission for the current tab
+  useEffect(() => {
+    const checkPermissionForActiveTab = () => {
+      if (activeTab === 'close' && !hasPermission('dong_hop_dong_tra_gop')) {
+        setActiveTab('payment');
+      } else if (activeTab === 'rotate' && !hasPermission('dong_hop_dong_tra_gop')) {
+        setActiveTab('payment');
+      }
+    };
+    
+    checkPermissionForActiveTab();
+  }, [activeTab, hasPermission]);
+  
   // Function to load transaction history (moved outside useEffect to be reusable)
   const loadTransactionHistory = async () => {
     if (!installment?.id) return;
@@ -520,7 +535,24 @@ export function InstallmentPaymentHistoryModal({
   ) => {
     if (!installment?.id || processingCheckbox) return;
     const { id: userId } = await getCurrentUser();
-    
+    // Kiểm tra quyềnAdd commentMore actions
+    if (checked && !hasPermission('dong_lai_tra_gop')) {
+      toast({
+        variant: "destructive",
+        title: "Không có quyền",
+        description: "Bạn không có quyền đóng lãi"
+      });
+      return;
+    }
+
+    if (!checked && !hasPermission('huy_dong_lai_tra_gop')) {
+      toast({
+        variant: "destructive",
+        title: "Không có quyền",
+        description: "Bạn không có quyền hủy đóng lãi"
+      });
+      return;
+    }
     // Set processing state
     setProcessingCheckbox(true);
     setProcessingPeriodId(period.id);
@@ -766,6 +798,14 @@ export function InstallmentPaymentHistoryModal({
 
   // Lưu khoản thanh toán
   const handleSavePayment = async (period: InstallmentPaymentPeriod) => {
+    if (!hasPermission('dong_lai_tra_gop')) {
+      toast({
+        variant: "destructive",
+        title: "Không có quyền",
+        description: "Bạn không có quyền đóng lãi trả góp",
+      });
+      return;
+    }
     // Store the payment amount in temporary variable
     setTempEditedAmount(paymentAmount);
     
@@ -1147,7 +1187,15 @@ export function InstallmentPaymentHistoryModal({
 
           {/* Tabs */}
           <CreditActionTabs
-            tabs={DEFAULT_INSTALLMENT_TABS}
+            tabs={DEFAULT_INSTALLMENT_TABS.filter(tab => {
+              if (tab.id === 'close') {
+                return hasPermission('dong_hop_dong_tra_gop');
+              }
+              if (tab.id === 'rotate') {
+                return hasPermission('dao_hop_dong_tra_gop');
+              }
+              return true;
+            })}
             activeTab={activeTab}
             onChangeTab={(tabId: TabId) => setActiveTab(tabId)}
             variant="scrollable"
@@ -1204,7 +1252,7 @@ export function InstallmentPaymentHistoryModal({
             </div>
           )}
 
-          {activeTab === "close" && (
+          {activeTab === "close" && hasPermission('dong_hop_dong_tra_gop') && (
             <div className="p-4 border rounded-md">
               <h3 className="text-lg font-medium mb-4">Đóng hợp đồng</h3>
 
@@ -1586,7 +1634,7 @@ export function InstallmentPaymentHistoryModal({
             </div>
           )}
 
-          {activeTab === "rotate" && (
+          {activeTab === "rotate" && hasPermission('dong_hop_dong_tra_gop') && (
             <div className="p-4 border rounded-md">
               <div>
                 <p className="mb-4">

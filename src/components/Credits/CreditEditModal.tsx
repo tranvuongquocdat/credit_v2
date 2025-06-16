@@ -803,7 +803,7 @@ export function CreditEditModal({
               <Button 
                 type="submit" 
                 className="bg-blue-600 hover:bg-blue-700 text-white"
-                disabled={isLoading}
+                disabled={isLoading || status === CreditStatus.CLOSED || status === CreditStatus.DELETED}
               >
                 {isLoading ? 'Đang xử lý...' : 'Cập nhật'}
               </Button>

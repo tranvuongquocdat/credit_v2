@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PaymentHistoryModal } from "@/components/Credits/PaymentHistoryModal";
 import { CreditWarningsPagination } from "@/components/Credits/CreditWarningsPagination";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function CreditWarningPage() {
   const [credits, setCredits] = useState<CreditWithCustomer[]>([]);
@@ -28,7 +29,10 @@ export default function CreditWarningPage() {
   // State for payment history modal
   const [isPaymentHistoryModalOpen, setIsPaymentHistoryModalOpen] = useState(false);
   const [paymentHistoryCredit, setPaymentHistoryCredit] = useState<CreditWithCustomer | null>(null);
-  
+
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  // Kiểm tra quyền xem danh sách hợp đồng trả góp
+  const canViewCreditWarnings = hasPermission('xem_danh_sach_hop_dong_tin_chap');
   // Load credits when the page loads, store changes, or pagination/filter changes
   useEffect(() => {
     if (currentStore?.id) {
@@ -106,6 +110,16 @@ export default function CreditWarningPage() {
   
   return (
     <Layout>
+      {permissionsLoading ? (
+        <div className="p-4 border rounded-md mb-4 bg-gray-50">
+          <p className="text-center text-gray-500">Đang tải...</p>
+        </div>
+      ) : !canViewCreditWarnings ? (
+        <div className="p-4 border rounded-md mb-4 bg-gray-50">
+          <p className="text-center text-gray-500">Bạn không có quyền xem cảnh báo vay tiền</p>
+        </div>
+      ) : (
+      <>
       <div className="container mx-auto">
         {/* Title */}
         <div className="flex items-center justify-between border-b pb-2 mb-2">
@@ -178,7 +192,8 @@ export default function CreditWarningPage() {
           credit={paymentHistoryCredit}
         />
       )}
-      
+      </>
+      )}
     </Layout>
   );
 } 
