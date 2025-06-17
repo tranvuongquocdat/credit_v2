@@ -48,6 +48,9 @@ export function PaymentHistoryModal({
   // Thay đổi từ boolean sang counter
   const [dataChangeCounter, setDataChangeCounter] = useState(0);
   
+  // State for optimistic updates tracking
+  const [hasOptimisticUpdates, setHasOptimisticUpdates] = useState<boolean>(false);
+  
   // State đơn giản cho tổng lãi phí và nợ cũ
   const [totalExpectedInterest, setTotalExpectedInterest] = useState<number>(0);
   const [remainingDebt, setRemainingDebt] = useState<number>(0);
@@ -481,6 +484,7 @@ export function PaymentHistoryModal({
                 setDataChangeCounter(prev => prev + 1);                
                 reloadCreditInfo();
               }}
+              onOptimisticStateChange={setHasOptimisticUpdates}
             />
           )}
           

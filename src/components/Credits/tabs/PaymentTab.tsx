@@ -27,6 +27,7 @@ type PaymentTabProps = {
   formatDate: (date: string) => string;
   calculateDaysBetween: (start: Date, end: Date) => number;
   onDataChange?: () => void;
+  onOptimisticStateChange?: (hasOptimisticUpdates: boolean) => void;
 };
 
 // Helper function to format number with thousand separators for input
@@ -48,7 +49,8 @@ export function PaymentTab({
   formatCurrency,
   formatDate,
   calculateDaysBetween,
-  onDataChange
+  onDataChange,
+  onOptimisticStateChange
 }: PaymentTabProps) {
   // State for inline payment editing
   const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
@@ -260,6 +262,10 @@ export function PaymentTab({
     }
 
     const periodId = period.id || `temp-${period.period_number}`;
+    
+    // Set processing state
+    setIsProcessingCheckbox(true);
+    
     // 1. OPTIMISTIC UPDATE - Update UI immediately
     setOptimisticUpdates(prev => ({
       ...prev,
@@ -497,6 +503,7 @@ export function PaymentTab({
       });
     } finally {
       setLoadingPeriods(prev => ({ ...prev, [periodId]: false }));
+      setIsProcessingCheckbox(false);
     }
   };
 
@@ -566,6 +573,11 @@ export function PaymentTab({
     loadLastPaymentEndDate();
   }, [credit?.id, onDataChange]); // Reload khi có thay đổi dữ liệu
 
+  useEffect(() => {
+    const hasOptimisticUpdates = Object.keys(optimisticUpdates).length > 0;
+    onOptimisticStateChange?.(hasOptimisticUpdates);
+  }, [optimisticUpdates, onOptimisticStateChange]);
+
   return (
     <div className="relative">
       {/* NEW: Background sync indicator */}
@@ -575,8 +587,8 @@ export function PaymentTab({
           Đang đồng bộ...
         </div>
       )}
-      {/* Processing overlay - only when actually processing */}
-      {isProcessingCheckbox && (
+      {/* Processing overlay - Hidden when optimistic updates are active */}
+      {isProcessingCheckbox && Object.keys(optimisticUpdates).length === 0 && (
         <div className="absolute inset-0 bg-white bg-opacity-70 z-10 flex items-center justify-center">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 shadow-lg">
             <div className="flex items-center">
@@ -645,22 +657,11 @@ export function PaymentTab({
           </tr>
         </thead>
         <tbody>
-          {loading ? (
+          {/* UPDATED: Always show periods if available, even during background refresh */}
+          {periodsToDisplay.length === 0 ? (
             <tr>
               <td colSpan={8} className="py-4 text-center text-gray-500">
-                Đang tải dữ liệu...
-              </td>
-            </tr>
-          ) : error ? (
-            <tr>
-              <td colSpan={8} className="py-4 text-center text-red-500">
-                {error}
-              </td>
-            </tr>
-          ) : periodsToDisplay.length === 0 ? (
-            <tr>
-              <td colSpan={8} className="py-4 text-center text-gray-500">
-              {isGenerating ? "Đang tải dữ liệu..." : "Không có dữ liệu"}
+                {loading || isGenerating ? "Đang tải dữ liệu..." : error ? error : "Không có dữ liệu"}
               </td>
             </tr>
           ) : (
