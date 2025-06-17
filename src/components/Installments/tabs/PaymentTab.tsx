@@ -3,9 +3,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { InstallmentWithCustomer, InstallmentStatus } from "@/models/installment";
 import { format } from "date-fns";
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
 import { usePermissions } from "@/hooks/usePermissions";
+
 interface PaymentTabProps {
   loading: boolean;
   error: string | null;
@@ -29,6 +30,7 @@ interface PaymentTabProps {
   processingCheckbox: boolean;
   processingPeriodId: string | null;
   handleCheckboxChange: (period: InstallmentPaymentPeriod, checked: boolean, index: number) => void;
+  onOptimisticStateChange?: (hasOptimisticUpdates: boolean) => void;
 }
 
 export const PaymentTab: React.FC<PaymentTabProps> = ({
@@ -54,18 +56,98 @@ export const PaymentTab: React.FC<PaymentTabProps> = ({
   processingCheckbox,
   processingPeriodId,
   handleCheckboxChange,
+  onOptimisticStateChange,
 }) => {
   const { hasPermission } = usePermissions();
+  
+  // OPTIMISTIC UPDATES STATE
+  const [optimisticUpdates, setOptimisticUpdates] = useState<Record<string, boolean>>({});
+  const [isBackgroundSyncing, setIsBackgroundSyncing] = useState(false);
+  
+  // Notify parent about optimistic state changes
+  useEffect(() => {
+    const hasOptimisticUpdates = Object.keys(optimisticUpdates).length > 0;
+    onOptimisticStateChange?.(hasOptimisticUpdates);
+  }, [optimisticUpdates, onOptimisticStateChange]);
+  
   // Kiểm tra quyền đóng lãi trả góp
   const canPayInstallment = hasPermission('dong_lai_tra_gop');
+  
   // Helper to format number with dot
   const formatNumberWithDot = (num: number): string => {
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   };
 
+  // OPTIMISTIC HELPER: Get effective checked state
+  const getEffectiveCheckedState = (period: InstallmentPaymentPeriod): boolean => {
+    const periodId = period.id;
+    
+    // Prioritize optimistic state if exists
+    if (periodId in optimisticUpdates) {
+      return optimisticUpdates[periodId];
+    }
+    
+    // Fall back to actual database state
+    return isPeriodInDatabase(period);
+  };
+
+  // OPTIMISTIC HANDLER: Enhanced checkbox handler
+  const handleOptimisticCheckboxChange = async (
+    period: InstallmentPaymentPeriod,
+    checked: boolean,
+    index: number
+  ) => {
+    const periodId = period.id;
+    
+    // 1. IMMEDIATE UI UPDATE (Optimistic)
+    setOptimisticUpdates(prev => ({
+      ...prev,
+      [periodId]: checked
+    }));
+    
+    // 2. Show background sync indicator
+    setIsBackgroundSyncing(true);
+    
+    try {
+      // 3. Background database sync
+      await handleCheckboxChange(period, checked, index);
+      
+      // 4. Clear optimistic state after successful sync
+      setOptimisticUpdates(prev => {
+        const newUpdates = { ...prev };
+        delete newUpdates[periodId];
+        return newUpdates;
+      });
+      
+    } catch (error) {
+      // 5. Rollback optimistic update on error
+      setOptimisticUpdates(prev => {
+        const newUpdates = { ...prev };
+        delete newUpdates[periodId];
+        return newUpdates;
+      });
+      
+      console.error('Optimistic update failed, rolled back:', error);
+    } finally {
+      // 6. Hide sync indicator after delay
+      setTimeout(() => {
+        setIsBackgroundSyncing(false);
+      }, 800);
+    }
+  };
+
   return (
-    <div>
-      {loading ? (
+    <div className="relative">
+      {/* Background sync indicator */}
+      {isBackgroundSyncing && (
+        <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-3 py-1 rounded-full shadow-lg z-20 flex items-center">
+          <div className="h-3 w-3 rounded-full border border-white border-t-transparent animate-spin mr-2"></div>
+          Đang đồng bộ...
+        </div>
+      )}
+      
+      {/* CONDITIONAL LOADING: Only show when no data exists */}
+      {loading && calculateCombinedPaymentPeriods.length === 0 ? (
         <div className="text-center py-20">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700 mx-auto"></div>
           <p className="mt-2 text-gray-500">Đang tải dữ liệu...</p>
@@ -90,7 +172,10 @@ export const PaymentTab: React.FC<PaymentTabProps> = ({
             <tbody className="divide-y divide-gray-200">
               {calculateCombinedPaymentPeriods.map((period, index) => {
                 const actualAmount = period.actualAmount || period.expectedAmount;
-                const isPaid = isPeriodInDatabase(period);
+                
+                // USE OPTIMISTIC STATE
+                const isPaid = getEffectiveCheckedState(period);
+                
                 const isEditing = selectedPeriodId === period.id;
                 const isDateEditing = selectedDatePeriodId === period.id;
 
@@ -176,12 +261,14 @@ export const PaymentTab: React.FC<PaymentTabProps> = ({
                         checked={isPaid}
                         disabled={processingCheckbox || installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
                         onCheckedChange={(checked) => {
-                          console.log("checked",period.id);
+                          console.log("optimistic checkbox change:", period.id, checked);
                           if (period && period.id) {
-                            handleCheckboxChange(period, !!checked, index);
+                            // USE OPTIMISTIC HANDLER
+                            handleOptimisticCheckboxChange(period, !!checked, index);
                           }
                         }}
                       />
+                      {/* Per-period loading indicator */}
                       {processingCheckbox && processingPeriodId === period.id && (
                         <div className="inline-block ml-2 animate-spin rounded-full h-3 w-3 border-b-2 border-blue-700"></div>
                       )}
