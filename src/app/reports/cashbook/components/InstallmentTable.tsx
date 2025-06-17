@@ -54,6 +54,7 @@ export default function InstallmentTable({ storeId, startDate, endDate }: Instal
           )
         `)
         .eq('installments.employees.store_id', storeId)
+        .or('is_deleted.is.null,is_deleted.eq.false')
         .gte('created_at', start.toISOString())
         .lte('created_at', end.toISOString())
         .order('created_at', { ascending: false });

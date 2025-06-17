@@ -273,7 +273,7 @@ export default function MoneyFlowByDayPage() {
     }
   };
   
-  // Fetch daily cash flow data
+  // Optimized: Fetch daily cash flow data with parallel processing
   const fetchDailyCashFlow = async () => {
     if (!currentStore?.id) return;
     
@@ -293,136 +293,139 @@ export default function MoneyFlowByDayPage() {
         dates.push(new Date(currentDate));
         currentDate.setDate(currentDate.getDate() + 1);
       }
+
+      // OPTIMIZATION 1: Fetch ALL data for the entire date range in one go (parallel queries)
+      const startRangeISO = startDateObj.toISOString();
+      const endRangeISO = endDateObj.toISOString();
+
+      console.log('Fetching all transaction data in parallel...');
       
-      // Prepare data structure for each day
-      const dailyData: DailyCashFlow[] = [];
-      
-      // For each day in the range
-      for (const date of dates) {
-        const dayStart = startOfDay(date);
-        const dayEnd = endOfDay(date);
-        const dayStartISO = dayStart.toISOString();
-        const dayEndISO = dayEnd.toISOString();
-        
-        // Get opening balance for this day
-        const openingBalance = await fetchOpeningBalanceForDate(date);
-        
-        // Fetch pawn transactions for the day
-        const pawnHistoryData = await fetchAllData(
+      const [
+        allPawnHistory,
+        allCreditHistory,
+        allInstallmentHistory,
+        allTransactions,
+        allStoreFundHistory
+      ] = await Promise.all([
+        // Pawn history for entire range
+        fetchAllData(
           supabase
             .from('pawn_history')
-            .select(`
-              *,
-              pawns!inner (contract_code, store_id)
-            `)
+            .select('created_at, credit_amount, debit_amount, pawns!inner(store_id)')
             .eq('pawns.store_id', storeId)
             .or('is_deleted.is.null,is_deleted.eq.false')
-            .gte('created_at', dayStartISO)
-            .lte('created_at', dayEndISO)
-        );
+            .gte('created_at', startRangeISO)
+            .lte('created_at', endRangeISO)
+        ),
         
-        // Calculate pawn activity for the day
-        let pawnActivity = 0;
-        pawnHistoryData.forEach((item) => {
-          pawnActivity += (item.credit_amount as number || 0) - (item.debit_amount as number || 0);
-        });
-        
-        // Fetch credit transactions for the day
-        const creditHistoryData = await fetchAllData(
+        // Credit history for entire range
+        fetchAllData(
           supabase
             .from('credit_history')
-            .select(`
-              *,
-              credits!inner (contract_code, store_id)
-            `)
+            .select('created_at, credit_amount, debit_amount, credits!inner(store_id)')
             .eq('credits.store_id', storeId)
             .or('is_deleted.is.null,is_deleted.eq.false')
-            .gte('created_at', dayStartISO)
-            .lte('created_at', dayEndISO)
-        );
+            .gte('created_at', startRangeISO)
+            .lte('created_at', endRangeISO)
+        ),
         
-        // Calculate credit activity for the day
-        let creditActivity = 0;
-        creditHistoryData.forEach((item) => {
-          creditActivity += (item.credit_amount as number || 0) - (item.debit_amount as number || 0);
-        });
-        
-        // Fetch installment transactions for the day
-        const { data: installmentHistoryData } = await supabase
+        // Installment history for entire range
+        supabase
           .from('installment_history')
-          .select(`
-            *,
-            installments!inner (
-              contract_code,
-              employee_id,
-              employees!inner (store_id)
-            )
-          `)
+          .select('created_at, credit_amount, debit_amount, installments!inner(employee_id, employees!inner(store_id))')
           .eq('installments.employees.store_id', storeId)
           .or('is_deleted.is.null,is_deleted.eq.false')
-          .gte('created_at', dayStartISO)
-          .lte('created_at', dayEndISO)
-          .limit(10000);
+          .gte('created_at', startRangeISO)
+          .lte('created_at', endRangeISO)
+          .limit(50000)
+          .then(({ data }) => data || []),
         
-        // Calculate installment activity for the day
-        let installmentActivity = 0;
-        if (installmentHistoryData) {
-          installmentHistoryData.forEach((item: any) => {
-            installmentActivity += (item.credit_amount || 0) - (item.debit_amount || 0);
-          });
-        }
+                 // Transactions for entire range
+         supabase
+           .from('transactions')
+           .select('created_at, credit_amount, debit_amount, transaction_type')
+           .eq('store_id', storeId)
+           .eq('is_deleted', false)
+           .gte('created_at', startRangeISO)
+           .lte('created_at', endRangeISO)
+           .limit(50000)
+           .then(({ data }) => data || []),
         
-        // Fetch transactions (income/expense) for the day
-        const { data: transactionsData } = await supabase
-          .from('transactions')
-          .select('*')
-          .eq('store_id', storeId)
-          .eq('is_deleted', false)
-          .gte('created_at', dayStartISO)
-          .lte('created_at', dayEndISO)
-          .limit(10000);
-        
-        // Calculate income/expense for the day
-        let incomeExpenseActivity = 0;
-        if (transactionsData) {
-          transactionsData.forEach((item: any) => {
-            let amount = (item.credit_amount || 0) - (item.debit_amount || 0);
-            if (amount === 0) {
-              amount = item.transaction_type === 'expense' ? 
-                -Number(item.amount || 0) : 
-                Number(item.amount || 0);
-            }
-            incomeExpenseActivity += amount;
-          });
-        }
-        
-        // Fetch capital/fund transactions for the day
-        const { data: storeFundData } = await supabase
+        // Store fund history for entire range
+        supabase
           .from('store_fund_history')
-          .select('*')
+          .select('created_at, fund_amount, transaction_type')
           .eq('store_id', storeId)
-          .gte('created_at', dayStartISO)
-          .lte('created_at', dayEndISO)
-          .limit(10000);
+          .gte('created_at', startRangeISO)
+          .lte('created_at', endRangeISO)
+          .limit(50000)
+          .then(({ data }) => data || [])
+      ]);
+
+      console.log('All data fetched, processing days in parallel...');
+
+      // OPTIMIZATION 2: Process all days in parallel instead of sequential
+      const dailyDataPromises = dates.map(async (date) => {
+        const dayStart = startOfDay(date);
+        const dayEnd = endOfDay(date);
         
-        // Calculate capital changes for the day
-        let capitalActivity = 0;
-        if (storeFundData) {
-          storeFundData.forEach((item: any) => {
-            const amount = item.transaction_type === 'withdrawal' ? 
-              -Number(item.fund_amount || 0) : 
-              Number(item.fund_amount || 0);
-            capitalActivity += amount;
-          });
-        }
+                 // OPTIMIZATION 3: Filter data in memory instead of additional DB queries
+         const dayPawnData = allPawnHistory.filter(item => {
+           const itemDate = new Date(item.created_at as string);
+           return itemDate >= dayStart && itemDate <= dayEnd;
+         });
+         
+         const dayCreditData = allCreditHistory.filter(item => {
+           const itemDate = new Date(item.created_at as string);
+           return itemDate >= dayStart && itemDate <= dayEnd;
+         });
+         
+         const dayInstallmentData = allInstallmentHistory.filter(item => {
+           const itemDate = new Date(item.created_at as string);
+           return itemDate >= dayStart && itemDate <= dayEnd;
+         });
+         
+         const dayTransactionData = allTransactions.filter(item => {
+           const itemDate = new Date(item.created_at as string);
+           return itemDate >= dayStart && itemDate <= dayEnd;
+         });
+         
+         const dayFundData = allStoreFundHistory.filter(item => {
+           const itemDate = new Date(item.created_at as string);
+           return itemDate >= dayStart && itemDate <= dayEnd;
+         });
+
+        // Calculate activities for the day
+        const pawnActivity = dayPawnData.reduce((sum, item) => 
+          sum + (item.credit_amount as number || 0) - (item.debit_amount as number || 0), 0);
+        
+        const creditActivity = dayCreditData.reduce((sum, item) => 
+          sum + (item.credit_amount as number || 0) - (item.debit_amount as number || 0), 0);
+        
+        const installmentActivity = dayInstallmentData.reduce((sum, item: any) => 
+          sum + (item.credit_amount || 0) - (item.debit_amount || 0), 0);
+        
+                 const incomeExpenseActivity = dayTransactionData.reduce((sum, item: any) => {
+           const amount = (item.credit_amount || 0) - (item.debit_amount || 0);
+           return sum + amount;
+         }, 0);
+        
+        const capitalActivity = dayFundData.reduce((sum, item: any) => {
+          const amount = item.transaction_type === 'withdrawal' ? 
+            -Number(item.fund_amount || 0) : 
+            Number(item.fund_amount || 0);
+          return sum + amount;
+        }, 0);
+
+        // Get opening balance and loans in parallel
+        const [openingBalance, loans] = await Promise.all([
+          fetchOpeningBalanceForDate(date),
+          fetchLoansForDate(date)
+        ]);
         
         // Calculate closing balance
         const closingBalance = openingBalance + pawnActivity + creditActivity + 
           installmentActivity + incomeExpenseActivity + capitalActivity;
-        
-        // Fetch current loans
-        const loans = await fetchLoansForDate(date);
-        const totalLoans = loans.pawn + loans.credit + loans.installment;
         
         // Borrowed capital is assumed to be 0 as per requirement
         const borrowedCapital = 0;
@@ -434,8 +437,7 @@ export default function MoneyFlowByDayPage() {
           (loans.installment + loans.installmentDebt) - 
           borrowedCapital;
         
-        // Add to daily data
-        dailyData.push({
+        return {
           date,
           openingBalance,
           pawnActivity,
@@ -452,13 +454,17 @@ export default function MoneyFlowByDayPage() {
           installmentDebts: loans.installmentDebt,
           borrowedCapital,
           totalAssets
-        });
-      }
+        };
+      });
+
+      // Wait for all days to be processed
+      const dailyData = await Promise.all(dailyDataPromises);
       
       // Sort by date descending
       dailyData.sort((a, b) => b.date.getTime() - a.date.getTime());
       
       setCashFlowData(dailyData);
+      console.log('All processing completed!');
     } catch (err) {
       console.error('Error fetching cash flow data:', err);
       setError('Đã xảy ra lỗi khi tải dữ liệu');
