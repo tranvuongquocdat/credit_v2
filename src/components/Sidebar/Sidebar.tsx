@@ -214,18 +214,29 @@ export default function Sidebar() {
       <div className={`fixed left-0 top-14 h-[calc(100vh-3.5rem)] bg-white shadow-lg transition-all duration-300 ${
         isCollapsed ? 'w-20' : 'w-64'
       } z-40`}>
-        <div className="flex h-12 items-center justify-between px-4 border-b">
-          {!isCollapsed && (
-            <div className="flex items-center space-x-2">
-              <h2 className="text-sm font-medium text-gray-600">Menu điều hướng</h2>
+        <div className="flex h-12 items-center px-4 border-b">
+          {!isCollapsed ? (
+            <>
+              <div className="flex items-center space-x-2 flex-1">
+                <h2 className="text-sm font-medium text-gray-600">Menu điều hướng</h2>
+              </div>
+              <button
+                onClick={toggleCollapsed}
+                className="p-2 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0"
+              >
+                <FiChevronLeft size={20} />
+              </button>
+            </>
+          ) : (
+            <div className="w-full flex justify-center">
+              <button
+                onClick={toggleCollapsed}
+                className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <FiMenu size={20} />
+              </button>
             </div>
           )}
-          <button
-            onClick={toggleCollapsed}
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-          >
-            {isCollapsed ? <FiMenu size={20} /> : <FiChevronLeft size={20} />}
-          </button>
         </div>
         <div className="p-4 flex items-center justify-center h-[calc(100vh-3.5rem-3rem)]">
           <div className="animate-pulse text-gray-400">Loading...</div>
@@ -238,23 +249,34 @@ export default function Sidebar() {
     <div className={`fixed left-0 top-14 h-[calc(100vh-3.5rem)] bg-white shadow-lg transition-all duration-300 ${
       isCollapsed ? 'w-20' : 'w-64'
     } z-40`}>
-      <div className="flex h-12 items-center justify-between px-4 border-b">
-        {!isCollapsed && (
-          <div className="flex items-center space-x-2">
-            <h2 className="text-sm font-medium text-gray-600">Menu điều hướng</h2>
-            {currentUser?.role === 'superadmin' && (
-              <span className="px-2 py-1 text-xs bg-red-100 text-red-600 rounded-full font-medium">
-                SUPERADMIN
-              </span>
-            )}
+      <div className="flex h-12 items-center px-4 border-b">
+        {!isCollapsed ? (
+          <>
+            <div className="flex items-center space-x-2 flex-1">
+              <h2 className="text-sm font-medium text-gray-600">Menu điều hướng</h2>
+              {currentUser?.role === 'superadmin' && (
+                <span className="px-2 py-1 text-xs bg-red-100 text-red-600 rounded-full font-medium">
+                  SUPERADMIN
+                </span>
+              )}
+            </div>
+            <button
+              onClick={toggleCollapsed}
+              className="p-2 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0"
+            >
+              <FiChevronLeft size={20} />
+            </button>
+          </>
+        ) : (
+          <div className="w-full flex justify-center">
+            <button
+              onClick={toggleCollapsed}
+              className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              <FiMenu size={20} />
+            </button>
           </div>
         )}
-        <button
-          onClick={toggleCollapsed}
-          className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-        >
-          {isCollapsed ? <FiMenu size={20} /> : <FiChevronLeft size={20} />}
-        </button>
       </div>
 
       <nav className="p-4 flex flex-col h-[calc(100vh-3.5rem-3rem)] overflow-y-auto">

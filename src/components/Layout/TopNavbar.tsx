@@ -1,6 +1,6 @@
 "use client";
 
-import { Settings, Lock, User, Clock, Bike, DollarSign, Salad, Folder, ChevronDown, LogOut } from "lucide-react";
+import { Settings, Lock, User, Clock, Package, CreditCard, Calendar, Folder, ChevronDown, LogOut, Bell } from "lucide-react";
 import Link from "next/link";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useState, useEffect, memo, useCallback } from "react";
@@ -55,46 +55,53 @@ const StoreDropdown = memo(({
   return (
     <div className="relative">
       <button 
-        className="flex items-center px-2 hover:bg-[#3a5a75] transition-colors border-l border-r border-[rgba(0,0,0,0.2)]" 
+        className="flex items-center px-4 py-2 hover:bg-white/10 transition-all duration-200 rounded-lg bg-white/5 border border-white/10" 
         onClick={toggleDropdown}
       >
-        <Folder className="h-6 w-6 mr-1" />
-        <span className="text-white whitespace-nowrap mr-1">
+        <Folder className="h-5 w-5 mr-2" />
+        <span className="text-white whitespace-nowrap mr-2 font-medium">
           {loading ? 'Đang tải...' : (currentStore ? currentStore.name : 'Chọn cửa hàng')}
         </span>
-        <ChevronDown className="h-4 w-4" />
+        <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
       
       {/* Store dropdown menu */}
       {isOpen && (
-        <div className="absolute left-0 top-full mt-1 w-64 bg-white rounded-md shadow-lg py-1 text-gray-700 z-50">
+        <div className="absolute left-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-100 py-2 text-gray-700 z-50">
           {/* Refresh button */}
-          <div className="px-4 py-2 border-b border-gray-200">
+          <div className="px-4 py-3 border-b border-gray-100">
             <button
               onClick={handleRefresh}
-              className="flex items-center text-sm text-blue-600 hover:text-blue-800"
+              className="flex items-center text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded-lg transition-colors duration-150"
               disabled={loading}
             >
               <Settings className="h-4 w-4 mr-2" />
-              {loading ? 'Đang tải...' : 'Làm mới danh sách'}
+              <span className="font-medium">{loading ? 'Đang tải...' : 'Làm mới danh sách'}</span>
             </button>
           </div>
           
-          {stores.length === 0 ? (
-            <div className="px-4 py-2 text-sm text-gray-500">
-              {loading ? 'Đang tải cửa hàng...' : 'Không có cửa hàng nào'}
-            </div>
-          ) : (
-            stores.map(store => (
-              <button
-                key={store.id}
-                className={`block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${currentStore?.id === store.id ? 'bg-gray-100 font-medium' : ''}`}
-                onClick={() => selectStore(store)}
-              >
-                <div className="font-medium">{store.name}</div>
-              </button>
-            ))
-          )}
+          <div className="max-h-64 overflow-y-auto">
+            {stores.length === 0 ? (
+              <div className="px-4 py-3 text-sm text-gray-500 text-center">
+                {loading ? 'Đang tải cửa hàng...' : 'Không có cửa hàng nào'}
+              </div>
+            ) : (
+              stores.map(store => (
+                <button
+                  key={store.id}
+                  className={`block w-full text-left px-4 py-3 text-sm hover:bg-gray-50 transition-colors duration-150 mx-2 rounded-lg ${
+                    currentStore?.id === store.id ? 'bg-blue-50 text-blue-700 border-l-4 border-blue-500' : ''
+                  }`}
+                  onClick={() => selectStore(store)}
+                >
+                  <div className="font-medium">{store.name}</div>
+                  {currentStore?.id === store.id && (
+                    <div className="text-xs text-blue-600 mt-1">Đang chọn</div>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -202,7 +209,7 @@ export function TopNavbar() {
   const renderNotificationBadge = (count: number) => {
     if (count > 0) {
       return (
-        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-4 h-4 flex items-center justify-center">
+        <span className="absolute -top-1 -right-1 bg-gradient-to-r from-red-500 to-red-600 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full shadow-lg border-2 border-white font-semibold">
           {count > 99 ? '99+' : count}
         </span>
       );
@@ -213,68 +220,71 @@ export function TopNavbar() {
 
   
   return (
-    <div className="fixed top-0 left-0 right-0 h-14 bg-[#4d7496] text-white z-50 flex items-center justify-between px-4 shadow-md">
+    <div className="fixed top-0 left-0 right-0 h-16 bg-gradient-to-r from-[#4d7496] to-[#5a8bb0] text-white z-50 flex items-center justify-between px-6 shadow-lg border-b border-[#3a5a75]">
       {/* Left section with logo and settings icons */}
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-6">
         {/* Logo section */}
-        <Link href="/" className="flex items-center mr-6">
-          <div className="h-8 w-8 rounded bg-white text-[#4d7496] flex items-center justify-center font-bold">CR</div>
-          <span className="ml-2 font-medium">Quản lý Credit</span>
+        <Link href="/" className="flex items-center group">
+          <div className="h-10 w-10 rounded-lg bg-white text-[#4d7496] flex items-center justify-center font-bold text-lg shadow-md group-hover:shadow-lg transition-all duration-200">
+            CR
+          </div>
+          <span className="ml-3 font-semibold text-lg tracking-wide">Quản lý Credit</span>
         </Link>
 
-        
         {/* Left side icons group */}
-        <div className="flex items-center space-x-1">
+        <div className="flex items-center">
           <button 
-            className="p-2 hover:bg-[#3a5a75] transition-colors border-l border-r border-[rgba(0,0,0,0.2)] relative" 
+            className="p-3 hover:bg-white/10 transition-all duration-200 rounded-lg relative group" 
             title={`Cửa hàng có tổng ${notificationCounts.storeInvoices} hóa đơn cần xử lý`}
           >
-            <Settings className="h-6 w-6" />
+            <Settings className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
             {renderNotificationBadge(notificationCounts.storeInvoices)}
           </button>
-          <button className="p-2 hover:bg-[#3a5a75] transition-colors border-l border-r border-[rgba(0,0,0,0.2)] relative" title="Cài đặt khóa">
-            <Lock className="h-6 w-6" />
+          <button className="p-3 hover:bg-white/10 transition-all duration-200 rounded-lg relative group" title="Cài đặt khóa">
+            <Lock className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
           </button>
-          <button className="p-2 hover:bg-[#3a5a75] transition-colors border-l border-r border-[rgba(0,0,0,0.2)] relative" title="Danh sách khách hàng bị báo xấu">
-            <User className="h-6 w-6" />
+          <button className="p-3 hover:bg-white/10 transition-all duration-200 rounded-lg relative group" title="Danh sách khách hàng bị báo xấu">
+            <User className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
           </button>
         </div>
       </div>
 
       {/* Right section with various icons */}
       <div className="flex items-center space-x-2">
-        {/* Right side icons group */}
-        <button 
-          className="p-2 hover:bg-[#3a5a75] transition-colors border-l border-r border-[rgba(0,0,0,0.2)] relative" 
-          title={`Có ${notificationCounts.appointments} hồ sơ đang hẹn`}
-        >
-          <Clock className="h-6 w-6" />
-          {renderNotificationBadge(notificationCounts.appointments)}
-        </button>
-        <button 
-          className="p-2 hover:bg-[#3a5a75] transition-colors border-l border-r border-[rgba(0,0,0,0.2)] relative" 
-          title={`Cầm đồ có ${notificationCounts.pawnInvoices} hóa đơn cần xử lý`}
-          onClick={() => router.push('/pawn-warnings')}
-        >
-          <Bike className="h-6 w-6" />
-          {renderNotificationBadge(notificationCounts.pawnInvoices)}
-        </button>
-        <button 
-          className="p-2 hover:bg-[#3a5a75] transition-colors border-l border-r border-[rgba(0,0,0,0.2)] relative" 
-          title={`Tín chấp có ${notificationCounts.loanInvoices} hóa đơn cần xử lý`}
-          onClick={() => router.push('/credit-warnings')}
-        >
-          <DollarSign className="h-6 w-6" />
-          {renderNotificationBadge(notificationCounts.loanInvoices)}
-        </button>
-        <button 
-          className="p-2 hover:bg-[#3a5a75] transition-colors border-l border-r border-[rgba(0,0,0,0.2)] relative" 
-          title={`Trả góp có ${notificationCounts.installmentInvoices} hợp đồng cần xử lý`}
-          onClick={() => router.push('/installment-warnings')}
-        >
-          <Salad className="h-6 w-6" />
-          {renderNotificationBadge(notificationCounts.installmentInvoices)}
-        </button>
+        {/* Notification icons group */}
+        <div className="flex items-center space-x-1 bg-white/5 rounded-xl px-2 py-1">
+          <button 
+            className="p-2.5 hover:bg-white/15 transition-all duration-200 rounded-lg relative group" 
+            title={`Có ${notificationCounts.appointments} hồ sơ đang hẹn`}
+          >
+            <Clock className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
+            {renderNotificationBadge(notificationCounts.appointments)}
+          </button>
+          <button 
+            className="p-2.5 hover:bg-white/15 transition-all duration-200 rounded-lg relative group" 
+            title={`Cầm đồ có ${notificationCounts.pawnInvoices} hóa đơn cần xử lý`}
+            onClick={() => router.push('/pawn-warnings')}
+          >
+            <Package className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
+            {renderNotificationBadge(notificationCounts.pawnInvoices)}
+          </button>
+          <button 
+            className="p-2.5 hover:bg-white/15 transition-all duration-200 rounded-lg relative group" 
+            title={`Tín chấp có ${notificationCounts.loanInvoices} hóa đơn cần xử lý`}
+            onClick={() => router.push('/credit-warnings')}
+          >
+            <CreditCard className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
+            {renderNotificationBadge(notificationCounts.loanInvoices)}
+          </button>
+          <button 
+            className="p-2.5 hover:bg-white/15 transition-all duration-200 rounded-lg relative group" 
+            title={`Trả góp có ${notificationCounts.installmentInvoices} hợp đồng cần xử lý`}
+            onClick={() => router.push('/installment-warnings')}
+          >
+            <Calendar className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
+            {renderNotificationBadge(notificationCounts.installmentInvoices)}
+          </button>
+        </div>
         
         {/* Memomized Store Dropdown Component với storeVersion để buộc re-render */}
         <StoreDropdown
@@ -288,24 +298,27 @@ export function TopNavbar() {
         
         {/* User profile with dropdown */}
         <div className="relative group ml-2">
-          <button className="flex items-center space-x-1 p-1 hover:bg-[#3a5a75] transition-colors border-l border-r border-[rgba(0,0,0,0.2)] relative">
-            <Avatar className="h-8 w-8 bg-[#729bbe]">
-              <AvatarFallback className="bg-[#3a5a75] text-white">{user?.username?.charAt(0).toUpperCase() || 'N/A'}</AvatarFallback>
+          <button className="flex items-center space-x-2 p-2 hover:bg-white/10 transition-all duration-200 rounded-lg relative">
+            <Avatar className="h-9 w-9 bg-gradient-to-br from-[#729bbe] to-[#5a8bb0] ring-2 ring-white/20">
+              <AvatarFallback className="bg-gradient-to-br from-[#3a5a75] to-[#4d7496] text-white font-semibold">
+                {user?.username?.charAt(0).toUpperCase() || 'N/A'}
+              </AvatarFallback>
             </Avatar>
-            <span className="ml-1 hidden md:inline-block">{user?.username || 'N/A'}</span>
-            <ChevronDown className="h-4 w-4 hidden md:block" />
+            <span className="ml-1 hidden md:inline-block font-medium">{user?.username || 'N/A'}</span>
+            <ChevronDown className="h-4 w-4 hidden md:block group-hover:rotate-180 transition-transform duration-200" />
           </button>
           
           {/* Dropdown menu */}
-          <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-md shadow-lg py-1 text-gray-700 invisible group-hover:visible transform opacity-0 group-hover:opacity-100 transition-all duration-200 z-50">
-            <Link href="/profile" className="block px-4 py-2 text-sm hover:bg-gray-100 flex items-center">
-              <User className="h-4 w-4 mr-2" />
-              Hồ sơ cá nhân
+          <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-gray-100 py-2 text-gray-700 invisible group-hover:visible transform opacity-0 group-hover:opacity-100 transition-all duration-200 z-50">
+            <Link href="/profile" className="block px-4 py-3 text-sm hover:bg-gray-50 flex items-center rounded-lg mx-2 transition-colors duration-150">
+              <User className="h-4 w-4 mr-3 text-gray-500" />
+              <span className="font-medium">Hồ sơ cá nhân</span>
             </Link>
-            <Link href="/settings" className="block px-4 py-2 text-sm hover:bg-gray-100 flex items-center">
-              <Settings className="h-4 w-4 mr-2" />
-              Cài đặt tài khoản
+            <Link href="/settings" className="block px-4 py-3 text-sm hover:bg-gray-50 flex items-center rounded-lg mx-2 transition-colors duration-150">
+              <Settings className="h-4 w-4 mr-3 text-gray-500" />
+              <span className="font-medium">Cài đặt tài khoản</span>
             </Link>
+            <div className="border-t border-gray-100 my-2"></div>
             <button 
               onClick={async () => {
                 try {
@@ -317,10 +330,10 @@ export function TopNavbar() {
                   console.error('Lỗi khi đăng xuất:', error);
                 }
               }}
-              className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center text-red-600"
+              className="block w-full text-left px-4 py-3 text-sm hover:bg-red-50 flex items-center text-red-600 rounded-lg mx-2 transition-colors duration-150"
             >
-              <LogOut className="h-4 w-4 mr-2" />
-              Đăng xuất
+              <LogOut className="h-4 w-4 mr-3" />
+              <span className="font-medium">Đăng xuất</span>
             </button>
           </div>
         </div>
