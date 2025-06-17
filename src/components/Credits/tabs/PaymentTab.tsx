@@ -60,7 +60,11 @@ export function PaymentTab({
   // State for generated periods from getExpectedMoney
   const [generatedPeriods, setGeneratedPeriods] = useState<CreditPaymentPeriod[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-
+  // NEW: Optimistic updates state
+  const [optimisticUpdates, setOptimisticUpdates] = useState<Record<string, boolean>>({});
+    
+  // NEW: Background sync state
+  const [isBackgroundSyncing, setIsBackgroundSyncing] = useState(false);
   // Generate periods using convertFromHistoryToTimeArrayWithStatus + getExpectedMoney
   useEffect(() => {
     async function generatePeriodsFromExpectedMoney() {
@@ -183,15 +187,40 @@ export function PaymentTab({
 
   // Use generated periods for display
   const periodsToDisplay = generatedPeriods;
+  // NEW: Helper function to get effective checked state with optimistic updates
+  const getEffectiveCheckedState = (period: CreditPaymentPeriod) => {
+    const periodId = period.id || `temp-${period.period_number}`;
+    const hasOptimisticUpdate = periodId in optimisticUpdates;
+    
+    if (hasOptimisticUpdate) {
+      return optimisticUpdates[periodId];
+    }
+    
+    // Fall back to actual data
+    return Boolean(period.id && period.id.startsWith('db-') && (period.actual_amount || 0) > 0);
+  };
 
+  // NEW: Background sync function
+  const handleBackgroundSync = async () => {
+    if (!onDataChange) return;
+    
+    setIsBackgroundSyncing(true);
+    try {
+      onDataChange();
+      // Add delay to ensure sync completes and show feedback
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    } finally {
+      setIsBackgroundSyncing(false);
+    }
+  };
   const startEditing = (period: CreditPaymentPeriod) => {
     // Don't allow editing if period already has payments or if processing
-    const hasPayments = period.id && period.id.startsWith('db-') && (period.actual_amount || 0) > 0;
+    const hasPayments = getEffectiveCheckedState(period);
     if (hasPayments || isProcessingCheckbox) return;
     
     // Only allow editing the earliest unpaid period
     const earliestUnpaidIndex = periodsToDisplay.findIndex(p => 
-      (!p.id || p.id.startsWith('generated-')) || (p.id.startsWith('db-') && (p.actual_amount || 0) === 0)
+      !getEffectiveCheckedState(p)
     );
     const currentIndex = periodsToDisplay.findIndex(p => 
       (p.id === period.id) || (p.period_number === period.period_number)
@@ -208,7 +237,7 @@ export function PaymentTab({
     setEditingPeriodId(null);
   };
   
-  // Updated checkbox handler - simplified version using getLatestPaymentPaidDate
+  // UPDATED: Enhanced checkbox handler with optimistic updates
   const handleCheckboxChange = async (period: CreditPaymentPeriod, checked: boolean) => {
     if (!credit?.id || isProcessingCheckbox) return;
     // Kiểm tra quyền
@@ -229,11 +258,15 @@ export function PaymentTab({
       });
       return;
     }
-    // Set global loading state
-    setIsProcessingCheckbox(true);
-    
-    // Set loading state for this period
+
     const periodId = period.id || `temp-${period.period_number}`;
+    // 1. OPTIMISTIC UPDATE - Update UI immediately
+    setOptimisticUpdates(prev => ({
+      ...prev,
+      [periodId]: checked
+    }));
+    
+    // Set loading state for this period only
     setLoadingPeriods(prev => ({ ...prev, [periodId]: true }));
     const { id: userId } = await getCurrentUser();
     try {
@@ -392,12 +425,19 @@ export function PaymentTab({
       } else {
         // Uncheck logic - chỉ cho phép uncheck kỳ gần nhất
         const checkedPeriods = periodsToDisplay.filter(p => 
-          p.id && p.id.startsWith('db-') && (p.actual_amount || 0) > 0
+          getEffectiveCheckedState(p)
         );
         
         checkedPeriods.sort((a, b) => b.period_number - a.period_number);
         
         if (checkedPeriods.length > 0 && checkedPeriods[0].period_number !== period.period_number) {
+          // Revert optimistic update
+          setOptimisticUpdates(prev => {
+            const newUpdates = { ...prev };
+            delete newUpdates[periodId];
+            return newUpdates;
+          });
+          
           toast({
             variant: "destructive",
             title: "Không thể bỏ đánh dấu",
@@ -430,11 +470,26 @@ export function PaymentTab({
         });
       }
       
-      // Trigger data change to regenerate periods
-      if (onDataChange) onDataChange();
+      // 2. Clear optimistic update after successful DB operation
+      setOptimisticUpdates(prev => {
+        const newUpdates = { ...prev };
+        delete newUpdates[periodId];
+        return newUpdates;
+      });
+      
+      // 3. Background sync without disrupting UI
+      setTimeout(() => {
+        handleBackgroundSync();
+      }, 100);
       
     } catch (error) {
       console.error('Error handling payment records:', error);
+      // 4. Revert optimistic update on error
+      setOptimisticUpdates(prev => {
+        const newUpdates = { ...prev };
+        delete newUpdates[periodId];
+        return newUpdates;
+      });
       toast({
         title: 'Lỗi',
         description: error instanceof Error ? error.message : 'Không thể xử lý bản ghi thanh toán',
@@ -442,7 +497,6 @@ export function PaymentTab({
       });
     } finally {
       setLoadingPeriods(prev => ({ ...prev, [periodId]: false }));
-      setIsProcessingCheckbox(false);
     }
   };
 
@@ -514,7 +568,14 @@ export function PaymentTab({
 
   return (
     <div className="relative">
-      {/* Processing overlay */}
+      {/* NEW: Background sync indicator */}
+      {isBackgroundSyncing && (
+        <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full shadow-lg z-20 flex items-center">
+          <div className="h-3 w-3 rounded-full border border-white border-t-transparent animate-spin mr-1"></div>
+          Đang đồng bộ...
+        </div>
+      )}
+      {/* Processing overlay - only when actually processing */}
       {isProcessingCheckbox && (
         <div className="absolute inset-0 bg-white bg-opacity-70 z-10 flex items-center justify-center">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 shadow-lg">
@@ -526,8 +587,8 @@ export function PaymentTab({
         </div>
       )}
       
-      {/* Loading indicators */}
-      {isGenerating && (
+      {/* UPDATED: Conditional loading - only show when no data exists */}
+      {isGenerating && periodsToDisplay.length === 0 && (
         <div className="flex items-center justify-center p-4 mb-4 bg-blue-50 border border-blue-200 rounded">
           <div className="h-4 w-4 rounded-full border-2 border-t-transparent border-blue-600 animate-spin mr-2"></div>
           <span className="text-blue-700">Đang tải...</span>
@@ -599,27 +660,27 @@ export function PaymentTab({
           ) : periodsToDisplay.length === 0 ? (
             <tr>
               <td colSpan={8} className="py-4 text-center text-gray-500">
-                Đang tạo dữ liệu từ getExpectedMoney...
+              {isGenerating ? "Đang tải dữ liệu..." : "Không có dữ liệu"}
               </td>
             </tr>
           ) : (
-            // Hiển thị dữ liệu từ getExpectedMoney với chức năng editable
+            // UPDATED: Always show periods if available, even during background refresh
             periodsToDisplay.map((period, index) => {
               const expected = period.expected_amount || 0;
               const actual = period.actual_amount || period.expected_amount;
               const other = period.other_amount || 0;
               const total = expected + other;
               
-              // Updated logic to determine if period has payments in DB
-              const hasPayments = Boolean(period.id && period.id.startsWith('db-') && actual > 0);
+              // UPDATED: Use effective checked state with optimistic updates
+              const hasPayments = getEffectiveCheckedState(period);
               const isEditing = editingPeriodId === period.id || editingPeriodId === `temp-${period.period_number}`;
               const periodId = period.id || `temp-${period.period_number}`;
               const isLoading = loadingPeriods[periodId];
               const isDisabled = credit?.status === CreditStatus.CLOSED || credit?.status === CreditStatus.DELETED;
               
-              // Find the earliest unpaid period (first period with generated- id or db- id with no actual amount)
+              // UPDATED: Find the earliest unpaid period using optimistic updates
               const earliestUnpaidIndex = periodsToDisplay.findIndex(p => 
-                (!p.id || p.id.startsWith('generated-')) || (p.id.startsWith('db-') && (p.actual_amount || 0) === 0)
+                !getEffectiveCheckedState(p)
               );
               const isEarliestUnpaid = index === earliestUnpaidIndex;
               
@@ -686,9 +747,9 @@ export function PaymentTab({
                     ) : (
                       <>
                         {(() => {
-                          // Find all checked periods
+                          // UPDATED: Find all checked periods using optimistic updates
                           const checkedPeriods = periodsToDisplay.filter(p => 
-                            p.id && p.id.startsWith('db-') && (p.actual_amount || 0) > 0
+                            getEffectiveCheckedState(p)
                           );
                           
                           // Sort by period_number to find the highest
