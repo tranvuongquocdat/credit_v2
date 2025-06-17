@@ -63,7 +63,7 @@ const sidebarItems: SidebarItem[] = [
   { 
     title: 'Trả góp', 
     path: '/installments', 
-    icon: <FiCreditCard size={20} />
+    icon: <FiCalendar size={20} />
   },
   { 
     title: 'Khách hàng', 
@@ -75,10 +75,10 @@ const sidebarItems: SidebarItem[] = [
     path: '/stores', 
     icon: <FiShoppingBag size={20} />,
     submenu: [
-      { title: 'Tổng quát chuỗi cửa hàng', path: '/stores/overview', icon: <FiUsers size={18} /> },
-      { title: 'Thông tin chi tiết cửa hàng', path: '/stores/detail', icon: <FiUserPlus size={18} />, redColor: true },
-      { title: 'Danh sách cửa hàng', path: '/stores', icon: <FiUserCheck size={18} /> },
-      { title: 'Cấu hình hàng hóa', path: '/stores/collaterals', icon: <FiUserCheck size={18} /> },
+      { title: 'Tổng quát chuỗi cửa hàng', path: '/stores/overview', icon: <FiPieChart size={18} /> },
+      { title: 'Thông tin chi tiết cửa hàng', path: '/stores/detail', icon: <FiFileText size={18} /> },
+      { title: 'Danh sách cửa hàng', path: '/stores', icon: <FiShoppingBag size={18} /> },
+      { title: 'Cấu hình hàng hóa', path: '/stores/collaterals', icon: <FiPackage size={18} /> },
     ]
   },
   {
