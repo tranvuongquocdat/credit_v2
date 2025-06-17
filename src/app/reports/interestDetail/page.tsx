@@ -6,6 +6,8 @@ import { supabase } from '@/lib/supabase';
 import { useStore } from '@/contexts/StoreContext';
 import { format, startOfDay, endOfDay, parse, subDays } from 'date-fns';
 import { RefreshCw, FileSpreadsheet } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useRouter } from 'next/navigation';
 
 // Import calculation functions
 import { calculateCloseContractInterest as calculatePawnCloseInterest } from '@/lib/Pawns/calculate_close_contract_interest';
@@ -75,6 +77,20 @@ export default function InterestDetailPage() {
   // Debounce timer for data fetching
   const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
 
+  // Use permissions hook
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  const router = useRouter();
+  
+  // Check access permission
+  const canAccessReport = hasPermission('chi_tiet_tien_lai');
+  
+  // Redirect if user doesn't have permission
+  useEffect(() => {
+    if (!permissionsLoading && !canAccessReport) {
+      router.push('/');
+    }
+  }, [permissionsLoading, canAccessReport, router]);
+
   // Memoized fetch function to avoid unnecessary re-fetches
   const debouncedFetchData = useCallback(() => {
     if (debounceTimer) {
@@ -90,7 +106,7 @@ export default function InterestDetailPage() {
 
   // Effect to trigger debounced data fetching when filters change
   useEffect(() => {
-    if (currentStore?.id) {
+    if (currentStore?.id && canAccessReport && !permissionsLoading) {
       debouncedFetchData();
     }
     
@@ -99,7 +115,7 @@ export default function InterestDetailPage() {
         clearTimeout(debounceTimer);
       }
     };
-  }, [currentStore?.id, debouncedFetchData]);
+  }, [currentStore?.id, debouncedFetchData, canAccessReport, permissionsLoading]);
 
   // Function to fetch all data from a query with pagination
   const fetchAllData = async (query: any, pageSize: number = 1000) => {
@@ -775,6 +791,31 @@ export default function InterestDetailPage() {
   const totalInterestAmount = interestDetails.reduce((sum, item) => sum + item.interestAmount, 0);
   const totalOtherAmount = interestDetails.reduce((sum, item) => sum + item.otherAmount, 0);
   const totalTotalAmount = interestDetails.reduce((sum, item) => sum + item.totalAmount, 0);
+
+  // Loading state for permissions
+  if (permissionsLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center p-4">
+          <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+          <span>Đang kiểm tra quyền truy cập...</span>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Access denied state
+  if (!canAccessReport) {
+    return (
+      <Layout>
+        <div className="p-4 border rounded-md mb-4 bg-gray-50">
+          <p className="text-center text-gray-500">
+            Bạn không có quyền truy cập báo cáo này
+          </p>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>

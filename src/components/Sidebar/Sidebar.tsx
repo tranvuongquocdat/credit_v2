@@ -254,6 +254,43 @@ export default function Sidebar() {
             : null;
         }
         
+        // Special handling for Reports menu
+        if (item.path === '/reports' && item.submenu) {
+          const filteredSubmenu = item.submenu.filter(subItem => {
+            // Check permissions for each submenu item
+            if (subItem.path === '/reports/cashbook') {
+              return hasPermission('so_quy_tien_mat');
+            }
+            if (subItem.path === '/reports/transactionSummary') {
+              return hasPermission('tong_ket_giao_dich');
+            }
+            if (subItem.path === '/reports/profitSummary') {
+              return hasPermission('tong_ket_loi_nhuan');
+            }
+            if (subItem.path === '/reports/interestDetail') {
+              return hasPermission('chi_tiet_tien_lai');
+            }
+            if (subItem.path === '/reports/loanReport') {
+              return hasPermission('bao_cao_dang_cho_vay');
+            }
+            if (subItem.path === '/reports/contractClose') {
+              return hasPermission('bao_cao_dong_hop_dong');
+            }
+            if (subItem.path === '/reports/contractDeleted') {
+              return hasPermission('bao_cao_hop_dong_da_xoa');
+            }
+            if (subItem.path === '/reports/money-by-day') {
+              return hasPermission('dong_tien_theo_ngay');
+            }
+            return true; // Keep other submenu items
+          });
+          
+          // Only return the item if it has submenu items
+          return filteredSubmenu.length > 0 
+            ? { ...item, submenu: filteredSubmenu } 
+            : null;
+        }
+        
         // Check permission for Customers menu
         if (item.path === '/customers') {
           return hasPermission('xem_danh_sach_khach_hang') ? item : null;

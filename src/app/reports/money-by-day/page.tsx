@@ -10,6 +10,8 @@ import { usePawnCalculations } from '@/hooks/usePawnCalculation';
 import { useCreditCalculations } from '@/hooks/useCreditCalculation';
 import { useInstallmentsSummary } from '@/hooks/useInstallmentsSummary';
 import { DatePickerWithControls } from '@/components/ui/date-picker-with-controls';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useRouter } from 'next/navigation';
 
 // Shadcn UI components
 import {
@@ -114,6 +116,20 @@ export default function MoneyFlowByDayPage() {
   const { summary: pawnSummary } = usePawnCalculations();
   const { summary: creditSummary } = useCreditCalculations();
   const { data: installmentSummary } = useInstallmentsSummary();
+  
+  // Use permissions hook
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  const router = useRouter();
+  
+  // Check access permission
+  const canAccessReport = hasPermission('dong_tien_theo_ngay');
+  
+  // Redirect if user doesn't have permission
+  useEffect(() => {
+    if (!permissionsLoading && !canAccessReport) {
+      router.push('/');
+    }
+  }, [permissionsLoading, canAccessReport, router]);
   
   // Fetch opening balance from store_total_fund for a specific date
   const fetchOpeningBalanceForDate = async (date: Date): Promise<number> => {
@@ -479,10 +495,35 @@ export default function MoneyFlowByDayPage() {
 
   // Load data when component mounts or when date range or store changes
   useEffect(() => {
-    if (currentStore?.id) {
+    if (currentStore?.id && canAccessReport && !permissionsLoading) {
       fetchDailyCashFlow();
     }
-  }, [currentStore?.id, pawnSummary, creditSummary, installmentSummary]);
+  }, [currentStore?.id, pawnSummary, creditSummary, installmentSummary, canAccessReport, permissionsLoading]);
+  
+  // Loading state for permissions
+  if (permissionsLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center p-4">
+          <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+          <span>Đang kiểm tra quyền truy cập...</span>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Access denied state
+  if (!canAccessReport) {
+    return (
+      <Layout>
+        <div className="p-4 border rounded-md mb-4 bg-gray-50">
+          <p className="text-center text-gray-500">
+            Bạn không có quyền truy cập báo cáo này
+          </p>
+        </div>
+      </Layout>
+    );
+  }
   
   return (
     <Layout>

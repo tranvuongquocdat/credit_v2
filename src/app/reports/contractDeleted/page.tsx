@@ -6,6 +6,8 @@ import { supabase } from '@/lib/supabase';
 import { useStore } from '@/contexts/StoreContext';
 import { format, startOfDay, endOfDay, parse } from 'date-fns';
 import { RefreshCw } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useRouter } from 'next/navigation';
 
 // Shadcn UI components
 import {
@@ -54,6 +56,20 @@ export default function ContractDeletedPage() {
   
   // Filter states
   const [selectedContractType, setSelectedContractType] = useState<string>('all');
+
+  // Use permissions hook
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  const router = useRouter();
+  
+  // Check access permission
+  const canAccessReport = hasPermission('bao_cao_hop_dong_da_xoa');
+  
+  // Redirect if user doesn't have permission
+  useEffect(() => {
+    if (!permissionsLoading && !canAccessReport) {
+      router.push('/');
+    }
+  }, [permissionsLoading, canAccessReport, router]);
 
   // Function to fetch all data from a query with pagination
   const fetchAllData = async (query: any, pageSize: number = 1000) => {
@@ -274,9 +290,12 @@ export default function ContractDeletedPage() {
     }
   };
 
+  // Cập nhật useEffect để chỉ gọi API khi có quyền
   useEffect(() => {
-    fetchDeletedContracts();
-  }, [currentStore?.id, startDate, endDate, selectedContractType]);
+    if (currentStore?.id && canAccessReport && !permissionsLoading) {
+      fetchDeletedContracts();
+    }
+  }, [currentStore?.id, canAccessReport, permissionsLoading]);
 
   const handleStartDateChange = (value: string) => {
     setStartDate(value);
@@ -289,6 +308,31 @@ export default function ContractDeletedPage() {
   const handleRefresh = () => {
     fetchDeletedContracts();
   };
+
+  // Loading state for permissions
+  if (permissionsLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center p-4">
+          <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+          <span>Đang kiểm tra quyền truy cập...</span>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Access denied state
+  if (!canAccessReport) {
+    return (
+      <Layout>
+        <div className="p-4 border rounded-md mb-4 bg-gray-50">
+          <p className="text-center text-gray-500">
+            Bạn không có quyền truy cập báo cáo này
+          </p>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>

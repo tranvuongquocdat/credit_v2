@@ -6,6 +6,8 @@ import { supabase } from '@/lib/supabase';
 import { useStore } from '@/contexts/StoreContext';
 import { format, startOfDay, endOfDay, parse } from 'date-fns';
 import { RefreshCw } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useRouter } from 'next/navigation';
 
 // Import calculation functions
 import { calculateCloseContractInterest as calculatePawnCloseInterest } from '@/lib/Pawns/calculate_close_contract_interest';
@@ -69,6 +71,20 @@ export default function ContractClosePage() {
   
   // Filter states
   const [selectedContractType, setSelectedContractType] = useState<string>('all');
+
+  // Use permissions hook
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  const router = useRouter();
+  
+  // Check access permission
+  const canAccessReport = hasPermission('bao_cao_dong_hop_dong');
+  
+  // Redirect if user doesn't have permission
+  useEffect(() => {
+    if (!permissionsLoading && !canAccessReport) {
+      router.push('/');
+    }
+  }, [permissionsLoading, canAccessReport, router]);
 
   // Function to fetch all data from a query with pagination
   const fetchAllData = async (query: any, pageSize: number = 1000) => {
@@ -265,10 +281,35 @@ export default function ContractClosePage() {
 
   // Load data when component mounts or when filters change
   useEffect(() => {
-    if (currentStore?.id) {
+    if (currentStore?.id && canAccessReport && !permissionsLoading) {
       fetchClosedContracts();
     }
-  }, [currentStore?.id, startDate, endDate, selectedContractType]);
+  }, [currentStore?.id, startDate, endDate, selectedContractType, canAccessReport, permissionsLoading]);
+
+  // Loading state for permissions
+  if (permissionsLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center p-4">
+          <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+          <span>Đang kiểm tra quyền truy cập...</span>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Access denied state
+  if (!canAccessReport) {
+    return (
+      <Layout>
+        <div className="p-4 border rounded-md mb-4 bg-gray-50">
+          <p className="text-center text-gray-500">
+            Bạn không có quyền truy cập báo cáo này
+          </p>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>

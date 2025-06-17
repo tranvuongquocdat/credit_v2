@@ -6,6 +6,8 @@ import { supabase } from '@/lib/supabase';
 import { useStore } from '@/contexts/StoreContext';
 import { format, startOfDay, endOfDay, parse } from 'date-fns';
 import { RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useRouter } from 'next/navigation';
 
 // Import status calculation functions
 import { calculatePawnStatus } from '@/lib/Pawns/calculate_pawn_status';
@@ -71,6 +73,20 @@ export default function LoanReportPage() {
   
   // Filter states
   const [selectedContractType, setSelectedContractType] = useState<string>('all');
+
+  // Use permissions hook
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  const router = useRouter();
+  
+  // Check access permission
+  const canAccessReport = hasPermission('bao_cao_dang_cho_vay');
+  
+  // Redirect if user doesn't have permission
+  useEffect(() => {
+    if (!permissionsLoading && !canAccessReport) {
+      router.push('/');
+    }
+  }, [permissionsLoading, canAccessReport, router]);
 
   // Function to get status display text
   const getStatusText = (statusCode: string) => {
@@ -345,10 +361,10 @@ export default function LoanReportPage() {
 
   // Load data on component mount and when dependencies change
   useEffect(() => {
-    if (currentStore?.id) {
+    if (currentStore?.id && canAccessReport && !permissionsLoading) {
       fetchLoanReports();
     }
-  }, [currentStore?.id, startDate, endDate, selectedContractType, currentPage]);
+  }, [currentStore?.id, startDate, endDate, selectedContractType, currentPage, canAccessReport, permissionsLoading]);
 
   const handleStartDateChange = (value: string) => {
     setStartDate(value);
@@ -382,6 +398,31 @@ export default function LoanReportPage() {
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
+
+  // Loading state for permissions
+  if (permissionsLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center p-4">
+          <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+          <span>Đang kiểm tra quyền truy cập...</span>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Access denied state
+  if (!canAccessReport) {
+    return (
+      <Layout>
+        <div className="p-4 border rounded-md mb-4 bg-gray-50">
+          <p className="text-center text-gray-500">
+            Bạn không có quyền truy cập báo cáo này
+          </p>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>

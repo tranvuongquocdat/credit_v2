@@ -6,6 +6,8 @@ import { supabase } from '@/lib/supabase';
 import { useStore } from '@/contexts/StoreContext';
 import { format, startOfDay, endOfDay, parse, subDays } from 'date-fns';
 import { RefreshCw, FileSpreadsheet } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useRouter } from 'next/navigation';
 
 // Import status calculation functions
 import { calculatePawnStatus } from '@/lib/Pawns/calculate_pawn_status';
@@ -83,6 +85,20 @@ export default function ProfitSummaryPage() {
     const formatted = new Intl.NumberFormat('vi-VN').format(absoluteAmount);
     return isNegative ? `-${formatted}` : formatted;
   };
+
+  // Use permissions hook
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  const router = useRouter();
+  
+  // Check access permission
+  const canAccessReport = hasPermission('tong_ket_loi_nhuan');
+  
+  // Redirect if user doesn't have permission
+  useEffect(() => {
+    if (!permissionsLoading && !canAccessReport) {
+      router.push('/');
+    }
+  }, [permissionsLoading, canAccessReport, router]);
 
   // Get contracts with status calculation
   const getContractsWithStatus = async (
@@ -523,10 +539,10 @@ export default function ProfitSummaryPage() {
 
   // Load data on mount and when filters change
   useEffect(() => {
-    if (currentStore?.id) {
+    if (currentStore?.id && canAccessReport && !permissionsLoading) {
       fetchProfitSummary();
     }
-  }, [currentStore?.id, startDate, endDate]);
+  }, [currentStore?.id, startDate, endDate, canAccessReport, permissionsLoading]);
 
   // Calculate totals
   const calculateTotals = () => {
@@ -564,6 +580,31 @@ export default function ProfitSummaryPage() {
   const handleRefresh = () => {
     fetchProfitSummary();
   };
+
+  // Loading state for permissions
+  if (permissionsLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center p-4">
+          <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+          <span>Đang kiểm tra quyền truy cập...</span>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Access denied state
+  if (!canAccessReport) {
+    return (
+      <Layout>
+        <div className="p-4 border rounded-md mb-4 bg-gray-50">
+          <p className="text-center text-gray-500">
+            Bạn không có quyền truy cập báo cáo này
+          </p>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
