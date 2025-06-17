@@ -180,6 +180,9 @@ export function InstallmentPaymentHistoryModal({
   const [processingPeriodId, setProcessingPeriodId] = useState<string | null>(
     null,
   );
+  
+  // State for optimistic updates tracking
+  const [hasOptimisticUpdates, setHasOptimisticUpdates] = useState<boolean>(false);
 
   // State for rotation processing
   const [isRotating, setIsRotating] = useState<boolean>(false);
@@ -1230,8 +1233,8 @@ export function InstallmentPaymentHistoryModal({
                 </div>
               )}
               
-              {/* Processing overlay */}
-              {processingCheckbox && (
+              {/* Processing overlay - Hidden when optimistic updates are active */}
+              {processingCheckbox && !hasOptimisticUpdates && (
                 <div className="absolute inset-0 bg-white bg-opacity-70 z-10 flex items-center justify-center">
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 shadow-lg">
                     <div className="flex items-center">
@@ -1265,6 +1268,7 @@ export function InstallmentPaymentHistoryModal({
               processingCheckbox={processingCheckbox}
               processingPeriodId={processingPeriodId}
               handleCheckboxChange={handleCheckboxChange}
+              onOptimisticStateChange={setHasOptimisticUpdates}
             />
             </div>
           )}
