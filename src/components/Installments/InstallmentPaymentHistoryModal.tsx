@@ -759,7 +759,23 @@ export function InstallmentPaymentHistoryModal({
         if (error) {
           throw new Error(error.message);
         }
-        
+        // Update payment_due_date
+        const updatedLatestPaidDate = await getLatestPaymentPaidDate(installment.id);
+        if (updatedLatestPaidDate) {
+          const latestPaidDateObj = new Date(updatedLatestPaidDate);
+          const endDate = new Date(installment.loan_date || '');
+          endDate.setDate(endDate.getDate() + (installment.loan_period || 0) - 1);
+          if (latestPaidDateObj.getTime() >= endDate.getTime()) {
+            await updateInstallmentPaymentDueDate(installment.id, null);
+          } else {
+            const newDueDate = new Date(latestPaidDateObj);
+            newDueDate.setDate(newDueDate.getDate() + installment.payment_period);
+            await updateInstallmentPaymentDueDate(installment.id, newDueDate.toISOString());
+          }
+        }
+        else {
+          await updateInstallmentPaymentDueDate(installment.id, installment.start_date || '');
+        }
         toast({
           title: 'Thành công',
           description: `Đã xóa ${data?.length || 0} bản ghi thanh toán cho kỳ ${period.periodNumber}`,
@@ -1030,6 +1046,7 @@ export function InstallmentPaymentHistoryModal({
           });
         }
       }
+      await updateInstallmentPaymentDueDate(installment.id, null);
       await recordContractClosure(installment.id);
       
       // Reload installment info to get updated status
