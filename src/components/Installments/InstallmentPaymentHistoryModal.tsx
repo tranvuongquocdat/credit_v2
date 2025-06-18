@@ -39,7 +39,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { PaymentTab } from "./tabs/PaymentTab";
+import { PaymentTabFast } from "./tabs/PaymentTabFast";
 import { BadInstallmentTab } from "./tabs/BadInstallmentTab";
 import { 
   calculateTotalPaidFromHistory as calcTotalPaidFromHistory,
@@ -1246,29 +1246,9 @@ export function InstallmentPaymentHistoryModal({
                 </div>
               )}
 
-            <PaymentTab
-                loading={loading || isGenerating}
-              error={error}
-              calculateCombinedPaymentPeriods={calculateCombinedPaymentPeriods}
-              isPeriodInDatabase={isPeriodInDatabase}
-              selectedPeriodId={selectedPeriodId}
-              selectedDatePeriodId={selectedDatePeriodId}
-              selectedDate={selectedDate}
-              tempEditedDate={tempEditedDate}
-              tempEditedAmount={tempEditedAmount}
-              paymentAmount={paymentAmount}
+            <PaymentTabFast
               installment={installment}
-              findOldestUnpaidPeriodIndex={findOldestUnpaidPeriodIndex}
-              handleStartEditing={handleStartEditing}
-              handleSavePayment={handleSavePayment}
-              setPaymentAmount={setPaymentAmount}
-              setSelectedPeriodId={setSelectedPeriodId}
-              handleStartDateEditing={handleStartDateEditing}
-              handleSaveDate={handleSaveDate}
-              setSelectedDate={setSelectedDate}
-              processingCheckbox={processingCheckbox}
-              processingPeriodId={processingPeriodId}
-              handleCheckboxChange={handleCheckboxChange}
+              onDataChange={reloadInstallmentInfo}
               onOptimisticStateChange={setHasOptimisticUpdates}
             />
             </div>

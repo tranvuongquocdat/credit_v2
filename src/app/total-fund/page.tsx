@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DatePickerWithControls } from '@/components/ui/date-picker-with-controls';
 import { format, startOfDay } from 'date-fns';
+import { useRouter } from 'next/navigation';
+import { getCurrentUser } from '@/lib/auth';
 import {
   Table,
   TableBody,
@@ -64,8 +66,11 @@ interface DailyFundRecord {
 }
 
 export default function TotalFundPage() {
+  const router = useRouter();
   const { currentStore } = useStore();
   const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [financialSummary, setFinancialSummary] = useState<StoreFinancialData>({
     totalFund: 0,
     availableFund: 0,
@@ -85,6 +90,28 @@ export default function TotalFundPage() {
   const [endDate, setEndDate] = useState<string>(
     format(new Date(), 'yyyy-MM-dd')
   );
+
+  // Check authentication and role
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const user = await getCurrentUser();
+        setCurrentUser(user);
+        
+        if (!user || !['admin', 'superadmin'].includes(user.role)) {
+          router.push('/dashboard');
+          return;
+        }
+      } catch (error) {
+        console.error('Error checking auth:', error);
+        router.push('/dashboard');
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+    
+    checkAuth();
+  }, [router]);
 
   // Fetch financial summary data
   const fetchFinancialSummary = async () => {
@@ -408,6 +435,11 @@ export default function TotalFundPage() {
     if(currentStore?.id) {
       fetchAndProcessHistory();
     }
+  }
+
+  // Don't render if still checking auth or not admin/superadmin
+  if (isCheckingAuth || !currentUser || !['admin', 'superadmin'].includes(currentUser.role)) {
+    return null;
   }
 
   return (
