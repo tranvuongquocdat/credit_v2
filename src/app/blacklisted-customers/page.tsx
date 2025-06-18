@@ -125,7 +125,7 @@ export default function BlacklistedCustomersPage() {
                 <Input
                   id="search"
                   type="text"
-                  placeholder="Tìm kiếm theo CMND,SĐT"
+                  placeholder="Tìm kiếm theo CMND,SĐT hoặc tên KH"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyPress={handleKeyPress}
