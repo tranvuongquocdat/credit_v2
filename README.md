@@ -33,3 +33,6 @@ npm run update-types
 ```bash
 npx supabase gen types typescript --project-id "bzmnledygjcrqaypauwq" --schema public > src/types/database.types.ts
 ```
+
+
+### Cách truy cập web: Ở trang đầu, ấn vào 'View My Work', sau đó ấn tiếp vào 'View My Projects' ở trang thứ 2. Đến trang thứ 3, kéo xuống dưới cùng, ấn vào ô tròn số 1 (ở trên Research & Planning)
