@@ -8,7 +8,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { PlusIcon, Search } from 'lucide-react';
+import { PlusIcon, Search, AlertTriangle } from 'lucide-react';
 
 export interface AdminSearchFilters {
   query: string;
@@ -19,9 +19,10 @@ interface SearchFiltersProps {
   onSearch: (filters: AdminSearchFilters) => void;
   onReset: () => void;
   onCreateNew: () => void;
+  onDeactivateAll: () => void;
 }
 
-export function SearchFilters({ onSearch, onReset, onCreateNew }: SearchFiltersProps) {
+export function SearchFilters({ onSearch, onReset, onCreateNew, onDeactivateAll }: SearchFiltersProps) {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
 
@@ -98,6 +99,14 @@ export function SearchFilters({ onSearch, onReset, onCreateNew }: SearchFiltersP
           >
             <PlusIcon className="mr-1 h-3.5 w-3.5" />
             Thêm Admin
+          </Button>
+          <Button
+            onClick={onDeactivateAll}
+            size="sm"
+            className="text-white bg-red-600 hover:bg-red-700"
+          >
+            <AlertTriangle className="mr-1 h-3.5 w-3.5" />
+            SOS
           </Button>
         </div>
         

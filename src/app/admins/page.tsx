@@ -6,6 +6,7 @@ import { SearchFilters, AdminSearchFilters } from '@/components/Admins/SearchFil
 import { AdminCreateModal } from '@/components/Admins/AdminCreateModal';
 import { AdminEditModal } from '@/components/Admins/AdminEditModal';
 import { AdminStatusDialog } from '@/components/Admins/AdminStatusDialog';
+import { AdminBulkDeactivateDialog } from '@/components/Admins/AdminBulkDeactivateDialog';
 import { getAdmins } from '@/lib/admin';
 import { AdminStatus, AdminWithProfile } from '@/models/admin';
 import { Edit, UserX, UserCheck, RefreshCw } from 'lucide-react';
@@ -30,6 +31,7 @@ export default function AdminsPage() {
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [selectedAdmin, setSelectedAdmin] = useState<AdminWithProfile | null>(null);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
 
   // Fetch danh sách admin
   const fetchAdmins = async () => {
@@ -139,6 +141,7 @@ export default function AdminsPage() {
             setSelectedAdmin(null);
             setIsFormModalOpen(true);
           }}
+          onDeactivateAll={() => setIsBulkModalOpen(true)}
         />
 
         {/* Hiển thị lỗi nếu có */}
@@ -314,6 +317,13 @@ export default function AdminsPage() {
           fetchAdmins();
         }}
         admin={selectedAdmin}
+      />
+
+      <AdminBulkDeactivateDialog
+        isOpen={isBulkModalOpen}
+        onClose={() => setIsBulkModalOpen(false)}
+        admins={admins}
+        onSuccess={() => fetchAdmins()}
       />
     </Layout>
   );

@@ -109,9 +109,6 @@ function LoginForm() {
             {error}
           </div>
         )}
-        <p style={{ marginTop: '20px', textAlign: 'center' }}>
-          Chưa có tài khoản? <a href="/signup" style={{ color: '#007bff', textDecoration: 'none' }}>Đăng ký</a>
-        </p>
       </div>
     </div>
   );

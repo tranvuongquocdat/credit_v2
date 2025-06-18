@@ -128,7 +128,7 @@ export function PaymentTabFast({
         const startObj = new Date(startDate);
         const endObj = new Date(endDate);
         const totalDays = Math.floor((endObj.getTime() - startObj.getTime()) / 86400000) + 1;
-        if (totalDays <= 0) throw new Error('Ngày kết thúc phải sau ngày bắt đầu');
+        if (totalDays <= 0) throw new Error('Ngày này đã được đóng lãi. Bạn có thể tải lại bảng để xem lại');
 
         const dailyAmounts = await getExpectedMoney(installment.id);
         const loanStart = new Date(installment.start_date);
