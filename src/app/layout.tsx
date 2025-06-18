@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { StoreProvider } from "@/contexts/StoreContext";
+import { AuthProvider } from "@/contexts/AuthContext";
 
 // Không cần import font từ Google Fonts vì sẽ sử dụng Arial (system font)
 
@@ -25,10 +26,12 @@ export default function RootLayout({
           fontFamily: 'Arial, sans-serif' 
         }}
       >
-        <StoreProvider>
-          {children}
-          <Toaster />
-        </StoreProvider>
+        <AuthProvider>
+          <StoreProvider>
+            {children}
+            <Toaster />
+          </StoreProvider>
+        </AuthProvider>
       </body>
     </html>
   );

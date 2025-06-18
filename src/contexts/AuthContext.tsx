@@ -1,0 +1,115 @@
+"use client";
+
+import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
+import { getCurrentUser } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
+
+interface AuthContextType {
+  user: any | null;
+  permissions: string[];
+  loading: boolean;
+  error: Error | null;
+  isAdmin: boolean;
+  hasPermission: (permissionId: string) => boolean;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const useAuth = () => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  return ctx;
+};
+
+interface AuthProviderProps {
+  children: ReactNode;
+}
+
+export const AuthProvider = ({ children }: AuthProviderProps) => {
+  const [user, setUser] = useState<any | null>(null);
+  const [permissions, setPermissions] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchAuthData = async () => {
+      try {
+        setLoading(true);
+        const currentUser = await getCurrentUser();
+        if (!isMounted) return;
+
+        setUser(currentUser);
+
+        if (!currentUser || !currentUser.id) {
+          setPermissions([]);
+          setLoading(false);
+          return;
+        }
+
+        // Admin => all permissions implicitly
+        if (currentUser.role === "admin") {
+          setIsAdmin(true);
+          setPermissions([]);
+          setLoading(false);
+          return;
+        }
+
+        if (currentUser.role !== "employee") {
+          setPermissions([]);
+          setLoading(false);
+          return;
+        }
+
+        // Fetch employee row to get id
+        const { data: employeeData, error: employeeError } = await supabase
+          .from("employees")
+          .select("id")
+          .eq("user_id", currentUser.id)
+          .single();
+
+        if (employeeError || !employeeData) {
+          setPermissions([]);
+          setLoading(false);
+          return;
+        }
+
+        // Fetch permissions list
+        const { data: permissionData, error: permissionError } = await supabase
+          .from("employee_permissions")
+          .select("permission_id")
+          .eq("employee_id", employeeData.id);
+
+        if (permissionError) throw permissionError;
+
+        const ids = permissionData?.map((p) => p.permission_id) || [];
+        setPermissions(ids);
+      } catch (err) {
+        console.error("AuthProvider error:", err);
+        setError(err instanceof Error ? err : new Error("Unknown error"));
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    fetchAuthData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const hasPermission = (permissionId: string) => {
+    if (isAdmin) return true;
+    return permissions.includes(permissionId);
+  };
+
+  const value = useMemo(
+    () => ({ user, permissions, loading, error, isAdmin, hasPermission }),
+    [user, permissions, loading, error, isAdmin]
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}; 

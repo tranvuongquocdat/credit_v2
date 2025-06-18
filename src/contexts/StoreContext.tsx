@@ -4,6 +4,18 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useMe
 import { Store } from '@/models/store';
 import { getAllActiveStores } from '@/lib/store';
 
+// Helper: lấy store đã lưu ngay khi component khởi tạo (client-side only)
+const getInitialStore = (): Store | null => {
+  if (typeof window === 'undefined') return null; // SSR an toàn
+  try {
+    const savedId = localStorage.getItem('currentStoreId');
+    return savedId ? ({ id: savedId, name: '' } as Store) : null;
+  } catch (err) {
+    console.warn('Could not access localStorage:', err);
+    return null;
+  }
+};
+
 // Define the context shape
 interface StoreContextType {
   currentStore: Store | null;
@@ -33,8 +45,8 @@ interface StoreProviderProps {
 export const StoreProvider = ({ children }: StoreProviderProps) => {
   
   const [stores, setStores] = useState<Store[]>([]);
-  const [currentStore, setCurrentStoreState] = useState<Store | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [currentStore, setCurrentStoreState] = useState<Store | null>(() => getInitialStore());
+  const [loading, setLoading] = useState<boolean>(() => !getInitialStore());
   const [error, setError] = useState<Error | null>(null);
 
   // Function to fetch stores
@@ -91,20 +103,28 @@ export const StoreProvider = ({ children }: StoreProviderProps) => {
   // Load stores and verify/initialize current store
   useEffect(() => {
     let isMounted = true;
-    
+
     const initializeStores = async () => {
-      setLoading(true);
+      // Chỉ bật loading nếu chưa có storeId tạm thời
+      if (!currentStore) setLoading(true);
       await fetchStores();
-      if (isMounted) {
-        setLoading(false);
+      if (isMounted) setLoading(false);
+    };
+
+    initializeStores();
+
+    // Cross-tab sync: cập nhật khi key thay đổi ở tab khác
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'currentStoreId' && e.newValue) {
+        const newStore = stores.find((s) => s.id === e.newValue);
+        if (newStore) setCurrentStoreState(newStore);
       }
     };
-    
-    initializeStores();
-    
-    // Cleanup function to prevent state updates after unmount
+    window.addEventListener('storage', handleStorage);
+
     return () => {
       isMounted = false;
+      window.removeEventListener('storage', handleStorage);
     };
   }, []);
 
