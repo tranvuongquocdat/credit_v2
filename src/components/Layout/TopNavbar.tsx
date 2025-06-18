@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import { countInstallmentWarnings } from "@/lib/installmentPayment";
 import { countPawnWarnings } from "@/lib/pawn-warnings";
 import { countCreditWarnings } from "@/lib/credit-warnings";
-import { getCurrentUser } from "@/lib/auth";
+import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 
 // This interface will represent the notification data structure
@@ -134,6 +134,9 @@ export function TopNavbar() {
   // Use permissions hook to check user permissions
   const { hasPermission } = usePermissions();
   
+  // Use Auth context to get user information
+  const { user } = useAuth();
+  
   // Handler for store selection - memoized to prevent recreating on every render
   const handleStoreChange = useCallback((store: any) => {
     console.log('handleStoreChange', store);
@@ -145,22 +148,15 @@ export function TopNavbar() {
     // Buộc router refresh để làm mới dữ liệu trang
     router.refresh();
   }, [setCurrentStore, router]);
-  const [user, setUser] = useState<any>(null);
-  useEffect(() => { 
-    const fetchUser = async () => {
-      const user = await getCurrentUser();
-      setUser(user);
-    };
-    fetchUser();
-  }, []);
-  // Auto refresh stores khi component mount lần đầu (sau khi login)
+  
+  // Auto refresh stores khi component mount lần đầu nếu StoreProvider chưa có dữ liệu
   useEffect(() => {
-    if (!hasInitialized) {
-      console.log('TopNavbar: Auto refreshing stores on first mount');
+    if (!hasInitialized && stores.length === 0 && !loading) {
+      console.log('TopNavbar: refreshStores because stores list is empty');
       refreshStores();
       setHasInitialized(true);
     }
-  }, [hasInitialized, refreshStores]);
+  }, [hasInitialized, stores.length, loading, refreshStores]);
   
   // Log when component mounts and when current store changes
   useEffect(() => {

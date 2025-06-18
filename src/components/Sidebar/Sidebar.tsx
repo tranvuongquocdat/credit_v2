@@ -48,6 +48,7 @@ interface SidebarItem {
   submenu?: SubMenuItem[];
   redColor?: boolean;
   superAdminOnly?: boolean;
+  adminOnly?: boolean;
 }
 
 const sidebarItems: SidebarItem[] = [
@@ -109,7 +110,8 @@ const sidebarItems: SidebarItem[] = [
   { 
     title: 'Quỹ', 
     path: '/total-fund', 
-    icon: <FiPieChart size={20} />
+    icon: <FiPieChart size={20} />,
+    adminOnly: true
   },
   { 
     title: 'Báo cáo', 
@@ -208,7 +210,19 @@ export default function Sidebar() {
     
     // For other users, filter based on permissions
     return sidebarItems
-      .filter(item => !item.superAdminOnly)
+      .filter(item => {
+        // Filter out superadmin-only items for non-superadmin users
+        if (item.superAdminOnly && currentUser?.role !== 'superadmin') {
+          return false;
+        }
+        
+        // Filter out admin-only items for non-admin and non-superadmin users
+        if (item.adminOnly && !['admin', 'superadmin'].includes(currentUser?.role)) {
+          return false;
+        }
+
+        return true;
+      })
       .map(item => {
         // Special handling for the Stores menu
         if (item.path === '/stores' && item.submenu) {

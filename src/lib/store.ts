@@ -240,7 +240,7 @@ export async function getAllActiveStores() {
 
     let query = supabase
       .from(TABLE_NAME)
-      .select('id, name, cash_fund, investment')
+      .select('id, name')
       .eq('is_deleted', false)
       .eq('status', 'active');
 
@@ -272,7 +272,7 @@ export async function getAllActiveStores() {
       throw error;
     }
 
-    return { data: data as Pick<Store, 'id' | 'name' | 'cash_fund' | 'investment'>[], error: null };
+    return { data: data as Pick<Store, 'id' | 'name'>[], error: null };
 
   } catch (error) {
     console.error('Error fetching stores:', error);
