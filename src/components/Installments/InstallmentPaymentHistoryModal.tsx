@@ -40,6 +40,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { PaymentTab } from "./tabs/PaymentTab";
+import { BadInstallmentTab } from "./tabs/BadInstallmentTab";
 import { 
   calculateTotalPaidFromHistory as calcTotalPaidFromHistory,
   calculateRemainingToPay,
@@ -1812,12 +1813,13 @@ export function InstallmentPaymentHistoryModal({
           )}
 
           {activeTab === "bad-debt" && (
-            <div className="p-4 border rounded-md">
-              <h3 className="text-lg font-medium mb-4">Báo xấu khách hàng</h3>
-              <div className="text-center py-10 border rounded-md bg-gray-50">
-                <p className="text-gray-500">Tính năng đang được phát triển</p>
-              </div>
-            </div>
+            <BadInstallmentTab
+              installment={installment}
+              onSuccess={() => {
+                setHasDataChanged(true);
+                reloadInstallmentInfo();
+              }}
+            />
           )}
         </div>
       </DialogContent>

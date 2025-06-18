@@ -582,6 +582,7 @@ export function CreditCreateModal({
                 id="loanAmount"
                 value={loanAmount}
                 onChange={handleLoanAmountChange}
+                onFocus={(e) => e.target.select()}
                 required
                 placeholder="0"
               />

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useStore } from '@/contexts/StoreContext';
 import { Layout } from '@/components/Layout';
 import { Card } from '@/components/ui/card';
-import { ArrowUp, ArrowDown, DollarSign, Calendar, CreditCard, TrendingDown, RefreshCw } from 'lucide-react';
+import { ArrowUp, ArrowDown, Bike, Salad, DollarSign, TrendingDown, RefreshCw } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -478,7 +478,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <div className="relative group">
-                        <DollarSign className="h-4 w-4 mr-2 text-green-600 cursor-help" />
+                        <Bike className="h-4 w-4 mr-2 text-green-600 cursor-help" />
                         <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">
                           Cầm đồ
                         </div>
@@ -489,7 +489,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <div className="relative group">
-                        <CreditCard className="h-4 w-4 mr-2 text-blue-600 cursor-help" />
+                        <DollarSign className="h-4 w-4 mr-2 text-blue-600 cursor-help" />
                         <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">
                           Tín chấp
                         </div>
@@ -500,7 +500,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <div className="relative group">
-                        <Calendar className="h-4 w-4 mr-2 text-amber-600 cursor-help" />
+                        <Salad className="h-4 w-4 mr-2 text-amber-600 cursor-help" />
                         <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">
                           Trả góp
                         </div>
@@ -511,7 +511,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="bg-green-200 h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0">
-                <DollarSign className="h-5 w-5 text-green-700" />
+                <Bike className="h-5 w-5 text-green-700" />
               </div>
             </div>
           </Card>
@@ -526,7 +526,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <div className="relative group">
-                        <DollarSign className="h-4 w-4 mr-2 text-green-600 cursor-help" />
+                        <Bike className="h-4 w-4 mr-2 text-green-600 cursor-help" />
                         <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">
                           Cầm đồ
                         </div>
@@ -537,7 +537,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <div className="relative group">
-                        <CreditCard className="h-4 w-4 mr-2 text-blue-600 cursor-help" />
+                        <DollarSign className="h-4 w-4 mr-2 text-blue-600 cursor-help" />
                         <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">
                           Tín chấp
                         </div>
@@ -548,7 +548,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <div className="relative group">
-                        <Calendar className="h-4 w-4 mr-2 text-amber-600 cursor-help" />
+                        <Salad className="h-4 w-4 mr-2 text-amber-600 cursor-help" />
                         <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">
                           Trả góp
                         </div>
@@ -559,7 +559,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="bg-blue-200 h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0">
-                <Calendar className="h-5 w-5 text-blue-700" />
+                <Salad className="h-5 w-5 text-blue-700" />
               </div>
             </div>
           </Card>
@@ -574,7 +574,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <div className="relative group">
-                        <DollarSign className="h-4 w-4 mr-2 text-green-600 cursor-help" />
+                        <Bike className="h-4 w-4 mr-2 text-green-600 cursor-help" />
                         <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">
                           Cầm đồ
                         </div>
@@ -585,7 +585,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <div className="relative group">
-                        <CreditCard className="h-4 w-4 mr-2 text-blue-600 cursor-help" />
+                        <DollarSign className="h-4 w-4 mr-2 text-blue-600 cursor-help" />
                         <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">
                           Tín chấp
                         </div>
@@ -596,7 +596,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <div className="relative group">
-                        <Calendar className="h-4 w-4 mr-2 text-amber-600 cursor-help" />
+                        <Salad className="h-4 w-4 mr-2 text-amber-600 cursor-help" />
                         <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">
                           Trả góp
                         </div>
@@ -622,7 +622,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <div className="relative group">
-                        <DollarSign className="h-4 w-4 mr-2 text-green-600 cursor-help" />
+                        <Bike className="h-4 w-4 mr-2 text-green-600 cursor-help" />
                         <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">
                           Cầm đồ
                         </div>
@@ -633,7 +633,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <div className="relative group">
-                        <CreditCard className="h-4 w-4 mr-2 text-blue-600 cursor-help" />
+                        <DollarSign className="h-4 w-4 mr-2 text-blue-600 cursor-help" />
                         <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">
                           Tín chấp
                         </div>
@@ -644,7 +644,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <div className="relative group">
-                        <Calendar className="h-4 w-4 mr-2 text-amber-600 cursor-help" />
+                        <Salad className="h-4 w-4 mr-2 text-amber-600 cursor-help" />
                         <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">
                           Trả góp
                         </div>
@@ -655,7 +655,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="bg-amber-200 h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0">
-                <CreditCard className="h-5 w-5 text-amber-700" />
+                <DollarSign className="h-5 w-5 text-amber-700" />
               </div>
             </div>
           </Card>

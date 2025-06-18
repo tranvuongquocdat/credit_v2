@@ -478,6 +478,7 @@ export function InstallmentCreateModal({
                 id="amountGiven"
                 value={amountGiven}
                 onChange={handleAmountChange}
+                onFocus={(e) => e.target.select()}
                 required
                 className="w-48"
                 placeholder="0"
@@ -495,6 +496,7 @@ export function InstallmentCreateModal({
                 id="tiendua"
                 value={customerAmount}
                 onChange={handleCustomerAmountChange}
+                onFocus={(e) => e.target.select()}
                 required
                 className="w-48"
                 placeholder="0"

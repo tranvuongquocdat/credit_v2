@@ -1,18 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { SectionHeader } from '@/components/ui/SectionHeader';
-import { DataTable, Column } from '@/components/ui/DataTable';
 import { FormRow } from '@/components/ui/FormRow';
 import { Icon } from '@/components/ui/Icon';
 import { AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
-import { CreditWithCustomer } from '@/models/credit';
+import { InstallmentWithCustomer } from '@/models/installment';
 import { updateCustomer, searchBlacklistedCustomers } from '@/lib/customer';
 import { toast } from '@/components/ui/use-toast';
 
-interface BadCreditTabProps {
-  credit: CreditWithCustomer;
+interface BadInstallmentTabProps {
+  installment: InstallmentWithCustomer;
   onSuccess?: () => void;
 }
 
@@ -28,7 +27,7 @@ interface BlacklistHistoryItem {
   store_name: string;
 }
 
-export function BadCreditTab({ credit, onSuccess }: BadCreditTabProps) {
+export function BadInstallmentTab({ installment, onSuccess }: BadInstallmentTabProps) {
   // State for form
   const [blacklistReason, setBlacklistReason] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -37,53 +36,9 @@ export function BadCreditTab({ credit, onSuccess }: BadCreditTabProps) {
   const [blacklistHistory, setBlacklistHistory] = useState<BlacklistHistoryItem[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
-  // Table columns configuration for blacklist history
-  const columns: Column[] = [
-    {
-      key: 'index',
-      label: '#',
-      className: 'px-3 py-3 text-left text-sm font-medium text-gray-700 text-center'
-    },
-    {
-      key: 'customerName',
-      label: 'Tên khách hàng',
-      className: 'px-3 py-3 text-left text-sm font-medium text-gray-700'
-    },
-    {
-      key: 'phone',
-      label: 'Số điện thoại',
-      className: 'px-3 py-3 text-left text-sm font-medium text-gray-700'
-    },
-    {
-      key: 'idNumber',
-      label: 'CMND',
-      className: 'px-3 py-3 text-left text-sm font-medium text-gray-700'
-    },
-    {
-      key: 'address',
-      label: 'Địa chỉ',
-      className: 'px-3 py-3 text-left text-sm font-medium text-gray-700'
-    },
-    {
-      key: 'reason',
-      label: 'Lý do',
-      className: 'px-3 py-3 text-left text-sm font-medium text-gray-700'
-    },
-    {
-      key: 'reportDate',
-      label: 'Thời gian báo',
-      className: 'px-3 py-3 text-left text-sm font-medium text-gray-700'
-    },
-    {
-      key: 'source',
-      label: 'Nguồn',
-      className: 'px-3 py-3 text-left text-sm font-medium text-gray-700'
-    }
-  ];
-
   // Load blacklist history for the customer
   const loadBlacklistHistory = async () => {
-    if (!credit?.customer?.phone && !credit?.customer?.id_number && !credit?.customer?.name) {
+    if (!installment?.customer?.phone && !installment?.customer?.id_number && !installment?.customer?.name) {
       return;
     }
 
@@ -91,9 +46,9 @@ export function BadCreditTab({ credit, onSuccess }: BadCreditTabProps) {
     try {
       // Search by phone number, ID number, or name - try all available fields
       const searchQueries = [
-        credit?.customer?.phone,
-        credit?.customer?.id_number,
-        credit?.customer?.name
+        installment?.customer?.phone,
+        installment?.customer?.id_number,
+        installment?.customer?.name
       ].filter(Boolean); // Remove null/undefined values
       
       if (searchQueries.length === 0) {
@@ -101,14 +56,14 @@ export function BadCreditTab({ credit, onSuccess }: BadCreditTabProps) {
         return;
       }
 
-             // Try searching with each available field
-       let allResults: any[] = [];
-       for (const query of searchQueries) {
-         const { data, error } = await searchBlacklistedCustomers(query as string);
-         if (!error && data) {
-           allResults = [...allResults, ...data];
-         }
-       }
+      // Try searching with each available field
+      let allResults: any[] = [];
+      for (const query of searchQueries) {
+        const { data, error } = await searchBlacklistedCustomers(query as string);
+        if (!error && data) {
+          allResults = [...allResults, ...data];
+        }
+      }
 
       // Remove duplicates and filter to match exactly this customer
       const uniqueResults = allResults.filter((item, index, self) => 
@@ -117,9 +72,9 @@ export function BadCreditTab({ credit, onSuccess }: BadCreditTabProps) {
 
       const filteredData = uniqueResults.filter(item => {
         // Match by any available field - phone, id_number, or name
-        const phoneMatch = credit?.customer?.phone && item.phone && item.phone === credit.customer.phone;
-        const idMatch = credit?.customer?.id_number && item.id_number && item.id_number === credit.customer.id_number;
-        const nameMatch = credit?.customer?.name && item.name && item.name === credit.customer.name;
+        const phoneMatch = installment?.customer?.phone && item.phone && item.phone === installment.customer.phone;
+        const idMatch = installment?.customer?.id_number && item.id_number && item.id_number === installment.customer.id_number;
+        const nameMatch = installment?.customer?.name && item.name && item.name === installment.customer.name;
         
         return phoneMatch || idMatch || nameMatch;
       });
@@ -135,7 +90,7 @@ export function BadCreditTab({ credit, onSuccess }: BadCreditTabProps) {
   // Load blacklist history when component mounts
   useEffect(() => {
     loadBlacklistHistory();
-  }, [credit]);
+  }, [installment]);
 
   // Transform data for table display
   const tableData = blacklistHistory.map((item, index) => ({
@@ -185,7 +140,7 @@ export function BadCreditTab({ credit, onSuccess }: BadCreditTabProps) {
       return;
     }
 
-    if (!credit?.customer_id) {
+    if (!installment?.customer_id) {
       toast({
         title: 'Lỗi',
         description: 'Không tìm thấy thông tin khách hàng',
@@ -197,7 +152,7 @@ export function BadCreditTab({ credit, onSuccess }: BadCreditTabProps) {
     setIsLoading(true);
 
     try {
-      const { error } = await updateCustomer(credit.customer_id, {
+      const { error } = await updateCustomer(installment.customer_id, {
         blacklist_reason: blacklistReason.trim()
       });
 
@@ -249,7 +204,7 @@ export function BadCreditTab({ credit, onSuccess }: BadCreditTabProps) {
             <input
               type="text"
               className="border rounded px-2 py-1 w-full bg-gray-100"
-              value={credit?.customer?.name || ''}
+              value={installment?.customer?.name || ''}
               readOnly
             />
           </FormRow>
@@ -258,7 +213,7 @@ export function BadCreditTab({ credit, onSuccess }: BadCreditTabProps) {
             <input
               type="text"
               className="border rounded px-2 py-1 w-full bg-gray-100"
-              value={credit?.customer?.id_number || ''}
+              value={installment?.customer?.id_number || ''}
               readOnly
             />
           </FormRow>
@@ -267,7 +222,7 @@ export function BadCreditTab({ credit, onSuccess }: BadCreditTabProps) {
             <input
               type="text"
               className="border rounded px-2 py-1 w-full bg-gray-100"
-              value={credit?.customer?.phone || ''}
+              value={installment?.customer?.phone || ''}
               readOnly
             />
           </FormRow>
@@ -275,7 +230,7 @@ export function BadCreditTab({ credit, onSuccess }: BadCreditTabProps) {
           <FormRow label="Địa chỉ" alignItems="start">
             <textarea
               className="border rounded px-2 py-1 w-full h-16 resize-none bg-gray-100"
-              value={(credit?.customer as any)?.address || ''}
+              value={(installment?.customer as any)?.address || ''}
               readOnly
             ></textarea>
           </FormRow>
@@ -291,11 +246,11 @@ export function BadCreditTab({ credit, onSuccess }: BadCreditTabProps) {
           </FormRow>
           
           {/* Check if customer is already blacklisted */}
-          {(credit?.customer as any)?.blacklist_reason && (
+          {(installment?.customer as any)?.blacklist_reason && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4" role="alert">
               <span className="flex items-center">
                 <AlertCircle className="h-4 w-4 mr-2" />
-                Khách hàng này đã bị báo xấu với lý do: "{(credit?.customer as any)?.blacklist_reason}"
+                Khách hàng này đã bị báo xấu với lý do: "{(installment?.customer as any)?.blacklist_reason}"
               </span>
             </div>
           )}
@@ -311,7 +266,7 @@ export function BadCreditTab({ credit, onSuccess }: BadCreditTabProps) {
             <Button 
               type="submit"
               className="bg-red-600 hover:bg-red-700 text-white"
-              disabled={isLoading || !!(credit?.customer as any)?.blacklist_reason}
+              disabled={isLoading || !!(installment?.customer as any)?.blacklist_reason}
             >
               {isLoading ? 'Đang xử lý...' : 'Báo xấu'}
             </Button>
@@ -340,11 +295,14 @@ export function BadCreditTab({ credit, onSuccess }: BadCreditTabProps) {
                 <table className="min-w-full bg-white border border-gray-200 rounded-lg">
                   <thead className="bg-gray-50">
                     <tr>
-                      {columns.map((column) => (
-                        <th key={column.key} className={column.className || 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'}>
-                          {column.label}
-                        </th>
-                      ))}
+                      <th className="px-3 py-3 text-left text-sm font-medium text-gray-700 text-center">#</th>
+                      <th className="px-3 py-3 text-left text-sm font-medium text-gray-700">Tên khách hàng</th>
+                      <th className="px-3 py-3 text-left text-sm font-medium text-gray-700">Số điện thoại</th>
+                      <th className="px-3 py-3 text-left text-sm font-medium text-gray-700">CMND</th>
+                      <th className="px-3 py-3 text-left text-sm font-medium text-gray-700">Địa chỉ</th>
+                      <th className="px-3 py-3 text-left text-sm font-medium text-gray-700">Lý do</th>
+                      <th className="px-3 py-3 text-left text-sm font-medium text-gray-700">Thời gian báo</th>
+                      <th className="px-3 py-3 text-left text-sm font-medium text-gray-700">Nguồn</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">

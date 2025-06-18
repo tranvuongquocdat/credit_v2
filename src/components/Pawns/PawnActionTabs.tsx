@@ -79,5 +79,5 @@ export const DEFAULT_PAWN_TABS: PawnTab[] = [
   { id: 'redeem', label: 'Chuộc đồ' },
   { id: 'documents', label: 'Chứng từ' },
   { id: 'history', label: 'Lịch sử' },
-  // { id: 'bad-credit', label: 'Báo xấu khách hàng' },
+  { id: 'bad-credit', label: 'Báo xấu khách hàng' },
 ] as PawnTab[]; 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Settings, Lock, User, Clock, Package, CreditCard, Calendar, Folder, ChevronDown, LogOut, Bell } from "lucide-react";
+import { Settings, User, Bike, DollarSign, Salad, Folder, ChevronDown, LogOut, Bell } from "lucide-react";
 import Link from "next/link";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useState, useEffect, memo, useCallback } from "react";
@@ -253,59 +253,60 @@ export function TopNavbar() {
           <span className="ml-3 font-semibold text-lg tracking-wide">Quản lý Credit</span>
         </Link>
 
-        {/* Left side icons group */}
-        <div className="flex items-center">
-          <button 
-            className="p-3 hover:bg-white/10 transition-all duration-200 rounded-lg relative group" 
-            title={`Cửa hàng có tổng ${notificationCounts.storeInvoices} hóa đơn cần xử lý`}
-          >
-            <Settings className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
-            {renderNotificationBadge(notificationCounts.storeInvoices)}
-          </button>
-          <button className="p-3 hover:bg-white/10 transition-all duration-200 rounded-lg relative group" title="Cài đặt khóa">
-            <Lock className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
-          </button>
-          <button className="p-3 hover:bg-white/10 transition-all duration-200 rounded-lg relative group" title="Danh sách khách hàng bị báo xấu">
-            <User className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
-          </button>
-        </div>
+
       </div>
 
       {/* Right section with various icons */}
       <div className="flex items-center space-x-2">
         {/* Notification icons group */}
         <div className="flex items-center space-x-1 bg-white/5 rounded-xl px-2 py-1">
-          <button 
+          <div 
             className="p-2.5 hover:bg-white/15 transition-all duration-200 rounded-lg relative group" 
-            title={`Có ${notificationCounts.appointments} hồ sơ đang hẹn`}
+            title="Danh sách khách hàng bị báo xấu"
           >
-            <Clock className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
-            {renderNotificationBadge(notificationCounts.appointments)}
-          </button>
-          <button 
+            <button 
+              className="flex items-center justify-center"
+              onClick={() => router.push('/blacklisted-customers')}
+            >
+              <User className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
+            </button>
+          </div>
+          <div 
             className="p-2.5 hover:bg-white/15 transition-all duration-200 rounded-lg relative group" 
             title={`Cầm đồ có ${notificationCounts.pawnInvoices} hóa đơn cần xử lý`}
-            onClick={() => router.push('/pawn-warnings')}
           >
-            <Package className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
-            {renderNotificationBadge(notificationCounts.pawnInvoices)}
-          </button>
-          <button 
+            <button 
+              className="flex items-center justify-center"
+              onClick={() => router.push('/pawn-warnings')}
+            >
+              <Bike className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
+              {renderNotificationBadge(notificationCounts.pawnInvoices)}
+            </button>
+          </div>
+          <div 
             className="p-2.5 hover:bg-white/15 transition-all duration-200 rounded-lg relative group" 
             title={`Tín chấp có ${notificationCounts.loanInvoices} hóa đơn cần xử lý`}
-            onClick={() => router.push('/credit-warnings')}
           >
-            <CreditCard className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
-            {renderNotificationBadge(notificationCounts.loanInvoices)}
-          </button>
-          <button 
+            <button 
+              className="flex items-center justify-center"
+              onClick={() => router.push('/credit-warnings')}
+            >
+              <DollarSign className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
+              {renderNotificationBadge(notificationCounts.loanInvoices)}
+            </button>
+          </div>
+          <div 
             className="p-2.5 hover:bg-white/15 transition-all duration-200 rounded-lg relative group" 
             title={`Trả góp có ${notificationCounts.installmentInvoices} hợp đồng cần xử lý`}
-            onClick={() => router.push('/installment-warnings')}
           >
-            <Calendar className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
-            {renderNotificationBadge(notificationCounts.installmentInvoices)}
-          </button>
+            <button 
+              className="flex items-center justify-center"
+              onClick={() => router.push('/installment-warnings')}
+            >
+              <Salad className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
+              {renderNotificationBadge(notificationCounts.installmentInvoices)}
+            </button>
+          </div>
         </div>
         
         {/* Memomized Store Dropdown Component với storeVersion để buộc re-render */}

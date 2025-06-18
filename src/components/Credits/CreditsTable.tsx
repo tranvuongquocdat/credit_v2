@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
 import { CreditWithCustomer, CreditStatus } from '@/models/credit';
-import { MoreVertical, DollarSignIcon, UnlockIcon } from 'lucide-react';
+import { MoreVertical, DollarSignIcon, UnlockIcon, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { getInterestDisplayString } from '@/lib/interest-calculator';
@@ -444,7 +444,14 @@ export function CreditsTable({
                   className="py-3 px-3 text-center border-b border-r border-gray-200"
                   title={`Xem hợp đồng của ${credit.customer?.name}`}
                 >
-                  {credit.customer?.name || '-'}
+                  <div className="flex items-center justify-center gap-2">
+                    <span>{credit.customer?.name || '-'}</span>
+                    {(credit.customer as any)?.blacklist_reason && (
+                      <div title="Khách hàng bị báo xấu">
+                        <AlertTriangle className="h-4 w-4 text-red-500" />
+                      </div>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
                   {credit.collateral || '-'}
