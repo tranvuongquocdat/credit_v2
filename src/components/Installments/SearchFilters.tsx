@@ -12,6 +12,8 @@ import {
 import { PlusIcon } from 'lucide-react';
 import { useStore } from '@/contexts/StoreContext';
 import { usePermissions } from '@/hooks/usePermissions';
+import { getCustomers } from '@/lib/customer';
+import { Customer } from '@/models/customer';
 interface StatusMapType {
   [key: string]: { 
     label: string; 
@@ -51,6 +53,11 @@ export function SearchFilters({
   const { hasPermission } = usePermissions();
   // Kiểm tra quyền tạo mới hợp đồng trả góp
   const canCreateInstallment = hasPermission('tao_moi_hop_dong_tra_gop');
+  
+  // State for customer autocomplete
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [filters, setFilters] = useState<SearchFilters>({
     contract_code: '',
     customer_name: '',
@@ -63,6 +70,28 @@ export function SearchFilters({
   
   // Track if we've already processed initialFilters to prevent double search
   const [hasProcessedInitialFilters, setHasProcessedInitialFilters] = useState(false);
+  
+  // Load customers for autocomplete
+  useEffect(() => {
+    if (currentStore?.id) {
+      async function loadCustomers() {
+        try {
+          const { data, error } = await getCustomers(
+            1, 
+            1000, 
+            '', // search query
+            currentStore?.id || '', // filter by store_id
+            '' // status filter
+          );
+          if (error) throw error;
+          setCustomers(data || []);
+        } catch (err) {
+          console.error('Error loading customers:', err);
+        }
+      }
+      loadCustomers();
+    }
+  }, [currentStore?.id]);
   
   // Single useEffect để handle cả store và initialFilters
   useEffect(() => {
@@ -120,6 +149,37 @@ export function SearchFilters({
       ...prev,
       [id]: value
     }));
+  };
+
+  // Handle customer name search with autocomplete
+  const handleCustomerNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setFilters(prev => ({
+      ...prev,
+      customer_name: value
+    }));
+    
+    if (value.trim() === '') {
+      setFilteredCustomers([]);
+      setShowCustomerDropdown(false);
+    } else {
+      const filtered = customers.filter(customer =>
+        customer.name.toLowerCase().includes(value.toLowerCase()) ||
+        (customer.phone && customer.phone.includes(value)) ||
+        (customer.id_number && customer.id_number.includes(value))
+      );
+      setFilteredCustomers(filtered);
+      setShowCustomerDropdown(filtered.length > 0);
+    }
+  };
+
+  // Handle customer selection from dropdown
+  const handleCustomerSelect = (customerName: string) => {
+    setFilters(prev => ({
+      ...prev,
+      customer_name: customerName
+    }));
+    setShowCustomerDropdown(false);
   };
 
   const handleStatusChange = (value: string) => {
@@ -211,16 +271,39 @@ export function SearchFilters({
           <div className="relative">
             <Input
               id="customer_name"
-              placeholder="Nhập tên khách hàng"
+              placeholder="Nhập tên, SĐT hoặc CCCD để tìm"
               className="w-full pr-8"
               value={filters.customer_name}
-              onChange={handleInputChange}
+              onChange={handleCustomerNameChange}
+              onFocus={() => {
+                if (filteredCustomers.length > 0) {
+                  setShowCustomerDropdown(true);
+                }
+              }}
             />
             <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
               </svg>
             </div>
+            {showCustomerDropdown && (
+              <div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-md shadow-lg z-50 max-h-60 overflow-y-auto">
+                {filteredCustomers.map(customer => (
+                  <div
+                    key={customer.id}
+                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100"
+                    onClick={() => handleCustomerSelect(customer.name)}
+                  >
+                    <div className="font-medium">{customer.name}</div>
+                    <div className="text-sm text-gray-500">
+                      {customer.phone && `SĐT: ${customer.phone}`}
+                      {customer.phone && customer.id_number && ' • '}
+                      {customer.id_number && `CCCD: ${customer.id_number}`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
         

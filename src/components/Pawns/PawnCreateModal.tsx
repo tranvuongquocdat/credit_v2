@@ -65,6 +65,11 @@ export function PawnCreateModal({
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
   
+  // Add state for customer search
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  
   // State for collaterals dropdown
   const [collaterals, setCollaterals] = useState<Collateral[]>([]);
   const [selectedCollateral, setSelectedCollateral] = useState<Collateral | null>(null);
@@ -216,9 +221,32 @@ export function PawnCreateModal({
     const selected = customers.find(c => c.id === customerId);
     if (selected) {
       setCustomerName(selected.name);
+      setCustomerSearchQuery(selected.name);
       setIdNumber(selected.id_number || '');
       setPhone(selected.phone || '');
       setAddress(selected.address || '');
+      setShowCustomerDropdown(false);
+    }
+  };
+
+  // Handle customer search input change
+  const handleCustomerSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setCustomerSearchQuery(query);
+    setCustomerName(query);
+    
+    if (query.trim() === '') {
+      setFilteredCustomers([]);
+      setShowCustomerDropdown(false);
+      setSelectedCustomerId('');
+    } else {
+      const filtered = customers.filter(customer =>
+        customer.name.toLowerCase().includes(query.toLowerCase()) ||
+        (customer.phone && customer.phone.includes(query)) ||
+        (customer.id_number && customer.id_number.includes(query))
+      );
+      setFilteredCustomers(filtered);
+      setShowCustomerDropdown(filtered.length > 0);
     }
   };
   
@@ -506,19 +534,38 @@ export function PawnCreateModal({
                 required
               />
             ) : (
-              <select 
-                className="border rounded-md p-2 w-full"
-                value={selectedCustomerId}
-                onChange={(e) => handleCustomerChange(e.target.value)}
-                required
-              >
-                <option value="">Chọn khách hàng</option>
-                {customers.map(customer => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.name}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <Input 
+                  id="customerName"
+                  value={customerSearchQuery}
+                  onChange={handleCustomerSearchChange}
+                  onFocus={() => {
+                    if (filteredCustomers.length > 0) {
+                      setShowCustomerDropdown(true);
+                    }
+                  }}
+                  placeholder="Nhập tên, SĐT hoặc CCCD để tìm khách hàng"
+                  required
+                />
+                {showCustomerDropdown && (
+                  <div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-md shadow-lg z-50 max-h-60 overflow-y-auto">
+                    {filteredCustomers.map(customer => (
+                      <div
+                        key={customer.id}
+                        className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100"
+                        onClick={() => handleCustomerChange(customer.id)}
+                      >
+                        <div className="font-medium">{customer.name}</div>
+                        <div className="text-sm text-gray-500">
+                          {customer.phone && `SĐT: ${customer.phone}`}
+                          {customer.phone && customer.id_number && ' • '}
+                          {customer.id_number && `CCCD: ${customer.id_number}`}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
           
