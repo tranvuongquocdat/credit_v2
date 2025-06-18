@@ -32,7 +32,8 @@ export async function getPawns(
         customers (
           name,
           phone,
-          id_number
+          id_number,
+          blacklist_reason
         )
       `, { count: 'exact' });
     
@@ -183,7 +184,8 @@ export async function getPawnById(id: string, signal?: AbortSignal) {
         customers (
           name,
           phone,
-          id_number
+          id_number,
+          blacklist_reason
         )
       `)
       .eq('id', id)

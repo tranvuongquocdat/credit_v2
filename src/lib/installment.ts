@@ -20,7 +20,7 @@ export async function getInstallments(
       .select(`
         *,
         customer:customers(
-          id, name, phone, address
+          id, name, phone, address, blacklist_reason
         )
       `, { count: 'exact' });
     
@@ -110,6 +110,7 @@ export async function getInstallments(
         name: item.customer.name || '',
         phone: item.customer.phone || undefined,
         address: item.customer.address || undefined,
+        blacklist_reason: item.customer.blacklist_reason || undefined,
       } as Customer : undefined;
       
       return {
@@ -182,7 +183,7 @@ export async function getInstallmentById(id: string) {
       .select(`
         *,
         customer:customers(
-          id, name, phone, address
+          id, name, phone, address, blacklist_reason
         )
       `)
       .eq('id', id)
@@ -209,6 +210,7 @@ export async function getInstallmentById(id: string) {
       name: data.customer.name || '',
       phone: data.customer.phone || undefined,
       address: data.customer.address || undefined,
+      blacklist_reason: data.customer.blacklist_reason || undefined,
     } as Customer : undefined;
     
     // Transform data to match UI requirements

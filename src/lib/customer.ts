@@ -123,7 +123,8 @@ export async function createCustomer(params: CreateCustomerParams) {
         store_id: params.store_id,
         phone: params.phone,
         address: params.address,
-        id_number: params.id_number
+        id_number: params.id_number,
+        blacklist_reason: params.blacklist_reason
       })
       .select()
       .single();
@@ -150,6 +151,7 @@ export async function updateCustomer(id: string, params: UpdateCustomerParams) {
     if (params.phone !== undefined) updateData.phone = params.phone;
     if (params.address !== undefined) updateData.address = params.address;
     if (params.id_number !== undefined) updateData.id_number = params.id_number;
+    if (params.blacklist_reason !== undefined) updateData.blacklist_reason = params.blacklist_reason;
     
     // Tự động cập nhật thời gian sửa đổi
     updateData.updated_at = new Date().toISOString();
@@ -241,5 +243,63 @@ export async function getCustomersByStore(storeId: string) {
   } catch (err) {
     console.error('Error in direct store test:', err);
     return { success: false, error: err, data: null, count: 0 };
+  }
+}
+
+/**
+ * Tìm kiếm khách hàng bị báo xấu
+ */
+export async function searchBlacklistedCustomers(searchQuery: string) {
+  try {
+    debugLog('Searching blacklisted customers with query:', searchQuery);
+    
+    // Build query to search blacklisted customers
+    let query = supabase
+      .from('customers')
+      .select(`
+        *,
+        stores!inner(name)
+      `)
+      .not('blacklist_reason', 'is', null); // Only get customers with blacklist_reason
+    
+    // Apply search filter on phone, id_number, or name
+    if (searchQuery.trim()) {
+      query = query.or(`phone.ilike.%${searchQuery}%,id_number.ilike.%${searchQuery}%,name.ilike.%${searchQuery}%`);
+    }
+    
+    const { data, error } = await query
+      .order('updated_at', { ascending: false })
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      debugLog('Error from database:', error);
+      throw error;
+    }
+    
+    // Transform data to match expected interface
+    const transformedData = data?.map(customer => ({
+      id: customer.id,
+      name: customer.name,
+      phone: customer.phone,
+      id_number: customer.id_number,
+      address: customer.address,
+      blacklist_reason: customer.blacklist_reason,
+      created_at: customer.created_at,
+      updated_at: customer.updated_at,
+      store_name: customer.stores?.name || 'N/A'
+    }));
+    
+    debugLog(`Found ${transformedData?.length || 0} blacklisted customers`);
+    
+    return {
+      data: transformedData || [],
+      error: null
+    };
+  } catch (error) {
+    debugLog('Error searching blacklisted customers:', error);
+    return {
+      data: [],
+      error
+    };
   }
 }

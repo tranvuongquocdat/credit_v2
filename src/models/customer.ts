@@ -12,6 +12,7 @@ export interface Customer {
   id_number?: string | null;
   email?: string | null;
   notes?: string | null;
+  blacklist_reason?: string | null;
   status?: CustomerStatus;
   created_at?: string | null;
   updated_at?: string | null;
@@ -25,6 +26,7 @@ export interface CreateCustomerParams {
   id_number?: string | null;
   email?: string | null;
   notes?: string | null;
+  blacklist_reason?: string | null;
   status?: CustomerStatus;
 }
 
@@ -36,5 +38,6 @@ export interface UpdateCustomerParams {
   id_number?: string | null;
   email?: string | null;
   notes?: string | null;
+  blacklist_reason?: string | null;
   status?: CustomerStatus;
 }

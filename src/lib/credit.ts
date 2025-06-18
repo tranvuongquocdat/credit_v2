@@ -38,7 +38,7 @@ export async function getCredits(
       .from('credits')
       .select(`
         *,
-        customer:customers(name, phone, id_number)
+        customer:customers(name, phone, id_number, blacklist_reason)
       `, { count: 'exact' });
     
     // Set AbortController signal
@@ -173,7 +173,7 @@ export async function getCreditById(id: string) {
       .from('credits')
       .select(`
         *,
-        customer:customers(name, phone, id_number)
+        customer:customers(name, phone, id_number, blacklist_reason)
       `)
       .eq('id', id)
       .single();
@@ -226,7 +226,7 @@ export async function createCredit(params: CreateCreditParams) {
       })
       .select(`
         *,
-        customer:customers(name, phone, id_number)
+        customer:customers(name, phone, id_number, blacklist_reason)
       `)
       .single();
     

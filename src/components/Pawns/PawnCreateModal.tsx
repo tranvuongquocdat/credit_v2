@@ -658,6 +658,7 @@ export function PawnCreateModal({
                 id="loanAmount"
                 value={loanAmount}
                 onChange={handleLoanAmountChange}
+                onFocus={(e) => e.target.select()}
                 required
                 placeholder="0"
               />

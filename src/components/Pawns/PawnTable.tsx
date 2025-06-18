@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PawnWithCustomerAndCollateral, PawnStatus } from '@/models/pawn';
 import { formatCurrency } from '@/lib/utils';
-import { Edit, Eye, MoreHorizontal, Calendar, DollarSign, Trash2, UnlockIcon } from 'lucide-react';
+import { Edit, Eye, MoreHorizontal, Calendar, DollarSign, Trash2, UnlockIcon, AlertTriangle } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -406,7 +406,17 @@ export function PawnTable({
                 </TableCell>
                 <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
                   <div className="flex flex-col items-center">
-                    <span>{pawn.customer?.name}</span>
+                    <div className="flex items-center gap-1">
+                      <span>{pawn.customer?.name}</span>
+                      {(pawn.customer as any)?.blacklist_reason && (
+                        <div className="relative group">
+                          <AlertTriangle className="h-4 w-4 text-red-500" />
+                          <div className="absolute left-1/2 transform -translate-x-1/2 bottom-full mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
+                            Khách hàng bị báo xấu
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     <span className="text-xs text-gray-400 mt-1">{pawn.customer?.phone}</span>
                   </div>
                 </TableCell>

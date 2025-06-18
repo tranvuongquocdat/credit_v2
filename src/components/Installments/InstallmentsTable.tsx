@@ -476,13 +476,23 @@ export function InstallmentsTable({
                   </span>
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  <span 
-                    className="text-blue-600 cursor-pointer hover:underline" 
-                    onClick={() => handleContractCodeClick(installment.id)}
-                    title={canEditInstallment ? 'Nhấn để chỉnh sửa hợp đồng' : 'Bạn không có quyền chỉnh sửa hợp đồng'}
-                  >
-                    {installment.customer?.name || "N/A"}
-                  </span>
+                  <div className="flex items-center justify-center gap-1">
+                    <span 
+                      className="text-blue-600 cursor-pointer hover:underline" 
+                      onClick={() => handleContractCodeClick(installment.id)}
+                      title={canEditInstallment ? 'Nhấn để chỉnh sửa hợp đồng' : 'Bạn không có quyền chỉnh sửa hợp đồng'}
+                    >
+                      {installment.customer?.name || "N/A"}
+                    </span>
+                    {(installment.customer as any)?.blacklist_reason && (
+                      <div className="relative group">
+                        <AlertTriangleIcon className="h-4 w-4 text-red-500" />
+                        <div className="absolute left-1/2 transform -translate-x-1/2 bottom-full mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
+                          Khách hàng bị báo xấu
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
                   {formatCurrency(installment.amount_given)}

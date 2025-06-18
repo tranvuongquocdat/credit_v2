@@ -1,237 +1,352 @@
 'use client';
 
-import { useState } from 'react';
-import { PawnWithCustomerAndCollateral } from '@/models/pawn';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useToast } from '@/components/ui/use-toast';
-import { AlertTriangle, Shield, FileText } from 'lucide-react';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { FormRow } from '@/components/ui/FormRow';
+import { Icon } from '@/components/ui/Icon';
+import { AlertCircle } from 'lucide-react';
+import { format } from 'date-fns';
+import { vi } from 'date-fns/locale';
+import { PawnWithCustomerAndCollateral } from '@/models/pawn';
+import { updateCustomer, searchBlacklistedCustomers } from '@/lib/customer';
+import { toast } from '@/components/ui/use-toast';
 
 interface BadPawnTabProps {
   pawn: PawnWithCustomerAndCollateral;
+  onSuccess?: () => void;
 }
 
-export function BadPawnTab({ pawn }: BadPawnTabProps) {
-  const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [reportData, setReportData] = useState({
-    reason: '',
-    description: '',
-    severity: 'medium'
-  });
+interface BlacklistHistoryItem {
+  id: string;
+  name: string;
+  phone: string | null;
+  id_number: string | null;
+  address: string | null;
+  blacklist_reason: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  store_name: string;
+}
 
-  const reasons = [
-    { value: 'overdue', label: 'Quá hạn thanh toán' },
-    { value: 'fraud', label: 'Gian lận thông tin' },
-    { value: 'fake_collateral', label: 'Tài sản giả mạo' },
-    { value: 'aggressive', label: 'Thái độ hung hăng' },
-    { value: 'breach_contract', label: 'Vi phạm hợp đồng' },
-    { value: 'other', label: 'Lý do khác' }
-  ];
+export function BadPawnTab({ pawn, onSuccess }: BadPawnTabProps) {
+  // State for form
+  const [blacklistReason, setBlacklistReason] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // State for blacklist history
+  const [blacklistHistory, setBlacklistHistory] = useState<BlacklistHistoryItem[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
-  const severityLevels = [
-    { value: 'low', label: 'Thấp', color: 'text-yellow-600' },
-    { value: 'medium', label: 'Trung bình', color: 'text-orange-600' },
-    { value: 'high', label: 'Cao', color: 'text-red-600' },
-    { value: 'critical', label: 'Nghiêm trọng', color: 'text-red-800' }
-  ];
-
-  const handleSubmitReport = async () => {
-    if (!reportData.reason) {
-      toast({
-        title: "Lỗi",
-        description: "Vui lòng chọn lý do báo xấu",
-        variant: "destructive"
-      });
+  // Load blacklist history for the customer
+  const loadBlacklistHistory = async () => {
+    if (!pawn?.customer?.phone && !pawn?.customer?.id_number && !pawn?.customer?.name) {
       return;
     }
 
-    if (!reportData.description.trim()) {
-      toast({
-        title: "Lỗi",
-        description: "Vui lòng mô tả chi tiết lý do báo xấu",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setLoading(true);
+    setIsLoadingHistory(true);
     try {
-      // TODO: Implement bad customer report logic
-      // This would involve:
-      // 1. Creating a bad customer report record
-      // 2. Updating customer's credit score/status
-      // 3. Notifying relevant departments
+      // Search by phone number, ID number, or name - try all available fields
+      const searchQueries = [
+        pawn?.customer?.phone,
+        pawn?.customer?.id_number,
+        pawn?.customer?.name
+      ].filter(Boolean); // Remove null/undefined values
       
-      console.log('Bad customer report:', {
-        pawnId: pawn.id,
-        customerId: pawn.customer_id,
-        reason: reportData.reason,
-        description: reportData.description,
-        severity: reportData.severity
+      if (searchQueries.length === 0) {
+        setBlacklistHistory([]);
+        return;
+      }
+
+      // Try searching with each available field
+      let allResults: any[] = [];
+      for (const query of searchQueries) {
+        const { data, error } = await searchBlacklistedCustomers(query as string);
+        if (!error && data) {
+          allResults = [...allResults, ...data];
+        }
+      }
+
+      // Remove duplicates and filter to match exactly this customer
+      const uniqueResults = allResults.filter((item, index, self) => 
+        index === self.findIndex(t => t.id === item.id)
+      );
+
+      const filteredData = uniqueResults.filter(item => {
+        // Match by any available field - phone, id_number, or name
+        const phoneMatch = pawn?.customer?.phone && item.phone && item.phone === pawn.customer.phone;
+        const idMatch = pawn?.customer?.id_number && item.id_number && item.id_number === pawn.customer.id_number;
+        const nameMatch = pawn?.customer?.name && item.name && item.name === pawn.customer.name;
+        
+        return phoneMatch || idMatch || nameMatch;
       });
 
+      setBlacklistHistory(filteredData);
+    } catch (error) {
+      console.error('Error loading blacklist history:', error);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  // Load blacklist history when component mounts
+  useEffect(() => {
+    loadBlacklistHistory();
+  }, [pawn]);
+
+  // Transform data for table display
+  const tableData = blacklistHistory.map((item, index) => ({
+    index: index + 1,
+    customerName: item.name,
+    phone: item.phone || '-',
+    idNumber: item.id_number || '-',
+    address: item.address || '-',
+    reason: (
+      <div className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs max-w-xs">
+        {item.blacklist_reason}
+      </div>
+    ),
+    reportDate: (
+      <div className="flex flex-col">
+        <span className="text-xs text-gray-500">
+          {(item.updated_at || item.created_at) ? 
+            format(new Date(item.updated_at || item.created_at!), 'HH:mm', { locale: vi }) : 
+            '-'
+          }
+        </span>
+        <span className="text-xs text-gray-500">
+          {(item.updated_at || item.created_at) ? 
+            format(new Date(item.updated_at || item.created_at!), 'dd/MM/yyyy', { locale: vi }) : 
+            '-'
+          }
+        </span>
+      </div>
+    ),
+    source: (
+      <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
+        {item.store_name}
+      </span>
+    )
+  }));
+
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!blacklistReason.trim()) {
       toast({
-        title: "Thành công",
-        description: "Đã gửi báo cáo xấu khách hàng"
+        title: 'Lỗi',
+        description: 'Vui lòng nhập lý do báo xấu',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!pawn?.customer_id) {
+      toast({
+        title: 'Lỗi',
+        description: 'Không tìm thấy thông tin khách hàng',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const { error } = await updateCustomer(pawn.customer_id, {
+        blacklist_reason: blacklistReason.trim()
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: 'Thành công',
+        description: 'Đã báo xấu khách hàng thành công',
+        variant: 'default',
       });
 
       // Reset form
-      setReportData({
-        reason: '',
-        description: '',
-        severity: 'medium'
-      });
+      setBlacklistReason('');
+
+      // Reload blacklist history
+      await loadBlacklistHistory();
+
+      // Call onSuccess callback if provided
+      if (onSuccess) {
+        onSuccess();
+      }
+
     } catch (error) {
-      console.error('Error submitting bad customer report:', error);
+      console.error('Error blacklisting customer:', error);
       toast({
-        title: "Lỗi",
-        description: "Không thể gửi báo cáo",
-        variant: "destructive"
+        title: 'Lỗi',
+        description: 'Có lỗi xảy ra khi báo xấu khách hàng',
+        variant: 'destructive',
       });
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-        <div className="flex items-center space-x-2 mb-4">
-          <AlertTriangle className="h-6 w-6 text-red-600" />
-          <h3 className="text-xl font-bold text-red-800">Báo xấu khách hàng</h3>
-        </div>
+    <div className="p-4">
+      {/* Báo xấu khách hàng section */}
+      <div className="mb-6">
+        <SectionHeader
+          icon={<Icon name="warning" />}
+          title="Báo xấu khách hàng"
+          color="red"
+        />
         
-        <div className="space-y-6">
-          <div className="bg-white p-4 rounded-lg border">
-            <h4 className="font-medium text-gray-700 mb-2">Thông tin khách hàng</h4>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="flex justify-between">
-                <span>Tên khách hàng:</span>
-                <span className="font-medium">{pawn.customer?.name || 'N/A'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Mã hợp đồng:</span>
-                <span className="font-medium">{pawn.contract_code || 'N/A'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Số điện thoại:</span>
-                <span className="font-medium">{pawn.customer?.phone || 'N/A'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Địa chỉ:</span>
-                <span className="font-medium">{pawn.customer?.address || 'N/A'}</span>
-              </div>
+        <form onSubmit={handleSubmit} className="border rounded-md p-4">
+          <FormRow label="Tên khách hàng" required>
+            <input
+              type="text"
+              className="border rounded px-2 py-1 w-full bg-gray-100"
+              value={pawn?.customer?.name || ''}
+              readOnly
+            />
+          </FormRow>
+          
+          <FormRow label="CMND" required>
+            <input
+              type="text"
+              className="border rounded px-2 py-1 w-full bg-gray-100"
+              value={pawn?.customer?.id_number || ''}
+              readOnly
+            />
+          </FormRow>
+          
+          <FormRow label="Số điện thoại">
+            <input
+              type="text"
+              className="border rounded px-2 py-1 w-full bg-gray-100"
+              value={pawn?.customer?.phone || ''}
+              readOnly
+            />
+          </FormRow>
+          
+          <FormRow label="Địa chỉ" alignItems="start">
+            <textarea
+              className="border rounded px-2 py-1 w-full h-16 resize-none bg-gray-100"
+              value={(pawn?.customer as any)?.address || ''}
+              readOnly
+            ></textarea>
+          </FormRow>
+          
+          <FormRow label="Nội dung" required alignItems="start">
+            <textarea
+              className="border rounded px-2 py-1 w-full h-20 resize-none"
+              placeholder="Nhập nội dung báo xấu..."
+              value={blacklistReason}
+              onChange={(e) => setBlacklistReason(e.target.value)}
+              required
+            ></textarea>
+          </FormRow>
+          
+          {/* Check if customer is already blacklisted */}
+          {(pawn?.customer as any)?.blacklist_reason && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4" role="alert">
+              <span className="flex items-center">
+                <AlertCircle className="h-4 w-4 mr-2" />
+                Khách hàng này đã bị báo xấu với lý do: "{(pawn?.customer as any)?.blacklist_reason}"
+              </span>
             </div>
-          </div>
-
-          <div className="bg-white p-4 rounded-lg border">
-            <h4 className="font-medium text-gray-700 mb-4">Thông tin báo cáo</h4>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="reason">Lý do báo xấu</Label>
-                <Select value={reportData.reason} onValueChange={(value) => 
-                  setReportData(prev => ({ ...prev, reason: value }))
-                }>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Chọn lý do báo xấu" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {reasons.map((reason) => (
-                      <SelectItem key={reason.value} value={reason.value}>
-                        {reason.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="severity">Mức độ nghiêm trọng</Label>
-                <Select value={reportData.severity} onValueChange={(value) => 
-                  setReportData(prev => ({ ...prev, severity: value }))
-                }>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Chọn mức độ nghiêm trọng" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {severityLevels.map((level) => (
-                      <SelectItem key={level.value} value={level.value}>
-                        <span className={level.color}>{level.label}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="description">Mô tả chi tiết</Label>
-                <Textarea
-                  id="description"
-                  value={reportData.description}
-                  onChange={(e) => setReportData(prev => ({
-                    ...prev,
-                    description: e.target.value
-                  }))}
-                  placeholder="Mô tả chi tiết về hành vi xấu của khách hàng..."
-                  className="mt-1"
-                  rows={5}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <div className="flex items-center space-x-2 mb-2">
-              <Shield className="h-5 w-5 text-yellow-600" />
-              <h4 className="font-medium text-yellow-800">Lưu ý quan trọng</h4>
-            </div>
-            <ul className="text-sm text-yellow-700 space-y-1">
-              <li>• Báo cáo xấu sẽ ảnh hưởng đến điểm tín dụng của khách hàng</li>
-              <li>• Thông tin sẽ được chia sẻ với các cơ sở tín dụng khác</li>
-              <li>• Cần có bằng chứng cụ thể để hỗ trợ báo cáo</li>
-              <li>• Báo cáo sai sự thật có thể gây hậu quả pháp lý</li>
-              <li>• Khách hàng có quyền khiếu nại và yêu cầu xem xét lại</li>
-            </ul>
-          </div>
-
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-center space-x-2 mb-2">
-              <FileText className="h-5 w-5 text-blue-600" />
-              <h4 className="font-medium text-blue-800">Quy trình xử lý</h4>
-            </div>
-            <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
-              <li>Báo cáo sẽ được gửi đến bộ phận quản lý rủi ro</li>
-              <li>Thông tin sẽ được xác minh và đánh giá</li>
-              <li>Khách hàng sẽ được thông báo về báo cáo (nếu cần)</li>
-              <li>Cập nhật hồ sơ tín dụng của khách hàng</li>
-              <li>Thông báo cho các cơ sở tín dụng liên quan</li>
-            </ol>
-          </div>
-
-          <div className="flex justify-center space-x-4">
-            <Button
-              onClick={handleSubmitReport}
-              className="bg-red-600 hover:bg-red-700 text-white px-8 py-2"
-              disabled={loading || !reportData.reason || !reportData.description.trim()}
+          )}
+          
+          <div className="flex justify-end gap-2 mt-6">
+            <Button 
+              type="button"
+              className="bg-gray-200 hover:bg-gray-300 text-gray-800"
+              disabled={isLoading}
             >
-              {loading ? 'Đang xử lý...' : 'Gửi báo cáo'}
+              Thoát
             </Button>
-            <Button
-              onClick={() => setReportData({
-                reason: '',
-                description: '',
-                severity: 'medium'
-              })}
-              variant="outline"
-              className="px-8 py-2"
+            <Button 
+              type="submit"
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={isLoading || !!(pawn?.customer as any)?.blacklist_reason}
             >
-              Đặt lại
+              {isLoading ? 'Đang xử lý...' : 'Báo xấu'}
             </Button>
           </div>
-        </div>
+        </form>
+      </div>
+      
+      {/* Lịch sử báo xấu section */}
+      <div>
+        <SectionHeader
+          icon={<Icon name="history" />}
+          title="Lịch sử báo xấu"
+          color="amber"
+        />
+        
+        {isLoadingHistory ? (
+          <div className="border rounded-md p-4">
+            <div className="flex justify-center items-center h-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700"></div>
+            </div>
+          </div>
+        ) : (
+          <div className="border rounded-md">
+            {blacklistHistory.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white border border-gray-200 rounded-lg">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-3 text-left text-sm font-medium text-gray-700 text-center">#</th>
+                      <th className="px-3 py-3 text-left text-sm font-medium text-gray-700">Tên khách hàng</th>
+                      <th className="px-3 py-3 text-left text-sm font-medium text-gray-700">Số điện thoại</th>
+                      <th className="px-3 py-3 text-left text-sm font-medium text-gray-700">CMND</th>
+                      <th className="px-3 py-3 text-left text-sm font-medium text-gray-700">Địa chỉ</th>
+                      <th className="px-3 py-3 text-left text-sm font-medium text-gray-700">Lý do</th>
+                      <th className="px-3 py-3 text-left text-sm font-medium text-gray-700">Thời gian báo</th>
+                      <th className="px-3 py-3 text-left text-sm font-medium text-gray-700">Nguồn</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {tableData.map((row, index) => (
+                      <tr key={index} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                          {row.index}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {row.customerName}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {row.phone}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {row.idNumber}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                          {row.address}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
+                          {row.reason}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {row.reportDate}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {row.source}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500">Khách hàng này chưa bị báo xấu</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
