@@ -11,6 +11,7 @@ import { getExpectedMoney } from '@/lib/Installments/get_expected_money';
 import { getLatestPaymentPaidDate } from '@/lib/Installments/get_latest_payment_paid_date';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getCurrentUser } from '@/lib/auth';
+import { updateInstallmentPaymentDueDate } from '@/lib/installment';
 
 interface PaymentTabProps {
   installment: InstallmentWithCustomer;
@@ -178,7 +179,20 @@ export function PaymentTabFast({
 
         const { error } = await supabase.from('installment_history').upsert(records).select();
         if (error) throw new Error(error.message);
-
+        // Update payment_due_date
+        const updatedLatestPaidDate = await getLatestPaymentPaidDate(installment.id);
+        if (updatedLatestPaidDate) {
+          const latestPaidDateObj = new Date(updatedLatestPaidDate);
+          const endDate = new Date(installment.loan_date || '');
+          endDate.setDate(endDate.getDate() + (installment.loan_period || 0) - 1);
+          if (latestPaidDateObj.getTime() >= endDate.getTime()) {
+            await updateInstallmentPaymentDueDate(installment.id, null);
+          } else {
+            const newDueDate = new Date(latestPaidDateObj);
+            newDueDate.setDate(newDueDate.getDate() + installment.payment_period);
+            await updateInstallmentPaymentDueDate(installment.id, newDueDate.toISOString());
+          }
+        }
         toast({ title: 'Thành công', description: `Đã tạo ${records.length} bản ghi thanh toán` });
         setEditingPeriodId(null);
       } else {
@@ -201,6 +215,23 @@ export function PaymentTabFast({
           .lte('effective_date', `${endDate}T23:59:59Z`)
           .select();
         if (error) throw new Error(error.message);
+        // Update payment_due_date
+        const updatedLatestPaidDate = await getLatestPaymentPaidDate(installment.id);
+        if (updatedLatestPaidDate) {
+          const latestPaidDateObj = new Date(updatedLatestPaidDate);
+          const endDate = new Date(installment.loan_date || '');
+          endDate.setDate(endDate.getDate() + (installment.loan_period || 0) - 1);
+          if (latestPaidDateObj.getTime() >= endDate.getTime()) {
+            await updateInstallmentPaymentDueDate(installment.id, null);
+          } else {
+            const newDueDate = new Date(latestPaidDateObj);
+            newDueDate.setDate(newDueDate.getDate() + installment.payment_period);
+            await updateInstallmentPaymentDueDate(installment.id, newDueDate.toISOString());
+          }
+        }
+        else {
+          await updateInstallmentPaymentDueDate(installment.id, installment.start_date || '');
+        }
         toast({ title: 'Thành công', description: `Đã xoá ${data?.length || 0} bản ghi` });
       }
 

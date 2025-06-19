@@ -3,7 +3,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import { Store } from '@/models/store';
 import { getAllActiveStores } from '@/lib/store';
-import { supabase } from '@/lib/supabase';
 
 // Helper: lấy store đã lưu ngay khi component khởi tạo (client-side only)
 const getInitialStore = (): Store | null => {
@@ -25,6 +24,7 @@ interface StoreContextType {
   loading: boolean;
   error: Error | null;
   refreshStores: () => Promise<void>;
+  resetStores: () => void;
 }
 
 // Create the context with default values
@@ -103,19 +103,30 @@ export const StoreProvider = ({ children }: StoreProviderProps) => {
 
   // Load stores and verify/initialize current store
   useEffect(() => {
-    // Lần đầu
-    fetchStores();
+    let isMounted = true;
 
-    // Lắng nghe thay đổi session
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
-      // Xoá store cũ & refetch cho user mới
-      localStorage.removeItem('currentStoreId');
-      setStores([]);
-      setCurrentStoreState(null);
-      fetchStores();
-    });
+    const initializeStores = async () => {
+      // Chỉ bật loading nếu chưa có storeId tạm thời
+      if (!currentStore) setLoading(true);
+      await fetchStores();
+      if (isMounted) setLoading(false);
+    };
 
-    return () => subscription.unsubscribe();
+    initializeStores();
+
+    // Cross-tab sync: cập nhật khi key thay đổi ở tab khác
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'currentStoreId' && e.newValue) {
+        const newStore = stores.find((s) => s.id === e.newValue);
+        if (newStore) setCurrentStoreState(newStore);
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('storage', handleStorage);
+    };
   }, []);
 
   // Function to refresh stores (can be called manually)
@@ -138,6 +149,12 @@ export const StoreProvider = ({ children }: StoreProviderProps) => {
     console.log('✅ Store context updated:', store.name);
   };
 
+  const resetStores = () => {
+    setStores([]);
+    setCurrentStoreState(null);
+    localStorage.removeItem('currentStoreId');
+  };
+
   // Use useMemo to prevent unnecessary re-renders
   const contextValue = useMemo(() => ({
     currentStore,
@@ -145,7 +162,8 @@ export const StoreProvider = ({ children }: StoreProviderProps) => {
     setCurrentStore,
     loading,
     error,
-    refreshStores
+    refreshStores,
+    resetStores
   }), [currentStore, stores, loading, error]);
 
   return (

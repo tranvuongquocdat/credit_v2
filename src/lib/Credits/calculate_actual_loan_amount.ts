@@ -50,8 +50,6 @@ export async function calculateActualLoanAmount(creditId: string): Promise<numbe
       });
     }
 
-    console.log(`Credit ${creditId}: Initial = ${creditData.loan_amount}, Actual = ${actualAmount}`);
-    
     return Math.max(0, actualAmount); // Đảm bảo không âm
   } catch (error) {
     console.error(`Error calculating actual loan amount for credit ${creditId}:`, error);

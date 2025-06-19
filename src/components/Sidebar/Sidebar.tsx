@@ -497,6 +497,7 @@ export default function Sidebar() {
               try {
                 setIsLoggingOut(true);
                 await signOut();
+                localStorage.removeItem('currentStoreId');
                 router.push('/login');
                 router.refresh();
               } catch (error) {

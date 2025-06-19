@@ -134,7 +134,7 @@ export function SearchFilters({
       // Auto-search chỉ cho navigation từ URL
       onSearch(newFilters);
     }
-  }, [currentStore, initialFilters, hasProcessedInitialFilters]);
+  }, [currentStore?.id, initialFilters, hasProcessedInitialFilters]);
   
   // Reset processed flag khi initialFilters thay đổi (new navigation)
   useEffect(() => {

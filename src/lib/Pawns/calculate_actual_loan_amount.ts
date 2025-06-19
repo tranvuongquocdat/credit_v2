@@ -50,7 +50,6 @@ export async function calculateActualLoanAmount(pawnId: string): Promise<number>
       });
     }
 
-    console.log(`Pawn ${pawnId}: Initial = ${pawnData.loan_amount}, Actual = ${actualAmount}`);
     
     return Math.max(0, actualAmount); // Đảm bảo không âm
   } catch (error) {

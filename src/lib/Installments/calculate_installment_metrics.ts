@@ -45,17 +45,11 @@ export async function calculateInstallmentMetrics(
       installment.loan_date || new Date().toISOString()
     );
     
-    // Log for debugging
-    console.debug(`Installment ${installment.id} - Interest start date: ${interestStartDate}`);
-    
     // 2. Calculate profit collected based on the new formula
     const profitCollected = await calculateProfitCollectedInCurrentMonth(
       installment.id,
       installment.down_payment || 0
     );
-    
-    // Log profit collected for debugging
-    console.debug(`Installment ${installment.id} - Profit collected: ${profitCollected}`);
     
     // Calculate loan amount (amount given to customer)
     const loanAmount = Math.max(0, (installment.down_payment || 0) - totalPaidFromHistory);
@@ -180,15 +174,6 @@ async function calculateProfitCollectedInCurrentMonth(
     // Kết quả = B - A
     const profitCollected = b - a;
     
-    // Log để debug
-    console.debug(`Installment ${installmentId} - Profit calculation:`, {
-      totalCreditToLastMonth,
-      totalCreditToCurrentMonth,
-      downPayment,
-      a,
-      b,
-      profitCollected
-    });
     
     return profitCollected;
   } catch (error) {

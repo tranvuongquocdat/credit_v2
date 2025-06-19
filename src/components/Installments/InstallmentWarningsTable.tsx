@@ -10,7 +10,6 @@ import { useRouter } from "next/navigation";
 import { getLatestPaymentPaidDate } from '@/lib/Installments/get_latest_payment_paid_date';
 import { getinstallmentPaymentHistory } from "@/lib/Installments/payment_history";
 import { getExpectedMoney } from "@/lib/Installments/get_expected_money";
-import { convertFromHistoryToTimeArrayWithStatus } from "@/lib/Installments/convert_from_history_to_time_array";
 
 // Extended interface with warning-specific fields
 interface InstallmentWarning extends InstallmentWithCustomer {
@@ -26,6 +25,69 @@ interface InstallmentWarningsTableProps {
   isLoading: boolean;
   onPayment?: (installment: InstallmentWithCustomer, amount: number) => void;
   onCustomerClick?: (installment: InstallmentWithCustomer) => void; // Optional callback for customer click
+}
+
+// ================= Helper functions for simplified overdue computation =================
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+/**
+ * Trả về số kỳ quá hạn và danh sách số tiền lũy tiến cần đóng cho tối đa 10 kỳ đầu.
+ * latePeriods = Math.ceil(unpaidDays / paymentPeriod) nên kỳ cuối (nếu thiếu ngày) vẫn tính.
+ */
+function getOverdueInfo(
+  installment: InstallmentWithCustomer,
+  latestPaidDate: Date | null,
+  dailyAmounts: number[]
+) {
+  const paymentPeriod = installment.payment_period || 10;
+
+  // Ngày bắt đầu hợp đồng (index 0 của dailyAmounts)
+  const loanStart = new Date(installment.start_date);
+  loanStart.setHours(0, 0, 0, 0);
+
+  // Index của ngày đầu tiên CHƯA thanh toán
+  const firstUnpaidIdx = latestPaidDate
+    ? Math.floor((latestPaidDate.getTime() - loanStart.getTime()) / MS_PER_DAY) + 1
+    : 0;
+
+  // Ngày hiệu lực để so sánh (hôm nay hoặc ngày cuối hợp đồng, tuỳ cái nào sớm hơn)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const contractEnd = new Date(loanStart);
+  contractEnd.setDate(contractEnd.getDate() + installment.duration - 1);
+  contractEnd.setHours(0, 0, 0, 0);
+  const effectiveDate = today > contractEnd ? contractEnd : today;
+
+  const lastChkIdx = Math.floor(
+    (effectiveDate.getTime() - loanStart.getTime()) / MS_PER_DAY
+  );
+
+  // Chưa đến hạn ngày nào
+  if (lastChkIdx < firstUnpaidIdx) {
+    return { latePeriods: 0, buttonValues: [] as number[] };
+  }
+
+  const unpaidDays = lastChkIdx - firstUnpaidIdx + 1;
+  const latePeriods = Math.ceil(unpaidDays / paymentPeriod);
+
+  let cumulative = 0;
+  const buttonValues: number[] = [];
+
+  for (let p = 0; p < latePeriods && p < 10; p++) {
+    const fromIdx = firstUnpaidIdx + p * paymentPeriod;
+    const toIdx = Math.min(fromIdx + paymentPeriod - 1, lastChkIdx, dailyAmounts.length - 1);
+
+    if (fromIdx > toIdx) break; // Phòng hờ out-of-range
+
+    const periodAmount = dailyAmounts
+      .slice(fromIdx, toIdx + 1)
+      .reduce((sum, v) => sum + v, 0);
+
+    cumulative += Math.round(periodAmount);
+    buttonValues.push(cumulative);
+  }
+
+  return { latePeriods, buttonValues };
 }
 
 export function InstallmentWarningsTable({
@@ -77,14 +139,6 @@ export function InstallmentWarningsTable({
           try {
             // Get latest payment paid date
             const latestPaymentDate = await getLatestPaymentPaidDate(installment.id);
-            
-            // Tính tổng số tiền đã thanh toán từ history
-            const paymentHistory = await getinstallmentPaymentHistory(installment.id);
-            const totalPaid = paymentHistory.reduce((acc, curr) => acc + (curr.credit_amount || 0), 0);
-            
-            // Tính số tiền còn phải trả
-            const remainingAmount = Math.max(0, (installment.installment_amount || 0) - totalPaid);
-            
             // Kiểm tra xem có quá hạn không
             const startDate = new Date(installment.start_date);
             startDate.setHours(0, 0, 0, 0);
@@ -110,137 +164,32 @@ export function InstallmentWarningsTable({
             const paymentPeriod = installment.payment_period || 10;
             const daysSinceLastPayment = Math.floor((effectiveDate.getTime() - checkDate.getTime()) / (1000 * 60 * 60 * 24));
             
-            // Kiểm tra xem có kỳ nào đã đến hạn và chưa thanh toán không (thay vì dựa vào paymentPeriod cố định)
-            let hasOverduePeriods = false;
-            if (remainingAmount > 0) {
-              // Khai báo buttonValues và latePeriods ngoài try-catch
-              let buttonValues: number[] = [];
-              let latePeriods = Math.floor(daysSinceLastPayment / paymentPeriod); // fallback value
-              
-              // Sử dụng approach giống get_expected_money để tính chính xác
-              try {
-                // 1. Get daily expected amounts
-                const dailyAmounts = await getExpectedMoney(installment.id);
-                
-                // 2. Get payment history
-                const paymentHistory = await getinstallmentPaymentHistory(installment.id);
-                
-                // 3. Calculate loan end date
-                const loanStart = new Date(installment.start_date);
-                const loanEnd = new Date(loanStart);
-                loanEnd.setDate(loanStart.getDate() + dailyAmounts.length - 1);
-                const loanEndDate = loanEnd.toISOString().split('T')[0];
-                
-                // 4. Get periods and statuses using convertFromHistoryToTimeArrayWithStatus
-                const { periods: timePeriods, statuses } = convertFromHistoryToTimeArrayWithStatus(
-                  installment.start_date,
-                  loanEndDate,
-                  paymentPeriod,
-                  paymentHistory,
-                  paymentHistory
-                );
-                
-                console.log(`Contract ${installment.contract_code}:`);
-                console.log('All periods:', timePeriods);
-                console.log('Payment statuses:', statuses);
-                console.log('Daily amounts length:', dailyAmounts.length);
-                console.log('First few daily amounts:', dailyAmounts.slice(0, 10));
-                
-                // 5. Đếm số kỳ chưa thanh toán và tạo danh sách các kỳ cần thanh toán theo đúng thứ tự
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                
-                // Tạo danh sách các kỳ chưa thanh toán theo thứ tự
-                const unpaidPeriods: Array<{index: number, startDate: string, endDate: string}> = [];
-                
-                for (let i = 0; i < timePeriods.length; i++) {
-                  const [startDate, endDate] = timePeriods[i];
-                  const periodEndDate = new Date(endDate);
-                  periodEndDate.setHours(0, 0, 0, 0);
-                  
-                  // Chỉ tính những kỳ đã đến hạn và chưa thanh toán
-                  if (periodEndDate <= today && !statuses[i]) {
-                    unpaidPeriods.push({
-                      index: i,
-                      startDate,
-                      endDate
-                    });
-                  }
-                }
-                
-                // Cập nhật latePeriods với giá trị chính xác
-                latePeriods = unpaidPeriods.length;
-                hasOverduePeriods = latePeriods > 0;
-                
-                console.log(`Contract ${installment.contract_code}: Found ${latePeriods} unpaid periods, hasOverduePeriods: ${hasOverduePeriods}`);
-              
-                // 6. Calculate expected amount for each unpaid period theo đúng thứ tự và tạo button values
-                let cumulativeAmount = 0;
-                
-                for (let i = 0; i < Math.min(unpaidPeriods.length, 10); i++) {
-                  const unpaidPeriod = unpaidPeriods[i];
-                  const periodStartDate = new Date(unpaidPeriod.startDate);
-                  const periodEndDate = new Date(unpaidPeriod.endDate);
-                  
-                  console.log(`Processing period ${i + 1}: ${unpaidPeriod.startDate} to ${unpaidPeriod.endDate}`);
-                  
-                  // Calculate expected amount for this period
-                  const startDayIndex = Math.floor((periodStartDate.getTime() - loanStart.getTime()) / (1000 * 60 * 60 * 24));
-                  const endDayIndex = Math.floor((periodEndDate.getTime() - loanStart.getTime()) / (1000 * 60 * 60 * 24));
-                  
-                  let periodAmount = 0;
-                  for (let dayIndex = startDayIndex; dayIndex <= endDayIndex && dayIndex < dailyAmounts.length; dayIndex++) {
-                    if (dayIndex >= 0) {
-                      periodAmount += dailyAmounts[dayIndex];
-                    }
-                  }
-                  
-                  const roundedPeriodAmount = Math.round(periodAmount);
-                  cumulativeAmount += roundedPeriodAmount;
-                  buttonValues.push(cumulativeAmount);
-                  
-                  console.log(`Period ${i + 1} amount: ${roundedPeriodAmount}, cumulative: ${cumulativeAmount}`);
-                }
-                
-              } catch (error) {
-                console.error('Error calculating expected amounts, using fallback:', error);
-                // Nếu có lỗi, vẫn kiểm tra bằng logic cũ
-                if (daysSinceLastPayment >= paymentPeriod) {
-                  hasOverduePeriods = true;
-                }
-              }
-              
-              // Fallback nếu không tính được hoặc có lỗi
-              if (buttonValues.length === 0 || latePeriods === 0) {
-                console.log('Using fallback calculation...');
-                const totalPeriods = Math.ceil(installment.duration / paymentPeriod);
-                const amountPerPeriod = (installment.installment_amount || 0) / totalPeriods;
-                
-                // Ensure we have the correct number of late periods
-                const actualLatePeriods = latePeriods > 0 ? latePeriods : Math.floor(daysSinceLastPayment / paymentPeriod);
-                
-                if (actualLatePeriods > 0) {
-                  for (let i = 1; i <= Math.min(actualLatePeriods, 10); i++) {
-                buttonValues.push(amountPerPeriod * i);
-              }
-                  hasOverduePeriods = true;
-                }
-                
-                console.log(`Fallback: totalPeriods=${totalPeriods}, amountPerPeriod=${amountPerPeriod}, actualLatePeriods=${actualLatePeriods}`);
-                console.log('Fallback buttonValues:', buttonValues);
-              }
-              
-              // Chỉ thêm vào warnings nếu thực sự có kỳ quá hạn
-              if (hasOverduePeriods && latePeriods > 0) {
-              // Add to warnings
+            const dailyAmounts = await getExpectedMoney(installment.id);
+
+            const { latePeriods, buttonValues } = getOverdueInfo(
+              installment,
+              latestPaymentDate ? new Date(latestPaymentDate) : null,
+              dailyAmounts
+            );
+
+            if (latePeriods > 0 && buttonValues.length > 0) {
+              // Có kỳ quá hạn và có nút thanh toán nhanh
               warningResults.push({
                 ...installment,
                 payments: [],
                 latePeriods,
                 buttonValues,
-                totalDueAmount: installment.debt_amount || 0 // Sử dụng debt_amount từ installment
+                totalDueAmount: installment.debt_amount || 0
               });
-              }
+            } else {
+              // Chưa đến kỳ phải đóng hoặc đã thanh toán đủ — hiển thị nhưng không có nút
+              warningResults.push({
+                ...installment,
+                payments: [],
+                latePeriods: 0,
+                buttonValues: [],
+                totalDueAmount: 0
+              });
             }
             
           } catch (error) {
