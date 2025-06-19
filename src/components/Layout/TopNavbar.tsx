@@ -125,7 +125,7 @@ export function TopNavbar() {
   const [storeVersion, setStoreVersion] = useState(0);
   
   // Use the store context instead of local state
-  const { currentStore, stores, setCurrentStore, loading, refreshStores } = useStore();
+  const { currentStore, stores, setCurrentStore, loading, refreshStores, resetStores } = useStore();
   const router = useRouter();
   
   // State để theo dõi lần đầu component mount
@@ -341,13 +341,13 @@ export function TopNavbar() {
             <button 
               onClick={async () => {
                 try {
-                  localStorage.removeItem('currentStoreId');
+                  resetStores();
                   const { signOut } = await import('@/lib/auth');
                   await signOut();
                   router.push('/login');
                   router.refresh();
-                } catch (error) {
-                  console.error('Lỗi khi đăng xuất:', error);
+                } catch (e) {
+                  console.error('Lỗi khi đăng xuất:', e);
                 }
               }}
               className="block w-full text-left px-4 py-3 text-sm hover:bg-red-50 flex items-center text-red-600 rounded-lg mx-2 transition-colors duration-150"

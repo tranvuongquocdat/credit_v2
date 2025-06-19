@@ -311,7 +311,7 @@ export function InstallmentsTable({
     } finally {
       setLoadingPayments(false);
     }
-  }, [installments, currentStore, statusMap]);
+  }, [installments, currentStore?.id, statusMap]);
 
   // Nạp dữ liệu thanh toán khi installments thay đổi
   useEffect(() => {

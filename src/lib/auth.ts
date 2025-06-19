@@ -29,6 +29,7 @@ export async function signIn(email: string, password: string) {
 // Hàm đăng xuất
 export async function signOut() {
   const { error } = await supabase.auth.signOut();
+  localStorage.removeItem('currentStoreId');
   return { error };
 }
 

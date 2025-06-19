@@ -33,6 +33,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ data });
     } else if (action === 'signout') {
       const { error } = await supabase.auth.signOut();
+      localStorage.removeItem('currentStoreId');
       if (error) throw error;
       return NextResponse.json({ message: 'Đăng xuất thành công' });
     } else {

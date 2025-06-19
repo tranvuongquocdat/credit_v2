@@ -29,7 +29,7 @@ export async function getInstallmentWarnings(
       `, { count: 'exact' })
       .eq('status', 'on_time')
       .eq('store_id', storeId)
-      .or(`payment_due_date.lte.${today},and(payment_due_date.is.null,loan_date.lte.${today})`)
+      .or(`payment_due_date.lte.${today}`)
       .order('payment_due_date', { ascending: true })
       .range((page - 1) * limit, page * limit - 1);
     

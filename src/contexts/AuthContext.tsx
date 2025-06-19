@@ -92,11 +92,26 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   useEffect(() => { fetchAuthData(); }, [fetchAuthData]);
 
   useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
-      fetchAuthData();
-    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        switch (event) {
+          case 'SIGNED_IN':
+          case 'SIGNED_OUT':
+          case 'USER_UPDATED':
+            fetchAuthData();        // cần tải lại
+            break;
+
+          case 'TOKEN_REFRESHED':
+            // User không đổi, chỉ cập nhật token trong state nếu muốn
+            setUser((prev: any | null) => (prev ? { ...prev, ...session?.user } : prev));
+            // KHÔNG setLoading(true) ⇒ UI không flicker
+            break;
+
+          default:
+            break;
+        }
+      }
+    );
 
     return () => subscription.unsubscribe();
   }, [fetchAuthData]);
