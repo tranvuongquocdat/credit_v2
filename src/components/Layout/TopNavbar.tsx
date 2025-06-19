@@ -242,7 +242,7 @@ export function TopNavbar() {
       {/* Left section with logo and settings icons */}
       <div className="flex items-center space-x-6">
         {/* Logo section */}
-        <Link href="/" className="flex items-center group">
+        <Link href="/dashboard" className="flex items-center group">
           <div className="h-10 w-10 rounded-lg bg-white text-[#4d7496] flex items-center justify-center font-bold text-lg shadow-md group-hover:shadow-lg transition-all duration-200">
             CR
           </div>
