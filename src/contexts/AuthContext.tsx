@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode, useCallback } from "react";
 import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 
@@ -29,82 +29,80 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<any | null>(null);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
+  const fetchAuthData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const currentUser = await getCurrentUser();
+      setUser(currentUser);
 
-    const fetchAuthData = async () => {
-      try {
-        setLoading(true);
-        const currentUser = await getCurrentUser();
-        if (!isMounted) return;
-
-        setUser(currentUser);
-
-        if (!currentUser || !currentUser.id) {
-          setPermissions([]);
-          setLoading(false);
-          return;
-        }
-
-        // Admin => all permissions implicitly
-        if (currentUser.role === "admin") {
-          setIsAdmin(true);
-          setPermissions([]);
-          setLoading(false);
-          return;
-        }
-
-        if (currentUser.role !== "employee") {
-          setPermissions([]);
-          setLoading(false);
-          return;
-        }
-
-        // Fetch employee row to get id
-        const { data: employeeData, error: employeeError } = await supabase
-          .from("employees")
-          .select("id")
-          .eq("user_id", currentUser.id)
-          .single();
-
-        if (employeeError || !employeeData) {
-          setPermissions([]);
-          setLoading(false);
-          return;
-        }
-
-        // Fetch permissions list
-        const { data: permissionData, error: permissionError } = await supabase
-          .from("employee_permissions")
-          .select("permission_id")
-          .eq("employee_id", employeeData.id);
-
-        if (permissionError) throw permissionError;
-
-        const ids = permissionData?.map((p) => p.permission_id) || [];
-        setPermissions(ids);
-      } catch (err) {
-        console.error("AuthProvider error:", err);
-        setError(err instanceof Error ? err : new Error("Unknown error"));
-      } finally {
-        if (isMounted) setLoading(false);
+      if (!currentUser || !currentUser.id) {
+        setPermissions([]);
+        setLoading(false);
+        return;
       }
-    };
 
-    fetchAuthData();
+      // Admin => all permissions implicitly
+      if (currentUser.role === "admin") {
+        setIsAdmin(true);
+        setPermissions([]);
+        setLoading(false);
+        return;
+      }
 
-    return () => {
-      isMounted = false;
-    };
+      if (currentUser.role !== "employee") {
+        setPermissions([]);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch employee row to get id
+      const { data: employeeData, error: employeeError } = await supabase
+        .from("employees")
+        .select("id")
+        .eq("user_id", currentUser.id)
+        .single();
+
+      if (employeeError || !employeeData) {
+        setPermissions([]);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch permissions list
+      const { data: permissionData, error: permissionError } = await supabase
+        .from("employee_permissions")
+        .select("permission_id")
+        .eq("employee_id", employeeData.id);
+
+      if (permissionError) throw permissionError;
+
+      const ids = permissionData?.map((p) => p.permission_id) || [];
+      setPermissions(ids);
+    } catch (err) {
+      console.error("AuthProvider error:", err);
+      setError(err instanceof Error ? err : new Error("Unknown error"));
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const hasPermission = (permissionId: string) => {
-    if (isAdmin) return true;
-    return permissions.includes(permissionId);
-  };
+  useEffect(() => { fetchAuthData(); }, [fetchAuthData]);
+
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      fetchAuthData();
+    });
+
+    return () => subscription.unsubscribe();
+  }, [fetchAuthData]);
+
+  const hasPermission = (permissionId: string) =>
+    isAdmin ? true : permissions.includes(permissionId);
 
   const value = useMemo(
     () => ({ user, permissions, loading, error, isAdmin, hasPermission }),

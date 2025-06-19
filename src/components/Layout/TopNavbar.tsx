@@ -341,6 +341,7 @@ export function TopNavbar() {
             <button 
               onClick={async () => {
                 try {
+                  localStorage.removeItem('currentStoreId');
                   const { signOut } = await import('@/lib/auth');
                   await signOut();
                   router.push('/login');
