@@ -116,7 +116,7 @@ export default function CreditWarningPage() {
         </div>
       ) : !canViewCreditWarnings ? (
         <div className="p-4 border rounded-md mb-4 bg-gray-50">
-          <p className="text-center text-gray-500">Bạn không có quyền xem cảnh báo vay tiền</p>
+          <p className="text-center text-gray-500">Bạn không có quyền xem cảnh báo tín chấp</p>
         </div>
       ) : (
       <>
@@ -124,7 +124,7 @@ export default function CreditWarningPage() {
         {/* Title */}
         <div className="flex items-center justify-between border-b pb-2 mb-2">
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold">Cảnh báo vay tiền</h1>
+            <h1 className="text-lg font-bold">Cảnh báo tín chấp</h1>
           </div>
         </div>
         

@@ -30,7 +30,7 @@ export interface EmployeePermissionFormData {
 export const DEFAULT_PERMISSIONS = [
   {
     id: 'cam_do',
-    name: 'Càm đồ',
+    name: 'Cầm đồ',
     module: 'cam_do',
     children: [
       { 
