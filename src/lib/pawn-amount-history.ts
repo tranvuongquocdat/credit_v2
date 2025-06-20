@@ -26,13 +26,28 @@ export interface PawnAmountHistory {
 export interface PawnHistoryRecord {
   id: string;
   pawn_id: string;
-  transaction_type: PawnTransactionType;
+  transaction_type: PawnTransactionType | string;
   debit_amount?: number;
   credit_amount?: number;
   description?: string;
   created_by: string;
   created_at: string;
-  updated_at: string;
+  updated_at: string | null;
+}
+
+// Chuyển đổi bản ghi DB sang model chuẩn
+function transformHistory(record: Record<string, any>): PawnHistoryRecord {
+  return {
+    id: record.id,
+    pawn_id: record.pawn_id,
+    transaction_type: record.transaction_type,
+    debit_amount: record.debit_amount ?? undefined,
+    credit_amount: record.credit_amount ?? undefined,
+    description: record.description ?? undefined,
+    created_by: record.created_by,
+    created_at: record.created_at,
+    updated_at: record.updated_at ?? null
+  };
 }
 
 /**
@@ -105,24 +120,41 @@ export async function recordAdditionalLoan(
  * Get pawn history records from pawn_history table (for backward compatibility)
  */
 export async function getPawnAmountHistory(pawnId: string) {
-  try {
-    const { data, error } = await supabase
-      .from('pawn_history')
-      .select('*')
-      .eq('pawn_id', pawnId)
-      .order('created_at', { ascending: true });
+  const PAGE_SIZE = 1000; // Supabase giới hạn 1000 bản ghi / query
 
-    if (error) {
-      throw error;
+  try {
+    let offset = 0;
+    let hasMore = true;
+    const allRows: PawnHistoryRecord[] = [];
+
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('pawn_history')
+        .select('id, pawn_id, transaction_type, debit_amount, credit_amount, description, created_by, created_at, updated_at')
+        .eq('pawn_id', pawnId)
+        .order('created_at', { ascending: true })
+        .range(offset, offset + PAGE_SIZE - 1);
+
+      if (error) throw error;
+
+      if (data && data.length) {
+        allRows.push(...data.map(transformHistory));
+        if (data.length < PAGE_SIZE) {
+          hasMore = false;
+        } else {
+          offset += PAGE_SIZE;
+        }
+      } else {
+        hasMore = false;
+      }
     }
-    
-    return { data: data as PawnHistoryRecord[], error: null };
+
+    return { data: allRows, error: null };
   } catch (error) {
     console.error('Error fetching pawn amount history:', error);
     return { data: null, error };
   }
 }
-
 
 /**
  * Record pawn contract deletion

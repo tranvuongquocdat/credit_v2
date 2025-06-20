@@ -46,18 +46,38 @@ export interface InstallmentAmountHistory {
  * Lấy danh sách lịch sử giao dịch của một hợp đồng trả góp
  */
 export async function getInstallmentAmountHistory(installmentId: string) {
+  const PAGE_SIZE = 1000; // Supabase giới hạn 1000 bản ghi / query
+
   try {
-    const { data, error } = await supabase
-      .from('installment_history')
-      .select('*')
-      .eq('installment_id', installmentId)
-      .order('created_at', { ascending: true });
-    
-    if (error) throw error;
-    
-    // Transform data từ DB model sang UI model
-    const history = data.map(item => transformHistory(item));
-    
+    let offset = 0;
+    let hasMore = true;
+    const allRows: InstallmentAmountHistoryDB[] = [];
+
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('installment_history')
+        .select('id, installment_id, created_at, created_by, debit_amount, credit_amount, description, transaction_type, is_deleted, updated_at')
+        .eq('installment_id', installmentId)
+        .order('created_at', { ascending: true })
+        .range(offset, offset + PAGE_SIZE - 1);
+
+      if (error) throw error;
+
+      if (data && data.length) {
+        allRows.push(...data);
+        // Nếu nhận đủ PAGE_SIZE thì có thể còn trang tiếp theo
+        if (data.length < PAGE_SIZE) {
+          hasMore = false;
+        } else {
+          offset += PAGE_SIZE;
+        }
+      } else {
+        hasMore = false;
+      }
+    }
+
+    const history = allRows.map(transformHistory);
+
     return {
       data: history,
       error: null

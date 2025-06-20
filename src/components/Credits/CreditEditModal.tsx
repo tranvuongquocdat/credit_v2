@@ -23,6 +23,9 @@ import { AlertCircle } from 'lucide-react';
 import { MoneyInput } from '@/components/ui/money-input';
 import { usePermissions } from '@/hooks/usePermissions';
 import { DatePicker } from '../ui/date-picker';
+import { getStoreFinancialData } from '@/lib/store';
+import { calculateActualLoanAmount } from '@/lib/Credits/calculate_actual_loan_amount';
+
 interface CreditEditModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -76,6 +79,11 @@ export function CreditEditModal({
 
   // State to track if credit has payments
   const [hasPayments, setHasPayments] = useState<boolean>(false);
+  
+  // Fund status state
+  const [fundStatus, setFundStatus] = useState<any>(null);
+  const [isFundLoading, setIsFundLoading] = useState(false);
+  const [fundError, setFundError] = useState<string | null>(null);
   
   // Function to validate interest rate
   const validateInterestRate = (value: string, type: string) => {
@@ -336,6 +344,26 @@ export function CreditEditModal({
     loadData();
   }, [isOpen, creditId]);
   
+  // Load fund status when modal opens
+  useEffect(() => {
+    if (!isOpen || !currentStore?.id) return;
+
+    async function loadFundStatus() {
+      setIsFundLoading(true);
+      try {
+        const storeFinancialData = await getStoreFinancialData(currentStore!.id);
+        setFundStatus(storeFinancialData);
+      } catch (err) {
+        console.error('Error loading fund status:', err);
+        setFundError('Không thể tải thông tin quỹ tiền mặt. Vui lòng thử lại sau.');
+      } finally {
+        setIsFundLoading(false);
+      }
+    }
+
+    loadFundStatus();
+  }, [isOpen, currentStore?.id]);
+  
   // Quick loan amount adjustment
   const adjustLoanAmount = (amount: number) => {
     const newAmount = parseInt(loanAmount || '0') + amount;
@@ -390,6 +418,22 @@ export function CreditEditModal({
         }
         return periodNum; // already in days
       };
+      
+      // Validate available fund only for increased loan amount
+      const oldLoanAmount = await calculateActualLoanAmount(creditId);
+      const newLoanAmount = parseInt(loanAmount || '0');
+      const additionalAmount = newLoanAmount - oldLoanAmount;
+
+      if (additionalAmount > 0) {
+        if (!fundStatus || fundStatus.availableFund < additionalAmount) {
+          toast({
+            variant: 'destructive',
+            title: 'Lỗi',
+            description: `Quỹ tiền mặt không đủ. Hiện có ${fundStatus ? Math.floor(fundStatus.availableFund).toLocaleString() : 0} VND.`,
+          });
+          return;
+        }
+      }
       
       // Prepare update data
       const updateData: UpdateCreditParams = {

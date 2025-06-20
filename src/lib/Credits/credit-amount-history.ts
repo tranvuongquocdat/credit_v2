@@ -157,22 +157,42 @@ export async function recordAdditionalLoan(
  * Get credit amount history records for a specific credit
  */
 export async function getCreditAmountHistory(creditId: string) {
+  const PAGE_SIZE = 1000; // Supabase giới hạn 1000 bản ghi / query
   try {
+    let offset = 0;
+    let hasMore = true;
+    const allRows: CreditAmountHistory[] = [];
+
+    while (hasMore) {
     const { data, error } = await supabase
       .from('credit_history')
-      .select('*')
+      .select('id, credit_id, transaction_type, debit_amount, credit_amount, description, employee_id, created_at, updated_at, is_deleted')
       .eq('credit_id', creditId)
-      .order('created_at', { ascending: true });
-    if (error) {
-      throw error;
+      .order('created_at', { ascending: true })
+      .range(offset, offset + PAGE_SIZE - 1);
+
+      if (error) throw error;
+
+      if (data && data.length) {
+        // Chuyển đổi ngay để đảm bảo type khớp
+        allRows.push(...data.map(transformHistory));
+        // Nếu nhận đủ PAGE_SIZE thì có thể còn trang tiếp theo
+        if (data.length < PAGE_SIZE) {
+          hasMore = false;
+        } else {
+          offset += PAGE_SIZE;
+        }
+      } else {
+        hasMore = false;
+      }
     }
-    
-    // Transform data from DB model to UI model
-    const history = data ? data.map(item => transformHistory(item)) : [];
-    console.log(history);
-    return { data: history, error: null };
+
+    return {
+      data: allRows,
+      error: null
+    };
   } catch (error) {
-    console.error('Error getting credit amount history:', error);
+    console.error('Error fetching credit amount history:', error);
     return { data: null, error };
   }
 }

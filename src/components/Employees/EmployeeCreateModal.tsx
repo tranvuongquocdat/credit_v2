@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { Store } from '@/models/store';
 import { EmployeeFormData } from '@/models/employee';
-import { createEmployee } from '@/lib/employee';
+// import { createEmployee } from '@/lib/employee';
 import {
   Dialog,
   DialogContent,
@@ -36,13 +36,16 @@ export function EmployeeCreateModal({
     setError(null);
     
     try {
-      const { error } = await createEmployee(data);
-      
-      if (error) {
-        const errorMessage = typeof error === 'object' && error !== null && 'message' in error 
-          ? String(error.message) 
-          : 'Lỗi không xác định';
-        throw new Error(errorMessage);
+      const resp = await fetch('/api/employees/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+
+      const result = await resp.json();
+
+      if (!resp.ok) {
+        throw new Error(result.error || 'Không thể tạo nhân viên');
       }
       
       onClose();
