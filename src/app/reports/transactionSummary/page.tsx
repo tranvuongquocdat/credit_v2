@@ -242,40 +242,43 @@ export default function TransactionSummaryPage() {
       );
       
       // Fetch installment transactions
-      const { data: installmentHistoryData } = await supabase
-        .from('installment_history')
-        .select(`
-          *,
-          installments!inner (
-            contract_code,
-            employee_id,
-            employees!inner (store_id)
-          )
-        `)
-        .eq('installments.employees.store_id', storeId)
-        .or('is_deleted.is.null,is_deleted.eq.false')
-        .gte('created_at', startDateISO)
-        .lte('created_at', endDateISO)
-        .limit(10000);
+      const installmentHistoryData = await fetchAllData(
+        supabase
+          .from('installment_history')
+          .select(`
+            *,
+            installments!inner (
+              contract_code,
+              employee_id,
+              employees!inner (store_id)
+            )
+          `)
+          .eq('installments.employees.store_id', storeId)
+          .or('is_deleted.is.null,is_deleted.eq.false')
+          .gte('created_at', startDateISO)
+          .lte('created_at', endDateISO)
+      );
       
       // Fetch income/expense transactions
-      const { data: transactionsData } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('store_id', storeId)
-        .eq('is_deleted', false)
-        .gte('created_at', startDateISO)
-        .lte('created_at', endDateISO)
-        .limit(10000);
+      const transactionsData = await fetchAllData(
+        supabase
+          .from('transactions')
+          .select('*')
+          .eq('store_id', storeId)
+          .eq('is_deleted', false)
+          .gte('created_at', startDateISO)
+          .lte('created_at', endDateISO)
+      );
       
       // Fetch capital transactions
-      const { data: capitalData } = await supabase
-        .from('store_fund_history')
-        .select('*')
-        .eq('store_id', storeId)
-        .gte('created_at', startDateISO)
-        .lte('created_at', endDateISO)
-        .limit(10000);
+      const capitalData = await fetchAllData(
+        supabase
+          .from('store_fund_history')
+          .select('*')
+          .eq('store_id', storeId)
+          .gte('created_at', startDateISO)
+          .lte('created_at', endDateISO)
+      );
       
       // Calculate totals for each transaction type
       let pawnIncome = 0, pawnExpense = 0;

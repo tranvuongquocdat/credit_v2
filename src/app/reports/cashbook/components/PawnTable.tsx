@@ -25,6 +25,32 @@ const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('vi-VN').format(value);
 };
 
+// Function to fetch all data from a query with pagination
+const fetchAllData = async (query: any, pageSize: number = 1000) => {
+  let allData: any[] = [];
+  let from = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error } = await query.range(from, from + pageSize - 1);
+    
+    if (error) {
+      console.error('Error fetching data:', error);
+      break;
+    }
+
+    if (data && data.length > 0) {
+      allData = [...allData, ...data];
+      from += pageSize;
+      hasMore = data.length === pageSize;
+    } else {
+      hasMore = false;
+    }
+  }
+
+  return allData;
+};
+
 export default function PawnTable({ storeId, startDate, endDate }: PawnTableProps) {
   const [transactions, setTransactions] = useState<PawnTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -43,25 +69,25 @@ export default function PawnTable({ storeId, startDate, endDate }: PawnTableProp
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
       
-      const { data, error } = await supabase
-        .from('pawn_history')
-        .select(`
-          *,
-          pawns!inner (
-            contract_code,
-            store_id
-          )
-        `)
-        .eq('pawns.store_id', storeId)
-        .eq('is_deleted', false)
-        .gte('created_at', start.toISOString())
-        .lte('created_at', end.toISOString())
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
+      const data = await fetchAllData(
+        supabase
+          .from('pawn_history')
+          .select(`
+            *,
+            pawns!inner (
+              contract_code,
+              store_id
+            )
+          `)
+          .eq('pawns.store_id', storeId)
+          .eq('is_deleted', false)
+          .gte('created_at', start.toISOString())
+          .lte('created_at', end.toISOString())
+          .order('created_at', { ascending: false })
+      );
       
       // Use any[] for data to avoid TypeScript issues with the join
-      const formattedData: PawnTransaction[] = (data || []).map((item: any) => ({
+      const formattedData: PawnTransaction[] = data.map((item: any) => ({
         id: item.id,
         date: format(parseISO(item.created_at), 'dd/MM/yyyy HH:mm'),
         contractCode: item.pawns?.contract_code || 'N/A',

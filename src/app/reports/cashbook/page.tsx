@@ -239,24 +239,25 @@ export default function CashbookPage() {
       setCreditTransactions(formattedCreditData);
       
       // Fetch installment transactions
-      const { data: installmentHistoryData } = await supabase
-        .from('installment_history')
-        .select(`
-          *,
-          installments!inner (
-            contract_code,
-            employee_id,
-            employees!inner (store_id)
-          )
-        `)
-        .eq('installments.employees.store_id', storeId)
-        .or('is_deleted.is.null,is_deleted.eq.false')
-        .gte('created_at', startDateISO)
-        .lte('created_at', endDateISO)
-        .limit(10000);
+      const installmentHistoryData = await fetchAllData(
+        supabase
+          .from('installment_history')
+          .select(`
+            *,
+            installments!inner (
+              contract_code,
+              employee_id,
+              employees!inner (store_id)
+            )
+          `)
+          .eq('installments.employees.store_id', storeId)
+          .or('is_deleted.is.null,is_deleted.eq.false')
+          .gte('created_at', startDateISO)
+          .lte('created_at', endDateISO)
+      );
       
       // Format installment data for transaction list
-      const formattedInstallmentData: InstallmentTransaction[] = installmentHistoryData ? installmentHistoryData.map((item: any) => ({
+      const formattedInstallmentData: InstallmentTransaction[] = installmentHistoryData.map((item: any) => ({
         id: item.id,
         date: format(parseISO(item.created_at), 'dd/MM/yyyy HH:mm'),
         contractCode: item.installments?.contract_code || 'N/A',
@@ -265,21 +266,22 @@ export default function CashbookPage() {
         loanAmount: item.debit_amount || 0,
         interestAmount: item.credit_amount || 0,
         transactionType: item.transaction_type || ''
-      })) : [];
+      }));
       setInstallmentTransactions(formattedInstallmentData);
       
       // Fetch transactions (income/expense)
-      const { data: transactionsData } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('store_id', storeId)
-        .eq('is_deleted', false)
-        .gte('created_at', startDateISO)
-        .lte('created_at', endDateISO)
-        .limit(10000);
+      const transactionsData = await fetchAllData(
+        supabase
+          .from('transactions')
+          .select('*')
+          .eq('store_id', storeId)
+          .eq('is_deleted', false)
+          .gte('created_at', startDateISO)
+          .lte('created_at', endDateISO)
+      );
       
       // Format transaction data
-      const formattedTransactionData: Transaction[] = transactionsData ? transactionsData.map((item: any) => {
+      const formattedTransactionData: Transaction[] = transactionsData.map((item: any) => {
         let income = 0;
         let expense = 0;
         
@@ -300,20 +302,21 @@ export default function CashbookPage() {
           expense,
           transactionType: item.transaction_type || ''
         };
-      }) : [];
+      });
       setTransactions(formattedTransactionData);
       
       // Fetch capital/fund transactions
-      const { data: storeFundData } = await supabase
-        .from('store_fund_history')
-        .select('*')
-        .eq('store_id', storeId)
-        .gte('created_at', startDateISO)
-        .lte('created_at', endDateISO)
-        .limit(10000);
+      const storeFundData = await fetchAllData(
+        supabase
+          .from('store_fund_history')
+          .select('*')
+          .eq('store_id', storeId)
+          .gte('created_at', startDateISO)
+          .lte('created_at', endDateISO)
+      );
       
       // Format capital data
-      const formattedCapitalData: CapitalTransaction[] = storeFundData ? storeFundData.map((item: any) => {
+      const formattedCapitalData: CapitalTransaction[] = storeFundData.map((item: any) => {
         // Calculate amount based on transaction type like in the total-fund page
         const amount = item.transaction_type === 'withdrawal' 
           ? -Number(item.fund_amount || 0) 
@@ -328,7 +331,7 @@ export default function CashbookPage() {
           amount,
           transactionType: item.transaction_type || ''
         };
-      }) : [];
+      });
       setCapitalTransactions(formattedCapitalData);
       
       // Process data the same way as in total-fund page
@@ -350,34 +353,28 @@ export default function CashbookPage() {
       
       // Calculate installment activity
       let installmentNet = 0;
-      if (installmentHistoryData) {
-        installmentHistoryData.forEach((item: any) => {
-          installmentNet += (item.credit_amount || 0) - (item.debit_amount || 0);
-        });
-      }
+      installmentHistoryData.forEach((item: any) => {
+        installmentNet += (item.credit_amount || 0) - (item.debit_amount || 0);
+      });
       
       // Calculate income/expense (Thu chi)
       let incomeExpenseNet = 0;
-      if (transactionsData) {
-        transactionsData.forEach((item: any) => {
-          let amount = (item.credit_amount || 0) - (item.debit_amount || 0);
-          if (amount === 0) {
-            amount = item.transaction_type === 'expense' ? -Number(item.amount || 0) : Number(item.amount || 0);
-          }
-          incomeExpenseNet += amount;
-        });
-      }
+      transactionsData.forEach((item: any) => {
+        let amount = (item.credit_amount || 0) - (item.debit_amount || 0);
+        if (amount === 0) {
+          amount = item.transaction_type === 'expense' ? -Number(item.amount || 0) : Number(item.amount || 0);
+        }
+        incomeExpenseNet += amount;
+      });
       
       // Calculate capital changes - use the exact same logic as in total-fund page
       let capitalNet = 0;
-      if (storeFundData) {
-        storeFundData.forEach((item: any) => {
-          const amount = item.transaction_type === 'withdrawal' ? 
-            -Number(item.fund_amount || 0) : 
-            Number(item.fund_amount || 0);
-          capitalNet += amount;
-        });
-      }
+      storeFundData.forEach((item: any) => {
+        const amount = item.transaction_type === 'withdrawal' ? 
+          -Number(item.fund_amount || 0) : 
+          Number(item.fund_amount || 0);
+        capitalNet += amount;
+      });
       
       return {
         pawn: pawnNet,
