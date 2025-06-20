@@ -25,6 +25,32 @@ const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('vi-VN').format(value);
 };
 
+// Function to fetch all data from a query with pagination
+const fetchAllData = async (query: any, pageSize: number = 1000) => {
+  let allData: any[] = [];
+  let from = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error } = await query.range(from, from + pageSize - 1);
+    
+    if (error) {
+      console.error('Error fetching data:', error);
+      break;
+    }
+
+    if (data && data.length > 0) {
+      allData = [...allData, ...data];
+      from += pageSize;
+      hasMore = data.length === pageSize;
+    } else {
+      hasMore = false;
+    }
+  }
+
+  return allData;
+};
+
 export default function InstallmentTable({ storeId, startDate, endDate }: InstallmentTableProps) {
   const [transactions, setTransactions] = useState<InstallmentTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -43,25 +69,25 @@ export default function InstallmentTable({ storeId, startDate, endDate }: Instal
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
       
-      const { data, error } = await supabase
-        .from('installment_history')
-        .select(`
-          *,
-          installments!inner (
-            contract_code,
-            employee_id,
-            employees!inner (store_id)
-          )
-        `)
-        .eq('installments.employees.store_id', storeId)
-        .or('is_deleted.is.null,is_deleted.eq.false')
-        .gte('created_at', start.toISOString())
-        .lte('created_at', end.toISOString())
-        .order('created_at', { ascending: false });
+      const data = await fetchAllData(
+        supabase
+          .from('installment_history')
+          .select(`
+            *,
+            installments!inner (
+              contract_code,
+              employee_id,
+              employees!inner (store_id)
+            )
+          `)
+          .eq('installments.employees.store_id', storeId)
+          .or('is_deleted.is.null,is_deleted.eq.false')
+          .gte('created_at', start.toISOString())
+          .lte('created_at', end.toISOString())
+          .order('created_at', { ascending: false })
+      );
       
-      if (error) throw error;
-      
-      const formattedData: InstallmentTransaction[] = (data || []).map((item: any) => ({
+      const formattedData: InstallmentTransaction[] = data.map((item: any) => ({
         id: item.id,
         date: format(parseISO(item.created_at), 'dd/MM/yyyy HH:mm'),
         contractCode: item.installments?.contract_code || 'N/A',

@@ -32,6 +32,32 @@ const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('vi-VN').format(value);
 };
 
+// Function to fetch all data from a query with pagination
+const fetchAllData = async (query: any, pageSize: number = 1000) => {
+  let allData: any[] = [];
+  let from = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error } = await query.range(from, from + pageSize - 1);
+    
+    if (error) {
+      console.error('Error fetching data:', error);
+      break;
+    }
+
+    if (data && data.length > 0) {
+      allData = [...allData, ...data];
+      from += pageSize;
+      hasMore = data.length === pageSize;
+    } else {
+      hasMore = false;
+    }
+  }
+
+  return allData;
+};
+
 export default function TransactionTable({ storeId, startDate, endDate }: TransactionTableProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -50,18 +76,18 @@ export default function TransactionTable({ storeId, startDate, endDate }: Transa
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
       
-      const { data, error } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('store_id', storeId)
-        .eq('is_deleted', false)
-        .gte('created_at', start.toISOString())
-        .lte('created_at', end.toISOString())
-        .order('created_at', { ascending: false });
+      const data = await fetchAllData(
+        supabase
+          .from('transactions')
+          .select('*')
+          .eq('store_id', storeId)
+          .eq('is_deleted', false)
+          .gte('created_at', start.toISOString())
+          .lte('created_at', end.toISOString())
+          .order('created_at', { ascending: false })
+      );
       
-      if (error) throw error;
-      
-      const formattedData: Transaction[] = (data || []).map((item: any) => {
+      const formattedData: Transaction[] = data.map((item: any) => {
         let income = 0;
         let expense = 0;
         
