@@ -166,7 +166,7 @@ export async function getCreditAmountHistory(creditId: string) {
     while (hasMore) {
     const { data, error } = await supabase
       .from('credit_history')
-      .select('id, credit_id, transaction_type, debit_amount, credit_amount, description, employee_id, created_at, updated_at, is_deleted')
+      .select('id, credit_id, transaction_type, debit_amount, credit_amount, description, created_at, updated_at, is_deleted')
       .eq('credit_id', creditId)
       .order('created_at', { ascending: true })
       .range(offset, offset + PAGE_SIZE - 1);
