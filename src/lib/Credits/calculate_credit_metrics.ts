@@ -41,12 +41,18 @@ export async function calculateCreditMetrics(
   options?: MetricHelperOptions
 ): Promise<CreditMetrics | null> {
   try {
-    // Tính toán song song (loại bỏ paidInterest – sẽ tính riêng)
+    // 1. actual loan amount – ưu tiên map
+    const loanAmountPromise = ((): Promise<number> => {
+      const cached = options?.principalMap?.get(credit.id);
+      if (typeof cached === 'number') return Promise.resolve(cached);
+      return calculateActualLoanAmount(credit.id);
+    })();
+
     const [loanAmount, oldDebt, dailyAmounts, paidInterest] = await Promise.all([
-      calculateActualLoanAmount(credit.id),
+      loanAmountPromise,
       calculateDebtToLatestPaidPeriod(credit.id),
       getExpectedMoney(credit.id),
-      // Nếu map đã có sẵn, không gọi RPC đơn lẻ
+      // 2. paid interest – ưu tiên map
       (async () => {
         const cached = options?.interestMap?.get(credit.id);
         if (typeof cached === 'number') return cached;
