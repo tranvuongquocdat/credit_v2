@@ -26,33 +26,37 @@ export async function signIn(email: string, password: string) {
   return { data, error };
 }
 
+// simple in-memory cache
+let _cachedUser: any = null;
+
+// Lấy thông tin người dùng hiện tại
+export async function getCurrentUser(forceRefresh = false) {
+  if (_cachedUser && !forceRefresh) return _cachedUser;
+
+  // Chỉ log khi thật sự cần fetch (lần đầu hoặc forceRefresh)
+  console.log('getCurrentUser: fetching from Supabase');
+  const { data: { user } } = await supabase.auth.getUser();
+
+  let profile = { username: "", role: "user", is_banned: false } as any;
+  if (user) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("username, role, is_banned")
+      .eq("id", user.id)
+      .single();
+    if (data) profile = data;
+  }
+
+  _cachedUser = { ...user, ...profile };
+  return _cachedUser;
+}
+
 // Hàm đăng xuất
 export async function signOut() {
   const { error } = await supabase.auth.signOut();
+  _cachedUser = null;               // clear cache
   localStorage.removeItem('currentStoreId');
   return { error };
-}
-
-// Lấy thông tin người dùng hiện tại
-export async function getCurrentUser() {
-  const { data: { user } } = await supabase.auth.getUser();
-  // Lấy username từ bảng profiles nếu user tồn tại
-  let username = null;
-  let role = 'user';
-  let is_banned = false;
-  if (user) {
-    const { data: profileData, error } = await supabase
-      .from('profiles')
-      .select('username, role, is_banned')
-      .eq('id', user.id)
-      .single();
-    if (!error && profileData) {
-      username = profileData.username;
-      role = profileData.role || 'user';
-      is_banned = profileData.is_banned || false;
-    }
-  }
-  return { ...user, username, role, is_banned };
 }
 
 // Kiểm tra trạng thái ban của người dùng

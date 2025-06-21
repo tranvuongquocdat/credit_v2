@@ -20,7 +20,6 @@ import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { getInterestDisplayString } from '@/lib/interest-calculator';
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { reopenContract } from '@/lib/Credits/reopen_contract';
 import { getCreditPaymentHistory } from '@/lib/Credits/payment_history';
 import { calculateDebtToLatestPaidPeriod } from '@/lib/Credits/calculate_remaining_debt';

@@ -1,8 +1,9 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { signOut, getCurrentUser } from '@/lib/auth';
+import { signOut } from '@/lib/auth';
+import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { 
   FiHome, 
@@ -144,30 +145,12 @@ export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [isLoadingUser, setIsLoadingUser] = useState(true);
-  const [isFiltering, setIsFiltering] = useState(true);
+
+  // Đọc user & trạng thái loading từ AuthContext (đã cache ở AuthProvider)
+  const { user: currentUser, loading: authLoading } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   const { hasPermission } = usePermissions();
-
-  // Get current user to check role
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        setIsFiltering(true);
-        const user = await getCurrentUser();
-        setCurrentUser(user);
-      } catch (error) {
-        console.error('Error fetching user:', error);
-      } finally {
-        setIsLoadingUser(false);
-        setIsFiltering(false);
-      }
-    };
-
-    fetchUser();
-  }, []);
 
   const toggleExpanded = (path: string) => {
     if (isCollapsed) return; // Không mở submenu khi sidebar thu gọn
@@ -201,7 +184,7 @@ export default function Sidebar() {
 
   // Filter sidebar items based on user role and permissions
   const getFilteredSidebarItems = () => {
-    if (isLoadingUser || isFiltering) return [];
+    if (authLoading) return [];
     
     // If user is superadmin, only show SuperAdmin items
     if (currentUser?.role === 'superadmin') {
@@ -340,7 +323,7 @@ export default function Sidebar() {
   };
 
   // Don't render content while filtering
-  if (isFiltering) {
+  if (authLoading) {
     return (
       <div className={`fixed left-0 top-14 h-[calc(100vh-3.5rem)] bg-white shadow-lg transition-all duration-300 ${
         isCollapsed ? 'w-20' : 'w-64'

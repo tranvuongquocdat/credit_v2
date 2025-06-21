@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Layout } from '@/components/Layout/Layout';
+import dynamicImport from 'next/dynamic';
 
 import { 
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
@@ -12,7 +13,6 @@ import {
 } from '@/components/ui/alert-dialog';
 
 // Import custom components
-import { FinancialSummary } from '@/components/common/FinancialSummary';
 import { SearchFilters } from '@/components/Installments/SearchFilters';
 import { InstallmentsTable } from '@/components/Installments/InstallmentsTable';  
 import { InstallmentsPagination } from '@/components/Installments/InstallmentsPagination'; 
@@ -41,6 +41,27 @@ const statusMap: Record<string, { label: string, color: string }> = {
   [InstallmentStatus.DUE_TOMORROW]: { label: 'Ngày mai đóng', color: 'bg-amber-100 text-amber-800 border-amber-200' },
   [InstallmentStatus.FINISHED]: { label: 'Hoàn thành', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
 };
+
+// Skeleton displayed while loading FinancialSummary lazily
+function SkeletonFinancialSummary() {
+  return (
+    <div className="mb-4 flex py-1 animate-pulse">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="flex-1 text-center px-2">
+          <div className="h-4 bg-gray-200 rounded mb-2"></div>
+          <div className="h-6 bg-gray-200 rounded"></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// 'as any' to bypass prop-type incompatibility during dynamic import
+// You can replace by proper generic typing later if desired.
+const FinancialSummary = dynamicImport(
+  () => import('@/components/common/FinancialSummary').then((mod) => ({ default: mod.FinancialSummary })),
+  { ssr: false, loading: () => <SkeletonFinancialSummary /> }
+) as typeof import('@/components/common/FinancialSummary').FinancialSummary;
 
 export default function InstallmentsPage() {
   const { hasPermission, loading: permissionsLoading } = usePermissions();

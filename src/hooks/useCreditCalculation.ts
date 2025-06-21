@@ -4,7 +4,6 @@ import { supabase } from '@/lib/supabase';
 import { CreditStatus } from '@/models/credit';
 import { useStore } from '@/contexts/StoreContext';
 import { calculateCreditMetrics } from '@/lib/Credits/calculate_credit_metrics';
-import { calculateTotalCollectedInterest } from '@/lib/Credits/calculate_collected_interest';
 
 // Interface cho dữ liệu tài chính tổng hợp
 export interface StoreFinancialData {
@@ -66,11 +65,44 @@ export function useCreditCalculations() {
       let totalCollectedInterest = 0;
       const newDetails: Record<string, CreditFinancialDetail> = {};
       
+      /* ---------- 4. RPC duy nhất lấy paidInterest cho active + closed ---------- */
+      const interestMap = new Map<string, number>();
+      const activeIds  = activeCreditsData?.map(c => c.id) || [];
+      const closedIds  = closedCreditsData?.map(c => c.id) || [];
+      const allIds     = [...activeIds, ...closedIds];
+      
+      if (allIds.length) {
+        const start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+        const end   = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+        const { data: rows, error } = await supabase.rpc('get_paid_interest', {
+          p_credit_ids: allIds,
+          p_start_date: start.toISOString(),
+          p_end_date  : end.toISOString(),
+        });
+        if (!error && Array.isArray(rows)) {
+          rows.forEach((r: any) =>
+            interestMap.set(r.credit_id, Number(r.paid_interest || 0)));
+        }
+      }
+
+      // trước khi tính metrics cho từng credit
+      const { data: principalRows } = await supabase.rpc('get_principal_and_debt', {
+        p_credit_ids: activeIds,
+      });
+
+      // map cho nhanh
+      const principalMap = new Map<string, number>();
+      principalRows?.forEach(r => principalMap.set(r.credit_id, Number(r.current_principal || 0)));
+
       if (activeCreditsData?.length) {
         console.time('Calculate all active credits');
         
         const results = await Promise.all(
-          activeCreditsData.map(credit => calculateCreditMetrics(credit))
+          activeCreditsData.map(credit =>
+            calculateCreditMetrics(credit, {
+              interestMap,
+              principalMap   // truyền kèm để bỏ nốt query loan_amount / credit_history
+            }))
         );
         
         console.timeEnd('Calculate all active credits');
@@ -96,16 +128,10 @@ export function useCreditCalculations() {
         });
       }
       
-      // Xử lý lãi phí đã thu từ credits đã đóng
-      if (closedCreditsData?.length) {
-        console.time('Calculate closed credits interest');
-        
-        // Sử dụng hàm mới để tính toán lãi phí đã thu từ tất cả credits đã đóng trong một truy vấn
-        const closedCreditIds = closedCreditsData.map(credit => credit.id);
-        totalCollectedInterest += await calculateTotalCollectedInterest(closedCreditIds);
-        
-        console.timeEnd('Calculate closed credits interest');
-      }
+      // Cộng thêm lãi phí của các credit đã đóng
+      closedIds.forEach(id => {
+        totalCollectedInterest += interestMap.get(id) ?? 0;
+      });
       
       // 6. Set results
       setSummary({

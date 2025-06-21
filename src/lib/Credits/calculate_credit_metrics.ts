@@ -24,21 +24,34 @@ export interface CreditData {
   loan_date: string;
 }
 
+// Tùy chọn nhận thêm các map đã tính sẵn để tránh query lặp
+interface MetricHelperOptions {
+  interestMap?: Map<string, number>;
+  principalMap?: Map<string, number>; // reserved – có thể dùng để bỏ query principal trong tương lai
+}
+
 /**
  * Tính toán các chỉ số tài chính cho một hợp đồng tín dụng
  * @param credit - Dữ liệu hợp đồng tín dụng
+ * @param options - Tùy chọn nhận thêm các map đã tính sẵn để tránh query lặp
  * @returns Promise<CreditMetrics | null> - Các chỉ số tài chính hoặc null nếu có lỗi
  */
 export async function calculateCreditMetrics(
-  credit: CreditData
+  credit: CreditData,
+  options?: MetricHelperOptions
 ): Promise<CreditMetrics | null> {
   try {
-    // Tính toán song song các chỉ số cần thiết
+    // Tính toán song song (loại bỏ paidInterest – sẽ tính riêng)
     const [loanAmount, oldDebt, dailyAmounts, paidInterest] = await Promise.all([
       calculateActualLoanAmount(credit.id),
       calculateDebtToLatestPaidPeriod(credit.id),
       getExpectedMoney(credit.id),
-      calculateCollectedInterest(credit.id) // Sử dụng hàm mới với xử lý phân trang
+      // Nếu map đã có sẵn, không gọi RPC đơn lẻ
+      (async () => {
+        const cached = options?.interestMap?.get(credit.id);
+        if (typeof cached === 'number') return cached;
+        return calculateCollectedInterest(credit.id);
+      })()
     ]);
     
     const expectedProfit = dailyAmounts.reduce((sum, amount) => sum + amount, 0);
@@ -56,8 +69,8 @@ export async function calculateCreditMetrics(
       interestToday: Math.round(interestToday),
       actualLoanAmount: Math.round(loanAmount),
       loading: false,
-      // Lãi phí đã thu - đã được tính bằng hàm mới
-      paidInterest: paidInterest,
+      // Lãi phí đã thu
+      paidInterest,
       // Tiền cho vay
       summaryLoan: loanAmount,
       // Nợ cũ

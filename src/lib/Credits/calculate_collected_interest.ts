@@ -15,12 +15,28 @@ export async function calculateCollectedInterest(
   endDate?: Date
 ): Promise<number> {
   try {
-    // Xác định khoảng thời gian tính toán
     const start = startDate || new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    const end = endDate || new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
-    
-    // Sử dụng phương pháp phân trang để xử lý > 1000 bản ghi
-    return await calculateInterestWithPagination(creditId, start, end);
+    const end   = endDate   || new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+    console.log('calculateCollectedInterest', creditId, start, end);
+    // Gọi function đã tạo trong DB (trả về 1-hàng với trường paid_interest)
+    const { data, error } = await supabase.rpc('get_paid_interest', {
+      p_credit_ids: [creditId],
+      p_start_date: start.toISOString(),
+      p_end_date  : end.toISOString(),
+    });
+
+    if (error) {
+      console.error('get_paid_interest RPC error:', error);
+      // Fallback: dùng cách cũ (hiếm khi xảy ra)
+      return await calculateInterestWithPagination(creditId, start, end);
+    }
+
+    // Hàm trả về array ⟨credit_id, paid_interest⟩
+    const paid = Array.isArray(data) && data[0]?.paid_interest
+      ? Number(data[0].paid_interest)
+      : 0;
+
+    return Math.round(paid);
   } catch (error) {
     console.error(`Error calculating collected interest for credit ${creditId}:`, error);
     return 0;
@@ -39,7 +55,6 @@ async function calculateInterestWithPagination(
   let hasMoreData = true;
   let lastId: string | null = null;
   const pageSize = 1000; // Kích thước trang tối đa
-  
   while (hasMoreData) {
     let query = supabase
       .from('credit_history')
@@ -99,22 +114,35 @@ export async function calculateTotalCollectedInterest(
   endDate?: Date
 ): Promise<number> {
   try {
-    // Xác định khoảng thời gian tính toán
     const start = startDate || new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    const end = endDate || new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
-    
-    // Xử lý từng nhóm creditIds để tránh vượt quá giới hạn của IN clause
-    const batchSize = 100; // Số lượng ID tối đa trong mỗi nhóm
-    let totalInterest = 0;
-    
-    // Chia creditIds thành các nhóm nhỏ hơn
-    for (let i = 0; i < creditIds.length; i += batchSize) {
-      const batchIds = creditIds.slice(i, i + batchSize);
-      const batchInterest = await calculateBatchInterestWithPagination(batchIds, start, end);
-      totalInterest += batchInterest;
+    const end   = endDate   || new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+
+    if (creditIds.length === 0) return 0;
+
+    const { data, error } = await supabase.rpc('get_paid_interest', {
+      p_credit_ids: creditIds,
+      p_start_date: start.toISOString(),
+      p_end_date  : end.toISOString(),
+    });
+
+    if (error) {
+      console.error('get_paid_interest RPC error:', error);
+      // Fallback: tính theo từng batch cách cũ
+      const batchSize = 100;
+      let total = 0;
+      for (let i = 0; i < creditIds.length; i += batchSize) {
+        const slice = creditIds.slice(i, i + batchSize);
+        total += await calculateBatchInterestWithPagination(slice, start, end);
+      }
+      return Math.round(total);
     }
-    
-    return Math.round(totalInterest);
+
+    // data = array các hàng {credit_id, paid_interest}
+    const total = (data as any[]).reduce(
+      (sum, row) => sum + Number(row.paid_interest || 0),
+      0
+    );
+    return Math.round(total);
   } catch (error) {
     console.error(`Error calculating total collected interest:`, error);
     return 0;

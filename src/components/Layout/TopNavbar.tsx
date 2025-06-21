@@ -60,8 +60,8 @@ const StoreDropdown = memo(({
         onClick={toggleDropdown}
       >
         <Folder className="h-5 w-5 mr-2" />
-        <span className="text-white whitespace-nowrap mr-2 font-medium">
-          {loading ? 'Đang tải...' : (currentStore ? currentStore.name : 'Chọn cửa hàng')}
+        <span className="text-white whitespace-nowrap mr-2 font-medium" suppressHydrationWarning>
+          {loading ? 'Đang tải...' : (currentStore?.name ? currentStore.name : 'Chọn cửa hàng')}
         </span>
         <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
@@ -128,9 +128,6 @@ export function TopNavbar() {
   const { currentStore, stores, setCurrentStore, loading, refreshStores, resetStores } = useStore();
   const router = useRouter();
   
-  // State để theo dõi lần đầu component mount
-  const [hasInitialized, setHasInitialized] = useState(false);
-  
   // Use permissions hook to check user permissions
   const { hasPermission } = usePermissions();
   
@@ -148,15 +145,6 @@ export function TopNavbar() {
     // Buộc router refresh để làm mới dữ liệu trang
     router.refresh();
   }, [setCurrentStore, router]);
-  
-  // Auto refresh stores khi component mount lần đầu nếu StoreProvider chưa có dữ liệu
-  useEffect(() => {
-    if (!hasInitialized && stores.length === 0 && !loading) {
-      console.log('TopNavbar: refreshStores because stores list is empty');
-      refreshStores();
-      setHasInitialized(true);
-    }
-  }, [hasInitialized, stores.length, loading, refreshStores]);
   
   // Log when component mounts and when current store changes
   useEffect(() => {

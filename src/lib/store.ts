@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { Store, StoreFormData } from '@/models/store';
+import { getCurrentUser } from './auth';
 
 // Interface cho dữ liệu tài chính cửa hàng
 export interface StoreFinancialData {
@@ -21,8 +22,7 @@ export async function getStores(
   statusFilter: string = ''
 ) {
   try {
-    // Lấy thông tin user hiện tại từ getCurrentUser
-    const { getCurrentUser } = await import('./auth');
+    // Đã import tĩnh ở đầu file – dùng trực tiếp để tận dụng cache của auth
     const currentUser = await getCurrentUser();
     
     if (!currentUser || !currentUser.id) {
@@ -127,7 +127,7 @@ export async function getStoreById(id: string) {
 
 // Tạo cửa hàng mới
 export async function createStore(storeData: StoreFormData) {
-  const { getCurrentUser } = await import('./auth');
+  // Dùng hàm getCurrentUser đã import tĩnh
   const currentUser = await getCurrentUser();
   const userId = currentUser?.id;
 
@@ -228,8 +228,7 @@ export async function getStoreFinancialData(storeId: string = '1'): Promise<Stor
 // Lấy tất cả cửa hàng (không phân trang) - sử dụng cho select options
 export async function getAllActiveStores() {
   try {
-    // Lấy thông tin user hiện tại từ getCurrentUser
-    const { getCurrentUser } = await import('./auth');
+    // Đã import tĩnh ở đầu file – dùng trực tiếp để tận dụng cache của auth
     const currentUser = await getCurrentUser();
     
     if (!currentUser || !currentUser.id) {
