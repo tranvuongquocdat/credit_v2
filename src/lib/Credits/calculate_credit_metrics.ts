@@ -27,7 +27,8 @@ export interface CreditData {
 // Tùy chọn nhận thêm các map đã tính sẵn để tránh query lặp
 interface MetricHelperOptions {
   interestMap?: Map<string, number>;
-  principalMap?: Map<string, number>; // reserved – có thể dùng để bỏ query principal trong tương lai
+  principalMap?: Map<string, number>;
+  debtMap?: Map<string, number>;
 }
 
 /**
@@ -49,8 +50,14 @@ export async function calculateCreditMetrics(
     })();
 
     const [loanAmount, oldDebt, dailyAmounts, paidInterest] = await Promise.all([
-      loanAmountPromise,
-      calculateDebtToLatestPaidPeriod(credit.id),
+      /* loanAmount */ (
+        options?.principalMap?.get(credit.id) ??
+        calculateActualLoanAmount(credit.id)
+      ),
+      /* oldDebt */ (
+        options?.debtMap?.get(credit.id) ??
+        calculateDebtToLatestPaidPeriod(credit.id)
+      ),
       getExpectedMoney(credit.id),
       // 2. paid interest – ưu tiên map
       (async () => {

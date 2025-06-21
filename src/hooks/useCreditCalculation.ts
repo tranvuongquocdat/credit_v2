@@ -85,48 +85,49 @@ export function useCreditCalculations() {
         }
       }
 
-      // trước khi tính metrics cho từng credit
-      const { data: principalRows } = await supabase.rpc('get_principal_and_debt', {
-        p_credit_ids: activeIds,
+      const { data: rows } = await supabase.rpc('get_current_principal', {
+        p_credit_ids: allIds,
+      });
+      const principalMap = new Map<string, number>();
+      rows?.forEach(r => {
+        principalMap.set(r.credit_id, Number(r.current_principal));
       });
 
-      // map cho nhanh
-      const principalMap = new Map<string, number>();
-      principalRows?.forEach(r => principalMap.set(r.credit_id, Number(r.current_principal || 0)));
+      const { data: debtRows } = await supabase.rpc('get_old_debt', {
+        p_credit_ids: allIds,
+      });
+      const debtMap = new Map<string, number>();
+      debtRows?.forEach(r => debtMap.set(r.credit_id, Number(r.old_debt || 0)));
 
-      if (activeCreditsData?.length) {
-        console.time('Calculate all active credits');
-        
-        const results = await Promise.all(
-          activeCreditsData.map(credit =>
-            calculateCreditMetrics(credit, {
-              interestMap,
-              principalMap   // truyền kèm để bỏ nốt query loan_amount / credit_history
-            }))
-        );
-        
-        console.timeEnd('Calculate all active credits');
-        
-        // Aggregate results
-        results.forEach(result => {
-          if (result) {
-            newDetails[result.creditId] = {
-              creditId: result.creditId,
-              actualLoanAmount: result.actualLoanAmount,
-              oldDebt: result.oldDebt,
-              expectedProfit: result.expectedProfit,
-              paidInterest: result.paidInterest,
-              interestToday: result.interestToday,
-              loading: false
-            };
-            
-            totalLoan += result.summaryLoan;
-            totalOldDebt += result.summaryDebt;
-            totalProfit += result.summaryProfit;
-            totalCollectedInterest += result.paidInterest;
-          }
-        });
-      }
+      const results = await Promise.all(
+        activeCreditsData!.map(c =>
+          calculateCreditMetrics(c, {
+            principalMap,
+            interestMap,
+            debtMap
+          })
+        )
+      );
+      
+      // Aggregate results
+      results.forEach(result => {
+        if (result) {
+          newDetails[result.creditId] = {
+            creditId: result.creditId,
+            actualLoanAmount: result.actualLoanAmount,
+            oldDebt: result.oldDebt,
+            expectedProfit: result.expectedProfit,
+            paidInterest: result.paidInterest,
+            interestToday: result.interestToday,
+            loading: false
+          };
+          
+          totalLoan += result.summaryLoan;
+          totalOldDebt += result.summaryDebt;
+          totalProfit += result.summaryProfit;
+          totalCollectedInterest += result.paidInterest;
+        }
+      });
       
       // Cộng thêm lãi phí của các credit đã đóng
       closedIds.forEach(id => {
