@@ -298,6 +298,7 @@ export function PaymentHistoryModal({
 
         const debt = await calculateDebtToLatestPaidPeriod(credit.id);
         setRemainingDebt(debt);
+        console.log('totalExpectedInterest', total);
       } catch (error) {
         console.error('Error calculating financials:', error);
         setTotalExpectedInterest(0);

@@ -1,4 +1,3 @@
-import { getExpectedMoney } from './get_expected_money';
 import { calculateDebtToLatestPaidPeriod } from './calculate_remaining_debt';
 import { calculateActualLoanAmount } from './calculate_actual_loan_amount';
 import { calculateCollectedInterest } from './calculate_collected_interest';
@@ -22,6 +21,7 @@ export interface CreditData {
   id: string;
   loan_amount: number;
   loan_date: string;
+  loan_period: number;
 }
 
 // Tùy chọn nhận thêm các map đã tính sẵn để tránh query lặp
@@ -29,6 +29,8 @@ interface MetricHelperOptions {
   interestMap?: Map<string, number>;
   principalMap?: Map<string, number>;
   debtMap?: Map<string, number>;
+  expectedMap?: Map<string, number>;
+  todayMap?: Map<string, number>;
 }
 
 /**
@@ -42,14 +44,7 @@ export async function calculateCreditMetrics(
   options?: MetricHelperOptions
 ): Promise<CreditMetrics | null> {
   try {
-    // 1. actual loan amount – ưu tiên map
-    const loanAmountPromise = ((): Promise<number> => {
-      const cached = options?.principalMap?.get(credit.id);
-      if (typeof cached === 'number') return Promise.resolve(cached);
-      return calculateActualLoanAmount(credit.id);
-    })();
-
-    const [loanAmount, oldDebt, dailyAmounts, paidInterest] = await Promise.all([
+    const [loanAmount, oldDebt, expectedProfit, interestToday, paidInterest] = await Promise.all([
       /* loanAmount */ (
         options?.principalMap?.get(credit.id) ??
         calculateActualLoanAmount(credit.id)
@@ -58,23 +53,33 @@ export async function calculateCreditMetrics(
         options?.debtMap?.get(credit.id) ??
         calculateDebtToLatestPaidPeriod(credit.id)
       ),
-      getExpectedMoney(credit.id),
-      // 2. paid interest – ưu tiên map
-      (async () => {
+      /* expected profit */ (async () => {
+        const cached = options?.expectedMap?.get(credit.id);
+        if (typeof cached === 'number') return cached;
+        // Fallback: call calc_expected_until to loan end
+        const loanStart = new Date(credit.loan_date);
+        const loanEnd = new Date(loanStart.getTime() + (credit.loan_period - 1) * 86400000);
+        const { data } = await (supabase.rpc as any)('calc_expected_until', {
+          p_credit_id: credit.id,
+          p_end_date: loanEnd.toISOString().slice(0, 10),
+        });
+        return Number(data ?? 0);
+      })(),
+      /* interest today */ (async () => {
+        const cached = options?.todayMap?.get(credit.id);
+        if (typeof cached === 'number') return cached;
+        const { data } = await (supabase.rpc as any)('calc_expected_until', {
+          p_credit_id: credit.id,
+          p_end_date: new Date().toISOString().slice(0, 10),
+        });
+        return Number(data ?? 0);
+      })(),
+      /* paid interest */ (async () => {
         const cached = options?.interestMap?.get(credit.id);
         if (typeof cached === 'number') return cached;
         return calculateCollectedInterest(credit.id);
-      })()
+      })(),
     ]);
-    
-    const expectedProfit = dailyAmounts.reduce((sum, amount) => sum + amount, 0);
-    
-    // Tính interest to today
-    const today = new Date();
-    const loanStart = new Date(credit.loan_date);
-    const daysSinceLoan = Math.floor((today.getTime() - loanStart.getTime()) / (1000 * 60 * 60 * 24));
-    const interestToday = dailyAmounts.slice(0, daysSinceLoan + 1).reduce((sum, amount) => sum + amount, 0);
-    
     return {
       creditId: credit.id,
       oldDebt: Math.round(oldDebt),

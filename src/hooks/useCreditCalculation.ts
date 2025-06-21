@@ -48,7 +48,7 @@ export function useCreditCalculations() {
       // 2. Lấy danh sách credits ON_TIME
       const { data: activeCreditsData } = await supabase
         .from('credits')
-        .select('id, loan_amount, loan_date')
+        .select('id, loan_amount, loan_date, loan_period')
         .eq('store_id', storeId)
         .eq('status', CreditStatus.ON_TIME);
       
@@ -74,37 +74,58 @@ export function useCreditCalculations() {
       if (allIds.length) {
         const start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
         const end   = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
-        const { data: rows, error } = await supabase.rpc('get_paid_interest', {
+        const { data: interestRows, error } = await supabase.rpc('get_paid_interest', {
           p_credit_ids: allIds,
           p_start_date: start.toISOString(),
           p_end_date  : end.toISOString(),
         });
-        if (!error && Array.isArray(rows)) {
-          rows.forEach((r: any) =>
+        if (!error && Array.isArray(interestRows)) {
+          interestRows.forEach((r: any) =>
             interestMap.set(r.credit_id, Number(r.paid_interest || 0)));
         }
       }
 
-      const { data: rows } = await supabase.rpc('get_current_principal', {
+      const { data: principalRows } = await supabase.rpc('get_current_principal', {
         p_credit_ids: allIds,
       });
       const principalMap = new Map<string, number>();
-      rows?.forEach(r => {
+      principalRows?.forEach((r: { credit_id: string; current_principal: number }) => {
         principalMap.set(r.credit_id, Number(r.current_principal));
       });
 
+      // 5. RPC lấy old debt
       const { data: debtRows } = await supabase.rpc('get_old_debt', {
-        p_credit_ids: allIds,
+        p_credit_ids: activeIds,
       });
       const debtMap = new Map<string, number>();
-      debtRows?.forEach(r => debtMap.set(r.credit_id, Number(r.old_debt || 0)));
+      debtRows?.forEach((r: { credit_id: string; old_debt: number }) =>
+        debtMap.set(r.credit_id, Number(r.old_debt || 0))
+      );
+
+      /* ---------- 6. RPC lấy expectedProfit & interestToday ---------- */
+      const expectedMap = new Map<string, number>();
+      const todayMap = new Map<string, number>();
+
+      if (allIds.length) {
+        const { data: expRows, error: expErr } = await (supabase.rpc as any)('get_expected_interest', {
+          p_credit_ids: allIds,
+        });
+        if (!expErr && Array.isArray(expRows)) {
+          expRows.forEach((r: any) => {
+            expectedMap.set(r.credit_id, Number(r.expected_profit || 0));
+            todayMap.set(r.credit_id, Number(r.interest_today || 0));
+          });
+        }
+      }
 
       const results = await Promise.all(
         activeCreditsData!.map(c =>
           calculateCreditMetrics(c, {
             principalMap,
             interestMap,
-            debtMap
+            debtMap,
+            expectedMap,
+            todayMap,
           })
         )
       );
@@ -134,7 +155,7 @@ export function useCreditCalculations() {
         totalCollectedInterest += interestMap.get(id) ?? 0;
       });
       
-      // 6. Set results
+      // 7. Set results
       setSummary({
         totalFund: storeData?.investment || 0,
         availableFund: storeData?.cash_fund || 0,

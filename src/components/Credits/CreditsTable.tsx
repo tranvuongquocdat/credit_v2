@@ -42,6 +42,7 @@ interface CreditsTableProps {
   credits: CreditWithCustomer[];
   statusMap: StatusMapType;
   calculatedDetails?: Record<string, CreditFinancialDetail>;
+  calculatedStatuses?: Record<string, CreditStatusResult>;
   onView: (id: string) => void;
   onEdit: (id: string) => void;
   onDelete: (credit: CreditWithCustomer) => void;
@@ -80,29 +81,12 @@ export function CreditsTable({
   credits, 
   statusMap,
   calculatedDetails,
+  calculatedStatuses,
   onEdit, 
   onDelete, 
   onShowPaymentHistory,
   onRefresh
 }: CreditsTableProps) {
-  // State để lưu trữ thông tin thanh toán cho mỗi credit
-  const [paymentInfo, setPaymentInfo] = useState<Record<string, CreditPaymentInfo>>({});
-  
-  // State để lưu trữ thông tin ngày thanh toán tiếp theo
-  const [nextPaymentInfo, setNextPaymentInfo] = useState<Record<string, NextPaymentInfo>>({});
-  
-  // State để lưu trữ thông tin lãi phí đến hôm nay
-  const [interestTodayInfo, setInterestTodayInfo] = useState<Record<string, InterestTodayInfo>>({});
-  
-  // State để lưu trữ thông tin có kỳ thanh toán đã được thanh toán hay không cho mỗi credit
-  const [hasPaidPaymentPeriods, setHasPaidPaymentPeriods] = useState<Record<string, boolean>>({});
-  
-  // State cho actual loan amount
-  const [actualLoanAmounts, setActualLoanAmounts] = useState<Record<string, ActualLoanAmountInfo>>({});
-  
-  // State cho calculated status
-  const [calculatedStatuses, setCalculatedStatuses] = useState<Record<string, CreditStatusResult>>({});
-
   // Toast hook
   const { toast } = useToast();
   
@@ -131,270 +115,6 @@ export function CreditsTable({
     }
   };
   
-  // Hàm tái sử dụng để tính toán lãi phí đã đóng và nợ cũ - TỐI ƯU HÓA
-  const calculateCreditPayment = useCallback(async (creditId: string): Promise<CreditPaymentInfo> => {
-    try {
-      // Sử dụng Promise.all để chạy song song
-      const [paymentHistory, oldDebt] = await Promise.all([
-        // 1. Lấy payment history và tính tổng lãi phí đã đóng
-        getCreditPaymentHistory(creditId),
-        // 2. Tính nợ cũ bằng calculateDebtToLatestPaidPeriod
-        calculateDebtToLatestPaidPeriod(creditId)
-      ]);
-      
-      // Tính tổng lãi phí đã đóng từ payment history
-      const paidInterest = paymentHistory
-        .filter(record => record.transaction_type === 'payment' && record.is_deleted === false)
-        .reduce((sum, record) => sum + (record.credit_amount || 0), 0);
-      
-      console.log(`Credit ${creditId}: Paid interest = ${paidInterest}, Old debt = ${oldDebt}`);
-      
-      return { 
-        paidInterest: Math.round(paidInterest), 
-        oldDebt: Math.round(oldDebt), 
-        loading: false 
-      };
-    } catch (error) {
-      console.error(`Error calculating payment info for credit ${creditId}:`, error);
-      return { paidInterest: 0, oldDebt: 0, loading: false };
-    }
-  }, []);
-  
-  // Hàm tính toán ngày phải đóng lãi phí tiếp theo
-  const calculateNextPaymentDate = useCallback(async (creditId: string, credit: CreditWithCustomer): Promise<NextPaymentInfo> => {
-    try {
-      // Lấy ngày thanh toán gần nhất từ hàm getLatestPaymentPaidDate
-      const latestPaymentDate = await getLatestPaymentPaidDate(creditId);
-      
-      // Lấy ngày bắt đầu khoản vay
-      const loanStartDate = new Date(credit.loan_date);
-      
-      // Tính ngày kết thúc hợp đồng
-      const loanEndDate = new Date(loanStartDate);
-      const loanPeriodDays = credit.loan_period;
-      loanEndDate.setDate(loanStartDate.getDate() + loanPeriodDays - 1);
-      
-      // Lấy kỳ lãi (số ngày)
-      const interestPeriod = credit.interest_period || 30; // Mặc định là 30 ngày
-      
-      // Nếu không có thanh toán nào trước đây
-      if (!latestPaymentDate) {
-        // Tính ngày kết thúc của kỳ đầu tiên
-        const firstPeriodEndDate = new Date(loanStartDate);
-        firstPeriodEndDate.setDate(loanStartDate.getDate() + interestPeriod - 1);
-        
-        // Kiểm tra xem ngày kết thúc kỳ đầu tiên có vượt quá ngày kết thúc hợp đồng không
-        if (firstPeriodEndDate > loanEndDate) {
-          return { nextDate: null, isCompleted: true, loading: false };
-        }
-        
-        return { nextDate: firstPeriodEndDate.toISOString(), isCompleted: false, loading: false };
-      }
-      
-      // Nếu có thanh toán trước đây, tính kỳ tiếp theo
-      const lastPaymentDate = new Date(latestPaymentDate);
-      const nextPaymentDate = new Date(lastPaymentDate);
-      nextPaymentDate.setDate(lastPaymentDate.getDate() + interestPeriod);
-      
-      // Kiểm tra xem ngày thanh toán tiếp theo có vượt quá ngày kết thúc hợp đồng không
-      if (nextPaymentDate > loanEndDate) {
-        return { nextDate: null, isCompleted: true, loading: false };
-      }
-      
-      return { nextDate: nextPaymentDate.toISOString(), isCompleted: false, loading: false };
-    } catch (error) {
-      console.error(`Error calculating next payment date for credit ${creditId}:`, error);
-      return { nextDate: null, isCompleted: false, loading: false };
-    }
-  }, []);
-  
-  // Hàm kiểm tra xem credit có kỳ thanh toán nào đã được thanh toán không - TỐI ƯU HÓA
-  const checkHasPaidPaymentPeriods = useCallback(async (creditId: string): Promise<boolean> => {
-    try {
-      // Sử dụng getCreditPaymentHistory thay vì query trực tiếp
-      const paymentHistory = await getCreditPaymentHistory(creditId);
-      
-      // Kiểm tra xem có payment nào với credit_amount > 0 và chưa bị xóa
-      const hasPaidPayments = paymentHistory.some(record => 
-        record.transaction_type === 'payment' && 
-        record.is_deleted === false && 
-        (record.credit_amount || 0) > 0
-      );
-      
-      return hasPaidPayments;
-    } catch (error) {
-      console.error('Error in checkHasPaidPaymentPeriods:', error);
-      return false;
-    }
-  }, []);
-
-  // Hàm tính toán lãi phí đến hôm nay
-  const calculateInterestToday = useCallback(async (creditId: string, credit: CreditWithCustomer): Promise<InterestTodayInfo> => {
-    try {
-      const dailyAmounts = await getExpectedMoney(creditId);
-      const today = new Date();
-      const loanStart = new Date(credit.loan_date);
-      const daysSinceLoan = Math.floor((today.getTime() - loanStart.getTime()) / (1000 * 60 * 60 * 24));
-      
-      // Calculate interest up to today
-      const interestToday = dailyAmounts.slice(0, daysSinceLoan + 1).reduce((sum, amount) => sum + amount, 0);
-      
-      return { interestToday: Math.round(interestToday), loading: false };
-    } catch (error) {
-      console.error(`Error calculating interest to today for credit ${creditId}:`, error);
-      return { interestToday: 0, loading: false };
-    }
-  }, []);
-
-  // Hàm tính actual loan amount
-  const calculateActualLoanAmountInfo = useCallback(async (creditId: string): Promise<ActualLoanAmountInfo> => {
-    try {
-      const actualAmount = await calculateActualLoanAmount(creditId);
-      return { actualAmount: Math.round(actualAmount), loading: false };
-    } catch (error) {
-      console.error(`Error calculating actual loan amount for credit ${creditId}:`, error);
-      return { actualAmount: 0, loading: false };
-    }
-  }, []);
-
-  // Tải dữ liệu thanh toán cho tất cả các credit - CẬP NHẬT LOGGING
-  useEffect(() => {
-    if (calculatedDetails && Object.keys(calculatedDetails).length > 0) {
-      // Use provided calculated data
-      const newPaymentInfo: Record<string, CreditPaymentInfo> = {};
-      const newNextPaymentInfo: Record<string, NextPaymentInfo> = {};
-      const newInterestTodayInfo: Record<string, InterestTodayInfo> = {};
-      const newHasPaidPaymentPeriodsInfo: Record<string, boolean> = {};
-      const newActualLoanAmountInfo: Record<string, ActualLoanAmountInfo> = {};
-      
-      Object.values(calculatedDetails).forEach(detail => {
-        newPaymentInfo[detail.creditId] = {
-          paidInterest: detail.paidInterest,
-          oldDebt: detail.oldDebt,
-          loading: false
-        };
-        
-        newNextPaymentInfo[detail.creditId] = {
-          nextDate: null,
-          isCompleted: false,
-          loading: false
-        };
-        
-        newInterestTodayInfo[detail.creditId] = {
-          interestToday: detail.interestToday,
-          loading: false
-        };
-        
-        newHasPaidPaymentPeriodsInfo[detail.creditId] = false;
-        
-        newActualLoanAmountInfo[detail.creditId] = {
-          actualAmount: detail.actualLoanAmount,
-          loading: false
-        };
-      });
-      
-      setPaymentInfo(newPaymentInfo);
-      setNextPaymentInfo(newNextPaymentInfo);
-      setInterestTodayInfo(newInterestTodayInfo);
-      setHasPaidPaymentPeriods(newHasPaidPaymentPeriodsInfo);
-      setActualLoanAmounts(newActualLoanAmountInfo);
-      
-      console.log('CreditsTable: Using calculated data from hook');
-      return;
-    }
-    
-    // Fallback: Calculate if no data provided (existing logic)
-    console.log('CreditsTable: Fallback to individual calculations');
-    // Khởi tạo trạng thái loading cho tất cả credit
-    const initialLoadingState: Record<string, CreditPaymentInfo> = {};
-    const initialNextPaymentState: Record<string, NextPaymentInfo> = {};
-    const initialInterestTodayState: Record<string, InterestTodayInfo> = {};
-    const initialHasPaidPaymentPeriodsState: Record<string, boolean> = {};
-    const initialActualLoanAmountState: Record<string, ActualLoanAmountInfo> = {};
-    
-    credits.forEach(credit => {
-      initialLoadingState[credit.id] = { paidInterest: 0, oldDebt: 0, loading: true };
-      initialNextPaymentState[credit.id] = { nextDate: null, isCompleted: false, loading: true };
-      initialInterestTodayState[credit.id] = { interestToday: 0, loading: true };
-      initialHasPaidPaymentPeriodsState[credit.id] = false;
-      initialActualLoanAmountState[credit.id] = { actualAmount: 0, loading: true };
-    });
-    
-    setPaymentInfo(initialLoadingState);
-    setNextPaymentInfo(initialNextPaymentState);
-    setInterestTodayInfo(initialInterestTodayState);
-    setHasPaidPaymentPeriods(initialHasPaidPaymentPeriodsState);
-    setActualLoanAmounts(initialActualLoanAmountState);
-    
-    // Tải dữ liệu cho tất cả credit song song
-    const loadData = async () => {
-      try {
-        console.time('Load all credit data');
-        
-        // Calculate statuses for all credits in parallel
-        const creditIds = credits.map(credit => credit.id);
-        const statusResults = await calculateMultipleCreditStatus(creditIds);
-        
-        // Process all credits in parallel using Promise.all
-        const results = await Promise.all(
-          credits.map(async (credit) => {
-            console.time(`Credit ${credit.id}`);
-            
-            const [info, nextPayment, interestToday, hasPaidPayments, actualLoanAmount] = await Promise.all([
-              calculateCreditPayment(credit.id),
-              calculateNextPaymentDate(credit.id, credit),
-              calculateInterestToday(credit.id, credit),
-              checkHasPaidPaymentPeriods(credit.id),
-              calculateActualLoanAmountInfo(credit.id)
-            ]);
-            
-            console.timeEnd(`Credit ${credit.id}`);
-            
-            return {
-              creditId: credit.id,
-              info,
-              nextPayment,
-              interestToday,
-              hasPaidPayments,
-              actualLoanAmount
-            };
-          })
-        );
-        
-        console.timeEnd('Load all credit data');
-        console.log(`Loaded data for ${results.length} credits`);
-        
-        // Update all states at once
-        const newPaymentInfo: Record<string, CreditPaymentInfo> = {};
-        const newNextPaymentInfo: Record<string, NextPaymentInfo> = {};
-        const newInterestTodayInfo: Record<string, InterestTodayInfo> = {};
-        const newHasPaidPaymentPeriodsInfo: Record<string, boolean> = {};
-        const newActualLoanAmountInfo: Record<string, ActualLoanAmountInfo> = {};
-        
-        results.forEach(({ creditId, info, nextPayment, interestToday, hasPaidPayments, actualLoanAmount }) => {
-          newPaymentInfo[creditId] = info;
-          newNextPaymentInfo[creditId] = nextPayment;
-          newInterestTodayInfo[creditId] = interestToday;
-          newHasPaidPaymentPeriodsInfo[creditId] = hasPaidPayments;
-          newActualLoanAmountInfo[creditId] = actualLoanAmount;
-        });
-        
-        setPaymentInfo(newPaymentInfo);
-        setNextPaymentInfo(newNextPaymentInfo);
-        setInterestTodayInfo(newInterestTodayInfo);
-        setHasPaidPaymentPeriods(newHasPaidPaymentPeriodsInfo);
-        setActualLoanAmounts(newActualLoanAmountInfo);
-        setCalculatedStatuses(statusResults);
-      } catch (error) {
-        console.error('Error loading credit data:', error);
-      }
-    };
-    
-    if (credits.length > 0) {
-      loadData();
-    }
-  }, [credits, calculateCreditPayment, calculateNextPaymentDate, calculateInterestToday, checkHasPaidPaymentPeriods, calculateActualLoanAmountInfo]);
-
   // Hàm xử lý khi click vào mã hợp đồng
   const handleContractCodeClick = (creditId: string) => {
     if (canEditCredit) {
@@ -457,11 +177,7 @@ export function CreditsTable({
                 </TableCell>
                 <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
                   <div className="flex flex-col items-center">
-                    {actualLoanAmounts[credit.id]?.loading ? (
-                      <span className="text-gray-400">Đang tải...</span>
-                    ) : (
-                      formatCurrency(actualLoanAmounts[credit.id]?.actualAmount || credit.loan_amount)
-                    )}
+                    {formatCurrency(calculatedDetails?.[credit.id]?.actualLoanAmount ?? credit.loan_amount)}
                     <div className="text-xs text-red-800 mt-1">
                       {getInterestDisplayString(credit)}
                     </div>
@@ -482,167 +198,49 @@ export function CreditsTable({
                   </div>
                 </TableCell>
                 <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
-                  {paymentInfo[credit.id]?.loading ? (
-                    <span className="text-gray-400">Đang tải...</span>
-                  ) : (
-                    formatCurrency(paymentInfo[credit.id]?.paidInterest || 0)
-                  )}
+                  {formatCurrency(calculatedDetails?.[credit.id]?.paidInterest ?? 0)}
                 </TableCell>
                 <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
-                  {paymentInfo[credit.id]?.loading ? (
-                    <span className="text-gray-400">Đang tải...</span>
-                  ) : (
-                    formatCurrency(paymentInfo[credit.id]?.oldDebt || 0)
-                  )}
+                  {formatCurrency(calculatedDetails?.[credit.id]?.oldDebt ?? 0)}
                 </TableCell>
                 <TableCell className="py-3 px-3 text-center text-rose-600 font-medium border-b border-r border-gray-200">
-                  {interestTodayInfo[credit.id]?.loading ? (
-                    <span className="text-gray-400">Đang tải...</span>
-                  ) : (
-                    formatCurrency(interestTodayInfo[credit.id]?.interestToday || 0)
-                  )}
+                  {formatCurrency(calculatedDetails?.[credit.id]?.interestToday ?? 0)}
                 </TableCell>
                 <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
-                  {nextPaymentInfo[credit.id]?.loading ? (
-                    <span className="text-gray-400">Đang tải...</span>
-                  ) : nextPaymentInfo[credit.id]?.isCompleted ? (
-                    <span className="text-green-600 font-medium">Hoàn thành</span>
-                  ) : nextPaymentInfo[credit.id]?.nextDate ? (
-                    <span className={
-                      // Thêm màu đỏ nếu ngày thanh toán đã qua
-                      new Date(nextPaymentInfo[credit.id].nextDate as string) < new Date() 
-                        ? "text-red-600 font-medium" 
-                        : ""
-                    }>
-                      {formatDate(nextPaymentInfo[credit.id].nextDate)}
-                    </span>
-                  ) : (
-                    <span>-</span>
-                  )}
+                  <span>-</span>
                 </TableCell>
                 <TableCell className="py-3 px-3 border-b border-r border-gray-200">
                   <div className="flex justify-center">
                     <Badge
                       variant="outline"
                       className={(() => {
-                        // Use calculated status if available
-                        const calculatedStatus = calculatedStatuses[credit.id];
-                        if (calculatedStatus) {
-                          switch (calculatedStatus.statusCode) {
-                            case 'CLOSED':
-                              return "bg-blue-100 text-blue-800 border-blue-200";
-                            case 'DELETED':
-                              return "bg-gray-100 text-gray-800 border-gray-200";
-                            case 'FINISHED':
-                              return "bg-emerald-100 text-emerald-800 border-emerald-200";
-                            case 'BAD_DEBT':
-                              return "bg-purple-100 text-purple-800 border-purple-200";
-                            case 'OVERDUE':
-                              return "bg-red-100 text-red-800 border-red-200";
-                            case 'LATE_INTEREST':
-                              return "bg-yellow-100 text-yellow-800 border-yellow-200";
-                            case 'ACTIVE':
-                            default:
-                              return "bg-green-100 text-green-800 border-green-200";
-                          }
+                        const code = (calculatedStatuses?.[credit.id]?.statusCode as string | undefined) || credit.status;
+                        switch (code) {
+                          case 'CLOSED':
+                          case 'closed':
+                            return 'bg-blue-100 text-blue-800 border-blue-200';
+                          case 'DELETED':
+                          case 'deleted':
+                            return 'bg-gray-100 text-gray-800 border-gray-200';
+                          case 'FINISHED':
+                            return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+                          case 'BAD_DEBT':
+                            return 'bg-purple-100 text-purple-800 border-purple-200';
+                          case 'OVERDUE':
+                            return 'bg-red-100 text-red-800 border-red-200';
+                          case 'LATE_INTEREST':
+                            return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+                          default:
+                            return 'bg-green-100 text-green-800 border-green-200';
                         }
-                        
-                        // Fallback to original logic
-                        if (credit.status === 'closed' || credit.status === 'deleted') {
-                          return statusMap[credit.status]?.color || "bg-gray-100 text-gray-800";
-                        }
-                        
-                        const nextPayment = nextPaymentInfo[credit.id];
-                        if (nextPayment?.isCompleted) {
-                          return "bg-emerald-100 text-emerald-800 border-emerald-200"; // Finished
-                        }
-                        
-                        if (nextPayment?.nextDate) {
-                          const nextPaymentDate = new Date(nextPayment.nextDate);
-                          const today = new Date();
-                          today.setHours(0, 0, 0, 0);
-                          nextPaymentDate.setHours(0, 0, 0, 0);
-                          
-                          // Check if payment is overdue
-                          if (today > nextPaymentDate) {
-                            return "bg-red-100 text-red-800 border-red-200"; // Overdue
-                          }
-                          
-                          // Check if payment is due today
-                          if (today.getTime() === nextPaymentDate.getTime()) {
-                            return "bg-amber-100 text-amber-800 border-amber-200"; // Due today
-                          }
-                          
-                          // Check if payment is due tomorrow
-                          const tomorrow = new Date(today);
-                          tomorrow.setDate(today.getDate() + 1);
-                          if (tomorrow.getTime() === nextPaymentDate.getTime()) {
-                            return "bg-blue-100 text-blue-800 border-blue-200"; // Due tomorrow
-                          }
-                          
-                          // Payment is in the future
-                          return "bg-green-100 text-green-800 border-green-200"; // On time
-                        }
-                        
-                        // Default to original status
-                        return statusMap[credit.status || CreditStatus.ON_TIME]?.color || "bg-gray-100 text-gray-800";
                       })()}
                     >
-                      {(() => {
-                        // Use calculated status if available
-                        const calculatedStatus = calculatedStatuses[credit.id];
-                        if (calculatedStatus) {
-                          return calculatedStatus.status;
-                        }
-                        
-                        // Fallback to original logic
-                        if (credit.status === 'closed') {
-                          return "Đã đóng";
-                        }
-                        if (credit.status === 'deleted') {
-                          return "Đã xóa";
-                        }
-                        
-                        const nextPayment = nextPaymentInfo[credit.id];
-                        if (nextPayment?.isCompleted) {
-                          return "Hoàn thành";
-                        }
-                        
-                        if (nextPayment?.nextDate) {
-                          const nextPaymentDate = new Date(nextPayment.nextDate);
-                          const today = new Date();
-                          today.setHours(0, 0, 0, 0);
-                          nextPaymentDate.setHours(0, 0, 0, 0);
-                          
-                          // Check if payment is overdue
-                          if (today > nextPaymentDate) {
-                            return "Quá hạn";
-                          }
-                          
-                          // Check if payment is due today
-                          if (today.getTime() === nextPaymentDate.getTime()) {
-                            return "Hôm nay";
-                          }
-                          
-                          // Check if payment is due tomorrow
-                          const tomorrow = new Date(today);
-                          tomorrow.setDate(today.getDate() + 1);
-                          if (tomorrow.getTime() === nextPaymentDate.getTime()) {
-                            return "Ngày mai";
-                          }
-                          
-                          // Payment is in the future
-                          return "Đang vay";
-                        }
-                        
-                        // Default to original status
-                        return statusMap[credit.status || CreditStatus.ON_TIME]?.label || "Không xác định";
-                      })()}
+                      {calculatedStatuses?.[credit.id]?.status || statusMap[credit.status || 'on_time']?.label || 'Đang vay'}
                     </Badge>
                   </div>
                 </TableCell>
-                <TableCell className="py-3 px-3 border-b border-gray-200">
-                  <div className="flex justify-center space-x-1">
+                <TableCell className="py-3 px-3 border-b border-r border-gray-200">
+                  <div className="flex justify-center">
                     {onShowPaymentHistory && (
                       credit.status === 'closed' && hasPermission('huy_dong_hop_dong_tin_chap') ? (
                         <>
@@ -700,7 +298,7 @@ export function CreditsTable({
                       )
                     )}
                     {/* Hiển thị dropdown menu nếu: hợp đồng đã đóng HOẶC (hợp đồng chưa bị xóa và chưa có kỳ thanh toán đã được thanh toán) */}
-                    {(credit.status === 'closed' || (credit.status !== 'deleted' && !hasPaidPaymentPeriods[credit.id])) && (
+                    {(credit.status === 'closed') && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" className="h-8 w-8 p-0">

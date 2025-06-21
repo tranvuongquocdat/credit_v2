@@ -2,7 +2,6 @@ import { supabase } from './supabase';
 import { CreateInstallmentParams, Installment, InstallmentFilters, InstallmentStatus, InstallmentWithCustomer } from '@/models/installment';
 import { Customer } from '@/models/customer';
 import { formatCurrency } from '@/lib/utils';
-import { calculateDebtToLatestPaidPeriod } from './Installments/calculate_remaining_debt';
 import { getCurrentUser } from './auth';
 
 // Get all installments with pagination and filters
@@ -93,7 +92,21 @@ export async function getInstallments(
     if (signal?.aborted) {
       throw new Error('Request was cancelled');
     }
-    
+    // Ngay sau khi lấy biến `data` từ supabase
+    const ids = (data ?? []).map((it: any) => it.id);
+
+    // RPC 1 lần duy nhất
+    const { data: debtRows, error: debtErr } = await (supabase.rpc as any)(
+      'get_installment_old_debt',
+      { p_installment_ids: ids }
+    );
+    if (debtErr) throw debtErr;
+
+    const debtMap = new Map<string, number>();
+    (debtRows ?? []).forEach(
+      (r: { installment_id: string; old_debt: number }) =>
+        debtMap.set(r.installment_id, Number(r.old_debt || 0))
+    );
     // Transform data to match UI requirements
     const installmentPromises = (data || []).map(async (item: any) => {
       // Ensure values are not null
@@ -102,7 +115,6 @@ export async function getInstallments(
       const loanPeriod = item.loan_period || 0;
       const paymentPeriod = item.payment_period || 30;
       const loanDate = item.loan_date || new Date().toISOString();
-      const debtAmount = await calculateDebtToLatestPaidPeriod(item.id) || 0;
       
       // Convert customer data to Customer type or undefined
       const customerData = item.customer ? {
@@ -122,7 +134,7 @@ export async function getInstallments(
         duration: loanPeriod,
         payment_period: paymentPeriod,
         amount_paid: 0, // This will need to be calculated from payment records
-        old_debt: debtAmount, // Lấy trực tiếp từ DB thay vì tính toán
+        old_debt: debtMap.get(item.id) ?? 0, // Lấy trực tiếp từ DB thay vì tính toán
         daily_amount: installmentAmount / loanPeriod,
         installment_amount: installmentAmount,
         remaining_amount: downPayment,
@@ -134,7 +146,7 @@ export async function getInstallments(
         created_at: item.created_at || undefined,
         updated_at: item.updated_at || undefined,
         notes: item.notes || '',
-        debt_amount: debtAmount,
+        debt_amount: debtMap.get(item.id) ?? 0,
         customer: customerData
       };
     });
@@ -213,6 +225,14 @@ export async function getInstallmentById(id: string) {
       blacklist_reason: data.customer.blacklist_reason || undefined,
     } as Customer : undefined;
     
+    // ngay trước khi return
+    const { data: row } = await (supabase.rpc as any)(
+      'get_installment_old_debt',
+      { p_installment_ids: [data.id] }
+    ).single();
+
+    const debtAmount = row ? Number(row.old_debt || 0) : 0;
+    
     // Transform data to match UI requirements
     const installment: InstallmentWithCustomer = {
       id: data.id || '',
@@ -223,7 +243,7 @@ export async function getInstallmentById(id: string) {
       duration: loanPeriod,
       payment_period: paymentPeriod,
       amount_paid: 0, // This will need to be calculated from payment records
-      old_debt: data.debt_amount || 0, // Lấy trực tiếp từ DB
+      old_debt: debtAmount, // Lấy trực tiếp từ DB
       daily_amount: installmentAmount / loanPeriod,
       remaining_amount: downPayment,
       status: data.status as InstallmentStatus,
@@ -235,7 +255,7 @@ export async function getInstallmentById(id: string) {
       installment_amount: installmentAmount,
       loan_period: loanPeriod,
       loan_date: loanDate,
-      debt_amount: data.id ? await calculateDebtToLatestPaidPeriod(data.id) || 0 : 0,
+      debt_amount: debtAmount,
       
       store_id: data.store_id || '',
       created_at: data.created_at || undefined,

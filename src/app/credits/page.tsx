@@ -304,7 +304,7 @@ export default function CreditsPage() {
         />
 
         {/* Bảng dữ liệu hợp đồng */}
-        {/* <CreditsTable
+        <CreditsTable
           credits={credits}
           statusMap={statusMap}
           calculatedDetails={creditDetails}
@@ -314,7 +314,7 @@ export default function CreditsPage() {
           onUpdateStatus={handleOpenStatusDialog}
           onShowPaymentHistory={handleOpenPaymentHistory}
           onRefresh={handleRefresh}
-        /> */}
+        />
         
         {/* Phân trang */}
         <CreditsPagination

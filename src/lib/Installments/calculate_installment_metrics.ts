@@ -36,7 +36,6 @@ export async function calculateInstallmentMetrics(
     
     // Calculate old debt
     const oldDebt = await calculateDebtToLatestPaidPeriod(installment.id);
-    
     // 1. Calculate interest start date
     const interestStartDate = calculateInterestStartDate(
       installment.down_payment || 0,
