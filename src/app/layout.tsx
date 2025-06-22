@@ -7,7 +7,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 // Không cần import font từ Google Fonts vì sẽ sử dụng Arial (system font)
 
 export const metadata: Metadata = {
-  title: "Credit App",
+  title: "Hosodep",
   description: "Ứng dụng quản lý tín dụng",
 };
 

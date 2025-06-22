@@ -14,21 +14,15 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
-import { CreditWithCustomer, CreditStatus } from '@/models/credit';
+import { CreditWithCustomer } from '@/models/credit';
 import { MoreVertical, DollarSignIcon, UnlockIcon, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { getInterestDisplayString } from '@/lib/interest-calculator';
-import { useState, useEffect, useCallback } from 'react';
 import { reopenContract } from '@/lib/Credits/reopen_contract';
-import { getCreditPaymentHistory } from '@/lib/Credits/payment_history';
-import { calculateDebtToLatestPaidPeriod } from '@/lib/Credits/calculate_remaining_debt';
-import { getExpectedMoney } from '@/lib/Credits/get_expected_money';
-import { calculateActualLoanAmount } from '@/lib/Credits/calculate_actual_loan_amount';
 import { useToast } from '../ui/use-toast';
 import { CreditFinancialDetail } from '@/hooks/useCreditCalculation';
-import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_date';
-import { calculateMultipleCreditStatus, CreditStatusResult } from '@/lib/Credits/calculate_credit_status';
+import { CreditStatusResult } from '@/lib/Credits/calculate_credit_status';
 import { usePermissions } from '@/hooks/usePermissions';
 
 interface StatusMapType {
@@ -207,37 +201,59 @@ export function CreditsTable({
                   {formatCurrency(calculatedDetails?.[credit.id]?.interestToday ?? 0)}
                 </TableCell>
                 <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
-                  <span>-</span>
+                  {/* Ngày phải đóng lãi phí */}
+                  {(() => {
+                    const det = calculatedDetails?.[credit.id];
+                    if (!det) return '-';
+                    if (det.isCompleted) return <span className="text-green-600 font-medium">Hoàn thành</span>;
+                    if (!det.nextPayment) return '-';
+                    const nextDate = new Date(det.nextPayment);
+                    const today = new Date();
+                    today.setHours(0,0,0,0);
+                    nextDate.setHours(0,0,0,0);
+                    const diff = (nextDate.getTime()-today.getTime())/(24*3600*1000);
+                    const cls = diff<0 ? 'text-red-600 font-medium' : diff===0 ? 'text-amber-600 font-medium' : '';
+                    return <span className={cls}>{formatDate(det.nextPayment)}</span>;
+                  })()}
                 </TableCell>
-                <TableCell className="py-3 px-3 border-b border-r border-gray-200">
-                  <div className="flex justify-center">
-                    <Badge
-                      variant="outline"
-                      className={(() => {
-                        const code = (calculatedStatuses?.[credit.id]?.statusCode as string | undefined) || credit.status;
-                        switch (code) {
-                          case 'CLOSED':
-                          case 'closed':
-                            return 'bg-blue-100 text-blue-800 border-blue-200';
-                          case 'DELETED':
-                          case 'deleted':
-                            return 'bg-gray-100 text-gray-800 border-gray-200';
-                          case 'FINISHED':
-                            return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-                          case 'BAD_DEBT':
-                            return 'bg-purple-100 text-purple-800 border-purple-200';
-                          case 'OVERDUE':
-                            return 'bg-red-100 text-red-800 border-red-200';
-                          case 'LATE_INTEREST':
-                            return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-                          default:
-                            return 'bg-green-100 text-green-800 border-green-200';
-                        }
-                      })()}
-                    >
-                      {calculatedStatuses?.[credit.id]?.status || statusMap[credit.status || 'on_time']?.label || 'Đang vay'}
-                    </Badge>
-                  </div>
+                <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
+                  {/* ----- Status Cell ----- */}
+                  {(() => {
+                    const st = calculatedStatuses?.[credit.id];
+                    if (!st) {
+                      // Fallback to raw status
+                      return <Badge className="bg-gray-100 text-gray-800">{credit.status === 'closed' ? 'Đã đóng' : 'Đang vay'}</Badge>;
+                    }
+                    let colorClass = '';
+                    switch (st.statusCode) {
+                      case 'CLOSED':
+                        colorClass = 'bg-blue-100 text-blue-800 border-blue-200';
+                        break;
+                      case 'DELETED':
+                        colorClass = 'bg-gray-100 text-gray-800 border-gray-200';
+                        break;
+                      case 'FINISHED':
+                        colorClass = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+                        break;
+                      case 'BAD_DEBT':
+                        colorClass = 'bg-purple-100 text-purple-800 border-purple-200';
+                        break;
+                      case 'OVERDUE':
+                        colorClass = 'bg-red-100 text-red-800 border-red-200';
+                        break;
+                      case 'LATE_INTEREST':
+                        colorClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
+                        break;
+                      case 'ACTIVE':
+                      default:
+                        colorClass = 'bg-green-100 text-green-800 border-green-200';
+                        break;
+                    }
+                    const labelText = st.status && st.status.trim() !== ''
+                      ? st.status
+                      : statusMap[st.statusCode.toLowerCase()]?.label || st.statusCode;
+                    return <Badge className={colorClass}>{labelText}</Badge>;
+                  })()}
                 </TableCell>
                 <TableCell className="py-3 px-3 border-b border-r border-gray-200">
                   <div className="flex justify-center">
@@ -298,7 +314,7 @@ export function CreditsTable({
                       )
                     )}
                     {/* Hiển thị dropdown menu nếu: hợp đồng đã đóng HOẶC (hợp đồng chưa bị xóa và chưa có kỳ thanh toán đã được thanh toán) */}
-                    {(credit.status === 'closed') && (
+                    {(credit.status === 'closed' || (credit.status !== 'deleted' && !(calculatedDetails?.[credit.id]?.hasPaid))) && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" className="h-8 w-8 p-0">
@@ -314,7 +330,7 @@ export function CreditsTable({
                             </DropdownMenuItem>
                           )}
                           {/* Hiển thị "Xóa hợp đồng" cho hợp đồng chưa có kỳ thanh toán đã được thanh toán */}
-                          {credit.status !== 'closed' && hasPermission('xoa_hop_dong_tin_chap') && (
+                          {credit.status !== 'closed' && !calculatedDetails?.[credit.id]?.hasPaid && hasPermission('xoa_hop_dong_tin_chap') && (
                             <DropdownMenuItem onClick={() => onDelete(credit)} className="text-red-600">
                               Xóa hợp đồng
                             </DropdownMenuItem>

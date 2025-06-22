@@ -9,7 +9,9 @@ export enum CreditStatus {
   LATE_INTEREST = 'late_interest', // Chậm lãi
   BAD_DEBT = 'bad_debt',        // Nợ xấu
   CLOSED = 'closed',           // Kết thúc (hoặc đóng hợp đồng sớm)
-  DELETED = 'deleted'           // Đã xóa
+  DELETED = 'deleted',           // Đã xóa
+  FINISHED = 'finished',           // Hoàn thành
+  ACTIVE = 'active'           // Đang vay
 }
 
 export interface Credit {

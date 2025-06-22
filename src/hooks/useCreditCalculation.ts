@@ -23,6 +23,9 @@ export interface CreditFinancialDetail {
   expectedProfit: number;
   paidInterest: number;
   interestToday: number;
+  nextPayment: string | null;
+  isCompleted: boolean;
+  hasPaid: boolean;
   loading: boolean;
 }
 
@@ -118,6 +121,23 @@ export function useCreditCalculations() {
         }
       }
 
+      /* ---------- 7. RPC lấy thông tin kỳ thanh toán tiếp theo ---------- */
+      const nextMap = new Map<string, { nextDate: string | null; isCompleted: boolean; hasPaid: boolean }>();
+      if (activeIds.length) {
+        const { data: npRows, error: npErr } = await (supabase.rpc as any)('get_next_payment_info', {
+          p_credit_ids: activeIds,
+        });
+        if (!npErr && Array.isArray(npRows)) {
+          npRows.forEach((r: any) => {
+            nextMap.set(r.credit_id, {
+              nextDate: r.next_date,
+              isCompleted: r.is_completed,
+              hasPaid: r.has_paid,
+            });
+          });
+        }
+      }
+
       const results = await Promise.all(
         activeCreditsData!.map(c =>
           calculateCreditMetrics(c, {
@@ -140,6 +160,9 @@ export function useCreditCalculations() {
             expectedProfit: result.expectedProfit,
             paidInterest: result.paidInterest,
             interestToday: result.interestToday,
+            nextPayment: nextMap.get(result.creditId)?.nextDate || null,
+            isCompleted: nextMap.get(result.creditId)?.isCompleted || false,
+            hasPaid: nextMap.get(result.creditId)?.hasPaid || false,
             loading: false
           };
           
@@ -154,6 +177,8 @@ export function useCreditCalculations() {
       closedIds.forEach(id => {
         totalCollectedInterest += interestMap.get(id) ?? 0;
       });
+      
+      /* ---------- 8. Bỏ tính trạng thái tại đây - đã chuyển sang RPC per page */
       
       // 7. Set results
       setSummary({

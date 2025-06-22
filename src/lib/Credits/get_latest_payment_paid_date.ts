@@ -30,5 +30,6 @@ export async function getLatestPaymentPaidDate(creditId: string) {
     if (paymentHistory.length > 0) {
         return paymentHistory[0].effective_date;
     }
+    console.log(paymentHistory);
     return null;
 }

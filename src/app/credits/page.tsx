@@ -26,17 +26,19 @@ import { useCredits } from '@/hooks/useCredits';
 import { CreditStatus, CreditWithCustomer } from '@/models/credit';
 import { useCreditCalculations } from '@/hooks/useCreditCalculation';
 import { useAutoUpdateCashFund } from '@/hooks/useCashFundUpdater';
+import { useCreditStatuses } from '@/hooks/useCreditStatuses';
 
 import { usePermissions } from '@/hooks/usePermissions';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
-  [CreditStatus.ON_TIME]: { label: 'Đúng hẹn', color: 'bg-green-100 text-green-800' },
+  [CreditStatus.ACTIVE]: { label: 'Đang vay', color: 'bg-green-100 text-green-800' },
   [CreditStatus.OVERDUE]: { label: 'Quá hạn', color: 'bg-red-100 text-red-800' },
   [CreditStatus.LATE_INTEREST]: { label: 'Chậm lãi', color: 'bg-yellow-100 text-yellow-800' },
   [CreditStatus.BAD_DEBT]: { label: 'Nợ xấu', color: 'bg-purple-100 text-purple-800' },
   [CreditStatus.CLOSED]: { label: 'Đã đóng', color: 'bg-blue-100 text-blue-800' },
   [CreditStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
+  [CreditStatus.FINISHED]: { label: 'Hoàn thành', color: 'bg-green-100 text-green-800' },
 };
 
 
@@ -85,6 +87,8 @@ export default function CreditsPage() {
   // Lấy dữ liệu tài chính tổng hợp
   const { summary: financialSummary, details: creditDetails, refresh: refreshFinancial } = useCreditCalculations();
   
+  // Lấy trạng thái cho các hợp đồng trong trang hiện tại
+  const { statuses: creditStatuses } = useCreditStatuses(credits.map((c) => c.id));
   // Use auto update cash fund hook
   const { triggerUpdate } = useAutoUpdateCashFund({
     onUpdate: (newCashFund) => {
@@ -308,6 +312,7 @@ export default function CreditsPage() {
           credits={credits}
           statusMap={statusMap}
           calculatedDetails={creditDetails}
+          calculatedStatuses={creditStatuses}
           onView={handleViewCreditDetail}
           onEdit={handleEditCredit}
           onDelete={handleOpenDeleteDialog}
