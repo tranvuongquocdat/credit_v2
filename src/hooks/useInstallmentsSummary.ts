@@ -53,27 +53,51 @@ export function useInstallmentsSummary() {
         return;
       }
 
-      // Tính toán các giá trị theo yêu cầu
-      let totalLoan = 0; // Tổng tiền giao khách
-      let totalOldDebt = 0; // Tổng nợ cũ
-      let expectedProfit = 0; // Lãi phí dự kiến
-      let collectedProfit = 0; // Lãi phí đã thu
-      
-      
-      // Xử lý song song tất cả installments
-      const results = await Promise.all(
-        activeInstallments.map(installment => calculateInstallmentMetrics(installment))
+      const ids = activeInstallments
+        .map(it => it.id)
+        .filter((id): id is string => id !== null);   // → string[]
+
+      /* 3.1 oldDebt (đã có) */
+      const { data: debtRows } = await supabase.rpc(
+        'get_installment_old_debt', { p_installment_ids: ids }
       );
+
+      /* 3.2 tổng paid (cho loanAmount) */
+      const { data: paidRows } = await supabase.rpc(
+        'installment_get_paid_amount', { p_installment_ids: ids }
+      );
+
+      /* 3.3 profitCollected  */
+      const { data: profitRows } = await supabase.rpc(
+        'installment_get_collected_profit', { p_installment_ids: ids }
+      );
+
+      /* xây 3 map rồi truyền xuống calculateInstallmentMetrics */
+      const debtMap   = new Map(debtRows?.map(r => [r.installment_id, Number(r.old_debt)]));
+      const paidMap   = new Map(paidRows?.map(r => [r.installment_id, Number(r.paid_amount)]));
+      const profitMap = new Map(profitRows?.map(r => [r.installment_id, Number(r.profit_collected)]));
+
+      const results = await Promise.all(
+        activeInstallments.map(inst =>
+          calculateInstallmentMetrics(inst, { debtMap, paidMap, profitMap })
+        )
+      );
+
+      /* gộp kết quả */
+      let totalLoan = 0;
+      let totalOldDebt = 0;
+      let expectedProfit = 0;
+      let collectedProfit = 0;
       
-      console.timeEnd('Calculate all installments');
-      
-      // Aggregate results
-      results.forEach(result => {
+      results.forEach((result, idx) => {
+        const id = activeInstallments[idx].id;
+        const oldDebtVal = debtMap.get(id ?? '') ?? 0;       // dùng nợ cũ lấy từ RPC
+        totalOldDebt   += oldDebtVal;
+
         if (result) {
-          totalOldDebt += 0 - result.oldDebt;
           collectedProfit += result.profitCollected;
-          totalLoan += result.loanAmount;
-          expectedProfit += result.expectedProfitAmount;
+          totalLoan       += result.loanAmount;
+          expectedProfit  += result.expectedProfitAmount;
         }
       });
       

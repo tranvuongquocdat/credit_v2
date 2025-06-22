@@ -252,7 +252,7 @@ export default function InstallmentsPage() {
         )}
         
         {/* Installments Table */}
-        <div className="rounded-md border mt-4 mb-1 border-gray-200 shadow-sm overflow-hidden">
+        {/* <div className="rounded-md border mt-4 mb-1 border-gray-200 shadow-sm overflow-hidden">
           <InstallmentsTable
             installments={installments}
             statusMap={statusMap}
@@ -262,7 +262,7 @@ export default function InstallmentsPage() {
             onDelete={handleOpenDeleteDialog}
             onShowPaymentActions={handleShowPaymentActions}
           />
-        </div>
+        </div> */}
         
         {/* Modal tạo hợp đồng mới */}
         <InstallmentCreateModal

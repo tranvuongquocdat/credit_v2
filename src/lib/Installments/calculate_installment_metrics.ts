@@ -1,4 +1,8 @@
-import { getinstallmentPaymentHistory, getinstallmentPaymentHistoryByDateRange, getAllValidPaymentHistory, getAllValidPaymentHistoryByDateRange } from './payment_history';
+import {
+  getinstallmentPaymentHistory,
+  getAllValidPaymentHistory,
+  getTotalPaidAmount,
+} from './payment_history';
 import { calculateDebtToLatestPaidPeriod } from './calculate_remaining_debt';
 
 export interface InstallmentMetrics {
@@ -17,40 +21,49 @@ export interface InstallmentData {
   status: "on_time" | "overdue" | "late_interest" | "bad_debt" | "closed" | "deleted" | "finished" | null;
 }
 
+interface MetricHelperOptions {
+  debtMap?: Map<string, number>;
+  paidMap?: Map<string, number>;
+  profitMap?: Map<string, number>;
+}
+
 /**
  * Tính toán các chỉ số tài chính cho một hợp đồng trả góp
  * @param installment - Dữ liệu hợp đồng trả góp
+ * @param options - Các tùy chọn để reuse các kết quả đã tính
  * @returns Promise<InstallmentMetrics | null> - Các chỉ số tài chính hoặc null nếu có lỗi
  */
 export async function calculateInstallmentMetrics(
-  installment: InstallmentData
+  installment: InstallmentData,
+  options?: MetricHelperOptions
 ): Promise<InstallmentMetrics | null> {
   try {
-    // Skip if installment.id is null
     if (!installment.id) return null;
     
-    // Get payment history and calculate total paid
-    const paymentHistory = await getinstallmentPaymentHistory(installment.id);
-    const totalPaidFromHistory = paymentHistory.reduce((sum, record) => sum + (record.credit_amount || 0), 0);
+    /* ---------- 1. Tổng tiền đã đóng ---------- */
+    const totalPaid =
+      options?.paidMap?.get(installment.id) ??
+      (await getTotalPaidAmount(installment.id));
     
-    // Calculate old debt
-    const oldDebt = await calculateDebtToLatestPaidPeriod(installment.id);
-    // 1. Calculate interest start date
-    const interestStartDate = calculateInterestStartDate(
-      installment.down_payment || 0,
-      installment.installment_amount || 0,
-      installment.loan_period || 0,
-      installment.loan_date || new Date().toISOString()
-    );
+    /* ---------- 2. Nợ cũ ---------- */
+    const oldDebt =
+      options?.debtMap?.get(installment.id) ??
+      (await calculateDebtToLatestPaidPeriod(installment.id));
     
-    // 2. Calculate profit collected based on the new formula
-    const profitCollected = await calculateProfitCollectedInCurrentMonth(
-      installment.id,
-      installment.down_payment || 0
-    );
+    
+    /* ---------- 3. Lãi phí đã thu ---------- */
+    const profitCollected =
+      options?.profitMap?.get(installment.id) ??
+      (await calculateProfitCollectedInCurrentMonth(
+        installment.id,
+        installment.down_payment || 0,
+      ));
     
     // Calculate loan amount (amount given to customer)
-    const loanAmount = Math.max(0, (installment.down_payment || 0) - totalPaidFromHistory);
+    const loanAmount = Math.max(
+      0,
+      (installment.down_payment || 0) - totalPaid,
+    );
     
     // Calculate expected profit
     const expectedProfitAmount = installment.status === "on_time" 
