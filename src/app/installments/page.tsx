@@ -29,6 +29,9 @@ import { useStore } from '@/contexts/StoreContext';
 // Import types and API functions
 import { InstallmentStatus, InstallmentWithCustomer } from '@/models/installment';
 import { usePermissions } from '@/hooks/usePermissions';
+import { supabase } from '@/lib/supabase';
+import { calculateRemainingToPay } from '@/lib/installmentCalculations';
+import { calculateMultipleInstallmentStatus } from '@/lib/Installments/calculate_installment_status';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -116,11 +119,13 @@ export default function InstallmentsPage() {
   const [isInstallmentEditModalOpen, setIsInstallmentEditModalOpen] = useState(false);
   const [editInstallmentId, setEditInstallmentId] = useState<string>('');
   
-  // State cho modal thanh toán (đã bỏ modal chi tiết)
-  
   // State cho modal thanh toán (InstallmentPaymentHistoryModal)
   const [isPaymentActionsModalOpen, setIsPaymentActionsModalOpen] = useState(false);
   const [selectedInstallmentForPayment, setSelectedInstallmentForPayment] = useState<InstallmentWithCustomer | null>(null);
+  
+  // NEW: state for enriched data & calc loading
+  const [processedInstallments, setProcessedInstallments] = useState<InstallmentWithCustomer[]>([]);
+  const [calcLoading, setCalcLoading] = useState(false);
   
   // Calculate total pages
   const totalPages = Math.ceil(totalItems / itemsPerPage);
@@ -205,6 +210,111 @@ export default function InstallmentsPage() {
     }
   };
 
+  // ------------------------------------------------------------
+  // Calculate paid amount + remaining + status once installments list changes
+  // ------------------------------------------------------------
+  useEffect(() => {
+    const compute = async () => {
+      if (installments.length === 0) {
+        setProcessedInstallments([]);
+        return;
+      }
+      setCalcLoading(true);
+      try {
+        const ids = installments.map((i) => i.id);
+        // RPC: tổng tiền đã đóng
+        const { data: paidRows, error: paidError } = await supabase.rpc('installment_get_paid_amount', {
+          p_installment_ids: ids,
+        });
+        if (paidError) {
+          console.error('installment_get_paid_amount error:', paidError);
+        }
+        const paidMap = new Map<string, number>(
+          (paidRows ?? []).map((r: any) => [r.installment_id, Number(r.total_paid ?? r.paid_amount ?? 0)])
+        );
+
+        // RPC: tính trạng thái
+        const calculatedStatuses = await calculateMultipleInstallmentStatus(ids);
+
+        const enriched = installments.map((it) => {
+          const totalPaid = paidMap.get(it.id) ?? 0;
+          const remaining = calculateRemainingToPay(it, totalPaid);
+
+          // Tính nhãn ngày phải đóng tiếp theo
+          let nextPaymentDateLabel: string;
+          if (!it.payment_due_date) {
+            nextPaymentDateLabel = 'Hoàn thành';
+          } else {
+            const due = new Date(it.payment_due_date);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const diff = Math.floor((due.getTime() - today.getTime()) / 86400000);
+            if (diff === 0) nextPaymentDateLabel = 'Hôm nay';
+            else if (diff === 1) nextPaymentDateLabel = 'Ngày mai';
+            else {
+              const day = due.getDate().toString().padStart(2, '0');
+              const month = (due.getMonth() + 1).toString().padStart(2, '0');
+              nextPaymentDateLabel = `${day}/${month}`;
+            }
+          }
+
+          // Map status info
+          const calcStatus = calculatedStatuses[it.id];
+          let statusInfo: { label: string; color: string };
+          if (calcStatus) {
+            let color: string;
+            switch (calcStatus.statusCode) {
+              case 'closed':
+                color = 'bg-blue-100 text-blue-800 border-blue-200';
+                break;
+              case 'deleted':
+                color = 'bg-gray-100 text-gray-800 border-gray-200';
+                break;
+              case 'finished':
+                color = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+                break;
+              case 'bad_debt':
+                color = 'bg-purple-100 text-purple-800 border-purple-200';
+                break;
+              case 'overdue':
+                color = 'bg-red-100 text-red-800 border-red-200';
+                break;
+              case 'late_interest':
+                color = 'bg-yellow-100 text-yellow-800 border-yellow-200';
+                break;
+              case 'active':
+              default:
+                color = 'bg-green-100 text-green-800 border-green-200';
+                break;
+            }
+            statusInfo = { label: calcStatus.status, color };
+          } else {
+            statusInfo = statusMap[it.status] || {
+              label: 'Không xác định',
+              color: 'bg-gray-100 text-gray-800',
+            };
+          }
+
+          return {
+            ...it,
+            totalPaid,
+            remainingToPay: remaining,
+            nextPaymentDate: nextPaymentDateLabel,
+            statusInfo,
+          } as InstallmentWithCustomer;
+        });
+
+        setProcessedInstallments(enriched);
+      } catch (err) {
+        console.error('Error computing installment aggregates:', err);
+      } finally {
+        setCalcLoading(false);
+      }
+    };
+
+    compute();
+  }, [installments]);
+
   return (
     <Layout>
       <div className="max-w-full">
@@ -252,17 +362,17 @@ export default function InstallmentsPage() {
         )}
         
         {/* Installments Table */}
-        {/* <div className="rounded-md border mt-4 mb-1 border-gray-200 shadow-sm overflow-hidden">
+        <div className="rounded-md border mt-4 mb-1 border-gray-200 shadow-sm overflow-hidden">
           <InstallmentsTable
-            installments={installments}
+            installments={processedInstallments}
             statusMap={statusMap}
-            isLoading={loading}
+            isLoading={loading || calcLoading}
             onEdit={handleEditInstallment}
             onUpdateStatus={handleOpenStatusDialog}
             onDelete={handleOpenDeleteDialog}
             onShowPaymentActions={handleShowPaymentActions}
           />
-        </div> */}
+        </div> 
         
         {/* Modal tạo hợp đồng mới */}
         <InstallmentCreateModal

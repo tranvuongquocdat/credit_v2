@@ -38,8 +38,6 @@ import {
   calculateRemainingToPay
 } from "@/lib/installmentCalculations";
 import { supabase } from "@/lib/supabase";
-import { getinstallmentPaymentHistory } from "@/lib/Installments/payment_history";
-import { calculateMultipleInstallmentStatus, InstallmentStatusResult } from "@/lib/Installments/calculate_installment_status";
 import { recordContractReopening } from "@/lib/installmentAmountHistory";
 import { usePermissions } from '@/hooks/usePermissions';
 // Define status info interface
@@ -60,14 +58,14 @@ interface InstallmentWithStatusInfo extends InstallmentWithCustomer {
 }
 
 interface InstallmentsTableProps {
-  installments: InstallmentWithCustomer[];
+  installments: InstallmentWithStatusInfo[];
   statusMap: Record<string, { label: string; color: string }>;
   isLoading: boolean;
   onEdit: (id: string) => void;
-  onUpdateStatus: (installment: InstallmentWithCustomer) => void;
-  onDelete: (installment: InstallmentWithCustomer) => void;
-  onShowPaymentHistory?: (installment: InstallmentWithCustomer) => void;
-  onShowPaymentActions?: (installment: InstallmentWithCustomer) => void;
+  onUpdateStatus: (installment: InstallmentWithStatusInfo) => void;
+  onDelete: (installment: InstallmentWithStatusInfo) => void;
+  onShowPaymentHistory?: (installment: InstallmentWithStatusInfo) => void;
+  onShowPaymentActions?: (installment: InstallmentWithStatusInfo) => void;
 }
 
 export function InstallmentsTable({
@@ -80,15 +78,8 @@ export function InstallmentsTable({
   onShowPaymentHistory,
   onShowPaymentActions,
 }: InstallmentsTableProps) {
-  // State để lưu trữ dữ liệu hợp đồng đã kèm thông tin thanh toán
-  const [installmentsWithStatus, setInstallmentsWithStatus] = useState<InstallmentWithStatusInfo[]>([]);
-  const [loadingPayments, setLoadingPayments] = useState(false);
-  
   // State để lưu trữ thông tin có kỳ thanh toán đã được thanh toán hay không cho mỗi installment
   const [hasPaidPaymentPeriods, setHasPaidPaymentPeriods] = useState<Record<string, boolean>>({});
-  
-  // State cho calculated status
-  const [calculatedStatuses, setCalculatedStatuses] = useState<Record<string, InstallmentStatusResult>>({});
   
   // State for unlock confirmation dialog
   const [unlockConfirmOpen, setUnlockConfirmOpen] = useState(false);
@@ -131,214 +122,29 @@ export function InstallmentsTable({
     }
   }, []);
 
-  // Extract loadPaymentData to a separate function so it can be called from other places
-  const loadPaymentData = useCallback(async () => {
-    if (!installments.length) return;
-    
-    setLoadingPayments(true);
-    
-    try {
-      // Calculate statuses for all installments in parallel
-      const installmentIds = installments.map(installment => installment.id);
-      const statusResults = await calculateMultipleInstallmentStatus(installmentIds);
-      setCalculatedStatuses(statusResults);
-      
-      // Tạo bản sao dữ liệu ban đầu
-      const enhancedInstallments: InstallmentWithStatusInfo[] = [...installments];
-
-      // Nạp dữ liệu thanh toán cho từng hợp đồng
-      for (let i = 0; i < enhancedInstallments.length; i++) {
-        const installment = enhancedInstallments[i];
-        
-        // Fetch fresh installment data from database to get latest payment_due_date
-        const { data: freshInstallmentData } = await supabase
-          .from('installments')
-          .select('payment_due_date')
-          .eq('id', installment.id)
-          .single();
-        
-        // Update the installment with fresh payment_due_date if available
-        if (freshInstallmentData) {
-          installment.payment_due_date = freshInstallmentData.payment_due_date;
-        }
-        
-        // Lấy dữ liệu kỳ thanh toán từ API
-        const paymentHistory = await getinstallmentPaymentHistory(installment.id);
-        
-        if (!paymentHistory) {
-          console.error(`Error loading payment data for installment ${installment.id}:`, paymentHistory);
-          continue;
-        }
-        
-        // Tính tổng tiền đã đóng (tổng của credit_amount)
-        installment.totalPaid = paymentHistory.reduce(
-          (sum, period) => sum + (period.credit_amount || 0), 
-          0
-        );
-        
-        // Tính còn phải đóng sử dụng utility function
-        installment.remainingToPay = calculateRemainingToPay(installment, installment.totalPaid || 0);
-        if (installment.oldDebt && installment.oldDebt < 0) {
-          // If there's negative oldDebt (customer owes more), add the absolute value
-          installment.remainingToPay += Math.abs(installment.oldDebt);
-        }
-        
-        // Xử lý ngày đóng tiền tiếp theo dựa trên payment_due_date
-        if (installment.payment_due_date) {
-          // Có payment_due_date => chưa hoàn thành
-          const dueDateObj = new Date(installment.payment_due_date);
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          
-          // So sánh ngày chuẩn xác
-          const isSameDay = (date1: Date, date2: Date) => {
-            return date1.getDate() === date2.getDate() &&
-                   date1.getMonth() === date2.getMonth() &&
-                   date1.getFullYear() === date2.getFullYear();
-          };
-          
-          // Format ngày
-          const day = dueDateObj.getDate().toString().padStart(2, '0');
-          const month = (dueDateObj.getMonth() + 1).toString().padStart(2, '0');
-          const year = dueDateObj.getFullYear();
-          installment.nextPaymentDate = `${day}/${month}/${year}`;
-          
-          // Kiểm tra hôm nay/ngày mai
-          if (isSameDay(today, dueDateObj)) {
-            installment.isDueToday = true;
-            installment.nextPaymentDate = "Hôm nay";
-          } else {
-            const tomorrow = new Date(today);
-            tomorrow.setDate(today.getDate() + 1);
-            
-            if (isSameDay(tomorrow, dueDateObj)) {
-              installment.nextPaymentDate = "Ngày mai";
-            }
-          }
-          
-          // Kiểm tra quá hạn
-          if (today > dueDateObj) {
-            installment.overdueDays = Math.floor((today.getTime() - dueDateObj.getTime()) / (1000 * 60 * 60 * 24));
-          }
-          
-          // Cập nhật trạng thái dựa trên payment_due_date
-          if (installment.status !== InstallmentStatus.CLOSED && 
-              installment.status !== InstallmentStatus.DELETED && 
-              installment.status !== InstallmentStatus.FINISHED) {
-            if (today > dueDateObj) {
-              // Nếu ngày hiện tại > ngày đóng tiền => Quá hạn
-              installment.status = InstallmentStatus.LATE_INTEREST;
-            } else if (isSameDay(today, dueDateObj)) {
-              // Nếu là ngày hôm nay => Đến hạn hôm nay
-              installment.status = InstallmentStatus.ON_TIME;
-              installment.isDueToday = true;
-            } else {
-              // Các trường hợp khác => Đúng hạn
-              installment.status = InstallmentStatus.ON_TIME;
-              
-              // Kiểm tra ngày mai
-              const tomorrow = new Date(today);
-              tomorrow.setDate(today.getDate() + 1);
-              
-              if (isSameDay(tomorrow, dueDateObj)) {
-                installment.status = InstallmentStatus.DUE_TOMORROW;
-              }
-            }
-          }
-        } else {
-          // Không có payment_due_date => đã hoàn thành
-          installment.nextPaymentDate = "Hoàn thành";
-          
-          // Cập nhật trạng thái nếu chưa phải CLOSED hoặc DELETED
-          if (installment.status !== InstallmentStatus.CLOSED && 
-              installment.status !== InstallmentStatus.DELETED) {
-            installment.status = InstallmentStatus.FINISHED;
-          }
-        }
-      }
-      
-      // Cập nhật statusInfo sau khi cập nhật status
-      for (const installment of enhancedInstallments) {
-        // Use calculated status if available, otherwise fallback to statusMap
-        const calculatedStatus = calculatedStatuses[installment.id];
-        let statusInfo: StatusInfo;
-        
-        if (calculatedStatus) {
-          // Map calculated status to color and use calculated status text
-          let color: string;
-          switch (calculatedStatus.statusCode) {
-            case 'CLOSED':
-              color = "bg-blue-100 text-blue-800 border-blue-200";
-              break;
-            case 'DELETED':
-              color = "bg-gray-100 text-gray-800 border-gray-200";
-              break;
-            case 'FINISHED':
-              color = "bg-emerald-100 text-emerald-800 border-emerald-200";
-              break;
-            case 'BAD_DEBT':
-              color = "bg-purple-100 text-purple-800 border-purple-200";
-              break;
-            case 'OVERDUE':
-              color = "bg-red-100 text-red-800 border-red-200";
-              break;
-            case 'LATE_INTEREST':
-              color = "bg-yellow-100 text-yellow-800 border-yellow-200";
-              break;
-            case 'ACTIVE':
-            default:
-              color = "bg-green-100 text-green-800 border-green-200";
-              break;
-          }
-          statusInfo = {
-            label: calculatedStatus.status,
-            color: color
-          };
-        } else {
-          // Fallback to original logic
-          statusInfo = statusMap[installment.status] || {
-            label: "Không xác định",
-            color: "bg-gray-100 text-gray-800",
-          };
-        }
-        
-        installment.statusInfo = statusInfo;
-      }
-      
-      setInstallmentsWithStatus(enhancedInstallments);
-    } catch (err) {
-      console.error("Error loading payment data:", err);
-    } finally {
-      setLoadingPayments(false);
-    }
-  }, [installments, currentStore?.id, statusMap]);
-
-  // Nạp dữ liệu thanh toán khi installments thay đổi
+  // Check if installments have paid periods when list changes
   useEffect(() => {
-    loadPaymentData();
-    
-    // Load payment periods info
     const loadPaymentPeriodsInfo = async () => {
       const newHasPaidPaymentPeriodsInfo: Record<string, boolean> = {};
-      
+
       const results = await Promise.all(
         installments.map(async (installment) => {
           const hasPaidPayments = await checkHasPaidPaymentPeriods(installment.id);
           return { installmentId: installment.id, hasPaidPayments };
         })
       );
-      
+
       results.forEach(({ installmentId, hasPaidPayments }) => {
         newHasPaidPaymentPeriodsInfo[installmentId] = hasPaidPayments;
       });
-      
+
       setHasPaidPaymentPeriods(newHasPaidPaymentPeriodsInfo);
     };
-    
+
     if (installments.length > 0) {
       loadPaymentPeriodsInfo();
     }
-  }, [loadPaymentData, installments, checkHasPaidPaymentPeriods]);
+  }, [installments, checkHasPaidPaymentPeriods]);
 
   // Show confirmation dialog before unlocking
   const confirmUnlockInstallment = (installment: InstallmentWithStatusInfo) => {
@@ -371,8 +177,7 @@ export function InstallmentsTable({
         title: "Thành công",
         description: "Đã mở lại hợp đồng",
       });
-      // Reload data to get updated payment periods and status with fresh payment_due_date
-      await loadPaymentData();
+      // TODO: trigger parent refresh via a callback if needed
     } catch (err) {
       console.error("Error unlocking installment:", err);
     }
@@ -398,8 +203,7 @@ export function InstallmentsTable({
         description: "Đã cập nhật ngày đóng tiền",
       });
       
-      // Reload data to get updated payment periods and status with fresh payment_due_date
-      await loadPaymentData();
+      // TODO: trigger parent refresh via a callback if needed
     } catch (error) {
       console.error('Error updating payment due date:', error);
       toast({
@@ -419,7 +223,7 @@ export function InstallmentsTable({
     }
   };
 
-  if (isLoading || loadingPayments) {
+  if (isLoading) {
     return (
       <div className="h-96 flex items-center justify-center">
         <Spinner size="lg" />
@@ -458,8 +262,8 @@ export function InstallmentsTable({
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {installmentsWithStatus.map((installment, index) => {
-            const statusInfo = installment.statusInfo || {
+          {installments.map((installment, index) => {
+            const statusInfo = installment.statusInfo ?? {
               label: "Không xác định",
               color: "bg-gray-100 text-gray-800",
             };
@@ -531,7 +335,7 @@ export function InstallmentsTable({
                   })()}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  {formatCurrency(installment.totalPaid || 0)}
+                  {formatCurrency((installment.totalPaid ?? 0))}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
                   <span className={installment.debt_amount && installment.debt_amount > 0 ? 'text-red-600' : 'text-green-600'}>
@@ -542,7 +346,7 @@ export function InstallmentsTable({
                   {formatCurrency(calculateDailyAmount(installment))}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  {formatCurrency(installment.remainingToPay || 0)}
+                  {formatCurrency(installment.remainingToPay ?? 0)}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
                   <Badge

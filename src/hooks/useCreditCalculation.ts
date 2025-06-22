@@ -137,8 +137,8 @@ export function useCreditCalculations() {
           });
         }
       }
-
-      const results = await Promise.all(
+        
+        const results = await Promise.all(
         activeCreditsData!.map(c =>
           calculateCreditMetrics(c, {
             principalMap,
@@ -149,29 +149,29 @@ export function useCreditCalculations() {
           })
         )
       );
-      
-      // Aggregate results
-      results.forEach(result => {
-        if (result) {
-          newDetails[result.creditId] = {
-            creditId: result.creditId,
-            actualLoanAmount: result.actualLoanAmount,
-            oldDebt: result.oldDebt,
-            expectedProfit: result.expectedProfit,
-            paidInterest: result.paidInterest,
-            interestToday: result.interestToday,
+        
+        // Aggregate results
+        results.forEach(result => {
+          if (result) {
+            newDetails[result.creditId] = {
+              creditId: result.creditId,
+              actualLoanAmount: result.actualLoanAmount,
+              oldDebt: result.oldDebt,
+              expectedProfit: result.expectedProfit,
+              paidInterest: result.paidInterest,
+              interestToday: result.interestToday,
             nextPayment: nextMap.get(result.creditId)?.nextDate || null,
             isCompleted: nextMap.get(result.creditId)?.isCompleted || false,
             hasPaid: nextMap.get(result.creditId)?.hasPaid || false,
-            loading: false
-          };
-          
-          totalLoan += result.summaryLoan;
-          totalOldDebt += result.summaryDebt;
-          totalProfit += result.summaryProfit;
-          totalCollectedInterest += result.paidInterest;
-        }
-      });
+              loading: false
+            };
+            
+            totalLoan += result.summaryLoan;
+            totalOldDebt += result.summaryDebt;
+            totalProfit += result.summaryProfit;
+            totalCollectedInterest += result.paidInterest;
+          }
+        });
       
       // Cộng thêm lãi phí của các credit đã đóng
       closedIds.forEach(id => {

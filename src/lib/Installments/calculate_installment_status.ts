@@ -4,7 +4,7 @@ import { getLatestPaymentPaidDate } from './get_latest_payment_paid_date';
 
 export interface InstallmentStatusResult {
   status: string;
-  statusCode: 'CLOSED' | 'OVERDUE' | 'LATE_INTEREST' | 'BAD_DEBT' | 'DELETED' | 'FINISHED' | 'ACTIVE';
+  statusCode: string;
   description?: string;
 }
 
@@ -153,32 +153,21 @@ export async function calculateInstallmentStatus(installmentId: string): Promise
  * @param installmentIds - Mảng các ID của installments cần tính status
  * @returns Promise<Record<string, InstallmentStatusResult>> - Object với key là installmentId và value là status result
  */
-export async function calculateMultipleInstallmentStatus(installmentIds: string[]): Promise<Record<string, InstallmentStatusResult>> {
-  const results: Record<string, InstallmentStatusResult> = {};
-  
-  // Xử lý song song để tăng hiệu suất
-  const promises = installmentIds.map(async (installmentId) => {
-    try {
-      const status = await calculateInstallmentStatus(installmentId);
-      return { installmentId, status };
-    } catch (error) {
-      console.error(`Error calculating status for installment ${installmentId}:`, error);
-      return {
-        installmentId,
-        status: {
-          status: "Lỗi",
-          statusCode: 'ACTIVE' as const,
-          description: "Không thể tính toán trạng thái"
-        }
-      };
-    }
-  });
+export async function calculateMultipleInstallmentStatus(
+  installmentIds: string[],
+): Promise<Record<string, InstallmentStatusResult>> {
+  const { data, error } = await supabase
+    .rpc('get_installment_statuses', { p_installment_ids: installmentIds });
 
-  const resolvedResults = await Promise.all(promises);
-  
-  resolvedResults.forEach(({ installmentId, status }) => {
-    results[installmentId] = status;
-  });
+  if (error) throw error;
 
-  return results;
+  const map: Record<string, InstallmentStatusResult> = {};
+  data.forEach((row: any) => {
+    map[row.installment_id] = {
+      status: row.status,
+      statusCode: row.status_code,
+      description: row.description,
+    };
+  });
+  return map;
 } 
