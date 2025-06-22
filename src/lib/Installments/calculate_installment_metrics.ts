@@ -6,7 +6,6 @@ export interface InstallmentMetrics {
   profitCollected: number;
   loanAmount: number;
   expectedProfitAmount: number;
-  interestStartDate: string;
 }
 
 export interface InstallmentData {
@@ -63,8 +62,7 @@ export async function calculateInstallmentMetrics(
       oldDebt,
       profitCollected,
       loanAmount,
-      expectedProfitAmount,
-      interestStartDate
+      expectedProfitAmount
     };
   } catch (error) {
     console.error(`Error calculating metrics for installment ${installment.id}:`, error);
@@ -74,7 +72,6 @@ export async function calculateInstallmentMetrics(
       profitCollected: 0,
       loanAmount: 0,
       expectedProfitAmount: 0,
-      interestStartDate: new Date().toISOString()
     };
   }
 }

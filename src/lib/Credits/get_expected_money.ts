@@ -11,7 +11,7 @@ export async function getExpectedMoney(creditId: string, countUntilToday: boolea
     // sắp xếp theo effective_date tăng dần
     const { data: principalPaymentHistory, error } = await supabase
         .from('credit_history')
-        .select('*')
+        .select('effective_date, transaction_type, debit_amount, credit_amount')
         .eq('credit_id', creditId)
         .in('transaction_type', ['principal_repayment', 'additional_loan'])
         .eq('is_deleted', false)
@@ -23,7 +23,7 @@ export async function getExpectedMoney(creditId: string, countUntilToday: boolea
     // lấy ra credit từ database
     const { data: credit, error: creditError } = await supabase
         .from('credits')
-        .select('*')
+        .select('loan_date, loan_period, loan_amount, interest_ui_type, interest_notation, interest_type, interest_value')
         .eq('id', creditId)
         .single();
 
