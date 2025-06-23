@@ -321,10 +321,6 @@ export function TopNavbar() {
               <User className="h-4 w-4 mr-3 text-gray-500" />
               <span className="font-medium">Hồ sơ cá nhân</span>
             </Link>
-            <Link href="/settings" className="block px-4 py-3 text-sm hover:bg-gray-50 flex items-center rounded-lg mx-2 transition-colors duration-150">
-              <Settings className="h-4 w-4 mr-3 text-gray-500" />
-              <span className="font-medium">Cài đặt tài khoản</span>
-            </Link>
             <div className="border-t border-gray-100 my-2"></div>
             <button 
               onClick={async () => {
