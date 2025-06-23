@@ -54,8 +54,6 @@ export async function getCredits(
   signal?: AbortSignal
 ) {
   try {
-    // Bắt đầu từ record thứ mấy
-    const from = (page - 1) * limit;
     
     // Tạo query cơ bản với join bảng customers để lấy thông tin khách hàng
     let query = supabase
@@ -64,7 +62,6 @@ export async function getCredits(
         *,
         customer:customers(name, phone, id_number, blacklist_reason)
       `, { count: 'exact' })
-      .order('created_at', { ascending: false });
     
     // Set AbortController signal
     if (signal) {
@@ -119,11 +116,14 @@ export async function getCredits(
         query = query.eq('loan_period', filters.duration);
       }
     }
+
+    // Calculate pagination
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
     
     // Thực hiện query với phân trang
     const { data, error, count } = await query
-      .order('created_at', { ascending: false })
-      .range(from, from + limit - 1);
+      .range(from, to);
     
     if (error) throw error;
     
