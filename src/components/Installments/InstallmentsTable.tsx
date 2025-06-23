@@ -339,7 +339,7 @@ export function InstallmentsTable({
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
                   <span className={installment.debt_amount && installment.debt_amount > 0 ? 'text-red-600' : 'text-green-600'}>
-                    {formatCurrency((0 - (installment.debt_amount || 0)))}
+                    {formatCurrency(installment.debt_amount || 0)}
                   </span>
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">

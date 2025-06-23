@@ -14,7 +14,7 @@ export function useInstallments() {
   const [error, setError] = useState<string | null>(null);
   const [totalItems, setTotalItems] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(30);
   
   // Get current store from context
   const { currentStore } = useStore();

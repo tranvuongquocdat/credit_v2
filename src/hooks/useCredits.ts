@@ -10,7 +10,7 @@ export function useCredits(initialFilters?: Partial<SearchFilters>) {
   const [error, setError] = useState<any>(null);
   const [totalItems, setTotalItems] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(30);
   const [filters, setFilters] = useState<SearchFilters>({
     contract_code: initialFilters?.contract_code || '',
     customer_name: initialFilters?.customer_name || '',

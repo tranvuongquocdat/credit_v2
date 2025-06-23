@@ -8,7 +8,7 @@ import { useStore } from '@/contexts/StoreContext';
 
 // Default values for pagination
 const DEFAULT_PAGE = 1;
-const DEFAULT_ITEMS_PER_PAGE = 10;
+const DEFAULT_ITEMS_PER_PAGE = 30;
 
 interface SearchFilters {
   contractCode?: string;
