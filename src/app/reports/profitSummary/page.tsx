@@ -118,7 +118,7 @@ export default function ProfitSummaryPage() {
       selectString = `
         id, 
         contract_code, 
-        installment_amount,
+        down_payment,
         loan_date, 
         status,
         customers(name)
@@ -470,7 +470,7 @@ export default function ProfitSummaryPage() {
          // Calculate loan amounts
          const totalLoanAmount = newContracts.reduce((sum, contract) => {
            const amount = categoryKey === 'installment' 
-             ? (contract.installment_amount || 0)  // Use installment_amount for installments
+             ? (contract.down_payment || 0)  // Use down_payment for installments
              : (contract.loan_amount || 0);
            return sum + amount;
          }, 0);
