@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ChevronDown } from 'lucide-react';
 import { InstallmentWithCustomer, InstallmentStatus } from '@/models/installment';
 import { InstallmentPaymentPeriod } from '@/models/installmentPayment';
 import { useInstallmentPaymentPeriods } from '@/hooks/useInstallmentPaymentPeriods';
@@ -12,6 +11,8 @@ import { getLatestPaymentPaidDate } from '@/lib/Installments/get_latest_payment_
 import { usePermissions } from '@/hooks/usePermissions';
 import { getCurrentUser } from '@/lib/auth';
 import { updateInstallmentPaymentDueDate } from '@/lib/installment';
+import { DatePicker } from '@/components/ui/date-picker';
+import { format } from 'date-fns';
 
 interface PaymentTabProps {
   installment: InstallmentWithCustomer;
@@ -46,6 +47,10 @@ export function PaymentTabFast({
   const [loadingPeriods, setLoadingPeriods] = useState<Record<string, boolean>>({});
   const [isProcessingCheckbox, setIsProcessingCheckbox] = useState(false);
   const [isBackgroundSyncing, setIsBackgroundSyncing] = useState(false);
+
+  const [editingDatePeriodId, setEditingDatePeriodId] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string>('');
+  const [periodTransactionDates, setPeriodTransactionDates] = useState<Record<string, string>>({});
 
   // Expose optimistic state up
   useEffect(() => {
@@ -86,6 +91,19 @@ export function PaymentTabFast({
   };
 
   const cancelEditing = () => setEditingPeriodId(null);
+
+  const startDateEditing = (period: InstallmentPaymentPeriod) => {
+    const hasPayments = getEffectiveCheckedState(period);
+    if (hasPayments || isProcessingCheckbox) return;
+
+    const earliestUnpaidIdx = generatedPeriods.findIndex((p) => !getEffectiveCheckedState(p));
+    const currentIdx = generatedPeriods.findIndex((p) => p.id === period.id);
+    if (currentIdx !== earliestUnpaidIdx) return;
+
+    setEditingDatePeriodId(period.id);
+    const existing = periodTransactionDates[period.id] || period.paymentStartDate || new Date().toISOString().split('T')[0];
+    setSelectedDate(existing);
+  };
 
   const handleCheckboxChange = async (
     period: InstallmentPaymentPeriod,
@@ -173,6 +191,10 @@ export function PaymentTabFast({
               description: `Thanh toán chu kỳ ${idx + 1}/${cycles.length}`,
               is_deleted: false,
               created_by: userId,
+              transaction_date: (() => {
+                const t = periodTransactionDates[periodId] || period.paymentStartDate || new Date().toISOString().split('T')[0];
+                return new Date(t).toISOString();
+              })(),
             });
           }
         });
@@ -288,12 +310,12 @@ export function PaymentTabFast({
           <table className="w-full border-collapse">
             <thead className="bg-gray-50 sticky top-0">
               <tr>
-                <th className="px-2 py-2 text-left text-sm font-medium text-gray-500 border">STT</th>
-                <th className="px-2 py-2 text-left text-sm font-medium text-gray-500 border">Ngày</th>
-                <th className="px-2 py-2 text-center text-sm font-medium text-gray-500 border">Số ngày</th>
-                <th className="px-2 py-2 text-right text-sm font-medium text-gray-500 border">Tiền lãi phí</th>
-                <th className="px-2 py-2 text-right text-sm font-medium text-gray-500 border">Tổng</th>
-                <th className="px-2 py-2 text-right text-sm font-medium text-gray-500 border">Khách trả</th>
+                <th className="px-2 py-2 text-center text-sm font-medium text-gray-500 border">STT</th>
+                <th className="px-2 py-2 text-center text-sm font-medium text-gray-500 border">Ngày</th>
+                <th className="px-2 py-2 text-center text-sm font-medium text-gray-500 border">Ngày giao dịch</th>
+                <th className="px-2 py-2 text-center text-sm font-medium text-gray-500 border">Tiền lãi phí</th>
+                <th className="px-2 py-2 text-center text-sm font-medium text-gray-500 border">Tổng</th>
+                <th className="px-2 py-2 text-center text-sm font-medium text-gray-500 border">Khách trả</th>
                 <th className="px-2 py-2 text-center text-sm font-medium text-gray-500 border w-10" />
               </tr>
             </thead>
@@ -319,8 +341,29 @@ export function PaymentTabFast({
                       {formatDate(period.dueDate)} → {formatDate(period.endDate)}
                     </td>
                     <td className="px-2 py-2 text-center border">
-                      {period.dueDate && period.endDate ?
-                        Math.round((new Date(period.endDate).getTime() - new Date(period.dueDate).getTime()) / 86400000) + 1 : 0}
+                      {editingDatePeriodId === period.id ? (
+                        <DatePicker
+                          value={selectedDate}
+                          onChange={(date) => {
+                            setSelectedDate(date);
+                            setPeriodTransactionDates((prev) => ({ ...prev, [period.id]: date }));
+                            setEditingDatePeriodId(null);
+                          }}
+                          className="w-32 text-center mx-auto"
+                          maxDate={format(new Date(), 'yyyy-MM-dd')}
+                          disabled={isDisabled}
+                        />
+                      ) : (
+                        <span
+                          className={`${!hasPayments && !isDisabled && !isProcessingCheckbox && isEarliestUnpaid ? 'text-blue-500 cursor-pointer' : 'text-gray-600'}`}
+                          onClick={!hasPayments && !isDisabled && !isProcessingCheckbox && isEarliestUnpaid ? () => startDateEditing(period) : undefined}
+                        >
+                          {(() => {
+                            const dateStr = periodTransactionDates[period.id] || period.paymentStartDate || new Date().toISOString().split('T')[0];
+                            return formatDate(dateStr);
+                          })()}
+                        </span>
+                      )}
                     </td>
                     <td className="px-2 py-2 text-right border">{formatCurrency(expected)}</td>
                     <td className="px-2 py-2 text-right border">{formatCurrency(expected)}</td>
