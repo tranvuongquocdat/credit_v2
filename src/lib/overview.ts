@@ -49,37 +49,128 @@ export async function getPawnFinancialsForStore(storeId: string): Promise<Financ
 }
 
 export async function getCreditFinancialsForStore(storeId: string): Promise<FinancialSummary> {
-    const { data: activeCreditsData } = await supabase
+  // 1. Lấy danh sách credits ON_TIME
+  const { data: activeCreditsData } = await supabase
     .from('credits')
-    .select('id, loan_amount, loan_date')
+    .select('id, loan_amount, loan_date, loan_period')
     .eq('store_id', storeId)
     .eq('status', CreditStatus.ON_TIME);
+
+  // 2. Lấy danh sách credits đã đóng
+  const { data: closedCreditsData } = await supabase
+    .from('credits')
+    .select('id')
+    .eq('store_id', storeId)
+    .eq('status', CreditStatus.CLOSED);
 
   let totalLoan = 0;
   let totalOldDebt = 0;
   let totalProfit = 0;
-  let totalPaidInterest = 0;
+  let totalCollectedInterest = 0;
 
-  if (activeCreditsData?.length) {
+      
+  /* ---------- 4. RPC duy nhất lấy paidInterest cho active + closed ---------- */
+  const interestMap = new Map<string, number>();
+  const activeIds  = activeCreditsData?.map(c => c.id) || [];
+  const closedIds  = closedCreditsData?.map(c => c.id) || [];
+  const allIds     = [...activeIds, ...closedIds];
+  
+  if (allIds.length) {
+    const start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const end   = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+    const { data: interestRows, error } = await supabase.rpc('get_paid_interest', {
+      p_credit_ids: allIds,
+      p_start_date: start.toISOString(),
+      p_end_date  : end.toISOString(),
+    });
+    if (!error && Array.isArray(interestRows)) {
+      interestRows.forEach((r: any) =>
+        interestMap.set(r.credit_id, Number(r.paid_interest || 0)));
+    }
+  }
+
+  const { data: principalRows } = await supabase.rpc('get_current_principal', {
+    p_credit_ids: allIds,
+  });
+  const principalMap = new Map<string, number>();
+  principalRows?.forEach((r: { credit_id: string; current_principal: number }) => {
+    principalMap.set(r.credit_id, Number(r.current_principal));
+  });
+
+  // 5. RPC lấy old debt
+  const { data: debtRows } = await supabase.rpc('get_old_debt', {
+    p_credit_ids: activeIds,
+  });
+  const debtMap = new Map<string, number>();
+  debtRows?.forEach((r: { credit_id: string; old_debt: number }) =>
+    debtMap.set(r.credit_id, Number(r.old_debt || 0))
+  );
+
+  /* ---------- 6. RPC lấy expectedProfit & interestToday ---------- */
+  const expectedMap = new Map<string, number>();
+  const todayMap = new Map<string, number>();
+
+  if (allIds.length) {
+    const { data: expRows, error: expErr } = await (supabase.rpc as any)('get_expected_interest', {
+      p_credit_ids: allIds,
+    });
+    if (!expErr && Array.isArray(expRows)) {
+      expRows.forEach((r: any) => {
+        expectedMap.set(r.credit_id, Number(r.expected_profit || 0));
+        todayMap.set(r.credit_id, Number(r.interest_today || 0));
+      });
+    }
+  }
+
+  /* ---------- 7. RPC lấy thông tin kỳ thanh toán tiếp theo ---------- */
+  const nextMap = new Map<string, { nextDate: string | null; isCompleted: boolean; hasPaid: boolean }>();
+  if (activeIds.length) {
+    const { data: npRows, error: npErr } = await (supabase.rpc as any)('get_next_payment_info', {
+      p_credit_ids: activeIds,
+    });
+    if (!npErr && Array.isArray(npRows)) {
+      npRows.forEach((r: any) => {
+        nextMap.set(r.credit_id, {
+          nextDate: r.next_date,
+          isCompleted: r.is_completed,
+          hasPaid: r.has_paid,
+        });
+      });
+    }
+  }
+    
     const results = await Promise.all(
-      activeCreditsData.map(credit => calculateCreditMetrics(credit))
-    );
-
+    activeCreditsData!.map(c =>
+      calculateCreditMetrics(c, {
+        principalMap,
+        interestMap,
+        debtMap,
+        expectedMap,
+        todayMap,
+      })
+    )
+  );
+    
+    // Aggregate results
     results.forEach(result => {
       if (result) {
         totalLoan += result.summaryLoan;
         totalOldDebt += result.summaryDebt;
         totalProfit += result.summaryProfit;
-        totalPaidInterest += result.paidInterest;
+        totalCollectedInterest += result.paidInterest;
       }
     });
-  }
+  
+  // Cộng thêm lãi phí của các credit đã đóng
+  closedIds.forEach(id => {
+    totalCollectedInterest += interestMap.get(id) ?? 0;
+  });
 
   return {
     totalLoan: Math.round(totalLoan),
     oldDebt: Math.round(totalOldDebt),
     profit: Math.round(totalProfit),
-    collectedInterest: Math.round(totalPaidInterest)
+    collectedInterest: Math.round(totalCollectedInterest)
   };
 }
 
@@ -112,6 +203,29 @@ export async function getInstallmentFinancialsForStore(storeId: string): Promise
         collectedInterest: 0,
     };
   }
+  const ids = activeInstallments
+  .map(it => it.id)
+  .filter((id): id is string => id !== null);   // → string[]
+
+  /* 3.1 oldDebt (đã có) */
+  const { data: debtRows } = await supabase.rpc(
+    'get_installment_old_debt', { p_installment_ids: ids }
+  );
+
+  /* 3.2 tổng paid (cho loanAmount) */
+  const { data: paidRows } = await supabase.rpc(
+    'installment_get_paid_amount', { p_installment_ids: ids }
+  );
+
+  /* 3.3 profitCollected  */
+  const { data: profitRows } = await supabase.rpc(
+    'installment_get_collected_profit', { p_installment_ids: ids }
+  );
+
+  /* 3. xây 3 map rồi truyền xuống calculateInstallmentMetrics */
+  const debtMap   = new Map(debtRows?.map(r => [r.installment_id, Number(r.old_debt)]));
+  const paidMap   = new Map(paidRows?.map(r => [r.installment_id, Number(r.paid_amount)]));
+  const profitMap = new Map(profitRows?.map(r => [r.installment_id, Number(r.profit_collected)]));
 
   let totalLoan = 0;
   let totalOldDebt = 0;
@@ -119,15 +233,18 @@ export async function getInstallmentFinancialsForStore(storeId: string): Promise
   let collectedProfit = 0;
   
   const results = await Promise.all(
-    activeInstallments.map(installment => calculateInstallmentMetrics(installment))
+    activeInstallments.map(installment => calculateInstallmentMetrics(installment, { debtMap, paidMap, profitMap }))
   );
   
-  results.forEach(result => {
+  results.forEach((result, idx) => {
+    const id = activeInstallments[idx].id;
+    const oldDebtVal = debtMap.get(id ?? '') ?? 0;       // dùng nợ cũ lấy từ RPC
+    totalOldDebt   += oldDebtVal;
+
     if (result) {
-      totalOldDebt += 0 - result.oldDebt;
       collectedProfit += result.profitCollected;
-      totalLoan += result.loanAmount;
-      expectedProfit += result.expectedProfitAmount;
+      totalLoan       += result.loanAmount;
+      expectedProfit  += result.expectedProfitAmount;
     }
   });
 
