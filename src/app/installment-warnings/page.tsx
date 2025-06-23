@@ -22,6 +22,15 @@ import { InstallmentWarningsTable } from "@/components/Installments/InstallmentW
 import { getInstallmentWarnings } from "@/lib/installment-warnings";
 import { InstallmentWarningsPagination } from "@/components/Installments/InstallmentWarningsPagination";
 import { usePermissions } from "@/hooks/usePermissions";
+import { Employee } from "@/models/employee";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+import { getEmployees } from "@/lib/employee";
 
 export default function InstallmentWarningsPage() {
   const [installments, setInstallments] = useState<InstallmentWithCustomer[]>([]);
@@ -46,12 +55,23 @@ export default function InstallmentWarningsPage() {
   
   const router = useRouter();
   
+  const [employeeFilter, setEmployeeFilter] = useState<string>('all');
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  
   // Load installments khi page load, store thay đổi, filter thay đổi hoặc trang thay đổi
   useEffect(() => {
     if (canViewInstallmentsList) {
       loadInstallments();
     }
-  }, [currentStore, customerNameFilter, currentPage, canViewInstallmentsList]);
+  }, [currentStore, customerNameFilter, employeeFilter, currentPage, canViewInstallmentsList]);
+  
+  useEffect(() => {
+    (async () => {
+      if (!currentStore?.id) return;
+      const { data } = await getEmployees(1, 500, '', currentStore.id);
+      setEmployees(data || []);
+    })();
+  }, [currentStore?.id]);
   
   async function loadInstallments() {
     if (!currentStore?.id) return;
@@ -62,7 +82,8 @@ export default function InstallmentWarningsPage() {
         currentPage,
         itemsPerPage,
         currentStore.id,
-        customerNameFilter
+        customerNameFilter,
+        employeeFilter === 'all' ? '' : employeeFilter
       );
 
       if (error) {
@@ -125,6 +146,7 @@ export default function InstallmentWarningsPage() {
   // Clear filter
   const clearFilter = () => {
     setCustomerNameFilter("");
+    setEmployeeFilter("all");
     setCurrentPage(1);
   };
   
@@ -371,10 +393,30 @@ export default function InstallmentWarningsPage() {
                   className="pl-10"
                 />
               </div>
+              {/* Employee Select */}
+              <div className="max-w-xs">
+                <Select
+                  value={employeeFilter}
+                  onValueChange={(v) => {
+                    setEmployeeFilter(v);
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Nhân viên" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả NV</SelectItem>
+                    {employees.map((e) => (
+                      <SelectItem key={e.uid} value={e.uid}>{e.full_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <Button 
                 variant="outline" 
                 onClick={clearFilter}
-                disabled={!customerNameFilter}
+                disabled={!customerNameFilter && employeeFilter==='all'}
               >
                 Xóa bộ lọc
               </Button>
