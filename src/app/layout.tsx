@@ -8,7 +8,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 
 export const metadata: Metadata = {
   title: "Hosodep",
-  description: "Ứng dụng quản lý tín dụng",
+  description: "Hosodep",
 };
 
 export default function RootLayout({
