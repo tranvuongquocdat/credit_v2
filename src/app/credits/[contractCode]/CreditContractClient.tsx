@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from '@/components/ui/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useCreditStatuses } from '@/hooks/useCreditStatuses';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -68,7 +69,8 @@ export function CreditContractClient({ contractCode }: CreditContractClientProps
   
   // Lấy dữ liệu tài chính tổng hợp
   const { summary: financialSummary, details: creditDetails, refresh: refreshFinancial } = useCreditCalculations();
-  
+  // Lấy trạng thái cho các hợp đồng trong trang hiện tại
+  const { statuses: creditStatuses } = useCreditStatuses(credits.map((c) => c.id));
   // State for dialogs
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedCredit, setSelectedCredit] = useState<CreditWithCustomer | null>(null);
@@ -265,6 +267,7 @@ export function CreditContractClient({ contractCode }: CreditContractClientProps
           credits={credits}
           statusMap={statusMap}
           calculatedDetails={creditDetails}
+          calculatedStatuses={creditStatuses}
           onView={handleViewCreditDetail}
           onEdit={handleEditCredit}
           onDelete={handleOpenDeleteDialog}

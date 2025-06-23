@@ -5,7 +5,7 @@ import { Layout } from '@/components/Layout';
 import { useRouter } from 'next/navigation';
 
 // Import custom components
-import { FinancialSummary } from '@/components/common/FinancialSummary';
+import dynamicImport from 'next/dynamic';
 import { SearchFilters } from '@/components/Installments/SearchFilters';
 import { InstallmentsTable } from '@/components/Installments/InstallmentsTable';
 import { InstallmentsPagination } from '@/components/Installments/InstallmentsPagination';
@@ -25,6 +25,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from '@/components/ui/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
+import { supabase } from '@/lib/supabase';
+import { calculateMultipleInstallmentStatus } from '@/lib/Installments/calculate_installment_status';
+import { calculateRemainingToPay } from '@/lib/installmentCalculations';
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
   [InstallmentStatus.ON_TIME]: { label: 'Đang vay', color: 'bg-green-100 text-green-800 border-green-200' },
@@ -36,6 +39,28 @@ const statusMap: Record<string, { label: string, color: string }> = {
   [InstallmentStatus.DUE_TOMORROW]: { label: 'Ngày mai đóng', color: 'bg-amber-100 text-amber-800 border-amber-200' },
   [InstallmentStatus.FINISHED]: { label: 'Hoàn thành', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
 };
+
+// Skeleton displayed while loading FinancialSummary lazily
+function SkeletonFinancialSummary() {
+  return (
+    <div className="mb-4 flex py-1 animate-pulse">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="flex-1 text-center px-2">
+          <div className="h-4 bg-gray-200 rounded mb-2"></div>
+          <div className="h-6 bg-gray-200 rounded"></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// 'as any' to bypass prop-type incompatibility during dynamic import
+// You can replace by proper generic typing later if desired.
+const FinancialSummary = dynamicImport(
+  () => import('@/components/common/FinancialSummary').then((mod) => ({ default: mod.FinancialSummary })),
+  { ssr: false, loading: () => <SkeletonFinancialSummary /> }
+) as typeof import('@/components/common/FinancialSummary').FinancialSummary;
+
 
 interface InstallmentContractClientProps {
   contractCode: string;
@@ -94,6 +119,9 @@ export function InstallmentContractClient({ contractCode }: InstallmentContractC
   const [isPaymentActionsModalOpen, setIsPaymentActionsModalOpen] = useState(false);
   const [selectedInstallmentForPayment, setSelectedInstallmentForPayment] = useState<InstallmentWithCustomer | null>(null);
   
+    // NEW: state for enriched data & calc loading
+    const [processedInstallments, setProcessedInstallments] = useState<InstallmentWithCustomer[]>([]);
+    const [calcLoading, setCalcLoading] = useState(false);
   // Calculate total pages
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   
@@ -182,7 +210,110 @@ export function InstallmentContractClient({ contractCode }: InstallmentContractC
       refreshFinancial();
     }
   };
-  
+    // ------------------------------------------------------------
+  // Calculate paid amount + remaining + status once installments list changes
+  // ------------------------------------------------------------
+  useEffect(() => {
+    const compute = async () => {
+      if (installments.length === 0) {
+        setProcessedInstallments([]);
+        return;
+      }
+      setCalcLoading(true);
+      try {
+        const ids = installments.map((i) => i.id);
+        // RPC: tổng tiền đã đóng
+        const { data: paidRows, error: paidError } = await supabase.rpc('installment_get_paid_amount', {
+          p_installment_ids: ids,
+        });
+        if (paidError) {
+          console.error('installment_get_paid_amount error:', paidError);
+        }
+        const paidMap = new Map<string, number>(
+          (paidRows ?? []).map((r: any) => [r.installment_id, Number(r.total_paid ?? r.paid_amount ?? 0)])
+        );
+
+        // RPC: tính trạng thái
+        const calculatedStatuses = await calculateMultipleInstallmentStatus(ids);
+
+        const enriched = installments.map((it) => {
+          const totalPaid = paidMap.get(it.id) ?? 0;
+          const remaining = calculateRemainingToPay(it, totalPaid);
+
+          // Tính nhãn ngày phải đóng tiếp theo
+          let nextPaymentDateLabel: string;
+          if (!it.payment_due_date) {
+            nextPaymentDateLabel = 'Hoàn thành';
+          } else {
+            const due = new Date(it.payment_due_date);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const diff = Math.floor((due.getTime() - today.getTime()) / 86400000);
+            if (diff === 0) nextPaymentDateLabel = 'Hôm nay';
+            else if (diff === 1) nextPaymentDateLabel = 'Ngày mai';
+            else {
+              const day = due.getDate().toString().padStart(2, '0');
+              const month = (due.getMonth() + 1).toString().padStart(2, '0');
+              nextPaymentDateLabel = `${day}/${month}`;
+            }
+          }
+
+          // Map status info
+          const calcStatus = calculatedStatuses[it.id];
+          let statusInfo: { label: string; color: string };
+          if (calcStatus) {
+            let color: string;
+            switch (calcStatus.statusCode) {
+              case 'closed':
+                color = 'bg-blue-100 text-blue-800 border-blue-200';
+                break;
+              case 'deleted':
+                color = 'bg-gray-100 text-gray-800 border-gray-200';
+                break;
+              case 'finished':
+                color = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+                break;
+              case 'bad_debt':
+                color = 'bg-purple-100 text-purple-800 border-purple-200';
+                break;
+              case 'overdue':
+                color = 'bg-red-100 text-red-800 border-red-200';
+                break;
+              case 'late_interest':
+                color = 'bg-yellow-100 text-yellow-800 border-yellow-200';
+                break;
+              case 'active':
+              default:
+                color = 'bg-green-100 text-green-800 border-green-200';
+                break;
+            }
+            statusInfo = { label: calcStatus.status, color };
+          } else {
+            statusInfo = statusMap[it.status] || {
+              label: 'Không xác định',
+              color: 'bg-gray-100 text-gray-800',
+            };
+          }
+
+          return {
+            ...it,
+            totalPaid,
+            remainingToPay: remaining,
+            nextPaymentDate: nextPaymentDateLabel,
+            statusInfo,
+          } as InstallmentWithCustomer;
+        });
+
+        setProcessedInstallments(enriched);
+      } catch (err) {
+        console.error('Error computing installment aggregates:', err);
+      } finally {
+        setCalcLoading(false);
+      }
+    };
+
+    compute();
+  }, [installments]);
   // Handle refresh after contract operations
   const handleRefresh = () => {
     refetch();
@@ -211,11 +342,12 @@ export function InstallmentContractClient({ contractCode }: InstallmentContractC
             <p className="text-center text-gray-500">Đang tải...</p>
           </div>
         ) : hasPermission('xem_thong_tin_tra_gop') ? (
-        <FinancialSummary 
-          fundStatus={financialSummary || undefined}
-          onRefresh={refreshFinancial}
-          autoFetch={false}
-        />
+          <FinancialSummary 
+            fundStatus={financialSummary || undefined}
+            onRefresh={refreshFinancial}
+            autoFetch={false}
+            enableCashFundUpdate={true}
+          />
         ) : null}
 
         {/* Bộ lọc và tìm kiếm */}
@@ -236,8 +368,8 @@ export function InstallmentContractClient({ contractCode }: InstallmentContractC
 
         {/* Bảng dữ liệu hợp đồng */}
         <InstallmentsTable
-          installments={installments}
-          isLoading={loading}
+          installments={processedInstallments}
+          isLoading={loading || calcLoading}
           statusMap={statusMap}
           onEdit={handleEditInstallment}
           onShowPaymentActions={handleShowPaymentActions}

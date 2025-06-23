@@ -66,6 +66,7 @@ interface InstallmentsTableProps {
   onDelete: (installment: InstallmentWithStatusInfo) => void;
   onShowPaymentHistory?: (installment: InstallmentWithStatusInfo) => void;
   onShowPaymentActions?: (installment: InstallmentWithStatusInfo) => void;
+  onRefresh?: () => void;
 }
 
 export function InstallmentsTable({
@@ -77,6 +78,7 @@ export function InstallmentsTable({
   onDelete,
   onShowPaymentHistory,
   onShowPaymentActions,
+  onRefresh,
 }: InstallmentsTableProps) {
   // State để lưu trữ thông tin có kỳ thanh toán đã được thanh toán hay không cho mỗi installment
   const [hasPaidPaymentPeriods, setHasPaidPaymentPeriods] = useState<Record<string, boolean>>({});
@@ -177,6 +179,7 @@ export function InstallmentsTable({
         title: "Thành công",
         description: "Đã mở lại hợp đồng",
       });
+      onRefresh?.();
       // TODO: trigger parent refresh via a callback if needed
     } catch (err) {
       console.error("Error unlocking installment:", err);
@@ -202,7 +205,7 @@ export function InstallmentsTable({
         title: "Thành công",
         description: "Đã cập nhật ngày đóng tiền",
       });
-      
+      onRefresh?.();
       // TODO: trigger parent refresh via a callback if needed
     } catch (error) {
       console.error('Error updating payment due date:', error);

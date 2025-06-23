@@ -141,15 +141,13 @@ export async function hasInstallmentAnyPayments(installmentId: string) {
  */
 export async function countInstallmentWarnings(storeId?: string) {
   try {
-    // Get the current date in ISO format
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = new Date().toISOString().slice(0, 10);
     
     const { data, error } = await supabase
       .from('installments_by_store')
       .select('id, payment_due_date')
       .eq('store_id', storeId || '')
-      .lte('payment_due_date', today.toISOString())
+      .lte('payment_due_date', today)
       .eq('status', 'on_time');
     
     return {

@@ -186,6 +186,8 @@ export default function InstallmentsPage() {
       handleCloseDeleteDialog();
       // Trigger cash fund update
       triggerUpdate();
+      refetch();
+      refreshFinancial();
     } else {
       console.error('Error deleting installment:', error);
     }
@@ -371,6 +373,11 @@ export default function InstallmentsPage() {
             onUpdateStatus={handleOpenStatusDialog}
             onDelete={handleOpenDeleteDialog}
             onShowPaymentActions={handleShowPaymentActions}
+            onRefresh={() => {
+              refetch();
+              refreshFinancial();
+              triggerUpdate();
+            }}
           />
         </div> 
         
