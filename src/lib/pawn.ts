@@ -91,6 +91,7 @@ export async function getPawns(
     // Execute query with pagination
     const { data, error, count } = await query
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .range(from, to);
     
     if (error) {
