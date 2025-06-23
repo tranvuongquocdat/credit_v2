@@ -123,6 +123,8 @@ export async function getCredits(
     
     // Thực hiện query với phân trang
     const { data, error, count } = await query
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .range(from, to);
     
     if (error) throw error;
