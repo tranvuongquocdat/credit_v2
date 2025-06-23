@@ -21,7 +21,8 @@ export async function getInstallments(
         customer:customers(
           id, name, phone, address, blacklist_reason
         )
-      `, { count: 'exact' });
+      `, { count: 'exact' })
+      .order('created_at', { ascending: false });
     
     // Apply filters if provided
     if (filters?.contract_code) {

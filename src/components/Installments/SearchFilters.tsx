@@ -14,6 +14,7 @@ import { useStore } from '@/contexts/StoreContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getCustomers } from '@/lib/customer';
 import { Customer } from '@/models/customer';
+import { InstallmentStatus } from '@/models/installment';
 interface StatusMapType {
   [key: string]: { 
     label: string; 
@@ -22,7 +23,6 @@ interface StatusMapType {
 }
 
 interface SearchFiltersProps {
-  statusMap: StatusMapType;
   onSearch: (filters: SearchFilters) => void;
   onReset: () => void;
   onCreateNew: () => void;
@@ -41,13 +41,17 @@ export interface SearchFilters {
 }
 
 export function SearchFilters({ 
-  statusMap, 
   onSearch, 
   onReset, 
   onCreateNew, 
   onExportExcel,
   initialFilters
 }: SearchFiltersProps) {
+  const statusMap = {
+    [InstallmentStatus.ON_TIME]: { label: 'Đang vay', color: 'bg-green-100 text-green-800' },
+    [InstallmentStatus.CLOSED]: { label: 'Đã đóng', color: 'bg-blue-100 text-blue-800' },
+    [InstallmentStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
+  };
   // Get store context
   const { currentStore } = useStore();
   const { hasPermission } = usePermissions();

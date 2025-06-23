@@ -29,7 +29,7 @@ import { useCreditStatuses } from '@/hooks/useCreditStatuses';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
-  [CreditStatus.ON_TIME]: { label: 'Đúng hẹn', color: 'bg-green-100 text-green-800' },
+  [CreditStatus.ON_TIME]: { label: 'Đang vay', color: 'bg-green-100 text-green-800' },
   [CreditStatus.OVERDUE]: { label: 'Quá hạn', color: 'bg-red-100 text-red-800' },
   [CreditStatus.LATE_INTEREST]: { label: 'Chậm lãi', color: 'bg-yellow-100 text-yellow-800' },
   [CreditStatus.BAD_DEBT]: { label: 'Nợ xấu', color: 'bg-purple-100 text-purple-800' },
@@ -254,7 +254,6 @@ export function CreditContractClient({ contractCode }: CreditContractClientProps
         <>
         {/* Bộ lọc và tìm kiếm */}
         <SearchFilters
-          statusMap={statusMap}
           onSearch={handleSearchFilters}
           onReset={handleReset}
           onCreateNew={handleCreateCredit}

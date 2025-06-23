@@ -358,7 +358,6 @@ export function InstallmentContractClient({ contractCode }: InstallmentContractC
         ) : canViewInstallmentsList ? (
         <>
         <SearchFilters
-          statusMap={statusMap}
           onSearch={handleSearchFilters}
           onReset={handleReset}
           onCreateNew={handleCreateInstallment}

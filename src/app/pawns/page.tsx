@@ -227,7 +227,6 @@ export default function PawnsPage() {
           <>
             {/* Bộ lọc và tìm kiếm */}
             <SearchFilters
-              statusMap={statusMap}
               onSearch={handleSearchFilters}
               onReset={handleReset}
               onCreateNew={handleCreatePawn}

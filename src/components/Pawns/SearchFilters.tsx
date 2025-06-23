@@ -16,16 +16,11 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { getCustomers } from '@/lib/customer';
 import { Customer } from '@/models/customer';
 import { useStore } from '@/contexts/StoreContext';
+import { PawnStatus } from '@/models/pawn';
 
-interface StatusMapType {
-  [key: string]: { 
-    label: string; 
-    color: string;
-  }
-}
+
 
 interface SearchFiltersProps {
-  statusMap: StatusMapType;
   onSearch: (filters: SearchFilters) => void;
   onReset: () => void;
   onCreateNew: () => void;
@@ -43,13 +38,17 @@ export interface SearchFilters {
 }
 
 export function SearchFilters({
-  statusMap,
   onSearch,
   onReset,
   onCreateNew,
   onExportExcel,
   initialFilters
 }: SearchFiltersProps) {
+  const statusMap = {
+    [PawnStatus.ON_TIME]: { label: 'Đang vay', color: 'bg-green-100 text-green-800' },
+    [PawnStatus.CLOSED]: { label: 'Đã đóng', color: 'bg-blue-100 text-blue-800' },
+    [PawnStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
+  };
   // Sử dụng hook kiểm tra quyền
   const { hasPermission } = usePermissions();
   const { currentStore } = useStore();

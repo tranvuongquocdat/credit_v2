@@ -14,6 +14,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { getCustomers } from '@/lib/customer';
 import { Customer } from '@/models/customer';
 import { useStore } from '@/contexts/StoreContext';
+import { CreditStatus } from '@/models/credit';
 interface StatusMapType {
   [key: string]: { 
     label: string; 
@@ -22,7 +23,6 @@ interface StatusMapType {
 }
 
 interface SearchFiltersProps {
-  statusMap: StatusMapType;
   onSearch: (filters: SearchFilters) => void;
   onReset: () => void;
   onCreateNew: () => void;
@@ -41,13 +41,17 @@ export interface SearchFilters {
 }
 
 export function SearchFilters({ 
-  statusMap, 
   onSearch, 
   onReset, 
   onCreateNew, 
   onExportExcel,
   initialFilters 
 }: SearchFiltersProps) {
+  const statusMap = {
+    [CreditStatus.ON_TIME]: { label: 'Đang vay', color: 'bg-green-100 text-green-800' },
+    [CreditStatus.CLOSED]: { label: 'Đã đóng', color: 'bg-blue-100 text-blue-800' },
+    [CreditStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
+  };
   const [filters, setFilters] = useState<SearchFilters>({
     contract_code: '',
     customer_name: '',

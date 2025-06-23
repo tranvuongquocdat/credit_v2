@@ -35,7 +35,8 @@ export async function getPawns(
           id_number,
           blacklist_reason
         )
-      `, { count: 'exact' });
+      `, { count: 'exact' })
+      .order('created_at', { ascending: false });
     
     // Apply filters if provided
     if (filters?.contract_code) {

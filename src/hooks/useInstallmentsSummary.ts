@@ -46,7 +46,18 @@ export function useInstallmentsSummary() {
       if (installmentsError) {
         throw installmentsError;
       }
+
+      // Lấy danh sách hợp đồng đã đóng
+      const { data: closedInstallments, error: closedInstallmentsError } = await supabase
+        .from('installments_by_store')
+        .select('id')
+        .eq('status', InstallmentStatus.CLOSED)
+        .eq('store_id', currentStore.id);
       
+      if (closedInstallmentsError) {
+        throw closedInstallmentsError;
+      }
+
       // Check if there are any installments to process
       if (!activeInstallments || activeInstallments.length === 0) {
         setData(storeFinancialData);
@@ -54,6 +65,10 @@ export function useInstallmentsSummary() {
       }
 
       const ids = activeInstallments
+        .map(it => it.id)
+        .filter((id): id is string => id !== null);   // → string[]
+
+      const closedIds = closedInstallments
         .map(it => it.id)
         .filter((id): id is string => id !== null);   // → string[]
 
@@ -67,9 +82,9 @@ export function useInstallmentsSummary() {
         'installment_get_paid_amount', { p_installment_ids: ids }
       );
 
-      /* 3.3 profitCollected  */
+      /* 3.3 profitCollected ( tính cả hợp đồng đã đóng )  */
       const { data: profitRows } = await supabase.rpc(
-        'installment_get_collected_profit', { p_installment_ids: ids }
+        'installment_get_collected_profit', { p_installment_ids: [...ids, ...closedIds] }
       );
 
       /* xây 3 map rồi truyền xuống calculateInstallmentMetrics */
@@ -100,7 +115,11 @@ export function useInstallmentsSummary() {
           expectedProfit  += result.expectedProfitAmount;
         }
       });
-      
+      closedIds.forEach(id => {
+        const profitVal = profitMap.get(id ?? '') ?? 0;       // dùng nợ cũ lấy từ RPC
+        collectedProfit   += profitVal;
+      });
+
       const summaryData: StoreFinancialData = {
         // Use the cash_fund from the store financial data
         totalFund: storeFinancialData.availableFund || 0,

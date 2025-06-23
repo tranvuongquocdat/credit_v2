@@ -29,19 +29,19 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
     useEffect(() => {
       if (isOpen && inputRef.current) {
         const rect = inputRef.current.getBoundingClientRect();
-        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-        const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
         
         const calendarHeight = 400;
         const calendarWidth = 300;
+
+        // Available space relative to viewport because popup uses fixed positioning
         const spaceBelow = window.innerHeight - rect.bottom;
         const spaceAbove = rect.top;
-        
-        // Determine if should show above
+
+        // Determine if we should render above the input
         const showAbove = spaceAbove > spaceBelow && spaceBelow < calendarHeight;
-        
-        // Calculate horizontal position (center relative to input)
-        let left = rect.left + scrollLeft + (rect.width / 2) - (calendarWidth / 2);
+
+        // Horizontal position (centered relative to input)
+        let left = rect.left + (rect.width / 2) - (calendarWidth / 2);
         
         // Adjust horizontal position if it would go off-screen
         if (left < 10) {
@@ -53,16 +53,16 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
         // Calculate vertical position
         let top;
         if (showAbove) {
-          top = rect.top + scrollTop - calendarHeight - 8;
+          top = rect.top - calendarHeight - 8;
           // Ensure it doesn't go above viewport
           if (top < 10) {
             top = 10;
           }
         } else {
-          top = rect.bottom + scrollTop + 8;
+          top = rect.bottom + 8;
           // If it would go below viewport, force it above
-          if (top + calendarHeight > window.innerHeight + scrollTop - 10) {
-            top = rect.top + scrollTop - calendarHeight - 8;
+          if (top + calendarHeight > window.innerHeight - 10) {
+            top = rect.top - calendarHeight - 8;
             if (top < 10) {
               top = 10;
             }

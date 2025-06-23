@@ -31,7 +31,9 @@ export function usePawns() {
   const [itemsPerPage] = useState<number>(DEFAULT_ITEMS_PER_PAGE);
   
   // State for search filters
-  const [filters, setFilters] = useState<SearchFilters>({});
+  const [filters, setFilters] = useState<SearchFilters>({
+    status: 'on_time'
+  });
   // Get current store from store context
   const { currentStore } = useStore();
   
@@ -73,7 +75,7 @@ export function usePawns() {
         customer_name: filters.customerName,
         start_date: filters.startDate,
         end_date: filters.endDate,
-        status: filters.status as any || 'on_time',
+        status: filters.status as any || 'all',
         loan_period: filters.duration || undefined,
         store_id: currentStore.id // Sử dụng currentStore.id trực tiếp thay vì || ''
       };

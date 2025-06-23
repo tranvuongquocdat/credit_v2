@@ -348,7 +348,6 @@ export default function InstallmentsPage() {
         ) : canViewInstallmentsList ? (
         <>
         <SearchFilters
-          statusMap={statusMap}
           onSearch={handleSearchFilters}
           onReset={handleReset}
           onCreateNew={handleCreateInstallment}

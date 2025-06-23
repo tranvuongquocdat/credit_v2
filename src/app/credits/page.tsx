@@ -299,7 +299,6 @@ export default function CreditsPage() {
         ) : canViewCreditsList ? (
         <>
         <SearchFilters
-          statusMap={statusMap}
           onSearch={handleSearchFilters}
           onReset={handleReset}
           onCreateNew={handleCreateCredit}

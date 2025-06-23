@@ -20,6 +20,30 @@ export interface CreditFilters {
   duration?: number;
 }
 
+// Narrow set of statuses that actually exist in DB enum
+type DbCreditStatus =
+  | CreditStatus.ON_TIME
+  | CreditStatus.OVERDUE
+  | CreditStatus.LATE_INTEREST
+  | CreditStatus.BAD_DEBT
+  | CreditStatus.CLOSED
+  | CreditStatus.DELETED;
+
+const dbStatuses: DbCreditStatus[] = [
+  CreditStatus.ON_TIME,
+  CreditStatus.OVERDUE,
+  CreditStatus.LATE_INTEREST,
+  CreditStatus.BAD_DEBT,
+  CreditStatus.CLOSED,
+  CreditStatus.DELETED,
+];
+
+function isDbCreditStatus(status: CreditStatus): status is DbCreditStatus {
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  return dbStatuses.includes(status);
+}
+
 /**
  * Lấy danh sách hợp đồng tín chấp có phân trang và tìm kiếm
  */
@@ -39,7 +63,8 @@ export async function getCredits(
       .select(`
         *,
         customer:customers(name, phone, id_number, blacklist_reason)
-      `, { count: 'exact' });
+      `, { count: 'exact' })
+      .order('created_at', { ascending: false });
     
     // Set AbortController signal
     if (signal) {
@@ -82,7 +107,7 @@ export async function getCredits(
         query = query.lte('loan_date', filters.end_date);
       }
       
-      if (filters.status && filters.status !== 'all') {
+      if (filters.status && filters.status !== 'all' && isDbCreditStatus(filters.status)) {
         query = query.eq('status', filters.status);
       }
       
@@ -222,8 +247,8 @@ export async function createCredit(params: CreateCreditParams) {
         interest_period: params.interest_period,
         loan_date: loanDate,
         notes: params.notes,
-        status: params.status || CreditStatus.ON_TIME
-      })
+        status: (params.status || CreditStatus.ON_TIME) as NonNullable<Credit['status']>
+      } as any)
       .select(`
         *,
         customer:customers(name, phone, id_number, blacklist_reason)
@@ -293,7 +318,7 @@ export async function updateCredit(id: string, params: UpdateCreditParams) {
         : params.loan_date;
     }
     if (params.notes !== undefined) updateData.notes = params.notes;
-    if (params.status !== undefined) updateData.status = params.status;
+    if (params.status !== undefined) updateData.status = params.status as NonNullable<Credit['status']>;
     
     // Tự động cập nhật thời gian sửa đổi
     updateData.updated_at = new Date().toISOString();
@@ -526,7 +551,7 @@ export async function hasCreditAnyPayments(id: string) {
 export async function updateCreditStatus(id: string, status: CreditStatus) {
   const { data, error } = await supabase
     .from('credits')
-    .update({ status, updated_at: new Date().toISOString() })
+    .update({ status: (isDbCreditStatus(status) ? status : CreditStatus.ON_TIME) as DbCreditStatus, updated_at: new Date().toISOString() })
     .eq('id', id)
     .select()
     .single();
