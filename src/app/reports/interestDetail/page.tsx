@@ -287,12 +287,12 @@ export default function InterestDetailPage() {
         // Execute all pawn queries in parallel
         queryPromises.push(
           Promise.all([
-            fetchAllData(pawnQueries[0].gte('created_at', startDateISO).lte('created_at', endDateISO)),
+            fetchAllData(pawnQueries[0]), // Get ALL payment records, not just in date range
             fetchAllData(pawnQueries[1]),
             fetchAllData(pawnQueries[2]),
             fetchAllData(pawnQueries[3])
           ]).then(async ([pawnPaymentData, pawnCloseData, pawnReopenData, pawnDebtData]) => {
-            // Process payment transactions
+            // Process payment transactions - separate original and cancel records
             for (const item of pawnPaymentData || []) {
               let itemName = '';
               try {
@@ -306,12 +306,8 @@ export default function InterestDetailPage() {
                 console.error('Error parsing collateral_detail:', e);
               }
 
-              const transactionDate = item.is_deleted ? item.pawns.updated_at : item.created_at;
-              const interestAmount = item.is_deleted ? -(item.credit_amount || 0) : (item.credit_amount || 0);
-              const transactionType = item.is_deleted ? 'Huỷ đóng lãi' : 'Đóng lãi';
-
-              // Only include if transaction date is within range
-              if (new Date(transactionDate) >= startDateObj && new Date(transactionDate) <= endDateObj) {
+              // Always add original payment record (positive amount)
+              if (new Date(item.created_at) >= startDateObj && new Date(item.created_at) <= endDateObj) {
                 allInterestDetails.push({
                   id: `pawn-payment-${item.id}`,
                   contractId: item.pawn_id,
@@ -319,14 +315,36 @@ export default function InterestDetailPage() {
                   customerName: item.pawns?.customers?.name || '',
                   itemName,
                   loanAmount: item.pawns?.loan_amount || 0,
-                  transactionDate: new Date(transactionDate).toLocaleString('vi-VN'),
-                  transactionDateTime: new Date(transactionDate).toLocaleString('vi-VN'),
-                  interestAmount,
+                  transactionDate: new Date(item.created_at).toLocaleString('vi-VN'),
+                  transactionDateTime: new Date(item.created_at).toLocaleString('vi-VN'),
+                  interestAmount: item.credit_amount || 0,
                   otherAmount: 0,
-                  totalAmount: interestAmount,
-                  transactionType,
+                  totalAmount: item.credit_amount || 0,
+                  transactionType: 'Đóng lãi',
                   type: 'Cầm đồ'
                 });
+              }
+
+              // If payment is cancelled (is_deleted = true), add separate cancel record
+              if (item.is_deleted && item.pawns?.updated_at) {
+                const cancelDate = new Date(item.pawns.updated_at);
+                if (cancelDate >= startDateObj && cancelDate <= endDateObj) {
+                  allInterestDetails.push({
+                    id: `pawn-payment-cancel-${item.id}`,
+                    contractId: item.pawn_id,
+                    contractCode: item.pawns?.contract_code || '',
+                    customerName: item.pawns?.customers?.name || '',
+                    itemName,
+                    loanAmount: item.pawns?.loan_amount || 0,
+                    transactionDate: cancelDate.toLocaleString('vi-VN'),
+                    transactionDateTime: cancelDate.toLocaleString('vi-VN'),
+                    interestAmount: -(item.credit_amount || 0),
+                    otherAmount: 0,
+                    totalAmount: -(item.credit_amount || 0),
+                    transactionType: 'Huỷ đóng lãi',
+                    type: 'Cầm đồ'
+                  });
+                }
               }
             }
 
@@ -531,19 +549,15 @@ export default function InterestDetailPage() {
         // Execute all credit queries in parallel
         queryPromises.push(
           Promise.all([
-            fetchAllData(creditQueries[0]),
+            fetchAllData(creditQueries[0]), // Get ALL payment records, not just in date range
             fetchAllData(creditQueries[1]),
             fetchAllData(creditQueries[2]),
             fetchAllData(creditQueries[3])
           ]).then(async ([creditPaymentData, creditCloseData, creditReopenData, creditDebtData]) => {
-            // Process payment transactions
+            // Process payment transactions - separate original and cancel records
             for (const item of creditPaymentData || []) {
-              const transactionDate = item.is_deleted ? item.updated_at : item.created_at;
-              const interestAmount = item.is_deleted ? -(item.credit_amount || 0) : (item.credit_amount || 0);
-              const transactionType = item.is_deleted ? 'Huỷ đóng lãi' : 'Đóng lãi';
-
-              // Only include if transaction date is within range
-              if (new Date(transactionDate) >= startDateObj && new Date(transactionDate) <= endDateObj) {
+              // Always add original payment record (positive amount)
+              if (new Date(item.created_at) >= startDateObj && new Date(item.created_at) <= endDateObj) {
                 allInterestDetails.push({
                   id: `credit-payment-${item.id}`,
                   contractId: item.credit_id,
@@ -551,14 +565,36 @@ export default function InterestDetailPage() {
                   customerName: item.credits?.customers?.name || '',
                   itemName: 'Tín chấp',
                   loanAmount: item.credits?.loan_amount || 0,
-                  transactionDate: new Date(transactionDate).toLocaleString('vi-VN'),
-                  transactionDateTime: new Date(transactionDate).toLocaleString('vi-VN'),
-                  interestAmount,
+                  transactionDate: new Date(item.created_at).toLocaleString('vi-VN'),
+                  transactionDateTime: new Date(item.created_at).toLocaleString('vi-VN'),
+                  interestAmount: item.credit_amount || 0,
                   otherAmount: 0,
-                  totalAmount: interestAmount,
-                  transactionType,
+                  totalAmount: item.credit_amount || 0,
+                  transactionType: 'Đóng lãi',
                   type: 'Tín chấp'
                 });
+              }
+
+              // If payment is cancelled (is_deleted = true), add separate cancel record
+              if (item.is_deleted && item.updated_at) {
+                const cancelDate = new Date(item.updated_at);
+                if (cancelDate >= startDateObj && cancelDate <= endDateObj) {
+                  allInterestDetails.push({
+                    id: `credit-payment-cancel-${item.id}`,
+                    contractId: item.credit_id,
+                    contractCode: item.credits?.contract_code || '',
+                    customerName: item.credits?.customers?.name || '',
+                    itemName: 'Tín chấp',
+                    loanAmount: item.credits?.loan_amount || 0,
+                    transactionDate: cancelDate.toLocaleString('vi-VN'),
+                    transactionDateTime: cancelDate.toLocaleString('vi-VN'),
+                    interestAmount: -(item.credit_amount || 0),
+                    otherAmount: 0,
+                    totalAmount: -(item.credit_amount || 0),
+                    transactionType: 'Huỷ đóng lãi',
+                    type: 'Tín chấp'
+                  });
+                }
               }
             }
 
