@@ -22,7 +22,6 @@ export async function getInstallments(
           id, name, phone, address, blacklist_reason
         )
       `, { count: 'exact' })
-      .order('created_at', { ascending: false });
     
     // Apply filters if provided
     if (filters?.contract_code) {
@@ -80,10 +79,11 @@ export async function getInstallments(
       throw new Error('Request was cancelled');
     }
     
-    // Execute query
+    // Execute query (ensure ordering BEFORE pagination)
     const { data, error, count } = await query
-      .range(from, to)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .order('id',          { ascending: false })
+      .range(from, to);
       
     if (error) {
       throw error;
