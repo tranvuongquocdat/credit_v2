@@ -31,11 +31,13 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { getEmployees } from "@/lib/employee";
+import { useDebounce } from '@/hooks/useDebounce';
 
 export default function InstallmentWarningsPage() {
   const [installments, setInstallments] = useState<InstallmentWithCustomer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [customerNameFilter, setCustomerNameFilter] = useState("");
+  const debouncedCustomerFilter = useDebounce(customerNameFilter, 500);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -63,7 +65,7 @@ export default function InstallmentWarningsPage() {
     if (canViewInstallmentsList) {
       loadInstallments();
     }
-  }, [currentStore, customerNameFilter, employeeFilter, currentPage, canViewInstallmentsList]);
+  }, [currentStore, debouncedCustomerFilter, employeeFilter, currentPage, canViewInstallmentsList]);
   
   useEffect(() => {
     (async () => {
@@ -82,7 +84,7 @@ export default function InstallmentWarningsPage() {
         currentPage,
         itemsPerPage,
         currentStore.id,
-        customerNameFilter,
+        debouncedCustomerFilter,
         employeeFilter === 'all' ? '' : employeeFilter
       );
 
