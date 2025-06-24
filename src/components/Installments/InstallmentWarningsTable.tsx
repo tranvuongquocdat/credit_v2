@@ -153,6 +153,12 @@ export function InstallmentWarningsTable({
         }
         const nextMap = new Map((nextRows as any[]).map((r: any) => [r.installment_id, r.next_unpaid_date]));
 
+        /* 3. old debt */
+        const { data: oldDebtRows, error: oldDebtErr } = await (supabase as any).rpc('get_installment_old_debt', {
+          p_installment_ids: ids,
+        });
+        const oldDebtMap = new Map((oldDebtRows as any[]).map((r: any) => [r.installment_id, r.old_debt]));
+
         const warningResults: InstallmentWarning[] = [];
         // Process each installment
         for (const installment of installments) {
@@ -167,13 +173,6 @@ export function InstallmentWarningsTable({
 
             // Calculate daily amount directly instead of querying history
             const dailyAmount = (installment.installment_amount || 0) / installment.duration;
-
-            // Comment out fallback calculation for performance testing
-            // const { latePeriods: calcLatePeriods, buttonValues } = getOverdueInfo(
-            //   installment,
-            //   lastPaidDate,
-            //   dailyAmounts
-            // );
 
             const rpcLate = lateMap.get(installment.id) as number | undefined;
             const latePeriods = rpcLate || 0; // Use only RPC result
@@ -210,7 +209,7 @@ export function InstallmentWarningsTable({
                 payments: [],
                 latePeriods,
                 buttonValues,
-                totalDueAmount: installment.debt_amount || 0
+                totalDueAmount: oldDebtMap.get(installment.id) || 0
               });
             } else {
               // Chưa đến kỳ phải đóng hoặc đã thanh toán đủ — hiển thị nhưng không có nút
@@ -338,10 +337,7 @@ export function InstallmentWarningsTable({
                   {warning.customer?.address || ""}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  {warning.payments && warning.payments.length > 0 
-                    ? formatCurrency(warning.totalDueAmount)
-                    : formatCurrency(0)
-                  }
+                  {formatCurrency(warning.totalDueAmount)}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
                   {formatCurrency(totalAmountToDisplay)}
