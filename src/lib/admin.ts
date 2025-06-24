@@ -210,8 +210,21 @@ export async function deactivateAdmin(adminId: string) {
         console.log('🎯 Employees to ban:', employeesToBan);
 
         if (employeesToBan.length > 0) {
-          const employeeIds = employeesToBan.map(emp => emp.profiles.id);
-          
+          const employeeProfileIds = employeesToBan.map(emp => emp.profiles.id);
+          const employeeIds = employeesToBan.map(emp => emp.id);
+          // update employee status to inactive 
+          const { error: updateErrorStatus } = await supabase
+            .from('employees')
+            .update({
+              status: 'inactive',
+            })
+            .in('id', employeeIds)
+            .select();  
+          if (updateErrorStatus) {
+            console.error('❌ Error updating employees:', updateErrorStatus);
+            return { data: convertToAdmin(adminData), error: updateErrorStatus };
+          }
+
           const { data: updatedEmployees, error: updateError } = await supabase
             .from('profiles')
             .update({
@@ -219,7 +232,7 @@ export async function deactivateAdmin(adminId: string) {
               is_banned_by_superadmin: true,
               updated_at: new Date().toISOString(),
             })
-            .in('id', employeeIds)
+            .in('id', employeeProfileIds)
             .select();
 
           if (updateError) {

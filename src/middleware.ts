@@ -72,7 +72,6 @@ export async function middleware(request: NextRequest) {
           // Người dùng đã bị ban, đăng xuất họ
           console.log("User is banned, signing out:", user.id);
           await supabase.auth.signOut();
-          localStorage.removeItem('currentStoreId');
           // Xóa tất cả cookies liên quan đến phiên đăng nhập
           const cookies = request.cookies.getAll();
           cookies.forEach(cookie => {

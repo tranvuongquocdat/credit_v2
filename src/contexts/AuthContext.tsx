@@ -32,10 +32,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const fetchAuthData = useCallback(async () => {
+  const fetchAuthData = useCallback(async (forceRefresh = false) => {
     try {
       setLoading(true);
-      const currentUser = await getCurrentUser();
+      const currentUser = await getCurrentUser(forceRefresh);
       setUser(currentUser);
 
       // Nếu không có user hợp lệ ⇒ reset quyền & isAdmin
@@ -103,7 +103,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           case 'SIGNED_IN':
           case 'SIGNED_OUT':
           case 'USER_UPDATED':
-            fetchAuthData();        // cần tải lại
+            fetchAuthData(true);        // cần tải lại
             break;
 
           case 'TOKEN_REFRESHED':
