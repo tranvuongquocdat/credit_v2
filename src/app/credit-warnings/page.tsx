@@ -13,11 +13,13 @@ import { Input } from "@/components/ui/input";
 import { PaymentHistoryModal } from "@/components/Credits/PaymentHistoryModal";
 import { CreditWarningsPagination } from "@/components/Credits/CreditWarningsPagination";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useDebounce } from '@/hooks/useDebounce';
 
 export default function CreditWarningPage() {
   const [credits, setCredits] = useState<CreditWithCustomer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [customerNameFilter, setCustomerNameFilter] = useState("");
+  const debouncedCustomerFilter = useDebounce(customerNameFilter, 500);
   const { currentStore } = useStore();
   
   // Pagination state
@@ -38,7 +40,7 @@ export default function CreditWarningPage() {
     if (currentStore?.id) {
       loadCredits();
     }
-  }, [currentStore, currentPage, customerNameFilter]);
+  }, [currentStore, currentPage, debouncedCustomerFilter]);
   
   async function loadCredits() {
     if (!currentStore?.id) return;
@@ -49,7 +51,7 @@ export default function CreditWarningPage() {
         currentPage,
         itemsPerPage,
         currentStore.id,
-        customerNameFilter
+        debouncedCustomerFilter
       );
       
       if (error) {

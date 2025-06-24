@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { PawnWarningsPagination } from '@/components/Pawns/PawnWarningsPagination';
 import { calculatePawnStatus } from '@/lib/Pawns/calculate_pawn_status';
 import { usePermissions } from "@/hooks/usePermissions";
+import { useDebounce } from '@/hooks/useDebounce';
 
 export default function PawnWarningsPage() {
   const router = useRouter();
@@ -41,6 +42,7 @@ export default function PawnWarningsPage() {
   
   // State for filters
   const [customerNameFilter, setCustomerNameFilter] = useState("");
+  const debouncedCustomerFilter = useDebounce(customerNameFilter, 500);
   const [statusFilter, setStatusFilter] = useState<PawnStatus | "all">("all");
   
   // State for modals
@@ -62,7 +64,7 @@ export default function PawnWarningsPage() {
     if (currentStore?.id) {
       loadPawns();
     }
-  }, [currentStore, currentPage, customerNameFilter, statusFilter]);
+  }, [currentStore, currentPage, debouncedCustomerFilter, statusFilter]);
   
   // Load pawns with warnings
   const loadPawns = async () => {
@@ -76,7 +78,7 @@ export default function PawnWarningsPage() {
         currentPage,
         itemsPerPage,
         currentStore.id,
-        customerNameFilter,
+        debouncedCustomerFilter,
         statusFilter
       );
       

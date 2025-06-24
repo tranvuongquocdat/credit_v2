@@ -5,7 +5,8 @@ export async function getInstallmentWarnings(
   page: number = 1,
   limit: number = 10,
   storeId: string,
-  customerFilter: string = ''
+  customerFilter: string = '',
+  employeeId: string = ''
 ) {
   try {
     if (!storeId) {
@@ -46,6 +47,11 @@ export async function getInstallmentWarnings(
       } else {
         query = query.eq('id', '00000000-0000-0000-0000-000000000000'); // Non-existent ID
       }
+    }
+    
+    // Áp dụng filter theo nhân viên nếu có
+    if (employeeId) {
+      query = query.eq('employee_id', employeeId);
     }
     
     const { data: installments, error, count } = await query;
