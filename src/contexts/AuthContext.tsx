@@ -38,7 +38,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       const currentUser = await getCurrentUser();
       setUser(currentUser);
 
+      // Nếu không có user hợp lệ ⇒ reset quyền & isAdmin
       if (!currentUser || !currentUser.id) {
+        setIsAdmin(false);
         setPermissions([]);
         setLoading(false);
         return;
@@ -53,6 +55,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
 
       if (currentUser.role !== "employee") {
+        // Những role khác (superadmin, v.v.) ⇒ không phải admin nên reset cờ
+        setIsAdmin(false);
         setPermissions([]);
         setLoading(false);
         return;
@@ -80,6 +84,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (permissionError) throw permissionError;
 
       const ids = permissionData?.map((p) => p.permission_id) || [];
+      setIsAdmin(false);                   // nhân viên ⇒ chắc chắn không phải admin
       setPermissions(ids);
     } catch (err) {
       console.error("AuthProvider error:", err);
