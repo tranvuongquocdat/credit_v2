@@ -87,53 +87,23 @@ export async function calculateCloseContractInterest(pawnId: string, inputDate: 
     
     let expectedFromStartToInput = 0;
     
-    // Add initial value logging
-    console.log("Initial expectedFromStartToInput:", expectedFromStartToInput);
-    
     // Tính tổng expected từ ngày đầu đến ngày input
     for (let dayIndex = 0; dayIndex < daysFromStartToInput; dayIndex++) {
       if (dayIndex >= 0) {
-        // Log before adding
-        console.log(`Day ${dayIndex}: Adding ${dailyAmounts[dayIndex] || 0} to expectedFromStartToInput (current: ${expectedFromStartToInput})`);
         expectedFromStartToInput += dailyAmounts[dayIndex] || 0;
-        // Log after adding
-        console.log(`Day ${dayIndex}: expectedFromStartToInput is now ${expectedFromStartToInput}`);
       }
-      // Nếu dayIndex vượt quá số ngày của dailyAmounts thì tinh tiếp dựa trên interest_period
+      // Nếu dayIndex vượt quá số ngày của dailyAmounts thì tính tiếp dựa trên interest_period
       if (dayIndex >= dailyAmounts.length) {
         const remainingDays = daysFromStartToInput - dailyAmounts.length;
         const remainingDailyAmount = dailyAmounts[dailyAmounts.length - 1];
         
-        // Log values before calculation
-        console.log("Before remaining calculation:");
-        console.log("- expectedFromStartToInput:", expectedFromStartToInput);
-        console.log("- remainingDailyAmount:", remainingDailyAmount);
-        console.log("- remainingDays:", remainingDays);
-        
-        // Check if expectedFromStartToInput is NaN before calculation
-        if (isNaN(expectedFromStartToInput)) {
-          console.error("expectedFromStartToInput is NaN before remaining calculation!");
-        }
-        
         expectedFromStartToInput += remainingDailyAmount * remainingDays;
-        
-        // Log after calculation
-        console.log("After remaining calculation:");
-        console.log("- expectedFromStartToInput:", expectedFromStartToInput);
-        
-        // Check if result is NaN
-        if (isNaN(expectedFromStartToInput)) {
-          console.error("expectedFromStartToInput became NaN after remaining calculation!");
-        }
-        
         break;
       }
     }
 
     // 8. Kết quả = Expected từ ngày bắt đầu đến ngày input - Expected của các kỳ đã đóng
     const result = expectedFromStartToInput - totalExpectedOfPaidPeriods;
-    console.log("totalExpectedOfPaidPeriods", totalExpectedOfPaidPeriods);
-    console.log("expectedFromStartToInput", expectedFromStartToInput);
     return Math.round(result);
 
   } catch (error) {
