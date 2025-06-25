@@ -90,49 +90,6 @@ export async function calculateInstallmentMetrics(
 }
 
 /**
- * Tính ngày bắt đầu ghi nhận lãi
- * @param downPayment - Số tiền đặt cọc
- * @param installmentAmount - Tổng số tiền trả góp
- * @param loanPeriod - Thời gian vay (số ngày)
- * @param loanDate - Ngày bắt đầu vay
- * @returns string - Ngày bắt đầu tính lãi (ISO string)
- */
-function calculateInterestStartDate(
-  downPayment: number,
-  installmentAmount: number,
-  loanPeriod: number,
-  loanDate: string
-): string {
-  try {
-    // Validate input
-    if (!loanDate) {
-      return new Date().toISOString(); // Default to current date if loan_date is missing
-    }
-    
-    if (!loanPeriod || loanPeriod <= 0 || 
-        !installmentAmount || installmentAmount <= 0 ||
-        !downPayment || downPayment <= 0) {
-      return loanDate; // Return loan_date if any required value is invalid
-    }
-    
-    // Tính tỉ lệ tiền đặt cọc so với tổng số tiền
-    const ratio = Math.min(downPayment / installmentAmount, 1); // Ensure ratio doesn't exceed 1
-    
-    // Tính số ngày hoàn vốn (số ngày để tiền trả đủ tiền đặt cọc)
-    const daysToBreakEven = Math.ceil(ratio * loanPeriod);
-    
-    // Tính ngày bắt đầu lãi = ngày vay + số ngày hoàn vốn
-    const loanDateObj = new Date(loanDate);
-    const interestStartDateObj = new Date(loanDateObj);
-    interestStartDateObj.setDate(loanDateObj.getDate() + daysToBreakEven);
-    return interestStartDateObj.toISOString();
-  } catch (error) {
-    console.error('Error calculating interest start date:', error);
-    return loanDate; // Return original loan date in case of error
-  }
-}
-
-/**
  * Tính lãi phí đã thu theo công thức mới
  * A = Tổng credit_amount từ đầu đến cuối tháng trước - down_payment (nếu âm thì = 0)
  * B = Tổng credit_amount từ đầu đến cuối tháng này - down_payment (nếu âm thì = 0)
