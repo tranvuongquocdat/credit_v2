@@ -240,7 +240,7 @@ export async function getPawnWarnings(
       
     // Apply status filter if specified
     if (statusFilter !== 'all') {
-      pawnsQuery = pawnsQuery.eq('status', statusFilter);
+      pawnsQuery = pawnsQuery.eq('status', statusFilter as any);
     }
       
     // Áp dụng filter theo tên khách hàng nếu có

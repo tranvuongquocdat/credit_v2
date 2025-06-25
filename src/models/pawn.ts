@@ -1,13 +1,13 @@
-import { Database } from '@/types/database.types';
 import { Collateral } from './collateral';
 
 export enum PawnStatus {
-  ON_TIME = 'on_time',          // Đang vay
+  ACTIVE = 'active',          // Đang vay
+  ON_TIME = 'on_time',           // Đúng hẹn
   OVERDUE = 'overdue',          // Quá hạn
   LATE_INTEREST = 'late_interest', // Chậm lãi
   BAD_DEBT = 'bad_debt',        // Nợ xấu
   CLOSED = 'closed',           // Kết thúc (hoặc đóng hợp đồng sớm)
-  DELETED = 'deleted'           // Đã xóa
+  DELETED = 'deleted',           // Đã xóa
 }
 
 export enum InterestType {

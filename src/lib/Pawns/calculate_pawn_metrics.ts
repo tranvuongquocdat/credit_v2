@@ -1,8 +1,7 @@
-import { supabase } from '@/lib/supabase';
-import { calculateActualLoanAmount } from './calculate_actual_loan_amount';
 import { calculateDebtToLatestPaidPeriod } from './calculate_remaining_debt';
-import { getExpectedMoney } from './get_expected_money';
+import { calculateActualLoanAmount } from './calculate_actual_loan_amount';
 import { calculateCollectedInterest } from './calculate_collected_interest';
+import { supabase } from '../supabase';
 
 export interface PawnMetrics {
   pawnId: string;
@@ -22,53 +21,76 @@ export interface PawnData {
   id: string;
   loan_amount: number;
   loan_date: string;
-  interest_value: number;
-  interest_type: string;
   loan_period: number;
-  interest_period: number;
+}
+
+// Tùy chọn nhận thêm các map đã tính sẵn để tránh query lặp
+interface MetricHelperOptions {
+  interestMap?: Map<string, number>;
+  principalMap?: Map<string, number>;
+  debtMap?: Map<string, number>;
+  expectedMap?: Map<string, number>;
+  todayMap?: Map<string, number>;
 }
 
 /**
- * Tính toán các chỉ số tài chính cho một hợp đồng cầm đồ
- * @param pawn - Dữ liệu hợp đồng cầm đồ
- * @returns Promise<PawnMetrics | null> - Các chỉ số tài chính hoặc null nếu có lỗi
+ * Tính toán các chỉ số tài chính cho một hợp đồng tín dụng
+ * @param credit - Dữ liệu hợp đồng tín dụng
+ * @param options - Tùy chọn nhận thêm các map đã tính sẵn để tránh query lặp
+ * @returns Promise<CreditMetrics | null> - Các chỉ số tài chính hoặc null nếu có lỗi
  */
 export async function calculatePawnMetrics(
-  pawn: PawnData
+  pawn: PawnData,
+  options?: MetricHelperOptions
 ): Promise<PawnMetrics | null> {
   try {
-    // Calculate actual loan amount including additional loans and principal repayments
-    const actualLoanAmount = await calculateActualLoanAmount(pawn.id);
-    
-    // Calculate paid interest using the new function
-    const paidInterest = await calculateCollectedInterest(pawn.id);
-    
-    // Calculate old debt (similar to credits logic)
-    const oldDebt = await calculateDebtToLatestPaidPeriod(pawn.id);
-    
-    // Calculate expected profit using getExpectedMoney (sum of all daily interest)
-    const expectedMoneyArray = await getExpectedMoney(pawn.id);
-    const expectedProfit = expectedMoneyArray.reduce((sum, amount) => sum + amount, 0);
-    
-    // Calculate interest to today
-    const today = new Date();
-    const loanStart = new Date(pawn.loan_date);
-    const daysSinceLoan = Math.floor((today.getTime() - loanStart.getTime()) / (1000 * 60 * 60 * 24));
-    const daysToCalculate = Math.min(Math.max(0, daysSinceLoan + 1), expectedMoneyArray.length);
-    const interestToday = expectedMoneyArray.slice(0, daysToCalculate).reduce((sum, amount) => sum + amount, 0);
-    
+    const [loanAmount, oldDebt, expectedProfit, interestToday, paidInterest] = await Promise.all([
+      /* loanAmount */ (
+        options?.principalMap?.get(pawn.id) ??
+        calculateActualLoanAmount(pawn.id)
+      ),
+      /* oldDebt */ (
+        options?.debtMap?.get(pawn.id) ??
+        calculateDebtToLatestPaidPeriod(pawn.id)
+      ),
+      /* expected profit */ (async () => {
+        const cached = options?.expectedMap?.get(pawn.id);
+        if (typeof cached === 'number') return cached;
+        // Fallback: call calc_expected_until to loan end
+        const loanStart = new Date(pawn.loan_date);
+        const loanEnd = new Date(loanStart.getTime() + (pawn.loan_period - 1) * 86400000);
+        const { data } = await (supabase.rpc as any)('calc_expected_until', {
+          p_pawn_id: pawn.id,
+          p_end_date: loanEnd.toISOString().slice(0, 10),
+        });
+        return Number(data ?? 0);
+      })(),
+      /* interest today */ (async () => {
+        const cached = options?.todayMap?.get(pawn.id);
+        if (typeof cached === 'number') return cached;
+        const { data } = await (supabase.rpc as any)('calc_expected_until', {
+          p_pawn_id: pawn.id,
+          p_end_date: new Date().toISOString().slice(0, 10),
+        });
+        return Number(data ?? 0);
+      })(),
+      /* paid interest */ (async () => {
+        const cached = options?.interestMap?.get(pawn.id);
+        if (typeof cached === 'number') return cached;
+        return calculateCollectedInterest(pawn.id);
+      })(),
+    ]);
     return {
       pawnId: pawn.id,
       oldDebt: Math.round(oldDebt),
       expectedProfit: Math.round(expectedProfit),
       interestToday: Math.round(interestToday),
-      actualLoanAmount: Math.round(actualLoanAmount),
+      actualLoanAmount: Math.round(loanAmount),
       loading: false,
       // Lãi phí đã thu
-      paidInterest: paidInterest,
-      // For summary
+      paidInterest,
       // Tiền cho vay
-      summaryLoan: actualLoanAmount,
+      summaryLoan: loanAmount,
       // Nợ cũ
       summaryDebt: oldDebt,
       // Lãi phí dự kiến

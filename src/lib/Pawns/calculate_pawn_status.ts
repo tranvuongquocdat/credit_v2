@@ -14,120 +14,53 @@ export interface PawnStatusResult {
  * @returns Promise<PawnStatusResult> - Kết quả status và mô tả
  */
 export async function calculatePawnStatus(pawnId: string): Promise<PawnStatusResult> {
-  try {
-    // Lấy thông tin pawn
-    const { data: pawn, error: pawnError } = await supabase
-      .from('pawns')
-      .select('id, status, loan_date, loan_period, interest_period')
-      .eq('id', pawnId)
-      .single();
+  const { data: pawn, error } = await supabase.rpc('get_pawn_statuses', {
+    p_pawn_ids: [pawnId],
+  });
 
-    if (pawnError) {
-      throw pawnError;
-    }
-
-    if (!pawn) {
-      throw new Error("Pawn not found");
-    }
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    // 1. Kiểm tra nếu hợp đồng đã đóng
-    if (pawn.status === PawnStatus.CLOSED) {
-      return {
-        status: "Đã đóng",
-        statusCode: 'CLOSED',
-        description: "Hợp đồng đã được đóng"
-      };
-    }
-
-    // 2. Kiểm tra nếu hợp đồng đã xóa
-    if (pawn.status === PawnStatus.DELETED) {
-      return {
-        status: "Đã xóa",
-        statusCode: 'DELETED',
-        description: "Hợp đồng đã bị xóa"
-      };
-    }
-
-    // 3. Kiểm tra nếu trạng thái là ON_TIME
-    if (pawn.status === PawnStatus.ON_TIME) {
-      // Tính ngày kết thúc hợp đồng
-      const loanDate = new Date(pawn.loan_date);
-      loanDate.setHours(0, 0, 0, 0);
-      const contractEndDate = new Date(loanDate);
-      contractEndDate.setDate(loanDate.getDate() + pawn.loan_period - 1);
-      contractEndDate.setHours(0, 0, 0, 0);
-
-      // 3a. Kiểm tra nếu hợp đồng quá hạn (ngày kết thúc < hôm nay)
-      if (contractEndDate < today) {
-        const overdueDays = Math.floor((today.getTime() - contractEndDate.getTime()) / (1000 * 60 * 60 * 24));
-        return {
-          status: "Quá hạn",
-          statusCode: 'OVERDUE',
-          description: `Quá hạn ${overdueDays} ngày`
-        };
-      }
-
-      // 3b. Kiểm tra chậm lãi
-      try {
-        const latestPaymentDate = await getLatestPaymentPaidDate(pawnId);
-        
-        if (latestPaymentDate) {
-          // Có lịch sử thanh toán - tính từ ngày thanh toán cuối
-          const lastPaymentDate = new Date(latestPaymentDate);
-          lastPaymentDate.setHours(0, 0, 0, 0);
-          
-          // Tính ngày cuối phải đóng lãi tiếp theo
-          const interestPeriod = pawn.interest_period || 30;
-          const nextInterestDueDate = new Date(lastPaymentDate);
-          nextInterestDueDate.setDate(lastPaymentDate.getDate() + interestPeriod);
-          nextInterestDueDate.setHours(0, 0, 0, 0);
-          
-          // Nếu ngày cuối đóng lãi <= hôm nay => chậm lãi
-          if (nextInterestDueDate <= today) {
-            const lateDays = Math.floor((today.getTime() - nextInterestDueDate.getTime()) / (1000 * 60 * 60 * 24));
-            return {
-              status: "Chậm lãi",
-              statusCode: 'LATE_INTEREST',
-              description: `Chậm lãi ${lateDays} ngày`
-            };
-          }
-        } else {
-          // Chưa có lịch sử thanh toán - tính từ ngày vay
-          const interestPeriod = pawn.interest_period || 30;
-          const firstInterestDueDate = new Date(loanDate);
-          firstInterestDueDate.setDate(loanDate.getDate() + interestPeriod);
-          firstInterestDueDate.setHours(0, 0, 0, 0);
-          
-          // Nếu ngày cuối đóng lãi đầu tiên <= hôm nay => chậm lãi
-          if (firstInterestDueDate <= today) {
-            const lateDays = Math.floor((today.getTime() - firstInterestDueDate.getTime()) / (1000 * 60 * 60 * 24));
-            return {
-              status: "Chậm lãi",
-              statusCode: 'LATE_INTEREST',
-              description: `Chậm lãi ${lateDays} ngày`
-            };
-          }
-        }
-      } catch (error) {
-        console.error('Error checking payment history:', error);
-        // Nếu có lỗi khi kiểm tra lịch sử thanh toán, vẫn tiếp tục với logic khác
-      }
-    }
-
-    // 4. Trường hợp mặc định - đang vay bình thường
+  if (error) {
+    console.error('Error calculating credit status:', error);
     return {
-      status: "Đang vay",
+      status: 'Đang vay',
       statusCode: 'ACTIVE',
-      description: "Hợp đồng đang hoạt động bình thường"
     };
-
-  } catch (error) {
-    console.error('Error calculating pawn status:', error);
-    throw error;
   }
+
+  const code = pawn?.[0]?.status_code;
+  if (code === 'CLOSED') {
+    return {
+      status: 'Đã đóng',
+      statusCode: 'CLOSED',
+    };
+  }
+  if (code === 'OVERDUE') { 
+    return {
+      status: 'Quá hạn',
+      statusCode: 'OVERDUE',
+    };
+  }
+  if (code === 'LATE_INTEREST') {
+    return {
+      status: 'Chậm lãi',
+      statusCode: 'LATE_INTEREST',
+    };
+  }
+  if (code === 'ACTIVE') {
+    return {
+      status: 'Đang vay',
+      statusCode: 'ACTIVE',
+    };
+  }
+  if (code === 'DELETED') { 
+    return {
+        status: 'Đã xóa',
+        statusCode: 'DELETED',
+      };
+  }
+  return {
+    status: 'Đang vay',
+    statusCode: 'ACTIVE',
+  };
 }
 
 /**

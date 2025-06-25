@@ -52,7 +52,6 @@ export default function PawnWarningsPage() {
   // Status mapping for display
   const statusMap = {
     [PawnStatus.ON_TIME]: { label: 'Đang cầm', color: 'bg-green-100 text-green-800' },
-    [PawnStatus.OVERDUE]: { label: 'Quá hạn', color: 'bg-red-100 text-red-800' },
     [PawnStatus.LATE_INTEREST]: { label: 'Chậm lãi', color: 'bg-yellow-100 text-yellow-800' },
     [PawnStatus.BAD_DEBT]: { label: 'Nợ xấu', color: 'bg-red-100 text-red-800' },
     [PawnStatus.CLOSED]: { label: 'Đã đóng', color: 'bg-gray-100 text-gray-800' },
@@ -109,7 +108,7 @@ export default function PawnWarningsPage() {
   // Handle view detail
   const handleViewDetail = async (pawn: PawnWithCustomerAndCollateral) => {
     const status = await calculatePawnStatus(pawn.id);
-    pawn.status = status.status as PawnStatus;
+    pawn.status = status.statusCode as PawnStatus;
     setSelectedPawn(pawn);
     setIsHistoryModalOpen(true);
   };
@@ -235,22 +234,7 @@ export default function PawnWarningsPage() {
                 />
               </div>
             </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-1">Trạng thái hợp đồng</label>
-              <select
-                value={statusFilter}
-                onChange={handleStatusFilterChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">Tất cả</option>
-                <option value="on_time">Đang cầm</option>
-                <option value="overdue">Quá hạn</option>
-                <option value="late_interest">Chậm lãi</option>
-                <option value="bad_debt">Nợ xấu</option>
-              </select>
-            </div>
-            
+
             <div className="flex items-end gap-2">
               <Button 
                 onClick={handleClearFilters}
@@ -275,12 +259,6 @@ export default function PawnWarningsPage() {
             <div className="mt-2 text-sm text-blue-600">
               {customerNameFilter && (
                 <span>Đang lọc theo tên khách hàng: <span className="font-semibold">{customerNameFilter}</span> </span>
-              )}
-              {statusFilter !== "all" && (
-                <span>
-                  {customerNameFilter && "| "}
-                  Trạng thái: <span className="font-semibold">{statusMap[statusFilter].label}</span>
-                </span>
               )}
               {totalItems > 0 ? 
                 ` (${totalItems} kết quả)` : 

@@ -1019,6 +1019,19 @@ export type Database = {
         }
         Returns: number
       }
+      calc_pawn_expected_until: {
+        Args: { p_pawn_id: string; p_end_date: string }
+        Returns: number
+      }
+      calc_pawn_pawn_interest_segment: {
+        Args: {
+          p_principal: number
+          p_daily_rate: number
+          p_start: string
+          p_end: string
+        }
+        Returns: number
+      }
       get_credit_statuses: {
         Args: { p_credit_ids: string[] }
         Returns: {
@@ -1092,6 +1105,55 @@ export type Database = {
         Returns: {
           credit_id: string
           paid_interest: number
+        }[]
+      }
+      get_pawn_current_principal: {
+        Args: { p_pawn_ids: string[] }
+        Returns: {
+          pawn_id: string
+          current_principal: number
+        }[]
+      }
+      get_pawn_expected_interest: {
+        Args: { p_pawn_ids: string[] }
+        Returns: {
+          pawn_id: string
+          expected_profit: number
+          interest_today: number
+        }[]
+      }
+      get_pawn_next_payment_info: {
+        Args: { p_pawn_ids: string[] }
+        Returns: {
+          pawn_id: string
+          next_date: string
+          is_completed: boolean
+          has_paid: boolean
+        }[]
+      }
+      get_pawn_old_debt: {
+        Args: { p_pawn_ids: string[] }
+        Returns: {
+          pawn_id: string
+          old_debt: number
+        }[]
+      }
+      get_pawn_paid_interest: {
+        Args: {
+          p_pawn_ids: string[]
+          p_start_date?: string
+          p_end_date?: string
+        }
+        Returns: {
+          pawn_id: string
+          paid_interest: number
+        }[]
+      }
+      get_pawn_statuses: {
+        Args: { p_pawn_ids: string[] }
+        Returns: {
+          pawn_id: string
+          status_code: string
         }[]
       }
       get_pawns_with_latest_payments: {

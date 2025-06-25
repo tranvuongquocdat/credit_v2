@@ -1,11 +1,9 @@
-'use client';
-
+// src/hooks/usePawnCalculation.ts
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { PawnStatus } from '@/models/pawn';
 import { useStore } from '@/contexts/StoreContext';
 import { calculatePawnMetrics } from '@/lib/Pawns/calculate_pawn_metrics';
-import { calculateTotalCollectedInterest } from '@/lib/Pawns/calculate_collected_interest';
 
 // Interface cho dữ liệu tài chính tổng hợp
 export interface StoreFinancialData {
@@ -17,7 +15,7 @@ export interface StoreFinancialData {
   collectedInterest: number;
 }
 
-// Interface cho chi tiết từng pawn (cho PawnTable)
+// Interface cho chi tiết từng pawn (cho PawnsTable)
 export interface PawnFinancialDetail {
   pawnId: string;
   actualLoanAmount: number;
@@ -25,6 +23,9 @@ export interface PawnFinancialDetail {
   expectedProfit: number;
   paidInterest: number;
   interestToday: number;
+  nextPayment: string | null;
+  isCompleted: boolean;
+  hasPaid: boolean;
   loading: boolean;
 }
 
@@ -37,8 +38,8 @@ export function usePawnCalculations() {
   const fetchAllData = async () => {
     try {
       setLoading(true);
-      if (!currentStore) return;
-      const storeId = currentStore?.id;
+      
+      const storeId = currentStore?.id || '1';
       
       // 1. Lấy thông tin store
       const { data: storeData } = await supabase
@@ -47,17 +48,17 @@ export function usePawnCalculations() {
         .eq('id', storeId)
         .single();
       
-      // 2. Lấy danh sách pawns ON_TIME
-      const { data: activePawnsData } = await supabase
+      // 2. Lấy danh sách credits ON_TIME
+      const { data: activeCreditsData } = await supabase
         .from('pawns')
-        .select('id, loan_amount, loan_date, interest_value, interest_type, loan_period, interest_period')
+        .select('id, loan_amount, loan_date, loan_period')
         .eq('store_id', storeId)
         .eq('status', PawnStatus.ON_TIME);
       
-      // 2b. Lấy danh sách pawns CLOSED cho việc tính lãi phí đã thu
-      const { data: closedPawnsData } = await supabase
+      // 3. Lấy danh sách credits đã đóng
+      const { data: closedCreditsData } = await supabase
         .from('pawns')
-        .select('id, loan_amount, loan_date, interest_value, interest_type, loan_period, interest_period')
+        .select('id')
         .eq('store_id', storeId)
         .eq('status', PawnStatus.CLOSED);
       
@@ -67,17 +68,89 @@ export function usePawnCalculations() {
       let totalCollectedInterest = 0;
       const newDetails: Record<string, PawnFinancialDetail> = {};
       
-      if (activePawnsData?.length) {
-        console.time('Calculate all active pawns');
+      /* ---------- 4. RPC duy nhất lấy paidInterest cho active + closed ---------- */
+      const interestMap = new Map<string, number>();
+      const activeIds  = activeCreditsData?.map(c => c.id) || [];
+      const closedIds  = closedCreditsData?.map(c => c.id) || [];
+      const allIds     = [...activeIds, ...closedIds];
+      
+      if (allIds.length) {
+        const start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+        const end   = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+        const { data: interestRows, error } = await supabase.rpc('get_pawn_paid_interest', {
+          p_pawn_ids: allIds,
+          p_start_date: start.toISOString(),
+          p_end_date  : end.toISOString(),
+        });
+        if (!error && Array.isArray(interestRows)) {
+          interestRows.forEach((r: any) =>
+            interestMap.set(r.pawn_id, Number(r.paid_interest || 0)));
+        }
+      }
+
+      const { data: principalRows } = await supabase.rpc('get_pawn_current_principal', {
+        p_pawn_ids: allIds,
+      });
+      const principalMap = new Map<string, number>();
+      principalRows?.forEach((r: { pawn_id: string; current_principal: number }) => {
+        principalMap.set(r.pawn_id, Number(r.current_principal));
+      });
+
+      // 5. RPC lấy old debt
+      const { data: debtRows } = await supabase.rpc('get_pawn_old_debt', {
+        p_pawn_ids: activeIds,
+      });
+      const debtMap = new Map<string, number>();
+      debtRows?.forEach((r: { pawn_id: string; old_debt: number }) =>
+        debtMap.set(r.pawn_id, Number(r.old_debt || 0))
+      );
+
+      /* ---------- 6. RPC lấy expectedProfit & interestToday ---------- */
+      const expectedMap = new Map<string, number>();
+      const todayMap = new Map<string, number>();
+
+      if (allIds.length) {
+        const { data: expRows, error: expErr } = await (supabase.rpc as any)('get_pawn_expected_interest', {
+          p_pawn_ids: allIds,
+        });
+        if (!expErr && Array.isArray(expRows)) {
+          expRows.forEach((r: any) => {
+            expectedMap.set(r.pawn_id, Number(r.expected_profit || 0));
+            todayMap.set(r.pawn_id, Number(r.interest_today || 0));
+          });
+        }
+      }
+
+      /* ---------- 7. RPC lấy thông tin kỳ thanh toán tiếp theo ---------- */
+      const nextMap = new Map<string, { nextDate: string | null; isCompleted: boolean; hasPaid: boolean }>();
+      if (activeIds.length) {
+        const { data: npRows, error: npErr } = await (supabase.rpc as any)('get_pawn_next_payment_info', {
+          p_pawn_ids: activeIds,
+        });
+        if (!npErr && Array.isArray(npRows)) {
+          npRows.forEach((r: any) => {
+            nextMap.set(r.pawn_id, {
+              nextDate: r.next_date,
+              isCompleted: r.is_completed,
+              hasPaid: r.has_paid,
+            });
+          });
+        }
+      }
         
-        // 3. Xử lý song song tất cả pawns đang hoạt động
         const results = await Promise.all(
-          activePawnsData.map(pawn => calculatePawnMetrics(pawn))
-        );
+        activeCreditsData!.map(c =>
+          calculatePawnMetrics(c, {
+            principalMap,
+            interestMap,
+            debtMap,
+            expectedMap,
+            todayMap,
+          })
+        )
+      );
         
-        console.timeEnd('Calculate all active pawns');
-        
-        // 4. Aggregate results từ pawns đang hoạt động
+        // Aggregate results
         results.forEach(result => {
           if (result) {
             newDetails[result.pawnId] = {
@@ -87,6 +160,9 @@ export function usePawnCalculations() {
               expectedProfit: result.expectedProfit,
               paidInterest: result.paidInterest,
               interestToday: result.interestToday,
+            nextPayment: nextMap.get(result.pawnId)?.nextDate || null,
+            isCompleted: nextMap.get(result.pawnId)?.isCompleted || false,
+            hasPaid: nextMap.get(result.pawnId)?.hasPaid || false,
               loading: false
             };
             
@@ -96,20 +172,15 @@ export function usePawnCalculations() {
             totalCollectedInterest += result.paidInterest;
           }
         });
-      }
       
-      // 5. Xử lý lãi phí đã thu từ pawns đã đóng
-      if (closedPawnsData?.length) {
-        console.time('Calculate closed pawns interest');
-        
-        // Sử dụng hàm mới để tính toán lãi phí đã thu từ tất cả pawns đã đóng trong một truy vấn
-        const closedPawnIds = closedPawnsData.map(pawn => pawn.id);
-        totalCollectedInterest += await calculateTotalCollectedInterest(closedPawnIds);
-        
-        console.timeEnd('Calculate closed pawns interest');
-      }
+      // Cộng thêm lãi phí của các credit đã đóng
+      closedIds.forEach(id => {
+        totalCollectedInterest += interestMap.get(id) ?? 0;
+      });
       
-      // 6. Set results
+      /* ---------- 8. Bỏ tính trạng thái tại đây - đã chuyển sang RPC per page */
+      
+      // 7. Set results
       setSummary({
         totalFund: storeData?.investment || 0,
         availableFund: storeData?.cash_fund || 0,
@@ -138,4 +209,4 @@ export function usePawnCalculations() {
     loading,
     refresh: fetchAllData
   };
-} 
+}

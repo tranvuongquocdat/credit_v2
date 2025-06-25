@@ -15,7 +15,7 @@ import { toast } from '@/components/ui/use-toast';
 // Import custom components
 import { FinancialSummary } from '@/components/common/FinancialSummary';
 import { SearchFilters } from '@/components/Pawns/SearchFilters';
-import { PawnTable } from '@/components/Pawns/PawnTable';
+import { PawnsTable } from '@/components/Pawns/PawnTable';
 import { PawnsPagination } from '@/components/Pawns/PawnsPagination';
 import { PawnHistoryModal as PaymentHistoryModal } from '@/components/Pawns/PawnHistoryModal';
 import { PawnCreateModal } from '@/components/Pawns/PawnCreateModal';
@@ -29,11 +29,13 @@ import { PawnStatus, PawnWithCustomer } from '@/models/pawn';
 import { usePawnCalculations } from '@/hooks/usePawnCalculation';
 import { useAutoUpdateCashFund } from '@/hooks/useCashFundUpdater';
 import { usePermissions } from '@/hooks/usePermissions';
-
+import { usePawnStatuses } from '@/hooks/usePawnStatuses';
+import { reopenContract } from '@/lib/Pawns/reopen_contract';
+import { updatePawnStatus } from '@/lib/pawn';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
-  [PawnStatus.ON_TIME]: { label: 'Đúng hẹn', color: 'bg-green-100 text-green-800' },
+  [PawnStatus.ACTIVE]: { label: 'Đang vay', color: 'bg-green-100 text-green-800' },
   [PawnStatus.OVERDUE]: { label: 'Quá hạn', color: 'bg-red-100 text-red-800' },
   [PawnStatus.LATE_INTEREST]: { label: 'Chậm lãi', color: 'bg-yellow-100 text-yellow-800' },
   [PawnStatus.BAD_DEBT]: { label: 'Nợ xấu', color: 'bg-purple-100 text-purple-800' },
@@ -69,8 +71,8 @@ export default function PawnsPage() {
   const canViewPawnsList = hasPermission('xem_danh_sach_hop_dong_cam_do');
   
   // Lấy dữ liệu tài chính tổng hợp
-  const { summary: financialSummary, refresh: refreshFinancial } = usePawnCalculations();
-  
+  const { summary: financialSummary, details: pawnDetails, refresh: refreshFinancial } = usePawnCalculations();
+  const { statuses: pawnStatuses, loading: pawnStatusesLoading } = usePawnStatuses(pawns.map(pawn => pawn.id));
   // Use auto update cash fund hook
   const { triggerUpdate } = useAutoUpdateCashFund({
     onUpdate: (newCashFund) => {
@@ -118,6 +120,48 @@ export default function PawnsPage() {
     // Mở modal chỉnh sửa thay vì chuyển trang
     setEditPawnId(pawnId);
     setIsPawnEditModalOpen(true);
+  };
+  
+  // Handle opening status dialog
+  const handleOpenStatusDialog = (pawn: PawnWithCustomer) => {
+    // Nếu hợp đồng đang ở trạng thái đóng (closed), xử lý mở lại hợp đồng
+    if (pawn.status === PawnStatus.CLOSED) {
+      // Hiển thị dialog xác nhận
+      if (confirm('Bạn có muốn mở lại hợp đồng này không? Trạng thái sẽ chuyển về "Đúng hẹn"')) {
+        reopenPawn(pawn);
+      }
+    } else {
+      // Trường hợp bình thường: mở dialog chọn trạng thái
+      setSelectedPawn(pawn);
+    }
+  };
+
+  // Hàm mở lại hợp đồng
+  const reopenPawn = async (pawn: PawnWithCustomer) => {
+    try {
+      // Ghi lại lịch sử mở lại hợp đồng với số tiền đóng hợp đồng gần nhất
+      const { recordContractReopening } = await import('@/lib/Credits/credit-amount-history');
+      const result = await recordContractReopening(
+        pawn.id,
+        new Date().toISOString(),
+        'Mở lại hợp đồng từ trạng thái đóng'
+      );
+      
+      console.log('Reopened contract with amount:', result.lastClosureAmount);
+      
+      // Cập nhật trạng thái hợp đồng về đúng hẹn
+      updatePawnStatus(pawn.id, PawnStatus.ON_TIME);
+      
+      // Refresh dữ liệu tài chính
+      refreshFinancial();
+    } catch (error) {
+      console.error('Error reopening contract:', error);
+      toast({
+        title: 'Lỗi',
+        description: 'Có lỗi xảy ra khi mở lại hợp đồng',
+        variant: 'destructive',
+      });
+    }
   };
   
   // Handle opening delete dialog
@@ -235,22 +279,15 @@ export default function PawnsPage() {
             />
 
             {/* Bảng dữ liệu hợp đồng */}
-            <PawnTable
+            <PawnsTable
               pawns={pawns}
-              loading={loading}
               statusMap={statusMap}
               onEdit={handleEditPawn}
-              onViewDetail={handleOpenPaymentHistory}
-              onDelete={(pawnId: string) => {
-                const pawn = pawns.find(p => p.id === pawnId);
-                if (pawn) handleOpenDeleteDialog(pawn);
-              }}
-              onExtend={(pawnId: string) => {
-                console.log('Extend pawn:', pawnId);
-              }}
-              onRedeem={(pawnId: string) => {
-                console.log('Redeem pawn:', pawnId);
-              }}
+              onDelete={handleOpenDeleteDialog}
+              onUpdateStatus={handleOpenStatusDialog}
+              onShowPaymentHistory={handleOpenPaymentHistory}
+              calculatedDetails={pawnDetails}
+              calculatedStatuses={pawnStatuses}
             />
             
             {/* Phân trang */}
