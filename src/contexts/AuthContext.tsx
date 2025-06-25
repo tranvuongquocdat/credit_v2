@@ -32,13 +32,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const fetchAuthData = useCallback(async () => {
+  const fetchAuthData = useCallback(async (forceRefresh = false) => {
     try {
       setLoading(true);
-      const currentUser = await getCurrentUser();
+      const currentUser = await getCurrentUser(forceRefresh);
       setUser(currentUser);
 
+      // Nếu không có user hợp lệ ⇒ reset quyền & isAdmin
       if (!currentUser || !currentUser.id) {
+        setIsAdmin(false);
         setPermissions([]);
         setLoading(false);
         return;
@@ -53,6 +55,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
 
       if (currentUser.role !== "employee") {
+        // Những role khác (superadmin, v.v.) ⇒ không phải admin nên reset cờ
+        setIsAdmin(false);
         setPermissions([]);
         setLoading(false);
         return;
@@ -80,6 +84,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (permissionError) throw permissionError;
 
       const ids = permissionData?.map((p) => p.permission_id) || [];
+      setIsAdmin(false);                   // nhân viên ⇒ chắc chắn không phải admin
       setPermissions(ids);
     } catch (err) {
       console.error("AuthProvider error:", err);
@@ -98,7 +103,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           case 'SIGNED_IN':
           case 'SIGNED_OUT':
           case 'USER_UPDATED':
-            fetchAuthData();        // cần tải lại
+            fetchAuthData(true);        // cần tải lại
             break;
 
           case 'TOKEN_REFRESHED':

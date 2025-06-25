@@ -41,7 +41,7 @@ export default function InstallmentWarningsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(30);
   const { currentStore } = useStore();
   const [processingPayment, setProcessingPayment] = useState(false);
   const [paymentConfirmOpen, setPaymentConfirmOpen] = useState(false);

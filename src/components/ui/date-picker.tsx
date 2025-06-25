@@ -36,10 +36,10 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
         // Available space relative to viewport because popup uses fixed positioning
         const spaceBelow = window.innerHeight - rect.bottom;
         const spaceAbove = rect.top;
-
+        
         // Determine if we should render above the input
         const showAbove = spaceAbove > spaceBelow && spaceBelow < calendarHeight;
-
+        
         // Horizontal position (centered relative to input)
         let left = rect.left + (rect.width / 2) - (calendarWidth / 2);
         

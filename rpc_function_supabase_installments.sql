@@ -180,3 +180,106 @@ begin
         return next;
     end loop;
 end $$;
+
+-- Function to get next unpaid date for multiple installments
+create or replace function public.installment_next_unpaid_date(
+  p_installment_ids uuid[]
+)
+returns table (
+  installment_id    uuid,
+  next_unpaid_date  date
+)
+language sql
+stable
+as $$
+with ids as (
+  select unnest(p_installment_ids) as id
+),
+last_pay as (
+  select   ih.installment_id,
+           max(ih.effective_date)::date as last_paid
+  from     installment_history ih
+  where    ih.installment_id = any(p_installment_ids)
+    and    ih.transaction_type = 'payment'
+    and    ih.is_deleted = false
+  group by ih.installment_id
+),
+inst_data as (
+  select i.id, i.start_date::date as loan_start
+  from installments i
+  where i.id = any(p_installment_ids)
+)
+select 
+  inst_data.id as installment_id,
+  coalesce(
+    (last_pay.last_paid + interval '1 day')::date,
+    inst_data.loan_start
+  ) as next_unpaid_date
+from inst_data
+left join last_pay on last_pay.installment_id = inst_data.id;
+$$;
+
+-- Function to get overdue statistics for multiple installments
+create or replace function public.installment_overdue_stats(
+  p_installment_ids uuid[]
+)
+returns table (
+  installment_id uuid,
+  late_periods   int,
+  first_unpaid   date,
+  last_check     date
+)
+language plpgsql
+stable
+as $$
+declare
+  rec record;
+  v_today date := current_date;
+  v_first_unpaid date;
+  v_last_check date;
+  v_unpaid_days int;
+  v_late_periods int;
+begin
+  for rec in
+    select 
+      i.id,
+      i.start_date::date as loan_date,
+      i.duration as loan_period,
+      i.payment_period,
+      coalesce(max(ih.effective_date)::date, null) as last_paid
+    from installments i
+    left join installment_history ih on ih.installment_id = i.id 
+      and ih.transaction_type = 'payment' 
+      and ih.is_deleted = false
+    where i.id = any(p_installment_ids)
+    group by i.id, i.start_date, i.duration, i.payment_period
+  loop
+    -- Calculate first unpaid date
+    v_first_unpaid := coalesce(
+      (rec.last_paid + interval '1 day')::date,
+      rec.loan_date
+    );
+    
+    -- Calculate contract end date
+    v_last_check := least(
+      v_today,
+      (rec.loan_date + (rec.loan_period - 1) * interval '1 day')::date
+    );
+    
+    -- Calculate unpaid days and late periods
+    if v_last_check >= v_first_unpaid then
+      v_unpaid_days := (v_last_check - v_first_unpaid + 1);
+      v_late_periods := ceil(v_unpaid_days::numeric / coalesce(rec.payment_period, 10));
+    else
+      v_late_periods := 0;
+    end if;
+    
+    installment_id := rec.id;
+    late_periods := v_late_periods;
+    first_unpaid := v_first_unpaid;
+    last_check := v_last_check;
+    
+    return next;
+  end loop;
+end;
+$$;

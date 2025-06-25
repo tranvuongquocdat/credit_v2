@@ -7,9 +7,8 @@ import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
 import { AlertTriangleIcon } from "lucide-react";
 import { useStore } from "@/contexts/StoreContext";
 import { useRouter } from "next/navigation";
-import { getLatestPaymentPaidDate } from '@/lib/Installments/get_latest_payment_paid_date';
-import { getinstallmentPaymentHistory } from "@/lib/Installments/payment_history";
 import { getExpectedMoney } from "@/lib/Installments/get_expected_money";
+import { supabase } from "@/lib/supabase";
 
 // Extended interface with warning-specific fields
 interface InstallmentWarning extends InstallmentWithCustomer {
@@ -132,45 +131,76 @@ export function InstallmentWarningsTable({
       setWarnings([]); // Clear old warnings before processing new ones
       
       try {
-        
+        const ids = installments.map((i) => i.id);
+
+        /* 1. late periods from overdue stats */
+        const { data: lateRows, error: lateErr } = await (supabase as any).rpc('installment_overdue_stats', {
+          p_installment_ids: ids,
+        });
+        if (lateErr) {
+          console.error('installment_overdue_stats error:', lateErr);
+          return;
+        }
+        const lateMap = new Map((lateRows as any[]).map((r: any) => [r.installment_id, r.late_periods]));
+
+        /* 2. next unpaid date */
+        const { data: nextRows, error: nextErr } = await (supabase as any).rpc('installment_next_unpaid_date', {
+          p_installment_ids: ids,
+        });
+        if (nextErr) {
+          console.error('installment_next_unpaid_date error:', nextErr);
+          return;
+        }
+        const nextMap = new Map((nextRows as any[]).map((r: any) => [r.installment_id, r.next_unpaid_date]));
+
+        /* 3. old debt */
+        const { data: oldDebtRows, error: oldDebtErr } = await (supabase as any).rpc('get_installment_old_debt', {
+          p_installment_ids: ids,
+        });
+        const oldDebtMap = new Map((oldDebtRows as any[]).map((r: any) => [r.installment_id, r.old_debt]));
+
         const warningResults: InstallmentWarning[] = [];
         // Process each installment
         for (const installment of installments) {
           try {
-            // Get latest payment paid date
-            const latestPaymentDate = await getLatestPaymentPaidDate(installment.id);
-            // Kiểm tra xem có quá hạn không
-            const startDate = new Date(installment.start_date);
-            startDate.setHours(0, 0, 0, 0);
-            const contractEndDate = new Date(startDate);
-            contractEndDate.setDate(startDate.getDate() + installment.duration - 1);
-            contractEndDate.setHours(0, 0, 0, 0);
-            
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            
-            // Use the earlier date between contract end date and today
-            const effectiveDate = today > contractEndDate ? contractEndDate : today;
-            
-            // Nếu có thanh toán gần nhất, tính từ ngày đó
-            let checkDate = startDate;
-            checkDate.setDate(checkDate.getDate() - 1);
-            if (latestPaymentDate) {
-              checkDate = new Date(latestPaymentDate);
+            const nextUnpaidStr = nextMap.get(installment.id) as string | undefined;
+            let lastPaidDate: Date | null = null;
+            if (nextUnpaidStr) {
+              const tmp = new Date(nextUnpaidStr);
+              tmp.setDate(tmp.getDate() - 1);
+              lastPaidDate = tmp;
             }
-            checkDate.setHours(0, 0, 0, 0);
-            
-            // Kiểm tra xem có quá hạn hay không
-            const paymentPeriod = installment.payment_period || 10;
-            const daysSinceLastPayment = Math.floor((effectiveDate.getTime() - checkDate.getTime()) / (1000 * 60 * 60 * 24));
-            
-            const dailyAmounts = await getExpectedMoney(installment.id);
 
-            const { latePeriods, buttonValues } = getOverdueInfo(
-              installment,
-              latestPaymentDate ? new Date(latestPaymentDate) : null,
-              dailyAmounts
-            );
+            // Calculate daily amount directly instead of querying history
+            const dailyAmount = (installment.installment_amount || 0) / installment.duration;
+
+            const rpcLate = lateMap.get(installment.id) as number | undefined;
+            const latePeriods = rpcLate || 0; // Use only RPC result
+            
+            // Generate button values based on RPC late periods only
+            const buttonValues: number[] = [];
+            if (latePeriods > 0) {
+              const firstUnpaidIdx = lastPaidDate
+                ? Math.floor((lastPaidDate.getTime() - new Date(installment.start_date).getTime()) / (1000 * 60 * 60 * 24)) + 1
+                : 0;
+              
+              const paymentPeriod = installment.payment_period || 10;
+              const contractEndIdx = installment.duration - 1; // 0-based index
+              let cumulative = 0;
+              
+              for (let p = 0; p < latePeriods && p < 10; p++) {
+                const fromIdx = firstUnpaidIdx + p * paymentPeriod;
+                const toIdx = Math.min(fromIdx + paymentPeriod - 1, contractEndIdx);
+                
+                if (fromIdx <= toIdx && fromIdx <= contractEndIdx) {
+                  const daysInPeriod = toIdx - fromIdx + 1;
+                  const periodAmount = daysInPeriod * dailyAmount;
+                  
+                  cumulative += Math.round(periodAmount);
+                  buttonValues.push(cumulative);
+                }
+              }
+            }
 
             if (latePeriods > 0 && buttonValues.length > 0) {
               // Có kỳ quá hạn và có nút thanh toán nhanh
@@ -179,7 +209,7 @@ export function InstallmentWarningsTable({
                 payments: [],
                 latePeriods,
                 buttonValues,
-                totalDueAmount: installment.debt_amount || 0
+                totalDueAmount: oldDebtMap.get(installment.id) || 0
               });
             } else {
               // Chưa đến kỳ phải đóng hoặc đã thanh toán đủ — hiển thị nhưng không có nút
@@ -307,10 +337,7 @@ export function InstallmentWarningsTable({
                   {warning.customer?.address || ""}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  {warning.payments && warning.payments.length > 0 
-                    ? formatCurrency(warning.totalDueAmount)
-                    : formatCurrency(0)
-                  }
+                  {formatCurrency(warning.totalDueAmount)}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
                   {formatCurrency(totalAmountToDisplay)}
