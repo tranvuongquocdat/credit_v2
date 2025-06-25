@@ -244,7 +244,7 @@ export function CreditsTable({
                       case 'LATE_INTEREST':
                         colorClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
                         break;
-                      case 'ACTIVE':
+                      case 'ON_TIME':
                       default:
                         colorClass = 'bg-green-100 text-green-800 border-green-200';
                         break;

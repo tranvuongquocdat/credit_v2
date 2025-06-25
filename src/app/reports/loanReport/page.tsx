@@ -91,7 +91,7 @@ export default function LoanReportPage() {
   // Function to get status display text
   const getStatusText = (statusCode: string) => {
     switch (statusCode) {
-      case 'ACTIVE':
+      case 'ON_TIME':
         return 'Đang vay';
       case 'LATE_INTEREST':
         return 'Chậm trả';
@@ -105,7 +105,7 @@ export default function LoanReportPage() {
   // Function to get status color
   const getStatusColor = (statusCode: string) => {
     switch (statusCode) {
-      case 'ACTIVE':
+      case 'ON_TIME':
         return 'bg-green-100 text-green-800';
       case 'LATE_INTEREST':
         return 'bg-yellow-100 text-yellow-800';
@@ -282,7 +282,7 @@ export default function LoanReportPage() {
               }
               
               // Only include contracts that are currently active (being loaned)
-              if (statusResult && ['ACTIVE', 'LATE_INTEREST', 'OVERDUE'].includes(statusResult.statusCode)) {
+              if (statusResult && ['ON_TIME', 'LATE_INTEREST', 'OVERDUE'].includes(statusResult.statusCode)) {
                 let itemName = '';
                 let loanAmount = 0;
                 

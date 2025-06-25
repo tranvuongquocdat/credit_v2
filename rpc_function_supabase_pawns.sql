@@ -356,7 +356,7 @@ create or replace function public.get_pawn_statuses(
 )
 returns table(
   pawn_id   uuid,
-  status_code text   -- CLOSED | OVERDUE | LATE_INTEREST | BAD_DEBT | DELETED | FINISHED | ACTIVE
+  status_code text   -- CLOSED | OVERDUE | LATE_INTEREST | BAD_DEBT | DELETED | FINISHED | ON_TIME
 ) language plpgsql
 as $$
 declare
@@ -411,7 +411,7 @@ begin
     if next_interest_date <= today then
       status_code := 'LATE_INTEREST';
     else
-      status_code := 'ACTIVE';
+      status_code := 'ON_TIME';
     end if;
 
     pawn_id := r.id;

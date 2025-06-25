@@ -266,25 +266,25 @@ export default function InstallmentsPage() {
           if (calcStatus) {
             let color: string;
             switch (calcStatus.statusCode) {
-              case 'closed':
+              case 'CLOSED':
                 color = 'bg-blue-100 text-blue-800 border-blue-200';
                 break;
-              case 'deleted':
+              case 'DELETED':
                 color = 'bg-gray-100 text-gray-800 border-gray-200';
                 break;
-              case 'finished':
+              case 'FINISHED':
                 color = 'bg-emerald-100 text-emerald-800 border-emerald-200';
                 break;
-              case 'bad_debt':
+              case 'BAD_DEBT':
                 color = 'bg-purple-100 text-purple-800 border-purple-200';
                 break;
-              case 'overdue':
+              case 'OVERDUE':
                 color = 'bg-red-100 text-red-800 border-red-200';
                 break;
-              case 'late_interest':
+              case 'LATE_INTEREST':
                 color = 'bg-yellow-100 text-yellow-800 border-yellow-200';
                 break;
-              case 'active':
+              case 'ON_TIME':
               default:
                 color = 'bg-green-100 text-green-800 border-green-200';
                 break;

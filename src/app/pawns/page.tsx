@@ -35,7 +35,7 @@ import { updatePawnStatus } from '@/lib/pawn';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
-  [PawnStatus.ACTIVE]: { label: 'Đang vay', color: 'bg-green-100 text-green-800' },
+  [PawnStatus.ON_TIME]: { label: 'Đang vay', color: 'bg-green-100 text-green-800' },
   [PawnStatus.OVERDUE]: { label: 'Quá hạn', color: 'bg-red-100 text-red-800' },
   [PawnStatus.LATE_INTEREST]: { label: 'Chậm lãi', color: 'bg-yellow-100 text-yellow-800' },
   [PawnStatus.BAD_DEBT]: { label: 'Nợ xấu', color: 'bg-purple-100 text-purple-800' },

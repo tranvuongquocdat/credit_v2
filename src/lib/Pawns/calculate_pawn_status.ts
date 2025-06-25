@@ -1,10 +1,8 @@
 import { supabase } from '../supabase';
-import { PawnStatus } from '@/models/pawn';
-import { getLatestPaymentPaidDate } from './get_latest_payment_paid_date';
 
 export interface PawnStatusResult {
   status: string;
-  statusCode: 'CLOSED' | 'OVERDUE' | 'LATE_INTEREST' | 'DELETED' | 'ACTIVE';
+  statusCode: 'CLOSED' | 'OVERDUE' | 'LATE_INTEREST' | 'DELETED' | 'ON_TIME';
   description?: string;
 }
 
@@ -22,7 +20,7 @@ export async function calculatePawnStatus(pawnId: string): Promise<PawnStatusRes
     console.error('Error calculating credit status:', error);
     return {
       status: 'Đang vay',
-      statusCode: 'ACTIVE',
+      statusCode: 'ON_TIME',
     };
   }
 
@@ -45,10 +43,10 @@ export async function calculatePawnStatus(pawnId: string): Promise<PawnStatusRes
       statusCode: 'LATE_INTEREST',
     };
   }
-  if (code === 'ACTIVE') {
+  if (code === 'ON_TIME') {
     return {
       status: 'Đang vay',
-      statusCode: 'ACTIVE',
+      statusCode: 'ON_TIME',
     };
   }
   if (code === 'DELETED') { 
@@ -59,41 +57,6 @@ export async function calculatePawnStatus(pawnId: string): Promise<PawnStatusRes
   }
   return {
     status: 'Đang vay',
-    statusCode: 'ACTIVE',
+    statusCode: 'ON_TIME',
   };
 }
-
-/**
- * Tính toán status cho nhiều pawns cùng lúc
- * @param pawnIds - Mảng các ID của pawns cần tính status
- * @returns Promise<Record<string, PawnStatusResult>> - Object với key là pawnId và value là status result
- */
-export async function calculateMultiplePawnStatus(pawnIds: string[]): Promise<Record<string, PawnStatusResult>> {
-  const results: Record<string, PawnStatusResult> = {};
-  
-  // Xử lý song song để tăng hiệu suất
-  const promises = pawnIds.map(async (pawnId) => {
-    try {
-      const status = await calculatePawnStatus(pawnId);
-      return { pawnId, status };
-    } catch (error) {
-      console.error(`Error calculating status for pawn ${pawnId}:`, error);
-      return {
-        pawnId,
-        status: {
-          status: "Lỗi",
-          statusCode: 'ACTIVE' as const,
-          description: "Không thể tính toán trạng thái"
-        }
-      };
-    }
-  });
-
-  const resolvedResults = await Promise.all(promises);
-  
-  resolvedResults.forEach(({ pawnId, status }) => {
-    results[pawnId] = status;
-  });
-
-  return results;
-} 

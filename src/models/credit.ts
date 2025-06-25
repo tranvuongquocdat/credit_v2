@@ -11,7 +11,6 @@ export enum CreditStatus {
   CLOSED = 'closed',           // Kết thúc (hoặc đóng hợp đồng sớm)
   DELETED = 'deleted',           // Đã xóa
   FINISHED = 'finished',           // Hoàn thành
-  ACTIVE = 'active'           // Đang vay
 }
 
 export interface Credit {

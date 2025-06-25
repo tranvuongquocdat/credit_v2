@@ -2,7 +2,7 @@ import { supabase } from '../supabase';
 
 export interface CreditStatusResult {
   status: string;
-  statusCode: 'CLOSED' | 'OVERDUE' | 'LATE_INTEREST' | 'BAD_DEBT' | 'DELETED' | 'FINISHED' | 'ACTIVE';
+  statusCode: 'CLOSED' | 'OVERDUE' | 'LATE_INTEREST' | 'BAD_DEBT' | 'DELETED' | 'FINISHED' | 'ON_TIME';
   description?: string;
 }
 
@@ -20,7 +20,7 @@ export async function calculateCreditStatus(creditId: string): Promise<CreditSta
     console.error('Error calculating credit status:', error);
     return {
       status: 'Đang vay',
-      statusCode: 'ACTIVE',
+      statusCode: 'ON_TIME',
     };
   }
 
@@ -55,10 +55,10 @@ export async function calculateCreditStatus(creditId: string): Promise<CreditSta
       statusCode: 'FINISHED',
     };
   }
-  if (code === 'ACTIVE') {
+  if (code === 'ON_TIME') {
     return {
       status: 'Đang vay',
-      statusCode: 'ACTIVE',
+      statusCode: 'ON_TIME',
     };
   }
   if (code === 'DELETED') { 
@@ -69,6 +69,6 @@ export async function calculateCreditStatus(creditId: string): Promise<CreditSta
   }
   return {
     status: 'Đang vay',
-    statusCode: 'ACTIVE',
+    statusCode: 'ON_TIME',
   };
 }

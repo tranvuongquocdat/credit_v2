@@ -1,7 +1,7 @@
 export { PawnCreateModal } from './PawnCreateModal';
 export { PawnEditModal } from './PawnEditModal';
 export { PawnHistoryModal } from './PawnHistoryModal';
-export { PawnTable } from './PawnTable';
+export { PawnsTable } from './PawnTable';
 export { PawnsPagination } from './PawnsPagination';
 export { PawnSearchFilters } from './PawnSearchFilters';
 export { AdditionalLoanForm } from './AdditionalLoanForm';

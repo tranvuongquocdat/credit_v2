@@ -65,40 +65,6 @@ export async function recordPrincipalRepayment(
   notes?: string
 ) {
   try {
-    // First, get the current loan amount
-    // const { data: pawnData, error: pawnError } = await supabase
-    //   .from('pawns')
-    //   .select('loan_amount')
-    //   .eq('id', pawnId)
-    //   .single();
-
-    // if (pawnError) {
-    //   throw pawnError;
-    // }
-
-    // if (!pawnData) {
-    //   throw new Error('Pawn not found');
-    // }
-
-    // const previousLoanAmount = pawnData.loan_amount;
-    // const newLoanAmount = previousLoanAmount - repaymentAmount;
-
-    // if (newLoanAmount < 0) {
-    //   throw new Error('Repayment amount cannot exceed the loan amount');
-    // }
-
-    // // Begin transaction
-    // // 1. Update the pawn with the new loan amount
-    // const { error: updateError } = await supabase
-    //   .from('pawns')
-    //   .update({ loan_amount: newLoanAmount })
-    //   .eq('id', pawnId);
-
-    // if (updateError) {
-    //   throw updateError;
-    // }
-
-    // 2. Insert the history record with new schema format
     const { id: userId } = await getCurrentUser();
     const { data, error } = await supabase
       .from('pawn_history')
@@ -149,30 +115,6 @@ export async function recordAdditionalLoan(
     return { data, error: null };
   } catch (error) {
     console.error('Error recording additional loan:', error);
-    return { data: null, error };
-  }
-}
-
-/**
- * Get pawn amount history records for a specific pawn
- */
-export async function getPawnAmountHistory(pawnId: string) {
-  try {
-    const { data, error } = await supabase
-      .from('pawn_history')
-      .select('*')
-      .eq('pawn_id', pawnId)
-      .order('created_at', { ascending: true });
-    if (error) {
-      throw error;
-    }
-    
-    // Transform data from DB model to UI model
-    const history = data ? data.map(item => transformHistory(item)) : [];
-    console.log(history);
-    return { data: history, error: null };
-  } catch (error) {
-    console.error('Error getting pawn amount history:', error);
     return { data: null, error };
   }
 }
@@ -397,36 +339,3 @@ export async function recordDebtPayment(
     return { data: null, error };
   }
 }
-
-/**
- * Record debt payment cancellation (hủy thanh toán nợ)
- */
-export async function recordCancelDebtPayment(
-  pawnId: string,
-  amount: number,
-  description?: string,
-  wasRefund: boolean = false // true nếu cancel một lần hoàn trả
-) {
-  try {
-    const { id: userId } = await getCurrentUser();
-    const { data, error } = await supabase
-      .from('pawn_history')
-      .insert({
-        pawn_id: pawnId,
-        transaction_type: 'debt_payment',
-        credit_amount: wasRefund ? amount : 0,  // Ngược lại với record ban đầu
-        debit_amount: wasRefund ? 0 : amount,   // Ngược lại với record ban đầu
-        description: description || (wasRefund ? 'Hủy hoàn trả tiền thừa' : 'Hủy thanh toán nợ cũ'),
-        created_by: userId
-      } as any)
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    return { data, error: null };
-  } catch (error) {
-    console.error('Error recording debt payment cancellation:', error);
-    return { data: null, error };
-  }
-} 

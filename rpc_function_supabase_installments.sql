@@ -131,7 +131,7 @@ create or replace function public.get_installment_statuses(
 )
 returns table (
     installment_id uuid,
-    status_code text,      -- ACTIVE | OVERDUE | …
+    status_code text,      -- ON_TIME | OVERDUE | …
     status text,           -- Nhãn tiếng Việt
     description text
 ) language plpgsql security definer as $$
@@ -154,24 +154,24 @@ begin
     loop
         /* CLOSED / DELETED / FINISHED / BAD_DEBT giữ nguyên */
         if r.status = 'closed' then
-            status_code := 'closed';     status := 'Đã đóng';
+            status_code := 'CLOSED';     status := 'Đã đóng';
         elsif r.status = 'deleted' then
-            status_code := 'deleted';    status := 'Đã xóa';
+            status_code := 'DELETED';    status := 'Đã xóa';
         elsif r.status = 'finished' or r.payment_due_date is null then
-            status_code := 'finished';   status := 'Hoàn thành';
+            status_code := 'FINISHED';   status := 'Hoàn thành';
         elsif r.status = 'bad_debt' then
-            status_code := 'bad_debt';   status := 'Nợ xấu';
+            status_code := 'BAD_DEBT';   status := 'Nợ xấu';
 
         /* còn lại – ON_TIME trước, kiểm tra quá hạn & chậm trả */
         else
             if r.contract_end < v_today then
-                status_code := 'overdue';
+                status_code := 'OVERDUE';
                 status := format('Quá hạn %s ngày', v_today - r.contract_end);
             elsif r.next_due <= v_today then
-                status_code := 'late_interest';
+                status_code := 'LATE_INTEREST';
                 status := format('Chậm trả %s ngày', v_today - r.next_due + 1);
             else
-                status_code := 'active';  status := 'Đang vay';
+                status_code := 'ON_TIME';  status := 'Đang vay';
             end if;
         end if;
 

@@ -77,32 +77,3 @@ export async function recordContractReopening(
     };
   }
 }
-
-/**
- * Gets the amount history for a pawn contract
- * @param pawnId - The ID of the pawn contract
- * @returns Promise with the amount history records
- */
-export async function getPawnAmountHistory(pawnId: string) {
-  try {
-    const { data, error } = await supabase
-      .from('pawn_history')
-      .select('*')
-      .eq('pawn_id', pawnId)
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
-    
-    return {
-      success: true,
-      history: data || []
-    };
-    
-  } catch (error) {
-    console.error('Error getting pawn amount history:', error);
-    return {
-      success: false,
-      history: []
-    };
-  }
-} 

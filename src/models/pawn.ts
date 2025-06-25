@@ -1,7 +1,6 @@
 import { Collateral } from './collateral';
 
 export enum PawnStatus {
-  ACTIVE = 'active',          // Đang vay
   ON_TIME = 'on_time',           // Đúng hẹn
   OVERDUE = 'overdue',          // Quá hạn
   LATE_INTEREST = 'late_interest', // Chậm lãi

@@ -205,29 +205,6 @@ export async function getPaymentPeriods(installmentId: string): Promise<Array<{
   return periods;
 }
 
-/**
- * Check xem một ngày có payment hay không
- * @param installmentId - ID của hợp đồng installment
- * @param date - Ngày cần check (YYYY-MM-DD)
- * @returns Promise<boolean> - true nếu có payment, false nếu không
- */
-export async function hasPaymentOnDate(installmentId: string, date: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from('installment_history')
-    .select('id')
-    .eq('installment_id', installmentId)
-    .eq('transaction_type', 'payment')
-    .gte('effective_date', date)
-    .lte('effective_date', date + 'T23:59:59Z')
-    .limit(1);
-
-  if (error) {
-    console.error('Error checking payment on date:', error);
-    return false;
-  }
-
-  return (data && data.length > 0);
-}
 
 /**
  * Lấy toàn bộ lịch sử thanh toán với transaction_type=payment và is_deleted=false

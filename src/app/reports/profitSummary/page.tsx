@@ -221,7 +221,7 @@ export default function ProfitSummaryPage() {
             console.error(`Error calculating status for ${contract.id}:`, error);
             return {
               ...contract,
-              calculatedStatus: 'ACTIVE',
+              calculatedStatus: 'ON_TIME',
               statusDescription: 'Không thể tính trạng thái'
             };
           }
@@ -247,7 +247,7 @@ export default function ProfitSummaryPage() {
             console.error(`Error calculating status for ${contract.id}:`, error);
             return {
               ...contract,
-              calculatedStatus: 'ACTIVE',
+              calculatedStatus: 'ON_TIME',
               statusDescription: 'Không thể tính trạng thái'
             };
           }
@@ -585,7 +585,7 @@ export default function ProfitSummaryPage() {
         case 'CLOSED':
           counts.closed++;
           break;
-        case 'ACTIVE':
+        case 'ON_TIME':
           counts.active++;
           break;
         case 'LATE_INTEREST':
