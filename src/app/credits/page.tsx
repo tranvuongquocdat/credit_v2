@@ -33,6 +33,8 @@ import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_date';
 import { supabase } from '@/lib/supabase';
+import { getInterestDisplayString } from '@/lib/interest-calculator';
+import { formatCurrencyExcel } from '@/lib/utils';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -45,14 +47,6 @@ const statusMap: Record<string, { label: string, color: string }> = {
   [CreditStatus.FINISHED]: { label: 'Hoàn thành', color: 'bg-green-100 text-green-800' },
 };
 
-// Helper to format currency for Excel (thousand separators)
-const formatCurrencyExcel = (value: number | undefined | null): string => {
-  try {
-    return new Intl.NumberFormat('vi-VN').format(value ?? 0);
-  } catch {
-    return String(value ?? 0);
-  }
-};
 
 export default function CreditsPage() {
   const router = useRouter();
@@ -208,17 +202,19 @@ export default function CreditsPage() {
           return {
             'STT': index + 1,
             'Mã hợp đồng': c.contract_code || '',
-            'SĐT khách hàng': c.customer?.phone || '',
+            'Tên khách hàng': c.customer?.name || '',
+            'SĐT': c.customer?.phone || '',
+            'CMND': c.customer?.id_number || '',
+            'Địa chỉ': (c as any).address || '',
             'Tiền vay': formatCurrencyExcel(c.loan_amount),
+            'Lãi phí': getInterestDisplayString(c),
             'Ngày vay': startDateStr,
             'Ngày kết thúc': endDateStr,
             'Ghi chú': c.notes || '',
             'Đã đóng đến ngày': latestPaidDateStr,
             'Lãi phí đã đóng': formatCurrencyExcel(paidInterest),
-            'Ngày phải đóng lãi phí': nextPaymentDateStr,
-            'CMND': c.customer?.id_number || '',
-            'Địa chỉ': (c as any).address || '',
-            'Ngày đóng hợp đồng gần nhất': latestCloseStr,
+            'Ngày phải đóng': nextPaymentDateStr,
+            'Ngày đóng hợp đồng': latestCloseStr,
           } as Record<string, any>;
         })
       );

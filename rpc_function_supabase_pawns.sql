@@ -342,8 +342,9 @@ select
   end as next_date,
   (case
      when lp.last_paid is null then false
-     when (lp.last_paid + (b.interest_period * INTERVAL '1 day')) > ((b.loan_date + ((b.loan_period - 1) * INTERVAL '1 day')))
-       then true        -- hoàn thành
+      when lp.last_paid >=
+       (b.loan_date + (b.loan_period - 1) * INTERVAL '1 day')
+       then true
      else false
    end) as is_completed,
   (lp.last_paid is not null) as has_paid
