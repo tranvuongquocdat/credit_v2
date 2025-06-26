@@ -14,9 +14,7 @@ import { calculatePawnStatus } from '@/lib/Pawns/calculate_pawn_status';
 import { calculateCreditStatus } from '@/lib/Credits/calculate_credit_status';
 import { calculateInstallmentStatus } from '@/lib/Installments/calculate_installment_status';
 
-// Import interest calculation functions
-import { calculateCloseContractInterest as calculatePawnCloseInterest } from '@/lib/Pawns/calculate_close_contract_interest';
-import { calculateCloseContractInterest as calculateCreditCloseInterest } from '@/lib/Credits/calculate_close_contract_interest';
+// Note: RPC functions are now used for interest calculation instead of individual contract calculations
 
 // Import financial calculation functions
 import {
@@ -263,6 +261,9 @@ export default function ProfitSummaryPage() {
   };
 
   // Get interest/profit data for date range by contract type - updated to get ALL contracts like interestDetail
+  // Optimized interest calculation using RPC functions for better performance
+  // Previous version: query all history records and calculate each contract individually (~several seconds)
+  // New version: use database RPC functions to calculate in bulk (~few milliseconds)
   const getInterestDataForDateRange = async (contractType: 'pawns' | 'credits' | 'installments') => {
     if (!currentStore?.id) return 0;
 
@@ -274,227 +275,63 @@ export default function ProfitSummaryPage() {
 
     try {
       if (contractType === 'pawns') {
-        // Get all pawn data in parallel queries
-        const [
-          { data: pawnHistory },
-          { data: pawnCloseHistory },
-          { data: pawnReopenHistory }
-        ] = await Promise.all([
-          // Payment transactions
-          supabase
-            .from('pawn_history')
-            .select('credit_amount, is_deleted, created_at, pawn_id, pawns!inner(store_id, updated_at)')
-            .eq('pawns.store_id', storeId)
-            .eq('transaction_type', 'payment'),
-          
-          // Close transactions
-          supabase
-            .from('pawn_history')
-            .select('pawn_id, created_at, pawns!inner(store_id)')
-            .eq('pawns.store_id', storeId)
-            .eq('transaction_type', 'contract_close')
-            .gte('created_at', startDateObj.toISOString())
-            .lte('created_at', endDateObj.toISOString()),
-          
-          // Reopen transactions
-          supabase
-            .from('pawn_history')
-            .select('pawn_id, created_at, pawns!inner(store_id)')
-            .eq('pawns.store_id', storeId)
-            .eq('transaction_type', 'contract_reopen')
-            .gte('created_at', startDateObj.toISOString())
-            .lte('created_at', endDateObj.toISOString())
-        ]);
+        // Get all pawn IDs for this store
+        const { data: pawnContracts } = await supabase
+          .from('pawns')
+          .select('id')
+          .eq('store_id', storeId);
 
-        // Process payment history
-        if (pawnHistory) {
-          pawnHistory.forEach(item => {
-            const paymentDate = new Date(item.created_at);
-            if (paymentDate >= startDateObj && paymentDate <= endDateObj) {
-              totalInterest += (item.credit_amount || 0);
-            }
-            
-            if (item.is_deleted && item.pawns?.updated_at) {
-              const cancelDate = new Date(item.pawns.updated_at);
-              if (cancelDate >= startDateObj && cancelDate <= endDateObj) {
-                totalInterest -= (item.credit_amount || 0);
-              }
-            }
+        if (pawnContracts && pawnContracts.length > 0) {
+          const pawnIds = pawnContracts.map(p => p.id);
+          
+          // Use RPC function to get paid interest for date range - much faster!
+          const { data, error } = await supabase.rpc('get_pawn_paid_interest', {
+            p_pawn_ids: pawnIds,
+            p_start_date: startDateObj.toISOString(),
+            p_end_date: endDateObj.toISOString(),
           });
-        }
 
-        // Process close transactions in parallel batches
-        if (pawnCloseHistory && pawnCloseHistory.length > 0) {
-          const batchSize = 10; // Process 10 contracts at a time
-          const batches = [];
-          
-          for (let i = 0; i < pawnCloseHistory.length; i += batchSize) {
-            batches.push(pawnCloseHistory.slice(i, i + batchSize));
+          if (error) {
+            console.error('get_pawn_paid_interest RPC error:', error);
+            return 0;
           }
 
-          const batchResults = await Promise.all(
-            batches.map(async (batch) => {
-              const promises = batch.map(async (item) => {
-                try {
-                  const calculationDate = format(new Date(item.created_at), 'yyyy-MM-dd');
-                  return await calculatePawnCloseInterest(item.pawn_id, calculationDate);
-                } catch (error) {
-                  console.error(`Error calculating pawn close interest for ${item.pawn_id}:`, error);
-                  return 0;
-                }
-              });
-              
-              const results = await Promise.allSettled(promises);
-              return results
-                .filter(result => result.status === 'fulfilled')
-                .reduce((sum, result) => sum + (result.value as number), 0);
-            })
-          );
-
-          totalInterest += batchResults.reduce((sum, result) => sum + result, 0);
-        }
-
-        // Process reopen transactions in parallel batches
-        if (pawnReopenHistory && pawnReopenHistory.length > 0) {
-          const batchSize = 10;
-          const batches = [];
-          
-          for (let i = 0; i < pawnReopenHistory.length; i += batchSize) {
-            batches.push(pawnReopenHistory.slice(i, i + batchSize));
+          // Sum all paid interest from RPC function result
+          if (Array.isArray(data)) {
+            totalInterest = data.reduce((sum, item) => {
+              return sum + Number(item.paid_interest || 0);
+            }, 0);
           }
-
-          const batchResults = await Promise.all(
-            batches.map(async (batch) => {
-              const promises = batch.map(async (item) => {
-                try {
-                  const calculationDate = format(new Date(item.created_at), 'yyyy-MM-dd');
-                  return await calculatePawnCloseInterest(item.pawn_id, calculationDate);
-                } catch (error) {
-                  console.error(`Error calculating pawn reopen interest for ${item.pawn_id}:`, error);
-                  return 0;
-                }
-              });
-              
-              const results = await Promise.allSettled(promises);
-              return results
-                .filter(result => result.status === 'fulfilled')
-                .reduce((sum, result) => sum + (result.value as number), 0);
-            })
-          );
-
-          totalInterest -= batchResults.reduce((sum, result) => sum + result, 0);
         }
 
       } else if (contractType === 'credits') {
-        // Get all credit data in parallel queries
-        const [
-          { data: creditHistory },
-          { data: creditCloseHistory },
-          { data: creditReopenHistory }
-        ] = await Promise.all([
-          // Payment transactions
-          supabase
-            .from('credit_history')
-            .select('credit_amount, is_deleted, created_at, updated_at, credit_id, credits!inner(store_id)')
-            .eq('credits.store_id', storeId)
-            .eq('transaction_type', 'payment'),
-          
-          // Close transactions
-          supabase
-            .from('credit_history')
-            .select('credit_id, created_at, credits!inner(store_id)')
-            .eq('credits.store_id', storeId)
-            .eq('transaction_type', 'contract_close')
-            .gte('created_at', startDateObj.toISOString())
-            .lte('created_at', endDateObj.toISOString()),
-          
-          // Reopen transactions
-          supabase
-            .from('credit_history')
-            .select('credit_id, created_at, credits!inner(store_id)')
-            .eq('credits.store_id', storeId)
-            .eq('transaction_type', 'contract_reopen')
-            .gte('created_at', startDateObj.toISOString())
-            .lte('created_at', endDateObj.toISOString())
-        ]);
+        // Get all credit IDs for this store
+        const { data: creditContracts } = await supabase
+          .from('credits')
+          .select('id')
+          .eq('store_id', storeId);
 
-        // Process payment history
-        if (creditHistory) {
-          creditHistory.forEach(item => {
-            const paymentDate = new Date(item.created_at);
-            if (paymentDate >= startDateObj && paymentDate <= endDateObj) {
-              totalInterest += (item.credit_amount || 0);
-            }
-            
-            if (item.is_deleted && item.updated_at) {
-              const cancelDate = new Date(item.updated_at);
-              if (cancelDate >= startDateObj && cancelDate <= endDateObj) {
-                totalInterest -= (item.credit_amount || 0);
-              }
-            }
+        if (creditContracts && creditContracts.length > 0) {
+          const creditIds = creditContracts.map(c => c.id);
+          
+          // Use RPC function to get paid interest for date range - much faster!
+          const { data, error } = await supabase.rpc('get_paid_interest', {
+            p_credit_ids: creditIds,
+            p_start_date: startDateObj.toISOString(),
+            p_end_date: endDateObj.toISOString(),
           });
-        }
 
-        // Process close transactions in parallel batches
-        if (creditCloseHistory && creditCloseHistory.length > 0) {
-          const batchSize = 10;
-          const batches = [];
-          
-          for (let i = 0; i < creditCloseHistory.length; i += batchSize) {
-            batches.push(creditCloseHistory.slice(i, i + batchSize));
+          if (error) {
+            console.error('get_paid_interest RPC error:', error);
+            return 0;
           }
 
-          const batchResults = await Promise.all(
-            batches.map(async (batch) => {
-              const promises = batch.map(async (item) => {
-                try {
-                  const calculationDate = format(new Date(item.created_at), 'yyyy-MM-dd');
-                  return await calculateCreditCloseInterest(item.credit_id, calculationDate);
-                } catch (error) {
-                  console.error(`Error calculating credit close interest for ${item.credit_id}:`, error);
-                  return 0;
-                }
-              });
-              
-              const results = await Promise.allSettled(promises);
-              return results
-                .filter(result => result.status === 'fulfilled')
-                .reduce((sum, result) => sum + (result.value as number), 0);
-            })
-          );
-
-          totalInterest += batchResults.reduce((sum, result) => sum + result, 0);
-        }
-
-        // Process reopen transactions in parallel batches
-        if (creditReopenHistory && creditReopenHistory.length > 0) {
-          const batchSize = 10;
-          const batches = [];
-          
-          for (let i = 0; i < creditReopenHistory.length; i += batchSize) {
-            batches.push(creditReopenHistory.slice(i, i + batchSize));
+          // Sum all paid interest from RPC function result
+          if (Array.isArray(data)) {
+            totalInterest = data.reduce((sum, item) => {
+              return sum + Number(item.paid_interest || 0);
+            }, 0);
           }
-
-          const batchResults = await Promise.all(
-            batches.map(async (batch) => {
-              const promises = batch.map(async (item) => {
-                try {
-                  const calculationDate = format(new Date(item.created_at), 'yyyy-MM-dd');
-                  return await calculateCreditCloseInterest(item.credit_id, calculationDate);
-                } catch (error) {
-                  console.error(`Error calculating credit reopen interest for ${item.credit_id}:`, error);
-                  return 0;
-                }
-              });
-              
-              const results = await Promise.allSettled(promises);
-              return results
-                .filter(result => result.status === 'fulfilled')
-                .reduce((sum, result) => sum + (result.value as number), 0);
-            })
-          );
-
-          totalInterest -= batchResults.reduce((sum, result) => sum + result, 0);
         }
 
       } else if (contractType === 'installments') {
