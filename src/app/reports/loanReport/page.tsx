@@ -255,85 +255,140 @@ export default function LoanReportPage() {
         }
       }
 
-      // Calculate status for each item in parallel and filter only active loan contracts
+      // Optimized: Use RPC functions to get all statuses at once instead of individual calculations
       const processedData: LoanReportItem[] = [];
       
-      // Process in chunks to avoid overwhelming the system
-      const chunkSize = 20;
-      const chunks = [];
-      for (let i = 0; i < allRawData.length; i += chunkSize) {
-        chunks.push(allRawData.slice(i, i + chunkSize));
-      }
-      
-      for (const chunk of chunks) {
-        // Process each chunk in parallel
-        const chunkResults = await Promise.allSettled(
-          chunk.map(async (item) => {
-            try {
-              let statusResult;
-              
-              // Calculate status based on type
-              if (item.type === 'Cầm đồ') {
-                statusResult = await calculatePawnStatus(item.id);
-              } else if (item.type === 'Tín chấp') {
-                statusResult = await calculateCreditStatus(item.id);
-              } else if (item.type === 'Trả góp') {
-                statusResult = await calculateInstallmentStatus(item.id);
-              }
-              
-              // Only include contracts that are currently active (being loaned)
-              if (statusResult && ['ON_TIME', 'LATE_INTEREST', 'OVERDUE'].includes(statusResult.statusCode)) {
-                let itemName = '';
-                let loanAmount = 0;
-                
-                // Get item name based on type
-                if (item.type === 'Cầm đồ') {
-                  try {
-                    if (item.collateral_detail) {
-                      const detail = typeof item.collateral_detail === 'string' 
-                        ? JSON.parse(item.collateral_detail) 
-                        : item.collateral_detail;
-                      itemName = detail.name || '';
-                    }
-                  } catch (e) {
-                    console.error('Error parsing collateral_detail:', e);
-                  }
-                  loanAmount = item.loan_amount || 0;
-                } else if (item.type === 'Tín chấp') {
-                  itemName = item.collateral || 'Tín chấp';
-                  loanAmount = item.loan_amount || 0;
-                } else if (item.type === 'Trả góp') {
-                  itemName = 'Trả góp';
-                  loanAmount = item.installment_amount || 0;
-                }
+      // Group contracts by type for batch RPC calls
+      const pawnContracts = allRawData.filter(item => item.type === 'Cầm đồ');
+      const creditContracts = allRawData.filter(item => item.type === 'Tín chấp');
+      const installmentContracts = allRawData.filter(item => item.type === 'Trả góp');
 
-                return {
-                  id: `${item.type.toLowerCase().replace(' ', '')}-${item.id}`,
-                  contractId: item.id || '',
-                  contractCode: item.contract_code || '',
-                  customerName: item.customers?.name || '',
-                  itemName,
-                  loanAmount,
-                  loanDate: item.loan_date ? format(new Date(item.loan_date), 'dd-MM-yyyy') : '',
-                  status: statusResult.status,
-                  statusCode: statusResult.statusCode,
-                  type: item.type
-                };
-              }
-              return null;
-            } catch (error) {
-              console.error(`Error calculating status for ${item.type} ${item.id}:`, error);
-              return null;
-            }
-          })
-        );
-        
-        // Add successful results to processedData
-        chunkResults.forEach((result) => {
-          if (result.status === 'fulfilled' && result.value) {
-            processedData.push(result.value);
+      // Get all statuses using RPC functions in parallel
+      const [pawnStatuses, creditStatuses, installmentStatuses] = await Promise.all([
+        // Get pawn statuses
+        pawnContracts.length > 0 ? (async () => {
+          const pawnIds = pawnContracts.map(p => p.id).filter(id => id !== null);
+          const { data, error } = await supabase.rpc('get_pawn_statuses', {
+            p_pawn_ids: pawnIds
+          });
+          if (error) {
+            console.error('Error getting pawn statuses:', error);
+            return [];
           }
+          return data || [];
+        })() : Promise.resolve([]),
+
+        // Get credit statuses  
+        creditContracts.length > 0 ? (async () => {
+          const creditIds = creditContracts.map(c => c.id).filter(id => id !== null);
+          const { data, error } = await supabase.rpc('get_credit_statuses', {
+            p_credit_ids: creditIds
+          });
+          if (error) {
+            console.error('Error getting credit statuses:', error);
+            return [];
+          }
+          return data || [];
+        })() : Promise.resolve([]),
+
+        // Get installment statuses
+        installmentContracts.length > 0 ? (async () => {
+          const installmentIds = installmentContracts.map(i => i.id).filter(id => id !== null);
+          const { data, error } = await supabase.rpc('get_installment_statuses', {
+            p_installment_ids: installmentIds
+          });
+          if (error) {
+            console.error('Error getting installment statuses:', error);
+            return [];
+          }
+          return data || [];
+        })() : Promise.resolve([])
+      ]);
+
+      // Create status maps for quick lookup
+      const pawnStatusMap = new Map();
+      pawnStatuses.forEach((s: any) => {
+        pawnStatusMap.set(s.pawn_id, {
+          statusCode: s.status_code,
+          status: s.status,
+          description: s.description
         });
+      });
+
+      const creditStatusMap = new Map();
+      creditStatuses.forEach((s: any) => {
+        creditStatusMap.set(s.credit_id, {
+          statusCode: s.status_code,
+          status: s.status,
+          description: s.description
+        });
+      });
+
+      const installmentStatusMap = new Map();
+      installmentStatuses.forEach((s: any) => {
+        installmentStatusMap.set(s.installment_id, {
+          statusCode: s.status_code,
+          status: s.status,
+          description: s.description
+        });
+      });
+
+      // Process all contracts with their statuses
+      for (const item of allRawData) {
+        try {
+          let statusResult;
+          
+          // Get status from appropriate map
+          if (item.type === 'Cầm đồ') {
+            statusResult = pawnStatusMap.get(item.id);
+          } else if (item.type === 'Tín chấp') {
+            statusResult = creditStatusMap.get(item.id);
+          } else if (item.type === 'Trả góp') {
+            statusResult = installmentStatusMap.get(item.id);
+          }
+          
+          // Only include contracts that are currently active (being loaned)
+          if (statusResult && ['ON_TIME', 'LATE_INTEREST', 'OVERDUE'].includes(statusResult.statusCode)) {
+            let itemName = '';
+            let loanAmount = 0;
+            
+            // Get item name based on type
+            if (item.type === 'Cầm đồ') {
+              try {
+                if (item.collateral_detail) {
+                  const detail = typeof item.collateral_detail === 'string' 
+                    ? JSON.parse(item.collateral_detail) 
+                    : item.collateral_detail;
+                  itemName = detail.name || '';
+                }
+              } catch (e) {
+                console.error('Error parsing collateral_detail:', e);
+              }
+              loanAmount = item.loan_amount || 0;
+            } else if (item.type === 'Tín chấp') {
+              itemName = item.collateral || 'Tín chấp';
+              loanAmount = item.loan_amount || 0;
+            } else if (item.type === 'Trả góp') {
+              itemName = 'Trả góp';
+              loanAmount = item.installment_amount || 0;
+            }
+
+            processedData.push({
+              id: `${item.type.toLowerCase().replace(' ', '')}-${item.id}`,
+              contractId: item.id || '',
+              contractCode: item.contract_code || '',
+              customerName: item.customers?.name || '',
+              itemName,
+              loanAmount,
+              loanDate: item.loan_date ? format(new Date(item.loan_date), 'dd-MM-yyyy') : '',
+              status: statusResult.status || statusResult.description,
+              statusCode: statusResult.statusCode,
+              type: item.type
+            });
+          }
+        } catch (error) {
+          console.error(`Error processing ${item.type} ${item.id}:`, error);
+        }
       }
 
       // Sort by loan date descending
