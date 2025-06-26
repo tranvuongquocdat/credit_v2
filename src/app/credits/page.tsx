@@ -29,6 +29,10 @@ import { useAutoUpdateCashFund } from '@/hooks/useCashFundUpdater';
 import { useCreditStatuses } from '@/hooks/useCreditStatuses';
 
 import { usePermissions } from '@/hooks/usePermissions';
+import * as XLSX from 'xlsx';
+import { format } from 'date-fns';
+import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_date';
+import { supabase } from '@/lib/supabase';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -41,6 +45,14 @@ const statusMap: Record<string, { label: string, color: string }> = {
   [CreditStatus.FINISHED]: { label: 'Hoàn thành', color: 'bg-green-100 text-green-800' },
 };
 
+// Helper to format currency for Excel (thousand separators)
+const formatCurrencyExcel = (value: number | undefined | null): string => {
+  try {
+    return new Intl.NumberFormat('vi-VN').format(value ?? 0);
+  } catch {
+    return String(value ?? 0);
+  }
+};
 
 export default function CreditsPage() {
   const router = useRouter();
@@ -111,6 +123,9 @@ export default function CreditsPage() {
   const [isCreditEditModalOpen, setIsCreditEditModalOpen] = useState(false);
   const [editCreditId, setEditCreditId] = useState<string>('');
   
+  // Exporting state
+  const [isExporting, setIsExporting] = useState(false);
+  
   // Calculate total pages
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   
@@ -134,9 +149,123 @@ export default function CreditsPage() {
   };
   
   // Handle export to Excel
-  const handleExportExcel = () => {
-    // In a real app, this would generate and download an Excel file
-    alert('Export to Excel functionality would be implemented here');
+  const handleExportExcel = async () => {
+    if (isExporting) return;
+
+    if (!credits || credits.length === 0) {
+      alert('Không có dữ liệu để xuất Excel');
+      return;
+    }
+
+    setIsExporting(true);
+
+    try {
+      const rows = await Promise.all(
+        credits.map(async (c, index) => {
+          // Lấy ngày thanh toán lãi phí mới nhất
+          let latestPaidDateStr = '';
+          try {
+            const latestPaid = await getLatestPaymentPaidDate(c.id);
+            if (latestPaid) latestPaidDateStr = format(new Date(latestPaid), 'dd/MM/yyyy');
+          } catch (err) {
+            console.error('getLatestPaymentPaidDate error', err);
+          }
+
+          // Lấy ngày đóng hợp đồng gần nhất
+          let latestCloseStr = '';
+          try {
+            const { data: closeRows, error: closeErr } = await supabase
+              .from('credit_history')
+              .select('effective_date')
+              .eq('credit_id', c.id)
+              .eq('transaction_type', 'contract_close')
+              .order('effective_date', { ascending: false })
+              .limit(1);
+            if (!closeErr && closeRows && closeRows.length > 0 && closeRows[0].effective_date) {
+              latestCloseStr = format(new Date(closeRows[0].effective_date), 'dd/MM/yyyy');
+            }
+          } catch (err) {
+            console.error('get latest close error', err);
+          }
+
+          // Ngày vay & kết thúc
+          const startDateStr = c.loan_date ? format(new Date(c.loan_date), 'dd/MM/yyyy') : '';
+          let endDateStr = '';
+          try {
+            if (c.loan_date && c.loan_period) {
+              const startDate = new Date(c.loan_date);
+              const endDate = new Date(startDate);
+              endDate.setDate(startDate.getDate() + (c.loan_period ?? 0) - 1);
+              endDateStr = format(endDate, 'dd/MM/yyyy');
+            }
+          } catch {}
+
+          // Lãi phí đã đóng và ngày phải đóng tiếp
+          const detail = creditDetails[c.id];
+          const paidInterest = detail?.paidInterest ?? 0;
+          const nextPaymentDateStr = detail?.isCompleted ? 'Hoàn thành' : detail?.nextPayment ? format(new Date(detail.nextPayment), 'dd/MM/yyyy') : '';
+
+          return {
+            'STT': index + 1,
+            'Mã hợp đồng': c.contract_code || '',
+            'SĐT khách hàng': c.customer?.phone || '',
+            'Tiền vay': formatCurrencyExcel(c.loan_amount),
+            'Ngày vay': startDateStr,
+            'Ngày kết thúc': endDateStr,
+            'Ghi chú': c.notes || '',
+            'Đã đóng đến ngày': latestPaidDateStr,
+            'Lãi phí đã đóng': formatCurrencyExcel(paidInterest),
+            'Ngày phải đóng lãi phí': nextPaymentDateStr,
+            'CMND': c.customer?.id_number || '',
+            'Địa chỉ': (c as any).address || '',
+            'Ngày đóng hợp đồng gần nhất': latestCloseStr,
+          } as Record<string, any>;
+        })
+      );
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(rows);
+
+      ws['!cols'] = [
+        { width: 6 },
+        { width: 15 },
+        { width: 15 },
+        { width: 15 },
+        { width: 12 },
+        { width: 12 },
+        { width: 25 },
+        { width: 14 },
+        { width: 15 },
+        { width: 18 },
+        { width: 18 },
+        { width: 30 },
+        { width: 18 },
+      ];
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Danh sách tín chấp');
+
+      // Style header
+      const headerKeys = Object.keys(rows[0] || {});
+      headerKeys.forEach((_, idx) => {
+        const cellRef = XLSX.utils.encode_cell({ r: 0, c: idx });
+        const cell = ws[cellRef];
+        if (cell) {
+          cell.s = {
+            fill: { fgColor: { rgb: '4472C4' } },
+            font: { bold: true, color: { rgb: 'FFFFFF' } },
+            alignment: { horizontal: 'center', vertical: 'center' },
+          } as any;
+        }
+      });
+
+      const fileName = `DanhSachTinChap_${format(new Date(), 'yyyyMMdd_HHmmss')}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    } catch (err) {
+      console.error('Export Excel error', err);
+      alert('Có lỗi khi xuất Excel');
+    } finally {
+      setIsExporting(false);
+    }
   };
   
   // Handle edit credit
@@ -303,6 +432,7 @@ export default function CreditsPage() {
           onReset={handleReset}
           onCreateNew={handleCreateCredit}
           onExportExcel={handleExportExcel}
+          exporting={isExporting}
           initialFilters={initialFilters}
         />
 

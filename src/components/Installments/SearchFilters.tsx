@@ -9,7 +9,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { PlusIcon } from 'lucide-react';
+import { PlusIcon, Loader2 } from 'lucide-react';
 import { useStore } from '@/contexts/StoreContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getCustomers } from '@/lib/customer';
@@ -27,6 +27,7 @@ interface SearchFiltersProps {
   onReset: () => void;
   onCreateNew: () => void;
   onExportExcel: () => void;
+  exporting?: boolean;
   initialFilters?: Partial<SearchFilters>; // Thêm prop để pre-fill form
 }
 
@@ -45,6 +46,7 @@ export function SearchFilters({
   onReset, 
   onCreateNew, 
   onExportExcel,
+  exporting,
   initialFilters
 }: SearchFiltersProps) {
   const statusMap = {
@@ -414,11 +416,22 @@ export function SearchFilters({
             size="sm"
             className="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
             onClick={onExportExcel}
+            disabled={exporting}
+            title={exporting ? 'Đang xuất...' : 'Xuất Excel'}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Xuất Excel
+            {exporting ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                Đang xuất...
+              </>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Xuất Excel
+              </>
+            )}
           </Button>
         </div>
         

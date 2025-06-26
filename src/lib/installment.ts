@@ -19,7 +19,7 @@ export async function getInstallments(
       .select(`
         *,
         customer:customers(
-          id, name, phone, address, blacklist_reason
+          id, name, phone, address, blacklist_reason, id_number
         )
       `, { count: 'exact' })
     
@@ -124,6 +124,7 @@ export async function getInstallments(
         phone: item.customer.phone || undefined,
         address: item.customer.address || undefined,
         blacklist_reason: item.customer.blacklist_reason || undefined,
+        id_number: item.customer.id_number || undefined,
       } as Customer : undefined;
       
       return {
@@ -180,7 +181,7 @@ export async function getInstallments(
 function calculateDueDate(loanDate: string, loanPeriod: number): string {
   try {
     const date = new Date(loanDate);
-    date.setDate(date.getDate() + loanPeriod);
+    date.setDate(date.getDate() + loanPeriod - 1);
     return date.toISOString().split('T')[0];
   } catch (error) {
     console.error('Error calculating due date:', error);
