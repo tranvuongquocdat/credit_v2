@@ -6,6 +6,10 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Layout } from '@/components/Layout/Layout';
 import dynamicImport from 'next/dynamic';
+import * as XLSX from 'xlsx';
+import { format } from 'date-fns';
+import { getLatestPaymentPaidDate } from '@/lib/Installments/get_latest_payment_paid_date';
+import { calculateDailyAmount, calculateRatio } from '@/lib/installmentCalculations';
 
 import { 
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
@@ -65,6 +69,15 @@ const FinancialSummary = dynamicImport(
   () => import('@/components/common/FinancialSummary').then((mod) => ({ default: mod.FinancialSummary })),
   { ssr: false, loading: () => <SkeletonFinancialSummary /> }
 ) as typeof import('@/components/common/FinancialSummary').FinancialSummary;
+
+// Helper to format currency with dot separators
+const formatCurrencyExcel = (value: number | undefined | null): string => {
+  try {
+    return new Intl.NumberFormat('vi-VN').format(value ?? 0);
+  } catch (e) {
+    return String(value ?? 0);
+  }
+};
 
 export default function InstallmentsPage() {
   const { hasPermission, loading: permissionsLoading } = usePermissions();
@@ -126,6 +139,8 @@ export default function InstallmentsPage() {
   // NEW: state for enriched data & calc loading
   const [processedInstallments, setProcessedInstallments] = useState<InstallmentWithCustomer[]>([]);
   const [calcLoading, setCalcLoading] = useState(false);
+  // Exporting state for Excel export
+  const [isExporting, setIsExporting] = useState(false);
   
   // Calculate total pages
   const totalPages = Math.ceil(totalItems / itemsPerPage);
@@ -142,9 +157,123 @@ export default function InstallmentsPage() {
   };
   
   // Handle export to Excel
-  const handleExportExcel = () => {
-    // In a real app, this would generate and download an Excel file
-    alert('Export to Excel functionality would be implemented here');
+  const handleExportExcel = async () => {
+    if (isExporting) return; // prevent multiple clicks
+
+    if (!processedInstallments || processedInstallments.length === 0) {
+      alert('Không có dữ liệu để xuất Excel');
+      return;
+    }
+
+    setIsExporting(true);
+
+    try {
+      // Prepare data rows
+      const rows = await Promise.all(
+        processedInstallments.map(async (item, index) => {
+          // Lấy ngày đã đóng mới nhất
+          let latestPaidDateStr = '';
+          try {
+            const latestPaidDate = await getLatestPaymentPaidDate(item.id);
+            if (latestPaidDate) {
+              latestPaidDateStr = format(new Date(latestPaidDate), 'dd/MM/yyyy');
+            }
+          } catch (err) {
+            console.error('Error getting latest paid date:', err);
+          }
+
+          // Ngày bắt đầu & kết thúc
+          const startDateStr = item.start_date ? format(new Date(item.start_date), 'dd/MM/yyyy') : '';
+          let endDateStr = '';
+          try {
+            if (item.start_date && item.duration) {
+              const startDate = new Date(item.start_date);
+              const endDate = new Date(startDate);
+              endDate.setDate(startDate.getDate() + (item.duration ?? 0) - 1);
+              endDateStr = format(endDate, 'dd/MM/yyyy');
+            }
+          } catch (err) {
+            console.error('Error calculating end date:', err);
+          }
+
+          // Ngày phải đóng tiếp theo
+          const nextDueDateStr = item.payment_due_date ? format(new Date(item.payment_due_date), 'dd/MM/yyyy') : '';
+
+          // Tính tiền thu theo kỳ
+          const dailyAmount = calculateDailyAmount(item);
+          const amountPerPeriod = dailyAmount * (item.payment_period ?? 1);
+
+          return {
+            'STT': index + 1,
+            'Mã hợp đồng': item.contract_code,
+            'Tên khách hàng': item.customer?.name || '',
+            'Số điện thoại khách hàng': (item.customer as any)?.phone || '',
+            'CMND': (item.customer as any)?.id_number || '',
+            'Địa chỉ': (item.customer as any)?.address || '',
+            'Tiền trả góp': formatCurrencyExcel(item.installment_amount),
+            'Tiền giao khách': formatCurrencyExcel(item.amount_given),
+            'Tỷ lệ': calculateRatio(item),
+            'Ngày bắt đầu': startDateStr,
+            'Ngày kết thúc': endDateStr,
+            'Đã đóng đến ngày': latestPaidDateStr,
+            'Đã đóng được': formatCurrencyExcel((item as any).totalPaid),
+            'Còn phải đóng': formatCurrencyExcel((item as any).remainingToPay),
+            'Ngày phải đóng tiếp theo': nextDueDateStr,
+            'Tiền thu theo kỳ': formatCurrencyExcel(amountPerPeriod),
+            'Tiền nợ': formatCurrencyExcel(item.old_debt ?? item.debt_amount),
+          } as Record<string, any>;
+        })
+      );
+
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(rows);
+
+      // Optional: set column widths for better readability
+      ws['!cols'] = [
+        { width: 6 },   // STT
+        { width: 15 },  // Mã hợp đồng
+        { width: 22 },  // Tên khách hàng
+        { width: 15 },  // SĐT
+        { width: 18 },  // CMND
+        { width: 25 },  // Địa chỉ
+        { width: 15 },  // Tiền trả góp
+        { width: 15 },  // Tiền giao khách
+        { width: 12 },  // Tỷ lệ
+        { width: 12 },  // Ngày bắt đầu
+        { width: 12 },  // Ngày kết thúc
+        { width: 14 },  // Đã đóng đến ngày
+        { width: 15 },  // Đã đóng được
+        { width: 15 },  // Còn phải đóng
+        { width: 18 },  // Ngày phải đóng tiếp theo
+        { width: 16 },  // Tiền thu theo kỳ
+        { width: 12 },  // Tiền nợ
+      ];
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Danh sách trả góp');
+
+      // Apply styling to header row (row 1)
+      const headerKeys = Object.keys(rows[0] || {});
+      headerKeys.forEach((_, idx) => {
+        const cellRef = XLSX.utils.encode_cell({ r: 0, c: idx });
+        const cell = ws[cellRef];
+        if (cell) {
+          cell.s = {
+            fill: { fgColor: { rgb: '4472C4' } }, // blue background
+            font: { bold: true, color: { rgb: 'FFFFFF' } },
+            alignment: { horizontal: 'center', vertical: 'center' },
+          } as any;
+        }
+      });
+
+      const fileName = `DanhSachTraGop_${format(new Date(), 'yyyyMMdd_HHmmss')}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    } catch (error) {
+      console.error('Error exporting installments to Excel:', error);
+      alert('Có lỗi xảy ra khi xuất Excel. Vui lòng thử lại.');
+    } finally {
+      setIsExporting(false);
+    }
   };
   
   // Handle edit installment
@@ -305,7 +434,7 @@ export default function InstallmentsPage() {
             statusInfo,
           } as InstallmentWithCustomer;
         });
-
+        console.log('enriched', enriched);
         setProcessedInstallments(enriched);
       } catch (err) {
         console.error('Error computing installment aggregates:', err);
@@ -352,6 +481,7 @@ export default function InstallmentsPage() {
           onReset={handleReset}
           onCreateNew={handleCreateInstallment}
           onExportExcel={handleExportExcel}
+          exporting={isExporting}
           initialFilters={initialFilters}
         />
         
