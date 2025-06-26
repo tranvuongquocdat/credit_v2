@@ -292,8 +292,14 @@ export default function InterestDetailPage() {
             fetchAllData(pawnQueries[2]),
             fetchAllData(pawnQueries[3])
           ]).then(async ([pawnPaymentData, pawnCloseData, pawnReopenData, pawnDebtData]) => {
-            // Process payment transactions - separate original and cancel records
+            // Process payment transactions - for pawns, only show records that are NOT deleted
+            // PAWN LOGIC: Unlike credits, cancelled pawn payments (is_deleted=true) should not be displayed at all
             for (const item of pawnPaymentData || []) {
+              // Skip deleted records - for pawns, cancelled payments should not be shown
+              if (item.is_deleted) {
+                continue;
+              }
+
               let itemName = '';
               try {
                 if (item.pawns?.collateral_detail) {
@@ -306,7 +312,7 @@ export default function InterestDetailPage() {
                 console.error('Error parsing collateral_detail:', e);
               }
 
-              // Always add original payment record (positive amount)
+              // Only add payment record if it's not deleted and within date range
               if (new Date(item.created_at) >= startDateObj && new Date(item.created_at) <= endDateObj) {
                 allInterestDetails.push({
                   id: `pawn-payment-${item.id}`,
@@ -323,28 +329,6 @@ export default function InterestDetailPage() {
                   transactionType: 'Đóng lãi',
                   type: 'Cầm đồ'
                 });
-              }
-
-              // If payment is cancelled (is_deleted = true), add separate cancel record
-              if (item.is_deleted && item.pawns?.updated_at) {
-                const cancelDate = new Date(item.pawns.updated_at);
-                if (cancelDate >= startDateObj && cancelDate <= endDateObj) {
-                  allInterestDetails.push({
-                    id: `pawn-payment-cancel-${item.id}`,
-                    contractId: item.pawn_id,
-                    contractCode: item.pawns?.contract_code || '',
-                    customerName: item.pawns?.customers?.name || '',
-                    itemName,
-                    loanAmount: item.pawns?.loan_amount || 0,
-                    transactionDate: cancelDate.toLocaleString('vi-VN'),
-                    transactionDateTime: cancelDate.toLocaleString('vi-VN'),
-                    interestAmount: -(item.credit_amount || 0),
-                    otherAmount: 0,
-                    totalAmount: -(item.credit_amount || 0),
-                    transactionType: 'Huỷ đóng lãi',
-                    type: 'Cầm đồ'
-                  });
-                }
               }
             }
 
@@ -555,6 +539,7 @@ export default function InterestDetailPage() {
             fetchAllData(creditQueries[3])
           ]).then(async ([creditPaymentData, creditCloseData, creditReopenData, creditDebtData]) => {
             // Process payment transactions - separate original and cancel records
+            // CREDIT LOGIC: Show both original payments and cancelled payments (as separate "Huỷ đóng lãi" records)
             for (const item of creditPaymentData || []) {
               // Always add original payment record (positive amount)
               if (new Date(item.created_at) >= startDateObj && new Date(item.created_at) <= endDateObj) {
