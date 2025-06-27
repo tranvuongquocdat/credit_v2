@@ -65,3 +65,12 @@ export const parseFormattedNumber = (str: string): number => {
 export const formatNumberWithCommas = (value: number): string => {
   return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 };
+
+// Helper to format currency for Excel (thousand separators)
+export const formatCurrencyExcel = (value: number | undefined | null): string => {
+  try {
+    return new Intl.NumberFormat('vi-VN').format(value ?? 0);
+  } catch {
+    return String(value ?? 0);
+  }
+};
