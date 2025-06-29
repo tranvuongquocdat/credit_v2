@@ -775,10 +775,38 @@ export default function InterestDetailPage() {
       // Wait for all queries to complete in parallel
       await Promise.all(queryPromises);
 
-      // Sort by transaction date (newest first)
-      allInterestDetails.sort((a, b) => new Date(b.transactionDateTime).getTime() - new Date(a.transactionDateTime).getTime());
+      // Group and aggregate data by contract, date, and transaction type
+      const groupedData = new Map<string, InterestDetailItem>();
 
-      setInterestDetails(allInterestDetails);
+      allInterestDetails.forEach(item => {
+        // Create grouping key: contractId + date (without time) + transactionType
+        const transactionDate = new Date(item.transactionDateTime).toDateString();
+        const groupKey = `${item.contractId}-${transactionDate}-${item.transactionType}`;
+        
+        if (groupedData.has(groupKey)) {
+          const existingItem = groupedData.get(groupKey)!;
+          
+          // Aggregate amounts
+          existingItem.interestAmount += item.interestAmount;
+          existingItem.otherAmount += item.otherAmount;
+          existingItem.totalAmount += item.totalAmount;
+          
+          // Use the latest transaction time
+          if (new Date(item.transactionDateTime) > new Date(existingItem.transactionDateTime)) {
+            existingItem.transactionDate = item.transactionDate;
+            existingItem.transactionDateTime = item.transactionDateTime;
+          }
+        } else {
+          // Create new grouped item
+          groupedData.set(groupKey, { ...item });
+        }
+      });
+
+      // Convert map back to array and sort by transaction date (newest first)
+      const aggregatedDetails = Array.from(groupedData.values());
+      aggregatedDetails.sort((a, b) => new Date(b.transactionDateTime).getTime() - new Date(a.transactionDateTime).getTime());
+
+      setInterestDetails(aggregatedDetails);
     } catch (error) {
       console.error('Error fetching interest details:', error);
       setError('Có lỗi xảy ra khi tải dữ liệu');
