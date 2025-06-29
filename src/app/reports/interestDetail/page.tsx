@@ -196,7 +196,7 @@ export default function InterestDetailPage() {
       // Pawn interest details - run all pawn queries in parallel
       if (selectedContractType === 'all' || selectedContractType === 'Cầm đồ') {
         const pawnQueries = [
-          // Payment transactions query
+          // Payment transactions query - get ALL payment records with updated_at for cancel tracking
           supabase
             .from('pawn_history')
             .select(`
@@ -206,6 +206,7 @@ export default function InterestDetailPage() {
               credit_amount,
               debit_amount,
               created_at,
+              updated_at,
               is_deleted,
               pawns!inner(
                 id,
@@ -219,7 +220,7 @@ export default function InterestDetailPage() {
             .eq('pawns.store_id', storeId)
             .eq('transaction_type', 'payment'),
 
-          // Contract close transactions query
+          // Contract close transactions query - get ALL records with updated_at for cancel tracking
           supabase
             .from('pawn_history')
             .select(`
@@ -227,6 +228,8 @@ export default function InterestDetailPage() {
               pawn_id,
               transaction_type,
               created_at,
+              updated_at,
+              is_deleted,
               pawns!inner(
                 id,
                 contract_code,
@@ -236,11 +239,9 @@ export default function InterestDetailPage() {
               )
             `)
             .eq('pawns.store_id', storeId)
-            .eq('transaction_type', 'contract_close')
-            .gte('created_at', startDateISO)
-            .lte('created_at', endDateISO),
+            .eq('transaction_type', 'contract_close'),
 
-          // Contract reopen transactions query
+          // Contract reopen transactions query - get ALL records with updated_at for cancel tracking
           supabase
             .from('pawn_history')
             .select(`
@@ -248,6 +249,8 @@ export default function InterestDetailPage() {
               pawn_id,
               transaction_type,
               created_at,
+              updated_at,
+              is_deleted,
               pawns!inner(
                 id,
                 contract_code,
@@ -257,9 +260,7 @@ export default function InterestDetailPage() {
               )
             `)
             .eq('pawns.store_id', storeId)
-            .eq('transaction_type', 'contract_reopen')
-            .gte('created_at', startDateISO)
-            .lte('created_at', endDateISO),
+            .eq('transaction_type', 'contract_reopen'),
 
           // Debt payment transactions query
           supabase
@@ -292,14 +293,9 @@ export default function InterestDetailPage() {
             fetchAllData(pawnQueries[2]),
             fetchAllData(pawnQueries[3])
           ]).then(async ([pawnPaymentData, pawnCloseData, pawnReopenData, pawnDebtData]) => {
-            // Process payment transactions - for pawns, only show records that are NOT deleted
-            // PAWN LOGIC: Unlike credits, cancelled pawn payments (is_deleted=true) should not be displayed at all
+            // Process payment transactions - show both original and cancelled payments
+            // PAWN LOGIC: Show original payments and cancelled payments (as separate "Huỷ đóng lãi" records)
             for (const item of pawnPaymentData || []) {
-              // Skip deleted records - for pawns, cancelled payments should not be shown
-              if (item.is_deleted) {
-                continue;
-              }
-
               let itemName = '';
               try {
                 if (item.pawns?.collateral_detail) {
@@ -312,7 +308,7 @@ export default function InterestDetailPage() {
                 console.error('Error parsing collateral_detail:', e);
               }
 
-              // Only add payment record if it's not deleted and within date range
+              // Always add original payment record (positive amount) if within date range
               if (new Date(item.created_at) >= startDateObj && new Date(item.created_at) <= endDateObj) {
                 allInterestDetails.push({
                   id: `pawn-payment-${item.id}`,
@@ -330,10 +326,34 @@ export default function InterestDetailPage() {
                   type: 'Cầm đồ'
                 });
               }
+
+              // If payment is cancelled (is_deleted = true), add separate cancel record
+              if (item.is_deleted && item.updated_at) {
+                const cancelDate = new Date(item.updated_at);
+                if (cancelDate >= startDateObj && cancelDate <= endDateObj) {
+                  allInterestDetails.push({
+                    id: `pawn-payment-cancel-${item.id}`,
+                    contractId: item.pawn_id,
+                    contractCode: item.pawns?.contract_code || '',
+                    customerName: item.pawns?.customers?.name || '',
+                    itemName,
+                    loanAmount: item.pawns?.loan_amount || 0,
+                    transactionDate: cancelDate.toLocaleString('vi-VN'),
+                    transactionDateTime: cancelDate.toLocaleString('vi-VN'),
+                    interestAmount: -(item.credit_amount || 0),
+                    otherAmount: 0,
+                    totalAmount: -(item.credit_amount || 0),
+                    transactionType: 'Huỷ đóng lãi',
+                    type: 'Cầm đồ'
+                  });
+                }
+              }
             }
 
             // Process contract close transactions in parallel
-            const closePromises = (pawnCloseData || []).map(async (item) => {
+            const closePromises = (pawnCloseData || []).filter(item => 
+              new Date(item.created_at) >= startDateObj && new Date(item.created_at) <= endDateObj
+            ).map(async (item) => {
               let itemName = '';
               try {
                 if (item.pawns?.collateral_detail) {
@@ -348,25 +368,63 @@ export default function InterestDetailPage() {
 
               const interestAmount = await calculateInterestAmount(item.pawn_id, 'Cầm đồ', item.created_at);
 
-                              return {
-                  id: `pawn-close-${item.id}`,
-                  contractId: item.pawn_id,
-                  contractCode: item.pawns?.contract_code || '',
-                  customerName: item.pawns?.customers?.name || '',
-                  itemName,
-                  loanAmount: item.pawns?.loan_amount || 0,
-                  transactionDate: new Date(item.created_at).toLocaleString('vi-VN'),
-                  transactionDateTime: new Date(item.created_at).toLocaleString('vi-VN'),
-                  interestAmount,
-                  otherAmount: 0,
-                  totalAmount: interestAmount,
-                  transactionType: 'Chuộc đồ',
-                  type: 'Cầm đồ' as const
-                };
+              return {
+                id: `pawn-close-${item.id}`,
+                contractId: item.pawn_id,
+                contractCode: item.pawns?.contract_code || '',
+                customerName: item.pawns?.customers?.name || '',
+                itemName,
+                loanAmount: item.pawns?.loan_amount || 0,
+                transactionDate: new Date(item.created_at).toLocaleString('vi-VN'),
+                transactionDateTime: new Date(item.created_at).toLocaleString('vi-VN'),
+                interestAmount,
+                otherAmount: 0,
+                totalAmount: interestAmount,
+                transactionType: 'Chuộc đồ',
+                type: 'Cầm đồ' as const
+              };
+            });
+
+            // Process contract close cancel transactions (if cancelled)
+            const closeCancelPromises = (pawnCloseData || []).filter(item => 
+              item.is_deleted && item.updated_at &&
+              new Date(item.updated_at) >= startDateObj && new Date(item.updated_at) <= endDateObj
+            ).map(async (item) => {
+              let itemName = '';
+              try {
+                if (item.pawns?.collateral_detail) {
+                  const detail = typeof item.pawns.collateral_detail === 'string' 
+                    ? JSON.parse(item.pawns.collateral_detail) 
+                    : item.pawns.collateral_detail;
+                  itemName = detail.name || '';
+                }
+              } catch (e) {
+                console.error('Error parsing collateral_detail:', e);
+              }
+
+              const interestAmount = -(await calculateInterestAmount(item.pawn_id, 'Cầm đồ', item.created_at));
+
+              return {
+                id: `pawn-close-cancel-${item.id}`,
+                contractId: item.pawn_id,
+                contractCode: item.pawns?.contract_code || '',
+                customerName: item.pawns?.customers?.name || '',
+                itemName,
+                loanAmount: item.pawns?.loan_amount || 0,
+                transactionDate: new Date(item.updated_at).toLocaleString('vi-VN'),
+                transactionDateTime: new Date(item.updated_at).toLocaleString('vi-VN'),
+                interestAmount,
+                otherAmount: 0,
+                totalAmount: interestAmount,
+                transactionType: 'Huỷ chuộc đồ',
+                type: 'Cầm đồ' as const
+              };
             });
 
             // Process contract reopen transactions in parallel
-            const reopenPromises = (pawnReopenData || []).map(async (item) => {
+            const reopenPromises = (pawnReopenData || []).filter(item => 
+              new Date(item.created_at) >= startDateObj && new Date(item.created_at) <= endDateObj
+            ).map(async (item) => {
               let itemName = '';
               try {
                 if (item.pawns?.collateral_detail) {
@@ -382,21 +440,58 @@ export default function InterestDetailPage() {
               // Calculate interest amount as negative of contract close
               const interestAmount = -(await calculateInterestAmount(item.pawn_id, 'Cầm đồ', item.created_at));
 
-                              return {
-                  id: `pawn-reopen-${item.id}`,
-                  contractId: item.pawn_id,
-                  contractCode: item.pawns?.contract_code || '',
-                  customerName: item.pawns?.customers?.name || '',
-                  itemName,
-                  loanAmount: item.pawns?.loan_amount || 0,
-                  transactionDate: new Date(item.created_at).toLocaleString('vi-VN'),
-                  transactionDateTime: new Date(item.created_at).toLocaleString('vi-VN'),
-                  interestAmount,
-                  otherAmount: 0,
-                  totalAmount: interestAmount,
-                  transactionType: 'Huỷ chuộc đồ',
-                  type: 'Cầm đồ' as const
-                };
+              return {
+                id: `pawn-reopen-${item.id}`,
+                contractId: item.pawn_id,
+                contractCode: item.pawns?.contract_code || '',
+                customerName: item.pawns?.customers?.name || '',
+                itemName,
+                loanAmount: item.pawns?.loan_amount || 0,
+                transactionDate: new Date(item.created_at).toLocaleString('vi-VN'),
+                transactionDateTime: new Date(item.created_at).toLocaleString('vi-VN'),
+                interestAmount,
+                otherAmount: 0,
+                totalAmount: interestAmount,
+                transactionType: 'Huỷ chuộc đồ',
+                type: 'Cầm đồ' as const
+              };
+            });
+
+            // Process contract reopen cancel transactions (if cancelled)
+            const reopenCancelPromises = (pawnReopenData || []).filter(item => 
+              item.is_deleted && item.updated_at &&
+              new Date(item.updated_at) >= startDateObj && new Date(item.updated_at) <= endDateObj
+            ).map(async (item) => {
+              let itemName = '';
+              try {
+                if (item.pawns?.collateral_detail) {
+                  const detail = typeof item.pawns.collateral_detail === 'string' 
+                    ? JSON.parse(item.pawns.collateral_detail) 
+                    : item.pawns.collateral_detail;
+                  itemName = detail.name || '';
+                }
+              } catch (e) {
+                console.error('Error parsing collateral_detail:', e);
+              }
+
+              // Calculate interest amount as positive (reverse of reopen)
+              const interestAmount = await calculateInterestAmount(item.pawn_id, 'Cầm đồ', item.created_at);
+
+              return {
+                id: `pawn-reopen-cancel-${item.id}`,
+                contractId: item.pawn_id,
+                contractCode: item.pawns?.contract_code || '',
+                customerName: item.pawns?.customers?.name || '',
+                itemName,
+                loanAmount: item.pawns?.loan_amount || 0,
+                transactionDate: new Date(item.updated_at).toLocaleString('vi-VN'),
+                transactionDateTime: new Date(item.updated_at).toLocaleString('vi-VN'),
+                interestAmount,
+                otherAmount: 0,
+                totalAmount: interestAmount,
+                transactionType: 'Chuộc đồ',
+                type: 'Cầm đồ' as const
+              };
             });
 
             // Process debt payment transactions
@@ -433,12 +528,14 @@ export default function InterestDetailPage() {
             }
 
             // Wait for all parallel interest calculations to complete
-            const [closeResults, reopenResults] = await Promise.all([
+            const [closeResults, closeCancelResults, reopenResults, reopenCancelResults] = await Promise.all([
               Promise.all(closePromises),
-              Promise.all(reopenPromises)
+              Promise.all(closeCancelPromises),
+              Promise.all(reopenPromises),
+              Promise.all(reopenCancelPromises)
             ]);
 
-            allInterestDetails.push(...closeResults, ...reopenResults);
+            allInterestDetails.push(...closeResults, ...closeCancelResults, ...reopenResults, ...reopenCancelResults);
           })
         );
       }
@@ -468,7 +565,7 @@ export default function InterestDetailPage() {
             .eq('credits.store_id', storeId)
             .eq('transaction_type', 'payment'),
 
-          // Contract close transactions query
+          // Contract close transactions query - get ALL records with updated_at for cancel tracking
           supabase
             .from('credit_history')
             .select(`
@@ -476,6 +573,8 @@ export default function InterestDetailPage() {
               credit_id,
               transaction_type,
               created_at,
+              updated_at,
+              is_deleted,
               credits!inner(
                 id,
                 contract_code,
@@ -484,11 +583,9 @@ export default function InterestDetailPage() {
               )
             `)
             .eq('credits.store_id', storeId)
-            .eq('transaction_type', 'contract_close')
-            .gte('created_at', startDateISO)
-            .lte('created_at', endDateISO),
+            .eq('transaction_type', 'contract_close'),
 
-          // Contract reopen transactions query
+          // Contract reopen transactions query - get ALL records with updated_at for cancel tracking
           supabase
             .from('credit_history')
             .select(`
@@ -496,6 +593,8 @@ export default function InterestDetailPage() {
               credit_id,
               transaction_type,
               created_at,
+              updated_at,
+              is_deleted,
               credits!inner(
                 id,
                 contract_code,
@@ -504,9 +603,7 @@ export default function InterestDetailPage() {
               )
             `)
             .eq('credits.store_id', storeId)
-            .eq('transaction_type', 'contract_reopen')
-            .gte('created_at', startDateISO)
-            .lte('created_at', endDateISO),
+            .eq('transaction_type', 'contract_reopen'),
 
           // Debt payment transactions query
           supabase
@@ -584,46 +681,99 @@ export default function InterestDetailPage() {
             }
 
             // Process contract close transactions in parallel
-            const closePromises = (creditCloseData || []).map(async (item) => {
+            const closePromises = (creditCloseData || []).filter(item => 
+              new Date(item.created_at) >= startDateObj && new Date(item.created_at) <= endDateObj
+            ).map(async (item) => {
               const interestAmount = await calculateInterestAmount(item.credit_id, 'Tín chấp', item.created_at);
 
-                              return {
-                  id: `credit-close-${item.id}`,
-                  contractId: item.credit_id,
-                  contractCode: item.credits?.contract_code || '',
-                  customerName: item.credits?.customers?.name || '',
-                  itemName: 'Tín chấp',
-                  loanAmount: item.credits?.loan_amount || 0,
-                  transactionDate: new Date(item.created_at).toLocaleString('vi-VN'),
-                  transactionDateTime: new Date(item.created_at).toLocaleString('vi-VN'),
-                  interestAmount,
-                  otherAmount: 0,
-                  totalAmount: interestAmount,
-                  transactionType: 'Đóng HĐ',
-                  type: 'Tín chấp' as const
-                };
+              return {
+                id: `credit-close-${item.id}`,
+                contractId: item.credit_id,
+                contractCode: item.credits?.contract_code || '',
+                customerName: item.credits?.customers?.name || '',
+                itemName: 'Tín chấp',
+                loanAmount: item.credits?.loan_amount || 0,
+                transactionDate: new Date(item.created_at).toLocaleString('vi-VN'),
+                transactionDateTime: new Date(item.created_at).toLocaleString('vi-VN'),
+                interestAmount,
+                otherAmount: 0,
+                totalAmount: interestAmount,
+                transactionType: 'Đóng HĐ',
+                type: 'Tín chấp' as const
+              };
             });
 
-            // Process contract reopen transactions in parallel
-            const reopenPromises = (creditReopenData || []).map(async (item) => {
+            // Process contract close cancel transactions (if cancelled)
+            const closeCancelPromises = (creditCloseData || []).filter(item => 
+              item.is_deleted && item.updated_at &&
+              new Date(item.updated_at) >= startDateObj && new Date(item.updated_at) <= endDateObj
+            ).map(async (item) => {
+              const interestAmount = -(await calculateInterestAmount(item.credit_id, 'Tín chấp', item.created_at));
+
+              return {
+                id: `credit-close-cancel-${item.id}`,
+                contractId: item.credit_id,
+                contractCode: item.credits?.contract_code || '',
+                customerName: item.credits?.customers?.name || '',
+                itemName: 'Tín chấp',
+                loanAmount: item.credits?.loan_amount || 0,
+                transactionDate: new Date(item.updated_at).toLocaleString('vi-VN'),
+                transactionDateTime: new Date(item.updated_at).toLocaleString('vi-VN'),
+                interestAmount,
+                otherAmount: 0,
+                totalAmount: interestAmount,
+                transactionType: 'Huỷ đóng HĐ',
+                type: 'Tín chấp' as const
+              };
+            });
+
+            // Process contract reopen transactions in parallel  
+            const reopenPromises = (creditReopenData || []).filter(item => 
+              new Date(item.created_at) >= startDateObj && new Date(item.created_at) <= endDateObj
+            ).map(async (item) => {
               // Calculate interest amount as negative of contract close
               const interestAmount = -(await calculateInterestAmount(item.credit_id, 'Tín chấp', item.created_at));
 
-                              return {
-                  id: `credit-reopen-${item.id}`,
-                  contractId: item.credit_id,
-                  contractCode: item.credits?.contract_code || '',
-                  customerName: item.credits?.customers?.name || '',
-                  itemName: 'Tín chấp',
-                  loanAmount: item.credits?.loan_amount || 0,
-                  transactionDate: new Date(item.created_at).toLocaleString('vi-VN'),
-                  transactionDateTime: new Date(item.created_at).toLocaleString('vi-VN'),
-                  interestAmount,
-                  otherAmount: 0,
-                  totalAmount: interestAmount,
-                  transactionType: 'Huỷ đóng HĐ',
-                  type: 'Tín chấp' as const
-                };
+              return {
+                id: `credit-reopen-${item.id}`,
+                contractId: item.credit_id,
+                contractCode: item.credits?.contract_code || '',
+                customerName: item.credits?.customers?.name || '',
+                itemName: 'Tín chấp',
+                loanAmount: item.credits?.loan_amount || 0,
+                transactionDate: new Date(item.created_at).toLocaleString('vi-VN'),
+                transactionDateTime: new Date(item.created_at).toLocaleString('vi-VN'),
+                interestAmount,
+                otherAmount: 0,
+                totalAmount: interestAmount,
+                transactionType: 'Huỷ đóng HĐ',
+                type: 'Tín chấp' as const
+              };
+            });
+
+            // Process contract reopen cancel transactions (if cancelled)
+            const reopenCancelPromises = (creditReopenData || []).filter(item => 
+              item.is_deleted && item.updated_at &&
+              new Date(item.updated_at) >= startDateObj && new Date(item.updated_at) <= endDateObj
+            ).map(async (item) => {
+              // Calculate interest amount as positive (reverse of reopen)
+              const interestAmount = await calculateInterestAmount(item.credit_id, 'Tín chấp', item.created_at);
+
+              return {
+                id: `credit-reopen-cancel-${item.id}`,
+                contractId: item.credit_id,
+                contractCode: item.credits?.contract_code || '',
+                customerName: item.credits?.customers?.name || '',
+                itemName: 'Tín chấp',
+                loanAmount: item.credits?.loan_amount || 0,
+                transactionDate: new Date(item.updated_at).toLocaleString('vi-VN'),
+                transactionDateTime: new Date(item.updated_at).toLocaleString('vi-VN'),
+                interestAmount,
+                otherAmount: 0,
+                totalAmount: interestAmount,
+                transactionType: 'Đóng HĐ',
+                type: 'Tín chấp' as const
+              };
             });
 
             // Process debt payment transactions
@@ -648,12 +798,14 @@ export default function InterestDetailPage() {
             }
 
             // Wait for all parallel interest calculations to complete
-            const [closeResults, reopenResults] = await Promise.all([
+            const [closeResults, closeCancelResults, reopenResults, reopenCancelResults] = await Promise.all([
               Promise.all(closePromises),
-              Promise.all(reopenPromises)
+              Promise.all(closeCancelPromises),
+              Promise.all(reopenPromises),
+              Promise.all(reopenCancelPromises)
             ]);
 
-            allInterestDetails.push(...closeResults, ...reopenResults);
+            allInterestDetails.push(...closeResults, ...closeCancelResults, ...reopenResults, ...reopenCancelResults);
           })
         );
       }
@@ -1028,8 +1180,9 @@ export default function InterestDetailPage() {
                               item.transactionType === 'Đóng lãi' ? 'bg-green-100 text-green-800' :
                               item.transactionType === 'Huỷ đóng lãi' ? 'bg-red-100 text-red-800' :
                               item.transactionType === 'Chuộc đồ' || item.transactionType === 'Đóng HĐ' ? 'bg-blue-100 text-blue-800' :
-                              item.transactionType === 'Huỷ chuộc đồ' || item.transactionType === 'Huỷ đóng HĐ' ? 'bg-orange-100 text-orange-800' :
+                              item.transactionType === 'Huỷ chuộc đồ' || item.transactionType === 'Huỷ đóng HĐ' ? 'bg-red-100 text-red-800' :
                               item.transactionType === 'Lãi họ' ? 'bg-purple-100 text-purple-800' :
+                              item.transactionType === 'Trả nợ' ? 'bg-yellow-100 text-yellow-800' :
                               'bg-gray-100 text-gray-800'
                             }`}>
                               {item.transactionType}
