@@ -8,6 +8,7 @@ export interface PawnTransaction {
   loanAmount: number;
   interestAmount: number;
   transactionType: string;
+  createdAt: string;
 }
 
 export interface CreditTransaction {
@@ -19,6 +20,7 @@ export interface CreditTransaction {
   loanAmount: number;
   interestAmount: number;
   transactionType: string;
+  createdAt: string;
 }
 
 export interface InstallmentTransaction {
@@ -30,6 +32,7 @@ export interface InstallmentTransaction {
   loanAmount: number;
   interestAmount: number;
   transactionType: string;
+  createdAt: string;
 }
 
 export interface Transaction {

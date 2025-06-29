@@ -25,6 +25,36 @@ const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('vi-VN').format(value);
 };
 
+// Function to translate transaction_type to Vietnamese
+const translateTransactionType = (transactionType: string): string => {
+  const translations: { [key: string]: string } = {
+    // Contract transaction types
+    'payment': 'Đóng lãi',
+    'loan': 'Cho vay',
+    'additional_loan': 'Vay thêm',
+    'principal_repayment': 'Trả gốc',
+    'contract_close': 'Đóng HĐ',
+    'contract_reopen': 'Mở lại HĐ',
+    'debt_payment': 'Trả nợ',
+    'extension': 'Gia hạn',
+    'deposit': 'Nộp tiền',
+    'withdrawal': 'Rút tiền',
+    'income': 'Thu nhập',
+    'expense': 'Chi phí',
+    'penalty': 'Phạt',
+    'interest': 'Lãi',
+    'fee': 'Phí',
+    'refund': 'Hoàn tiền',
+    'initial_loan': 'Khoản vay ban đầu',
+    'update_contract': 'Cập nhật HĐ',
+    'contract_delete': 'Xóa HĐ',
+    'contract_extension': 'Gia hạn HĐ',
+    'contract_rotate': 'Đảo HĐ'
+  };
+  
+  return translations[transactionType] || transactionType;
+};
+
 // Function to fetch all data from a query with pagination
 const fetchAllData = async (query: any, pageSize: number = 1000) => {
   let allData: any[] = [];
@@ -92,13 +122,44 @@ export default function PawnTable({ storeId, startDate, endDate }: PawnTableProp
         date: format(parseISO(item.created_at), 'dd/MM/yyyy HH:mm'),
         contractCode: item.pawns?.contract_code || 'N/A',
         customerName: 'N/A', // Customer name is not available in this query
-        description: item.description || 'Giao dịch cầm đồ',
+        description: translateTransactionType(item.transaction_type || ''),
         loanAmount: item.debit_amount || 0,
         interestAmount: item.credit_amount || 0,
-        transactionType: item.transaction_type || ''
+        transactionType: item.transaction_type || '',
+        createdAt: item.created_at
       }));
       
-      setTransactions(formattedData);
+      // Group and aggregate transactions by contract, date, and transaction type
+      const groupedData = new Map<string, PawnTransaction>();
+
+      formattedData.forEach(item => {
+        // Create grouping key: contractCode + date (without time) + transactionType
+        const transactionDate = new Date(item.createdAt).toDateString();
+        const groupKey = `${item.contractCode}-${transactionDate}-${item.transactionType}`;
+        
+        if (groupedData.has(groupKey)) {
+          const existingItem = groupedData.get(groupKey)!;
+          
+          // Aggregate amounts
+          existingItem.loanAmount += item.loanAmount;
+          existingItem.interestAmount += item.interestAmount;
+          
+          // Use the latest transaction time
+          if (new Date(item.createdAt) > new Date(existingItem.createdAt)) {
+            existingItem.date = item.date;
+            existingItem.createdAt = item.createdAt;
+          }
+        } else {
+          // Create new grouped item
+          groupedData.set(groupKey, { ...item });
+        }
+      });
+
+      // Convert map back to array and sort by transaction date (newest first)
+      const aggregatedTransactions = Array.from(groupedData.values());
+      aggregatedTransactions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      
+      setTransactions(aggregatedTransactions);
     } catch (err) {
       console.error('Error fetching pawn transactions:', err);
       setError('Đã xảy ra lỗi khi tải dữ liệu');
