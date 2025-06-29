@@ -129,7 +129,7 @@ export async function deleteCreditAmountHistory(id: string): Promise<void> {
     // Delete the history record by setting is_deleted = true
     const { error: deleteError } = await supabase
     .from('credit_history')
-    .update({ is_deleted: true, updated_by: userId })
+    .update({ is_deleted: true, updated_by: userId, updated_at: new Date().toISOString() })
     .eq('id', id);
     
     if (deleteError) {

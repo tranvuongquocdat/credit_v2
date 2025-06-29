@@ -370,7 +370,7 @@ export function PaymentTab({
         
         const { data, error } = await supabase
           .from('pawn_history')
-          .update({is_deleted: true, updated_by: userId})
+          .update({is_deleted: true, updated_by: userId, updated_at: new Date().toISOString()})
           .eq('pawn_id', pawn.id)
           .eq('transaction_type', 'payment')
           .eq('is_deleted', false)
