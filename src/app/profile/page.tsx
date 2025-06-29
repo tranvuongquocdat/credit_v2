@@ -21,7 +21,11 @@ import {
   Clock,
   Edit3,
   Save,
-  X
+  X,
+  Key,
+  Eye,
+  EyeOff,
+  CheckCircle
 } from 'lucide-react';
 interface EmployeeData {
   id: string;
@@ -63,6 +67,17 @@ export default function ProfilePage() {
     full_name: '',
     phone: '',
   });
+  const [passwordChangeMode, setPasswordChangeMode] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [showPasswords, setShowPasswords] = useState({
+    new: false,
+    confirm: false,
+  });
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
 
   // Fetch user profile data
   const fetchProfile = async () => {
@@ -168,11 +183,82 @@ export default function ProfilePage() {
     });
   };
 
+  // Handle password change
+  const handlePasswordChange = async () => {
+    if (!passwordData.newPassword || !passwordData.confirmPassword) {
+      setError('Vui lòng nhập đầy đủ thông tin mật khẩu');
+      return;
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setError('Mật khẩu xác nhận không khớp');
+      return;
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      setError('Mật khẩu mới phải có ít nhất 6 ký tự');
+      return;
+    }
+
+    try {
+      setPasswordLoading(true);
+      setError(null);
+
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: passwordData.newPassword
+      });
+
+      if (updateError) throw updateError;
+
+      setPasswordChangeMode(false);
+      setPasswordData({
+        newPassword: '',
+        confirmPassword: '',
+      });
+      
+      // Show success message
+      setPasswordSuccess(true);
+
+    } catch (err) {
+      console.error('Error updating password:', err);
+      setError(err instanceof Error ? err.message : 'Đã xảy ra lỗi khi thay đổi mật khẩu');
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  const cancelPasswordChange = () => {
+    setPasswordChangeMode(false);
+    setPasswordData({
+      newPassword: '',
+      confirmPassword: '',
+    });
+    setError(null);
+  };
+
+  const togglePasswordVisibility = (field: 'new' | 'confirm') => {
+    setShowPasswords(prev => ({
+      ...prev,
+      [field]: !prev[field]
+    }));
+  };
+
   useEffect(() => {
     if (!authLoading && user) {
       fetchProfile();
     }
   }, [user, authLoading]);
+
+  // Auto-hide password success message after 5 seconds
+  useEffect(() => {
+    if (passwordSuccess) {
+      const timer = setTimeout(() => {
+        setPasswordSuccess(false);
+      }, 5000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [passwordSuccess]);
 
   if (authLoading || loading) {
     return (
@@ -413,15 +499,132 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              {profile.employee.updated_at && (
-                <div className="pt-2 border-t border-gray-200">
-                  <Label className="text-sm font-medium text-gray-700">Cập nhật lần cuối</Label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Clock className="h-4 w-4 text-gray-500" />
-                    <span className="text-gray-600 text-sm">
-                      {profile.employee.updated_at ? formatDateTime(profile.employee.updated_at) : 'Chưa cập nhật'}
-                    </span>
+
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Password Change Section - Only for employees */}
+        {profile.employee && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Key className="h-5 w-5 text-blue-600" />
+                Thay đổi mật khẩu
+                                 {!passwordChangeMode && (
+                   <Button
+                     size="sm"
+                     onClick={() => {
+                       setPasswordChangeMode(true);
+                       setPasswordSuccess(false);
+                     }}
+                     className="ml-auto bg-blue-600 hover:bg-blue-700"
+                   >
+                     <Key className="h-4 w-4 mr-1" />
+                     Đổi mật khẩu
+                   </Button>
+                 )}
+                {passwordChangeMode && (
+                  <div className="ml-auto flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={handlePasswordChange}
+                      disabled={passwordLoading}
+                      className="flex items-center gap-1 bg-green-600 hover:bg-green-700"
+                    >
+                      <Save className="h-4 w-4" />
+                      {passwordLoading ? 'Đang lưu...' : 'Lưu'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={cancelPasswordChange}
+                      disabled={passwordLoading}
+                      className="flex items-center gap-1"
+                    >
+                      <X className="h-4 w-4" />
+                      Hủy
+                    </Button>
                   </div>
+                )}
+              </CardTitle>
+                         </CardHeader>
+             <CardContent>
+               {passwordSuccess && !passwordChangeMode && (
+                 <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                   <div className="flex items-center gap-2 text-green-800">
+                     <CheckCircle className="h-5 w-5" />
+                     <span className="font-medium">Thành công!</span>
+                   </div>
+                   <p className="text-green-700 text-sm mt-1">
+                     Mật khẩu đã được thay đổi thành công. Thông báo này sẽ tự động ẩn sau 5 giây.
+                   </p>
+                 </div>
+               )}
+               
+               {passwordChangeMode ? (
+                 <div className="space-y-4 max-w-md">
+                   <div>
+                    <Label className="text-sm font-medium text-gray-700">Mật khẩu mới</Label>
+                    <div className="relative mt-1">
+                      <Input
+                        type={showPasswords.new ? "text" : "password"}
+                        value={passwordData.newPassword}
+                        onChange={(e) => setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
+                        placeholder="Nhập mật khẩu mới (ít nhất 6 ký tự)"
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => togglePasswordVisibility('new')}
+                      >
+                        {showPasswords.new ? (
+                          <EyeOff className="h-4 w-4 text-gray-400" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-gray-400" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">Xác nhận mật khẩu mới</Label>
+                    <div className="relative mt-1">
+                      <Input
+                        type={showPasswords.confirm ? "text" : "password"}
+                        value={passwordData.confirmPassword}
+                        onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                        placeholder="Nhập lại mật khẩu mới"
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => togglePasswordVisibility('confirm')}
+                      >
+                        {showPasswords.confirm ? (
+                          <EyeOff className="h-4 w-4 text-gray-400" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-gray-400" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 text-sm text-gray-600">
+                    <p>• Mật khẩu phải có ít nhất 6 ký tự</p>
+                    <p>• Nên sử dụng kết hợp chữ hoa, chữ thường, số và ký tự đặc biệt</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-gray-600">
+                  <p>Nhấn vào nút "Đổi mật khẩu" để thay đổi mật khẩu đăng nhập của bạn.</p>
+                  <p className="text-sm mt-1">Mật khẩu sẽ được cập nhật trong hệ thống xác thực.</p>
                 </div>
               )}
             </CardContent>
