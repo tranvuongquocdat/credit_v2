@@ -27,6 +27,7 @@ import { toast } from '@/components/ui/use-toast';
 import { usePawnStatuses } from '@/hooks/usePawnStatuses';
 import { usePermissions } from '@/hooks/usePermissions';
 import { updatePawnStatus } from '@/lib/pawn-payment';
+import { isSameDay, addDays } from 'date-fns';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -61,6 +62,7 @@ export function PawnContractClient({ contractCode }: PawnContractClientProps) {
     totalItems, 
     currentPage, 
     itemsPerPage,
+    filters,
     handleSearch,
     handleReset,
     handlePageChange,
@@ -93,8 +95,20 @@ export function PawnContractClient({ contractCode }: PawnContractClientProps) {
   const [isPawnEditModalOpen, setIsPawnEditModalOpen] = useState(false);
   const [editPawnId, setEditPawnId] = useState<string>('');
   
-  // Calculate total pages
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+  const displayPawns = useMemo(() => {
+    if (filters?.status !== 'due_tomorrow') return pawns;
+    const tomorrow = addDays(new Date().setHours(0,0,0,0) as any, 1);
+    return pawns.filter(p => {
+      const next = pawnDetails[p.id]?.nextPayment;
+      if (!next) return false;
+      return isSameDay(new Date(next), tomorrow);
+    });
+  }, [pawns, filters?.status, pawnDetails]);
+
+  const effectiveTotalItems = filters?.status === 'due_tomorrow' ? displayPawns.length : totalItems;
+  const totalPages = Math.ceil(effectiveTotalItems / itemsPerPage);
+  
   
   // Memoize search handler to prevent re-creation on every render
   const handleSearchFilters = useCallback((filters: any) => {
@@ -270,7 +284,7 @@ export function PawnContractClient({ contractCode }: PawnContractClientProps) {
 
         {/* Bảng dữ liệu hợp đồng */}
         <PawnsTable
-          pawns={pawns}
+          pawns={displayPawns}
           statusMap={statusMap}
           onEdit={handleEditPawn}
           onDelete={handleOpenDeleteDialog}
@@ -284,7 +298,7 @@ export function PawnContractClient({ contractCode }: PawnContractClientProps) {
         <PawnsPagination
           currentPage={currentPage}
           totalPages={totalPages}
-          totalItems={totalItems}
+          totalItems={effectiveTotalItems}
           itemsPerPage={itemsPerPage}
           onPageChange={handlePageChange}
         />

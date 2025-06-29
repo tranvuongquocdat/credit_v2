@@ -75,7 +75,7 @@ export function usePawns() {
         customer_name: filters.customerName,
         start_date: filters.startDate,
         end_date: filters.endDate,
-        status: filters.status as any || 'all',
+        status: filters.status && filters.status !== 'due_tomorrow' ? (filters.status as any) : undefined,
         loan_period: filters.duration || undefined,
         store_id: currentStore.id // Sử dụng currentStore.id trực tiếp thay vì || ''
       };
@@ -217,6 +217,7 @@ export function usePawns() {
     totalItems,
     currentPage,
     itemsPerPage,
+    filters,
     handlePageChange,
     handleSearch,
     handleReset,

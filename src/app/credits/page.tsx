@@ -35,6 +35,7 @@ import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_
 import { supabase } from '@/lib/supabase';
 import { getInterestDisplayString } from '@/lib/interest-calculator';
 import { formatCurrencyExcel } from '@/lib/utils';
+import { isSameDay, addDays } from 'date-fns';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -76,6 +77,7 @@ export default function CreditsPage() {
     totalItems, 
     currentPage, 
     itemsPerPage,
+    filters,
     handleSearch,
     handleReset,
     handlePageChange,
@@ -120,8 +122,19 @@ export default function CreditsPage() {
   // Exporting state
   const [isExporting, setIsExporting] = useState(false);
   
-  // Calculate total pages
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  // Client-side filter: Ngày mai đóng lãi
+  const displayCredits = useMemo(() => {
+    if (filters?.status !== 'due_tomorrow') return credits;
+    const tomorrow = addDays(new Date().setHours(0,0,0,0) as any, 1);
+    return credits.filter(c => {
+      const next = creditDetails[c.id]?.nextPayment;
+      if (!next) return false;
+      return isSameDay(new Date(next), tomorrow);
+    });
+  }, [credits, filters?.status, creditDetails]);
+
+  const effectiveTotalItems = filters?.status === 'due_tomorrow' ? displayCredits.length : totalItems;
+  const totalPages = Math.ceil(effectiveTotalItems / itemsPerPage);
   
   // Process initial filters only once
   useEffect(() => {
@@ -434,7 +447,7 @@ export default function CreditsPage() {
 
         {/* Bảng dữ liệu hợp đồng */}
         <CreditsTable
-          credits={credits}
+          credits={displayCredits}
           statusMap={statusMap}
           calculatedDetails={creditDetails}
           calculatedStatuses={creditStatuses}
@@ -450,7 +463,7 @@ export default function CreditsPage() {
         <CreditsPagination
           currentPage={currentPage}
           totalPages={totalPages}
-          totalItems={totalItems}
+          totalItems={effectiveTotalItems}
           itemsPerPage={itemsPerPage}
           onPageChange={handlePageChange}
         />

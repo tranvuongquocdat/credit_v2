@@ -43,6 +43,7 @@ export interface CreateAdminParams {
 export interface UpdateAdminParams {
   username?: string;
   email?: string;
+  password?: string;
   status?: AdminStatus;
 }
 

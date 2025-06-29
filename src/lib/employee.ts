@@ -189,20 +189,26 @@ export async function createEmployee(params: CreateEmployeeParams) {
  */
 export async function updateEmployee(id: string, params: UpdateEmployeeParams) {
   try {
+    // Lấy ra profile id từ employee id trong bảng employees
+    const { data: employeeData, error: employeeError } = await supabase
+      .from('employees')
+      .select('user_id')
+      .eq('id', id)
+      .single();
+    if (employeeError) {
+      throw employeeError;
+    }
     // Kiểm tra nếu có thay đổi mật khẩu
     if (params.password) {
-      const { error: passwordError } = await supabase.functions.invoke(
-        'update-employee-password', 
-        { 
-          body: {
-            userId: id,
-            password: params.password
-          }
-        }
-      );
-
-      if (passwordError) {
-        throw passwordError;
+      const response = await fetch(`/api/users/${employeeData.user_id}/changePassword`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: params.password,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to update password');
       }
     }
 
@@ -212,23 +218,7 @@ export async function updateEmployee(id: string, params: UpdateEmployeeParams) {
     if (params.store_id !== undefined) updateData.store_id = params.store_id;
     if (params.phone !== undefined) updateData.phone = params.phone;
     if (params.status !== undefined) updateData.status = params.status;
-
-    // Cập nhật email nếu cần (thông qua admin API)
-    if (params.email !== undefined) {
-      const { error: emailError } = await supabase.functions.invoke(
-        'update-employee-email', 
-        { 
-          body: {
-            userId: id,
-            email: params.email
-          }
-        }
-      );
-
-      if (emailError) {
-        throw emailError;
-      }
-    }
+    if (params.email !== undefined) updateData.email = params.email;
 
     // Chỉ cập nhật employee trong database nếu có dữ liệu cần thay đổi
     if (Object.keys(updateData).length > 0) {

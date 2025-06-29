@@ -6,6 +6,7 @@ export async function getInstallmentWarnings(
   limit: number = 10,
   storeId: string,
   customerFilter: string = '',
+  contractCodeFilter: string = '',
   employeeId: string = ''
 ) {
   try {
@@ -47,6 +48,11 @@ export async function getInstallmentWarnings(
       } else {
         query = query.eq('id', '00000000-0000-0000-0000-000000000000'); // Non-existent ID
       }
+    }
+    
+    // Áp dụng filter theo mã hợp đồng nếu có
+    if (contractCodeFilter) {
+      query = query.eq('contract_code', contractCodeFilter);
     }
     
     // Áp dụng filter theo nhân viên nếu có

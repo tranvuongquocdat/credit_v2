@@ -6,13 +6,6 @@ import { InstallmentStatus, InstallmentWithCustomer } from "@/models/installment
 import { Search } from "lucide-react";
 import { toast } from '@/components/ui/use-toast';
 import { Layout } from "@/components/Layout";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle,
-  DialogFooter
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
@@ -37,18 +30,15 @@ export default function InstallmentWarningsPage() {
   const [installments, setInstallments] = useState<InstallmentWithCustomer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [customerNameFilter, setCustomerNameFilter] = useState("");
+  const [contractCodeFilter, setContractCodeFilter] = useState("");
   const debouncedCustomerFilter = useDebounce(customerNameFilter, 500);
+  const debouncedContractFilter = useDebounce(contractCodeFilter, 500);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [itemsPerPage] = useState(30);
   const { currentStore } = useStore();
   const [processingPayment, setProcessingPayment] = useState(false);
-  const [paymentConfirmOpen, setPaymentConfirmOpen] = useState(false);
-  const [selectedPayment, setSelectedPayment] = useState<{
-    installment: InstallmentWithCustomer;
-    amount: number;
-  } | null>(null);
   const { hasPermission, loading: permissionsLoading } = usePermissions();
   // Kiểm tra quyền xem danh sách hợp đồng trả góp
   const canViewInstallmentsList = hasPermission('xem_danh_sach_hop_dong_tra_gop');
@@ -65,7 +55,7 @@ export default function InstallmentWarningsPage() {
     if (canViewInstallmentsList) {
       loadInstallments();
     }
-  }, [currentStore, debouncedCustomerFilter, employeeFilter, currentPage, canViewInstallmentsList]);
+  }, [currentStore, debouncedCustomerFilter, debouncedContractFilter, employeeFilter, currentPage, canViewInstallmentsList]);
   
   useEffect(() => {
     (async () => {
@@ -85,6 +75,7 @@ export default function InstallmentWarningsPage() {
         itemsPerPage,
         currentStore.id,
         debouncedCustomerFilter,
+        debouncedContractFilter,
         employeeFilter === 'all' ? '' : employeeFilter
       );
 
@@ -124,14 +115,7 @@ export default function InstallmentWarningsPage() {
       });
       return;
     }
-    // Store the payment info for confirmation
-    setSelectedPayment({
-      installment,
-      amount,
-    });
-    
-    // Open confirmation dialog
-    setPaymentConfirmOpen(true);
+    await processPayment(installment, amount);
   };
   
   // Handle customer click to navigate to credits
@@ -148,6 +132,7 @@ export default function InstallmentWarningsPage() {
   // Clear filter
   const clearFilter = () => {
     setCustomerNameFilter("");
+    setContractCodeFilter("");
     setEmployeeFilter("all");
     setCurrentPage(1);
   };
@@ -158,11 +143,8 @@ export default function InstallmentWarningsPage() {
   };
   
   // Process payment after confirmation
-  const processPayment = async () => {
-    if (!selectedPayment) return;
-    
+  const processPayment = async (installment: InstallmentWithCustomer, amount: number) => {
     setProcessingPayment(true);
-    const { installment, amount } = selectedPayment;
     const { id: userId } = await getCurrentUser();
     try {
       // 1. Lấy ngày cuối cùng đã đóng tiền
@@ -355,8 +337,6 @@ export default function InstallmentWarningsPage() {
       });
     } finally {
       setProcessingPayment(false);
-      setPaymentConfirmOpen(false);
-      setSelectedPayment(null);
     }
   };
   
@@ -395,6 +375,20 @@ export default function InstallmentWarningsPage() {
                   className="pl-10"
                 />
               </div>
+              {/* Contract code input */}
+              <div className="relative flex-1 max-w-md">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                  <Search className="h-4 w-4 text-gray-400" />
+                </div>
+                <Input
+                  type="text"
+                  placeholder="Tìm kiếm mã hợp đồng..."
+                  value={contractCodeFilter}
+                  onChange={(e) => setContractCodeFilter(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  className="pl-10"
+                />
+              </div>
               {/* Employee Select */}
               <div className="max-w-xs">
                 <Select
@@ -418,15 +412,20 @@ export default function InstallmentWarningsPage() {
               <Button 
                 variant="outline" 
                 onClick={clearFilter}
-                disabled={!customerNameFilter && employeeFilter==='all'}
+                disabled={!customerNameFilter && !contractCodeFilter && employeeFilter==='all'}
               >
                 Xóa bộ lọc
               </Button>
             </div>
             {/* Show filter info if active */}
-            {customerNameFilter && (
+            {(customerNameFilter || contractCodeFilter) && (
               <div className="mt-2 text-sm text-blue-600">
-                Đang lọc theo tên khách hàng: <span className="font-semibold">{customerNameFilter}</span>
+                {customerNameFilter && (
+                  <>Đang lọc theo KH: <span className="font-semibold">{customerNameFilter}</span></>
+                )}
+                {contractCodeFilter && (
+                  <> {customerNameFilter && ' • '}Mã HĐ: <span className="font-semibold">{contractCodeFilter}</span></>
+                )}
                 {totalItems > 0 ? 
                   ` (${totalItems} kết quả)` : 
                   " (Không có kết quả)"}
@@ -457,41 +456,6 @@ export default function InstallmentWarningsPage() {
           </div>
         </div>
       )}
-      
-      {/* Payment Confirmation Dialog */}
-      <Dialog open={paymentConfirmOpen} onOpenChange={setPaymentConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Xác nhận thanh toán</DialogTitle>
-          </DialogHeader>
-          {selectedPayment && (
-            <div className="py-4">
-              <p className="mb-2">Bạn có chắc chắn muốn thanh toán:</p>
-              <ul className="list-disc pl-5 mb-4 space-y-1">
-                <li><span className="font-medium">Hợp đồng:</span> {selectedPayment.installment.contract_code}</li>
-                <li><span className="font-medium">Khách hàng:</span> {selectedPayment.installment.customer?.name}</li>
-                <li><span className="font-medium">Số tiền:</span> {selectedPayment.amount.toLocaleString()} VND</li>
-              </ul>
-            </div>
-          )}
-          <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => setPaymentConfirmOpen(false)} 
-              disabled={processingPayment}
-            >
-              Huỷ
-            </Button>
-            <Button 
-              onClick={processPayment} 
-              disabled={processingPayment}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              {processingPayment ? "Đang xử lý..." : "Xác nhận thanh toán"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </Layout>
   );
 } 

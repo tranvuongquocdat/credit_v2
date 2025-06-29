@@ -61,9 +61,27 @@ export async function getInstallments(
       query = query.eq('loan_period', filters.duration);
     }
     
-    if (filters?.status && filters.status !== 'all' && filters.status !== '' as any) {
+    // Special case: nếu filter status là 'due_tomorrow' thì lọc theo payment_due_date = ngày mai
+    if (filters?.status === InstallmentStatus.DUE_TOMORROW) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const yyyy = tomorrow.getFullYear();
+      const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
+      const dd = String(tomorrow.getDate()).padStart(2, '0');
+      const tomorrowStr = `${yyyy}-${mm}-${dd}`;
+      query = query.eq('payment_due_date', tomorrowStr);
+    } else if (filters?.status && filters.status !== 'all' && filters.status !== '' as any) {
       // Convert enum value to string for the database query
-      query = query.eq('status', filters.status as "on_time" | "overdue" | "late_interest" | "bad_debt" | "closed" | "deleted");
+      query = query.eq(
+        'status',
+        filters.status as
+          | 'on_time'
+          | 'overdue'
+          | 'late_interest'
+          | 'bad_debt'
+          | 'closed'
+          | 'deleted'
+      );
     }
     
     if (filters?.store_id) {

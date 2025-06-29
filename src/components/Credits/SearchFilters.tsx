@@ -50,10 +50,11 @@ export function SearchFilters({
   initialFilters 
 }: SearchFiltersProps) {
   const statusMap = {
-    [CreditStatus.ON_TIME]: { label: 'Đang vay', color: 'bg-green-100 text-green-800' },
-    [CreditStatus.CLOSED]: { label: 'Đã đóng', color: 'bg-blue-100 text-blue-800' },
-    [CreditStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
-  };
+    [CreditStatus.ON_TIME]:     { label: 'Đang vay',       color: 'bg-green-100 text-green-800' },
+    [CreditStatus.CLOSED]:      { label: 'Đã đóng',        color: 'bg-blue-100 text-blue-800' },
+    [CreditStatus.DELETED]:     { label: 'Đã xóa',         color: 'bg-gray-100 text-gray-800' },
+    due_tomorrow:               { label: 'Ngày mai đóng lãi', color: 'bg-amber-100 text-amber-800' },
+  } as any; // cast any để chấp nhận key string tuỳ chỉnh
   const [filters, setFilters] = useState<SearchFilters>({
     contract_code: '',
     customer_name: '',
@@ -358,8 +359,8 @@ export function SearchFilters({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tất cả</SelectItem>
-              {Object.entries(statusMap).map(([key, { label }]) => (
-                <SelectItem key={key} value={key}>{label}</SelectItem>
+              {(Object.entries(statusMap) as [string, { label: string; color: string }][]).map(([key, value]) => (
+                <SelectItem key={key} value={key}>{value.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
