@@ -92,6 +92,56 @@ export default function TransactionDetailsTable({
   const [transactions, setTransactions] = useState<FundHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Function to translate transaction_type to Vietnamese
+  const translateTransactionType = (transactionType: string): string => {
+    const translations: { [key: string]: string } = {
+      // Contract transaction types
+      'payment': 'Đóng lãi',
+      'loan': 'Cho vay',
+      'additional_loan': 'Vay thêm',
+      'principal_repayment': 'Trả gốc',
+      'contract_close': 'Đóng HĐ',
+      'contract_reopen': 'Mở lại HĐ',
+      'debt_payment': 'Trả nợ',
+      'extension': 'Gia hạn',
+      'deposit': 'Nộp tiền',
+      'withdrawal': 'Rút tiền',
+      'income': 'Thu nhập',
+      'expense': 'Chi phí',
+      'penalty': 'Phạt',
+      'interest': 'Lãi',
+      'fee': 'Phí',
+      'refund': 'Hoàn tiền',
+      'initial_loan': 'Khoản vay ban đầu',
+      'update_contract': 'Cập nhật HĐ',
+      'contract_delete': 'Xóa HĐ',
+      'contract_extension': 'Gia hạn HĐ',
+      'contract_rotate': 'Đảo HĐ',
+      
+      // Income transaction types (Thu)
+      'thu_khac': 'Thu khác',
+      'thu_tra_quy': 'Thu trả quỹ',
+      'thu_tien_no': 'Thu tiền nợ',
+      'thu_tien_ung': 'Thu tiền ứng',
+      'thu_tien_phat': 'Thu tiền phạt',
+      'hoa_hong_thu': 'Hoa hồng thu',
+      'thu_ve': 'Thu vé',
+      
+      // Expense transaction types (Chi)
+      'tra_luong': 'Trả lương',
+      'tra_lai_phi': 'Trả lãi phí',
+      'chi_tieu_dung': 'Chi tiêu dùng',
+      'chi_tra_quy': 'Chi trả quỹ',
+      'tam_ung': 'Tạm ứng',
+      'hoa_hong_chi': 'Hoa hồng chi',
+      'chi_ve': 'Chi vé',
+      'chi_van_phong': 'Chi văn phòng',
+      'chi_khac': 'Chi khác'
+    };
+    
+    return translations[transactionType] || transactionType;
+  };
   
   // Use the same fetchAllData function as total-fund page
   const fetchAllData = async (query: any, pageSize: number = 1000) => {
@@ -128,12 +178,13 @@ export default function TransactionDetailsTable({
     try {
       const allHistoryItems: FundHistoryItem[] = [];
       
-      // Use the same processItems function as total-fund page with additional fields
+      // Simplified processItems function - only use credit_amount and debit_amount with is_deleted = false
       const processItems = (data: GenericHistoryItem[], source: string) => {
         if (data && data.length > 0) {
           data.forEach((item) => {
             if (!item.created_at) return;
 
+            // Calculate net amount from credit_amount and debit_amount
             let amount = 0;
             if(source === 'Nguồn vốn'){
               amount = item.transaction_type === 'withdrawal' ? -Number(item.fund_amount || 0) : Number(item.fund_amount || 0);
@@ -144,6 +195,7 @@ export default function TransactionDetailsTable({
               }
             }
             else {
+              // For contract transactions, use simple credit_amount - debit_amount
               amount = (item.credit_amount || 0) - (item.debit_amount || 0);
             }
 
@@ -172,13 +224,22 @@ export default function TransactionDetailsTable({
             // Get item name (only for pawn transactions)
             let itemName = '';
             if (source === 'Cầm đồ') {
-              itemName = (item.pawns as any)?.['collateral_detail->>name'] || item.pawns?.collateral_detail?.name || '';
+              try {
+                if (item.pawns?.collateral_detail) {
+                  const detail = typeof item.pawns.collateral_detail === 'string' 
+                    ? JSON.parse(item.pawns.collateral_detail) 
+                    : item.pawns.collateral_detail;
+                  itemName = detail.name || '';
+                }
+              } catch (e) {
+                console.error('Error parsing collateral_detail:', e);
+              }
             }
 
             allHistoryItems.push({
               id: `${source.toLowerCase()}-${item.id}`,
               date: item.created_at,
-              description: item.description || item.note || `Giao dịch ${source}`,
+              description: translateTransactionType(item.transaction_type || ''),
               transactionType: item.transaction_type || '',
               source,
               income: amount > 0 ? amount : 0,
@@ -192,7 +253,7 @@ export default function TransactionDetailsTable({
         }
       };
 
-      // Use the same data fetching logic as total-fund page with profiles join and customer data
+      // Use simplified data fetching logic with only is_deleted = false condition
       
       // Credit history with profiles join and customer data
       const creditHistoryData = await fetchAllData(
@@ -208,7 +269,7 @@ export default function TransactionDetailsTable({
             profiles:created_by (username)
           `)
           .eq('credits.store_id', storeId)
-          .or('is_deleted.is.null,is_deleted.eq.false')
+          .eq('is_deleted', false)
       );
       
       if (creditHistoryData) {
@@ -219,7 +280,7 @@ export default function TransactionDetailsTable({
         processItems(processedCreditData, 'Tín chấp');
       }
 
-      // Pawn history with profiles join and collateral_detail->>name
+      // Pawn history with profiles join and collateral_detail
       const pawnHistoryData = await fetchAllData(
         supabase
           .from('pawn_history')
@@ -234,7 +295,7 @@ export default function TransactionDetailsTable({
             profiles:created_by (username)
           `)
           .eq('pawns.store_id', storeId)
-          .or('is_deleted.is.null,is_deleted.eq.false')
+          .eq('is_deleted', false)
       );
       
       if (pawnHistoryData) {
@@ -260,7 +321,7 @@ export default function TransactionDetailsTable({
             profiles:created_by (username)
           `)
           .eq('installments.employees.store_id', storeId)
-          .or('is_deleted.is.null,is_deleted.eq.false')
+          .eq('is_deleted', false)
       );
       
       if (installmentHistoryData) {
@@ -290,8 +351,34 @@ export default function TransactionDetailsTable({
       
       if (transactionsData) processItems(transactionsData, 'Thu chi');
       
-      // Sort by date (newest first)
-      allHistoryItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      // Group and aggregate transactions by contract, date, and transaction type
+      const groupedData = new Map<string, FundHistoryItem>();
+
+      allHistoryItems.forEach(item => {
+        // Create grouping key: contractCode + date (without time) + transactionType + source
+        const transactionDate = new Date(item.date).toDateString();
+        const groupKey = `${item.contractCode}-${transactionDate}-${item.transactionType}-${item.source}`;
+        
+        if (groupedData.has(groupKey)) {
+          const existingItem = groupedData.get(groupKey)!;
+          
+          // Aggregate amounts
+          existingItem.income += item.income;
+          existingItem.expense += item.expense;
+          
+          // Use the latest transaction time
+          if (new Date(item.date) > new Date(existingItem.date)) {
+            existingItem.date = item.date;
+          }
+        } else {
+          // Create new grouped item
+          groupedData.set(groupKey, { ...item });
+        }
+      });
+
+      // Convert map back to array and sort by date (newest first)
+      const aggregatedTransactions = Array.from(groupedData.values());
+      aggregatedTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       
       // Filter by date range
       const start = new Date(startDate);
@@ -300,7 +387,7 @@ export default function TransactionDetailsTable({
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
       
-      let filteredTransactions = allHistoryItems.filter(item => {
+      let filteredTransactions = aggregatedTransactions.filter(item => {
         const itemDate = new Date(item.date);
         return itemDate >= start && itemDate <= end;
       });
