@@ -121,10 +121,12 @@ export function SearchFilters({
   // Handle customer name search with autocomplete
   const handleCustomerNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    setFilters(prev => ({
-      ...prev,
+    const newFilters = {
+      ...filters,
       customer_name: value
-    }));
+    };
+    
+    setFilters(newFilters);
     
     if (value.trim() === '') {
       setFilteredCustomers([]);
@@ -138,15 +140,23 @@ export function SearchFilters({
       setFilteredCustomers(filtered);
       setShowCustomerDropdown(filtered.length > 0);
     }
+    
+    // Auto-search when customer name changes
+    onSearch(newFilters);
   };
 
   // Handle customer selection from dropdown
   const handleCustomerSelect = (customerName: string) => {
-    setFilters(prev => ({
-      ...prev,
+    const newFilters = {
+      ...filters,
       customer_name: customerName
-    }));
+    };
+    
+    setFilters(newFilters);
     setShowCustomerDropdown(false);
+    
+    // Auto-search when customer is selected
+    onSearch(newFilters);
   };
 
   const handleStatusChange = (value: string) => {
