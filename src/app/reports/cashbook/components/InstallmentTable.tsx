@@ -26,10 +26,10 @@ const formatCurrency = (value: number) => {
 };
 
 // Function to translate transaction_type to Vietnamese
-const translateTransactionType = (transactionType: string): string => {
+const translateTransactionType = (transactionType: string, isDeleted: boolean = false): string => {
   const translations: { [key: string]: string } = {
     // Contract transaction types
-    'payment': 'Đóng lãi',
+    'payment': isDeleted ? 'Huỷ đóng lãi' : 'Đóng lãi',
     'loan': 'Cho vay',
     'additional_loan': 'Vay thêm',
     'principal_repayment': 'Trả gốc',
@@ -103,7 +103,13 @@ export default function InstallmentTable({ storeId, startDate, endDate }: Instal
         supabase
           .from('installment_history')
           .select(`
-            *,
+            id,
+            created_at,
+            updated_at,
+            is_deleted,
+            transaction_type,
+            credit_amount,
+            debit_amount,
             installments!inner (
               contract_code,
               employee_id,
@@ -111,31 +117,87 @@ export default function InstallmentTable({ storeId, startDate, endDate }: Instal
             )
           `)
           .eq('installments.employees.store_id', storeId)
-          .or('is_deleted.is.null,is_deleted.eq.false')
-          .gte('created_at', start.toISOString())
-          .lte('created_at', end.toISOString())
           .order('created_at', { ascending: false })
       );
       
-      const formattedData: InstallmentTransaction[] = data.map((item: any) => ({
-        id: item.id,
-        date: format(parseISO(item.created_at), 'dd/MM/yyyy HH:mm'),
-        contractCode: item.installments?.contract_code || 'N/A',
-        customerName: 'N/A', // Customer name is not available in this query
-        description: translateTransactionType(item.transaction_type || ''),
-        loanAmount: item.debit_amount || 0,
-        interestAmount: item.credit_amount || 0,
-        transactionType: item.transaction_type || '',
-        createdAt: item.created_at
-      }));
+      // Process data to handle both original and cancelled payments
+      const allTransactions: InstallmentTransaction[] = [];
       
-      // Group and aggregate transactions by contract, date, and transaction type
+      data.forEach((item: any) => {
+        // Filter by date range first
+        const itemDate = new Date(item.created_at);
+        if (itemDate < start || itemDate > end) {
+          // If this is a cancelled payment, check if cancel date is in range
+          if (item.transaction_type === 'payment' && item.is_deleted && item.updated_at) {
+            const cancelDate = new Date(item.updated_at);
+            if (cancelDate < start || cancelDate > end) {
+              return; // Skip if neither original nor cancel date is in range
+            }
+          } else {
+            return; // Skip if original date is not in range
+          }
+        }
+
+        // Always add original transaction record if payment and within date range
+        if (item.transaction_type === 'payment') {
+          // Only add original record if created_at is in range
+          if (itemDate >= start && itemDate <= end) {
+            allTransactions.push({
+              id: item.id,
+              date: format(parseISO(item.created_at), 'dd/MM/yyyy HH:mm'),
+              contractCode: item.installments?.contract_code || 'N/A',
+              customerName: 'N/A',
+              description: translateTransactionType(item.transaction_type, false),
+              loanAmount: item.debit_amount || 0,
+              interestAmount: item.credit_amount || 0,
+              transactionType: item.transaction_type,
+              createdAt: item.created_at
+            });
+          }
+
+          // If payment is cancelled (is_deleted = true), add separate cancel record
+          if (item.is_deleted && item.updated_at) {
+            const cancelDate = new Date(item.updated_at);
+            if (cancelDate >= start && cancelDate <= end) {
+              allTransactions.push({
+                id: `${item.id}-cancel`,
+                date: format(parseISO(item.updated_at), 'dd/MM/yyyy HH:mm'),
+                contractCode: item.installments?.contract_code || 'N/A',
+                customerName: 'N/A',
+                description: translateTransactionType(item.transaction_type, true),
+                loanAmount: 0, // Don't show loan amount for cancellation
+                interestAmount: -(item.credit_amount || 0), // Only reverse interest amount in "Thu về" column
+                transactionType: item.transaction_type,
+                createdAt: item.updated_at
+              });
+            }
+          }
+        } else {
+          // For non-payment transactions, use original logic and check date range
+          if (itemDate >= start && itemDate <= end) {
+            allTransactions.push({
+              id: item.id,
+              date: format(parseISO(item.created_at), 'dd/MM/yyyy HH:mm'),
+              contractCode: item.installments?.contract_code || 'N/A',
+              customerName: 'N/A',
+              description: translateTransactionType(item.transaction_type || ''),
+              loanAmount: item.debit_amount || 0,
+              interestAmount: item.credit_amount || 0,
+              transactionType: item.transaction_type || '',
+              createdAt: item.created_at
+            });
+          }
+        }
+      });
+      
+      // Group and aggregate transactions by contract, date, transaction type, and description
       const groupedData = new Map<string, InstallmentTransaction>();
 
-      formattedData.forEach(item => {
-        // Create grouping key: contractCode + date (without time) + transactionType
+      allTransactions.forEach(item => {
+        // Create grouping key: contractCode + date (without time) + transactionType + description
+        // Add description to distinguish between "Đóng lãi" and "Huỷ đóng lãi"
         const transactionDate = new Date(item.createdAt).toDateString();
-        const groupKey = `${item.contractCode}-${transactionDate}-${item.transactionType}`;
+        const groupKey = `${item.contractCode}-${transactionDate}-${item.transactionType}-${item.description}`;
         
         if (groupedData.has(groupKey)) {
           const existingItem = groupedData.get(groupKey)!;
@@ -240,6 +302,8 @@ export default function InstallmentTable({ storeId, startDate, endDate }: Instal
                     <TableCell className="py-2 px-3 text-right border-b border-gray-200">
                       {item.interestAmount > 0 ? (
                         <span className="text-green-600">+{formatCurrency(item.interestAmount)}</span>
+                      ) : item.interestAmount < 0 ? (
+                        <span className="text-red-600">{formatCurrency(item.interestAmount)}</span>
                       ) : (
                         "0"
                       )}

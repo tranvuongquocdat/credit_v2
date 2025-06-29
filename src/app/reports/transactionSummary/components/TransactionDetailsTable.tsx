@@ -40,6 +40,8 @@ interface FundHistoryItem {
 interface GenericHistoryItem {
   id: string;
   created_at: string | null;
+  updated_at?: string | null;
+  is_deleted?: boolean | null;
   description?: string | null;
   note?: string | null;
   transaction_type?: string | null;
@@ -94,10 +96,10 @@ export default function TransactionDetailsTable({
   const [error, setError] = useState<string | null>(null);
 
   // Function to translate transaction_type to Vietnamese
-  const translateTransactionType = (transactionType: string): string => {
+  const translateTransactionType = (transactionType: string, isDeleted: boolean = false): string => {
     const translations: { [key: string]: string } = {
       // Contract transaction types
-      'payment': 'Đóng lãi',
+      'payment': isDeleted ? 'Huỷ đóng lãi' : 'Đóng lãi',
       'loan': 'Cho vay',
       'additional_loan': 'Vay thêm',
       'principal_repayment': 'Trả gốc',
@@ -178,89 +180,140 @@ export default function TransactionDetailsTable({
     try {
       const allHistoryItems: FundHistoryItem[] = [];
       
-      // Simplified processItems function - only use credit_amount and debit_amount with is_deleted = false
+      // Updated processItems function to handle both original and cancelled payments
       const processItems = (data: GenericHistoryItem[], source: string) => {
         if (data && data.length > 0) {
           data.forEach((item) => {
             if (!item.created_at) return;
 
-            // Calculate net amount from credit_amount and debit_amount
-            let amount = 0;
-            if(source === 'Nguồn vốn'){
-              amount = item.transaction_type === 'withdrawal' ? -Number(item.fund_amount || 0) : Number(item.fund_amount || 0);
-            } else if(source === 'Thu chi'){
-              amount = (item.credit_amount || 0) - (item.debit_amount || 0);
-              if(amount === 0){
-                amount = item.transaction_type === 'expense' ? -Number(item.amount || 0) : Number(item.amount || 0);
+            // Helper function to get common data
+            const getCommonData = () => {
+              // Get employee name based on source
+              let employeeName = '';
+              if (source === 'Thu chi') {
+                employeeName = item.employee_name || '';
+              } else if (source === 'Cầm đồ' || source === 'Tín chấp' || source === 'Trả góp') {
+                employeeName = item.profiles?.username || '';
               }
-            }
-            else {
-              // For contract transactions, use simple credit_amount - debit_amount
-              amount = (item.credit_amount || 0) - (item.debit_amount || 0);
-            }
 
-            // Get employee name based on source
-            let employeeName = '';
-            if (source === 'Thu chi') {
-              employeeName = item.employee_name || '';
-            } else if (source === 'Cầm đồ' || source === 'Tín chấp' || source === 'Trả góp') {
-              employeeName = item.profiles?.username || '';
-            }
+              // Get customer name based on source
+              let customerName = '';
+              if (source === 'Cầm đồ') {
+                customerName = item.pawns?.customers?.name || '';
+              } else if (source === 'Tín chấp') {
+                customerName = item.credits?.customers?.name || '';
+              } else if (source === 'Trả góp') {
+                customerName = item.installments?.customers?.name || '';
+              } else if (source === 'Nguồn vốn') {
+                customerName = (item as any).name || '';
+              } else if (source === 'Thu chi') {
+                customerName = (item as any).customers?.name || '';
+              }
 
-            // Get customer name based on source
-            let customerName = '';
-            if (source === 'Cầm đồ') {
-              customerName = item.pawns?.customers?.name || '';
-            } else if (source === 'Tín chấp') {
-              customerName = item.credits?.customers?.name || '';
-            } else if (source === 'Trả góp') {
-              customerName = item.installments?.customers?.name || '';
-            } else if (source === 'Nguồn vốn') {
-              customerName = (item as any).name || '';
-            } else if (source === 'Thu chi') {
-              customerName = (item as any).customers?.name || '';
-            }
-
-            // Get item name (only for pawn transactions)
-            let itemName = '';
-            if (source === 'Cầm đồ') {
-              try {
-                if (item.pawns?.collateral_detail) {
-                  const detail = typeof item.pawns.collateral_detail === 'string' 
-                    ? JSON.parse(item.pawns.collateral_detail) 
-                    : item.pawns.collateral_detail;
-                  itemName = detail.name || '';
+              // Get item name (only for pawn transactions)
+              let itemName = '';
+              if (source === 'Cầm đồ') {
+                try {
+                  if (item.pawns?.collateral_detail) {
+                    const detail = typeof item.pawns.collateral_detail === 'string' 
+                      ? JSON.parse(item.pawns.collateral_detail) 
+                      : item.pawns.collateral_detail;
+                    itemName = detail.name || '';
+                  }
+                } catch (e) {
+                  console.error('Error parsing collateral_detail:', e);
                 }
-              } catch (e) {
-                console.error('Error parsing collateral_detail:', e);
               }
-            }
 
-            allHistoryItems.push({
-              id: `${source.toLowerCase()}-${item.id}`,
-              date: item.created_at,
-              description: translateTransactionType(item.transaction_type || ''),
-              transactionType: item.transaction_type || '',
-              source,
-              income: amount > 0 ? amount : 0,
-              expense: amount < 0 ? -amount : 0,
-              contractCode: item.contract_code || '-',
-              employeeName,
-              customerName,
-              itemName
-            });
+              return { employeeName, customerName, itemName };
+            };
+
+            // For contract payment transactions (Cầm đồ, Tín chấp, Trả góp), handle original and cancelled separately
+            if ((source === 'Cầm đồ' || source === 'Tín chấp' || source === 'Trả góp') && item.transaction_type === 'payment') {
+              const { employeeName, customerName, itemName } = getCommonData();
+              const amount = (item.credit_amount || 0) - (item.debit_amount || 0);
+
+              // Always add original payment record (positive amount)
+              allHistoryItems.push({
+                id: `${source.toLowerCase()}-${item.id}`,
+                date: item.created_at,
+                description: translateTransactionType(item.transaction_type, false),
+                transactionType: item.transaction_type,
+                source,
+                income: amount > 0 ? amount : 0,
+                expense: amount < 0 ? -amount : 0,
+                contractCode: item.contract_code || '-',
+                employeeName,
+                customerName,
+                itemName
+              });
+
+              // If payment is cancelled (is_deleted = true), add separate cancel record
+              if (item.is_deleted && item.updated_at) {
+                allHistoryItems.push({
+                  id: `${source.toLowerCase()}-${item.id}-cancel`,
+                  date: item.updated_at,
+                  description: translateTransactionType(item.transaction_type, true),
+                  transactionType: item.transaction_type,
+                  source,
+                  income: amount < 0 ? -amount : 0, // Reverse the amounts for cancel record
+                  expense: amount > 0 ? amount : 0,
+                  contractCode: item.contract_code || '-',
+                  employeeName,
+                  customerName,
+                  itemName
+                });
+              }
+            } else {
+              // For non-payment transactions or non-contract sources, use original logic
+              let amount = 0;
+              if(source === 'Nguồn vốn'){
+                amount = item.transaction_type === 'withdrawal' ? -Number(item.fund_amount || 0) : Number(item.fund_amount || 0);
+              } else if(source === 'Thu chi'){
+                amount = (item.credit_amount || 0) - (item.debit_amount || 0);
+                if(amount === 0){
+                  amount = item.transaction_type === 'expense' ? -Number(item.amount || 0) : Number(item.amount || 0);
+                }
+              } else {
+                // For contract transactions that are not payments, use simple credit_amount - debit_amount
+                amount = (item.credit_amount || 0) - (item.debit_amount || 0);
+              }
+
+              const { employeeName, customerName, itemName } = getCommonData();
+
+              allHistoryItems.push({
+                id: `${source.toLowerCase()}-${item.id}`,
+                date: item.created_at,
+                description: translateTransactionType(item.transaction_type || ''),
+                transactionType: item.transaction_type || '',
+                source,
+                income: amount > 0 ? amount : 0,
+                expense: amount < 0 ? -amount : 0,
+                contractCode: item.contract_code || '-',
+                employeeName,
+                customerName,
+                itemName
+              });
+            }
           });
         }
       };
 
-      // Use simplified data fetching logic with only is_deleted = false condition
+      // Updated data fetching logic to get all records for payment tracking
       
-      // Credit history with profiles join and customer data
+      // Credit history with profiles join and customer data - get all records to track cancellations
       const creditHistoryData = await fetchAllData(
         supabase
           .from('credit_history')
           .select(`
-            *,
+            id,
+            created_at,
+            updated_at,
+            is_deleted,
+            transaction_type,
+            credit_amount,
+            debit_amount,
+            created_by,
             credits!inner (
               contract_code, 
               store_id,
@@ -269,7 +322,6 @@ export default function TransactionDetailsTable({
             profiles:created_by (username)
           `)
           .eq('credits.store_id', storeId)
-          .eq('is_deleted', false)
       );
       
       if (creditHistoryData) {
@@ -280,12 +332,19 @@ export default function TransactionDetailsTable({
         processItems(processedCreditData, 'Tín chấp');
       }
 
-      // Pawn history with profiles join and collateral_detail
+      // Pawn history with profiles join and collateral_detail - get all records to track cancellations
       const pawnHistoryData = await fetchAllData(
         supabase
           .from('pawn_history')
           .select(`
-            *,
+            id,
+            created_at,
+            updated_at,
+            is_deleted,
+            transaction_type,
+            credit_amount,
+            debit_amount,
+            created_by,
             pawns!inner (
               contract_code, 
               store_id,
@@ -295,7 +354,6 @@ export default function TransactionDetailsTable({
             profiles:created_by (username)
           `)
           .eq('pawns.store_id', storeId)
-          .eq('is_deleted', false)
       );
       
       if (pawnHistoryData) {
@@ -306,12 +364,19 @@ export default function TransactionDetailsTable({
         processItems(processedPawnData, 'Cầm đồ');
       }
 
-      // Installment history with profiles join and customer data
+      // Installment history with profiles join and customer data - get all records to track cancellations
       const installmentHistoryData = await fetchAllData(
         supabase
           .from('installment_history')
           .select(`
-            *,
+            id,
+            created_at,
+            updated_at,
+            is_deleted,
+            transaction_type,
+            credit_amount,
+            debit_amount,
+            created_by,
             installments!inner (
               contract_code,
               employee_id,
@@ -321,7 +386,6 @@ export default function TransactionDetailsTable({
             profiles:created_by (username)
           `)
           .eq('installments.employees.store_id', storeId)
-          .eq('is_deleted', false)
       );
       
       if (installmentHistoryData) {
@@ -341,7 +405,7 @@ export default function TransactionDetailsTable({
       
       if (storeFundData) processItems(storeFundData, 'Nguồn vốn');
       
-      // Transactions (join customers:customer_id(name))
+      // Transactions (join customers:customer_id(name)) - keep is_deleted filter for non-contract transactions
       const { data: transactionsData } = await supabase
         .from('transactions')
         .select('*, customers:customer_id(name)')
@@ -351,13 +415,14 @@ export default function TransactionDetailsTable({
       
       if (transactionsData) processItems(transactionsData, 'Thu chi');
       
-      // Group and aggregate transactions by contract, date, and transaction type
+      // Group and aggregate transactions by contract, date, transaction type, and description
       const groupedData = new Map<string, FundHistoryItem>();
 
       allHistoryItems.forEach(item => {
-        // Create grouping key: contractCode + date (without time) + transactionType + source
+        // Create grouping key: contractCode + date (without time) + transactionType + source + description
+        // Add description to distinguish between "Đóng lãi" and "Huỷ đóng lãi"
         const transactionDate = new Date(item.date).toDateString();
-        const groupKey = `${item.contractCode}-${transactionDate}-${item.transactionType}-${item.source}`;
+        const groupKey = `${item.contractCode}-${transactionDate}-${item.transactionType}-${item.source}-${item.description}`;
         
         if (groupedData.has(groupKey)) {
           const existingItem = groupedData.get(groupKey)!;
