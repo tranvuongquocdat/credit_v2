@@ -229,7 +229,7 @@ export function PaymentTabFast({
         const endDate = period.endDate?.split('T')[0] ?? startDate;
         const { data, error } = await supabase
           .from('installment_history')
-          .update({ is_deleted: true, updated_by: (await getCurrentUser()).id })
+          .update({ is_deleted: true, updated_by: (await getCurrentUser()).id, updated_at: new Date().toISOString() })
           .eq('installment_id', installment.id)
           .eq('transaction_type', 'payment')
           .eq('is_deleted', false)

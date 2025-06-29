@@ -52,7 +52,7 @@ export async function reopenContract(pawnId: string): Promise<void> {
     // 2. Đánh dấu is_deleted = true cho tất cả payment records được tạo từ việc đóng hợp đồng
     const { error: updatePaymentError } = await supabase
       .from('pawn_history')
-      .update({ is_deleted: true, updated_by: userId })
+      .update({ is_deleted: true, updated_by: userId, updated_at: new Date().toISOString() })
       .eq('pawn_id', pawnId)
       .eq('transaction_type', 'payment')
       .eq('is_created_from_contract_closure', true);
