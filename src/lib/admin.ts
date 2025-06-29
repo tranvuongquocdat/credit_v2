@@ -118,14 +118,31 @@ export async function createAdmin(adminData: CreateAdminParams) {
 // Update admin
 export async function updateAdmin(adminId: string, adminData: UpdateAdminParams) {
   try {
+    // get profile id from admin id
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', adminId)
+      .single();
+    if (profileError) return { data: null, error: profileError };
+
     const updateData: any = {
       updated_at: new Date().toISOString(),
     };
 
     if (adminData.username !== undefined) updateData.username = adminData.username;
-    if (adminData.email !== undefined) updateData.email = adminData.email;
-    if (adminData.status !== undefined) updateData.is_banned = adminData.status === AdminStatus.INACTIVE;
-
+    if (adminData.password !== undefined) {
+      const response = await fetch(`/api/users/${profileData.id}/changePassword`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: adminData.password,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to update password');
+      }
+    }
     const { data, error } = await supabase
       .from('profiles')
       .update(updateData)

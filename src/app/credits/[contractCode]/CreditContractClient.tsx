@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Layout } from '@/components/Layout';
 import { useRouter } from 'next/navigation';
 
@@ -12,6 +12,7 @@ import { CreditsPagination } from '@/components/Credits/CreditsPagination';
 import { PaymentHistoryModal } from '@/components/Credits/PaymentHistoryModal';
 import { CreditCreateModal } from '@/components/Credits/CreditCreateModal';
 import { CreditEditModal } from '@/components/Credits/CreditEditModal';
+import { isSameDay, addDays } from 'date-fns';
 
 // Import custom hooks
 import { useCredits } from '@/hooks/useCredits';
@@ -59,6 +60,7 @@ export function CreditContractClient({ contractCode }: CreditContractClientProps
     totalItems, 
     currentPage, 
     itemsPerPage,
+    filters,
     handleSearch,
     handleReset,
     handlePageChange,
@@ -86,8 +88,19 @@ export function CreditContractClient({ contractCode }: CreditContractClientProps
   const [isCreditEditModalOpen, setIsCreditEditModalOpen] = useState(false);
   const [editCreditId, setEditCreditId] = useState<string>('');
   
-  // Calculate total pages
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
+// Client-side filter: Ngày mai đóng lãi
+  const displayCredits = useMemo(() => {
+    if (filters?.status !== 'due_tomorrow') return credits;
+    const tomorrow = addDays(new Date().setHours(0,0,0,0) as any, 1);
+    return credits.filter(c => {
+      const next = creditDetails[c.id]?.nextPayment;
+      if (!next) return false;
+      return isSameDay(new Date(next), tomorrow);
+    });
+  }, [credits, filters?.status, creditDetails]);
+
+  const effectiveTotalItems = filters?.status === 'due_tomorrow' ? displayCredits.length : totalItems;
+  const totalPages = Math.ceil(effectiveTotalItems / itemsPerPage);
   
   // Handle search filters
   const handleSearchFilters = (filters: any) => {
@@ -263,7 +276,7 @@ export function CreditContractClient({ contractCode }: CreditContractClientProps
 
         {/* Bảng dữ liệu hợp đồng */}
         <CreditsTable
-          credits={credits}
+          credits={displayCredits}
           statusMap={statusMap}
           calculatedDetails={creditDetails}
           calculatedStatuses={creditStatuses}
@@ -279,7 +292,7 @@ export function CreditContractClient({ contractCode }: CreditContractClientProps
         <CreditsPagination
           currentPage={currentPage}
           totalPages={totalPages}
-          totalItems={totalItems}
+          totalItems={effectiveTotalItems}
           itemsPerPage={itemsPerPage}
           onPageChange={handlePageChange}
         />

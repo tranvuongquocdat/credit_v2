@@ -50,7 +50,8 @@ export function SearchFilters({
     [PawnStatus.ON_TIME]: { label: 'Đang vay', color: 'bg-green-100 text-green-800' },
     [PawnStatus.CLOSED]: { label: 'Đã đóng', color: 'bg-blue-100 text-blue-800' },
     [PawnStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
-  };
+    due_tomorrow: { label: 'Ngày mai đóng lãi', color: 'bg-amber-100 text-amber-800' },
+  } as any;
   // Sử dụng hook kiểm tra quyền
   const { hasPermission } = usePermissions();
   const { currentStore } = useStore();
@@ -378,8 +379,8 @@ export function SearchFilters({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tất cả</SelectItem>
-              {Object.entries(statusMap).map(([key, { label }]) => (
-                <SelectItem key={key} value={key}>{label}</SelectItem>
+              {(Object.entries(statusMap) as [string, { label: string; color: string }][]).map(([key, value]) => (
+                <SelectItem key={key} value={key}>{value.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>

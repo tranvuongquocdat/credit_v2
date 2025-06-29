@@ -33,6 +33,7 @@ export interface PawnHistoryRecord {
   created_by: string;
   created_at: string;
   updated_at: string | null;
+  is_deleted: boolean;
 }
 
 // Chuyển đổi bản ghi DB sang model chuẩn
@@ -46,7 +47,8 @@ function transformHistory(record: Record<string, any>): PawnHistoryRecord {
     description: record.description ?? undefined,
     created_by: record.created_by,
     created_at: record.created_at,
-    updated_at: record.updated_at ?? null
+    updated_at: record.updated_at ?? null,
+    is_deleted: record.is_deleted ?? false
   };
 }
 
@@ -130,7 +132,7 @@ export async function getPawnAmountHistory(pawnId: string) {
     while (hasMore) {
       const { data, error } = await supabase
         .from('pawn_history')
-        .select('id, pawn_id, transaction_type, debit_amount, credit_amount, description, created_by, created_at, updated_at')
+        .select('id, pawn_id, transaction_type, debit_amount, credit_amount, description, created_by, created_at, updated_at, is_deleted')
         .eq('pawn_id', pawnId)
         .order('created_at', { ascending: true })
         .range(offset, offset + PAGE_SIZE - 1);

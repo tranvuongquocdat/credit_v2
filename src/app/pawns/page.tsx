@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Layout } from '@/components/Layout';
 import { 
@@ -38,6 +38,7 @@ import { supabase } from '@/lib/supabase';
 import { formatCurrencyExcel } from '@/lib/utils';
 import { getPawnInterestDisplayString } from '@/lib/interest-calculator';
 import * as XLSX from 'xlsx';
+import { isSameDay, addDays } from 'date-fns';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -63,6 +64,7 @@ export default function PawnsPage() {
     totalItems, 
     currentPage, 
     itemsPerPage,
+    filters,
     handleSearch,
     handleReset,
     handlePageChange,
@@ -101,10 +103,22 @@ export default function PawnsPage() {
   const [isPawnEditModalOpen, setIsPawnEditModalOpen] = useState(false);
   const [editPawnId, setEditPawnId] = useState<string>('');
   
-  // Calculate total pages
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
   // Exporting state
   const [isExporting, setIsExporting] = useState(false);
+
+  const displayPawns = useMemo(() => {
+    if (filters?.status !== 'due_tomorrow') return pawns;
+    const tomorrow = addDays(new Date().setHours(0,0,0,0) as any, 1);
+    return pawns.filter(p => {
+      const next = pawnDetails[p.id]?.nextPayment;
+      if (!next) return false;
+      return isSameDay(new Date(next), tomorrow);
+    });
+  }, [pawns, filters?.status, pawnDetails]);
+
+  const effectiveTotalItems = filters?.status === 'due_tomorrow' ? displayPawns.length : totalItems;
+  const totalPages = Math.ceil(effectiveTotalItems / itemsPerPage);
+  
   // Handle search filters
   const handleSearchFilters = (filters: any) => {
     handleSearch(filters);
@@ -406,7 +420,7 @@ export default function PawnsPage() {
 
             {/* Bảng dữ liệu hợp đồng */}
             <PawnsTable
-              pawns={pawns}
+              pawns={displayPawns}
               statusMap={statusMap}
               onEdit={handleEditPawn}
               onDelete={handleOpenDeleteDialog}
@@ -420,7 +434,7 @@ export default function PawnsPage() {
             <PawnsPagination
               currentPage={currentPage}
               totalPages={totalPages}
-              totalItems={totalItems}
+              totalItems={effectiveTotalItems}
               itemsPerPage={itemsPerPage}
               onPageChange={handlePageChange}
             />

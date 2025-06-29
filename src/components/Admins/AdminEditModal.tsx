@@ -32,6 +32,7 @@ export function AdminEditModal({ isOpen, onClose, onSuccess, admin }: AdminEditM
     username: '',
     email: '',
     status: AdminStatus.ACTIVE,
+    password: '',
   });
   const [isLoading, setIsLoading] = useState(false);
 
@@ -41,6 +42,7 @@ export function AdminEditModal({ isOpen, onClose, onSuccess, admin }: AdminEditM
         username: admin.username || '',
         email: admin.email || '',
         status: admin.status,
+        password: '',
       });
     }
   }, [admin]);
@@ -71,6 +73,7 @@ export function AdminEditModal({ isOpen, onClose, onSuccess, admin }: AdminEditM
         username: formData.username.trim(),
         email: formData.email?.trim() || undefined,
         status: formData.status,
+        password: formData.password?.trim() || undefined,
       });
 
       if (error) {
@@ -118,41 +121,23 @@ export function AdminEditModal({ isOpen, onClose, onSuccess, admin }: AdminEditM
             <Label htmlFor="username">Tên đăng nhập *</Label>
             <Input
               id="username"
-              value={formData.username}
+              value={formData.username || ''}
               onChange={(e) => handleInputChange('username', e.target.value)}
               placeholder="Nhập tên đăng nhập"
-              required
-              disabled={isLoading}
+              disabled
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="password">Mật khẩu</Label>
             <Input
-              id="email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => handleInputChange('email', e.target.value)}
-              placeholder="Nhập email"
+              id="password"
+              type="password"
+              value={formData.password}
+              onChange={(e) => handleInputChange('password', e.target.value)}
+              placeholder="Để trống nếu không thay đổi"
               disabled={isLoading}
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="status">Trạng thái</Label>
-            <Select
-              value={formData.status}
-              onValueChange={(value: AdminStatus) => handleInputChange('status', value)}
-              disabled={isLoading}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Chọn trạng thái" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={AdminStatus.ACTIVE}>Hoạt động</SelectItem>
-                <SelectItem value={AdminStatus.INACTIVE}>Vô hiệu hóa</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
 
           <DialogFooter>
