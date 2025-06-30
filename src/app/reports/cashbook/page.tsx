@@ -207,7 +207,8 @@ export default function CashbookPage() {
         description: item.description || 'Giao dịch cầm đồ',
         loanAmount: item.debit_amount || 0,
         interestAmount: item.credit_amount || 0,
-        transactionType: item.transaction_type || ''
+        transactionType: item.transaction_type || '',
+        createdAt: item.created_at || ''
       }));
       setPawnTransactions(formattedPawnData);
       
@@ -234,7 +235,8 @@ export default function CashbookPage() {
         description: item.description || 'Giao dịch tín chấp',
         loanAmount: item.debit_amount || 0,
         interestAmount: item.credit_amount || 0,
-        transactionType: item.transaction_type || ''
+        transactionType: item.transaction_type || '',
+        createdAt: item.created_at || ''
       }));
       setCreditTransactions(formattedCreditData);
       
@@ -265,7 +267,8 @@ export default function CashbookPage() {
         description: item.description || 'Giao dịch trả góp',
         loanAmount: item.debit_amount || 0,
         interestAmount: item.credit_amount || 0,
-        transactionType: item.transaction_type || ''
+        transactionType: item.transaction_type || '',
+        createdAt: item.created_at || ''
       }));
       setInstallmentTransactions(formattedInstallmentData);
       

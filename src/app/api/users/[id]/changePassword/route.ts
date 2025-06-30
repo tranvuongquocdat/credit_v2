@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 export async function PUT(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: any
 ) {
   const body = await req.json()          // { password? }
 
