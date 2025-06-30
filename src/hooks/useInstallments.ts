@@ -218,6 +218,7 @@ export function useInstallments() {
     handlePageChange,
     handleUpdateStatus,
     handleDelete,
-    refetch
+    refetch,
+    filters              // expose current filters for external usage
   };
 }

@@ -68,24 +68,34 @@ export function useCreditCalculations() {
       let totalCollectedInterest = 0;
       const newDetails: Record<string, CreditFinancialDetail> = {};
       
-      /* ---------- 4. RPC duy nhất lấy paidInterest cho active + closed ---------- */
-      const interestMap = new Map<string, number>();
+      /* ---------- 4. RPC lấy paidInterest (2 phiên bản):
+           a) interestRangeMap: theo start_date & end_date (dùng cho tổng hợp)
+           b) interestTotalMap: toàn thời gian (dùng cho chi tiết từng credit) */
+
+      const interestRangeMap = new Map<string, number>();
+      const interestTotalMap = new Map<string, number>();
       const activeIds  = activeCreditsData?.map(c => c.id) || [];
       const closedIds  = closedCreditsData?.map(c => c.id) || [];
       const allIds     = [...activeIds, ...closedIds];
-      
+
       if (allIds.length) {
+        /* (a) date-range */
         const start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
         const end   = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
-        const { data: interestRows, error } = await supabase.rpc('get_paid_interest', {
+        const { data: interestRowsR } = await supabase.rpc('get_paid_interest', {
           p_credit_ids: allIds,
           p_start_date: start.toISOString(),
           p_end_date  : end.toISOString(),
         });
-        if (!error && Array.isArray(interestRows)) {
-          interestRows.forEach((r: any) =>
-            interestMap.set(r.credit_id, Number(r.paid_interest || 0)));
-        }
+        interestRowsR?.forEach((r: any) =>
+          interestRangeMap.set(r.credit_id, Number(r.paid_interest || 0)));
+
+        /* (b) total */
+        const { data: interestRowsT } = await supabase.rpc('get_paid_interest', {
+          p_credit_ids: allIds,
+        });
+        interestRowsT?.forEach((r: any) =>
+          interestTotalMap.set(r.credit_id, Number(r.paid_interest || 0)));
       }
 
       const { data: principalRows } = await supabase.rpc('get_current_principal', {
@@ -142,7 +152,7 @@ export function useCreditCalculations() {
         activeCreditsData!.map(c =>
           calculateCreditMetrics(c, {
             principalMap,
-            interestMap,
+            interestMap: interestTotalMap,
             debtMap,
             expectedMap,
             todayMap,
@@ -169,13 +179,13 @@ export function useCreditCalculations() {
             totalLoan += result.summaryLoan;
             totalOldDebt += result.summaryDebt;
             totalProfit += result.summaryProfit;
-            totalCollectedInterest += result.paidInterest;
+            totalCollectedInterest += interestRangeMap.get(result.creditId) ?? 0;
           }
         });
       
       // Cộng thêm lãi phí của các credit đã đóng
       closedIds.forEach(id => {
-        totalCollectedInterest += interestMap.get(id) ?? 0;
+        totalCollectedInterest += interestRangeMap.get(id) ?? 0;
       });
       
       /* ---------- 8. Bỏ tính trạng thái tại đây - đã chuyển sang RPC per page */

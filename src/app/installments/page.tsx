@@ -79,6 +79,15 @@ const formatCurrencyExcel = (value: number | undefined | null): string => {
   }
 };
 
+// Type for totals row returned by RPC
+interface InstallmentTotals {
+  total_amount_given: number;
+  total_paid: number;
+  total_debt: number;
+  total_daily_amount: number;
+  total_remaining: number;
+}
+
 export default function InstallmentsPage() {
   const { hasPermission, loading: permissionsLoading } = usePermissions();
   // Kiểm tra quyền xem danh sách hợp đồng trả góp
@@ -102,7 +111,8 @@ export default function InstallmentsPage() {
     handlePageChange,
     handleDelete,
     handleUpdateStatus,
-    refetch
+    refetch,
+    filters,
   } = useInstallments();
   
   // Sử dụng custom hook để lấy dữ liệu tài chính
@@ -446,6 +456,35 @@ export default function InstallmentsPage() {
     compute();
   }, [installments]);
 
+  // -------------------- Grand totals ----------------------
+  const [totals, setTotals] = useState<InstallmentTotals | null>(null);
+  const [totalsLoading, setTotalsLoading] = useState(false);
+
+  const fetchTotals = async (f = filters) => {
+    if (!currentStore?.id) return;
+    setTotalsLoading(true);
+    try {
+      const { data, error } = await (supabase as any).rpc('installment_get_totals', {
+        p_store_id: currentStore.id,
+        p_filters : f ?? null,
+      });
+      if (error) {
+        console.error('installment_get_totals error:', error);
+        return;
+      }
+      setTotals((data as any)?.[0] ?? null);
+    } catch (err) {
+      console.error('Error fetching totals:', err);
+    } finally {
+      setTotalsLoading(false);
+    }
+  };
+
+  // Fetch totals whenever filters or store change
+  useEffect(() => {
+    fetchTotals(filters);
+  }, [JSON.stringify(filters), currentStore?.id]);
+
   return (
     <Layout>
       <div className="max-w-full">
@@ -502,10 +541,12 @@ export default function InstallmentsPage() {
             onUpdateStatus={handleOpenStatusDialog}
             onDelete={handleOpenDeleteDialog}
             onShowPaymentActions={handleShowPaymentActions}
+            totals={totals ?? undefined}
             onRefresh={() => {
               refetch();
               refreshFinancial();
               triggerUpdate();
+              fetchTotals(filters);
             }}
           />
         </div> 
