@@ -528,16 +528,16 @@ export function InstallmentsTable({
           })}
         </tbody>
         {totals && (
-          <tfoot className="bg-gray-50 font-semibold">
+          <tfoot className="bg-yellow-200 font-semibold">
             <tr>
-              <td className="py-2 px-3 text-center" colSpan={3}>Tổng</td>
-              <td className="py-2 px-3 text-center">{formatCurrency(totals.total_amount_given)}</td>
+              <td className="py-2 px-3 text-center font-bold" colSpan={3}>Tổng</td>
+              <td className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_amount_given)}</td>
               <td className="py-2 px-3" />
               <td className="py-2 px-3" />
-              <td className="py-2 px-3 text-center">{formatCurrency(totals.total_paid)}</td>
-              <td className="py-2 px-3 text-center">{formatCurrency(totals.total_debt)}</td>
-              <td className="py-2 px-3 text-center">{formatCurrency(totals.total_daily_amount)}</td>
-              <td className="py-2 px-3 text-center">{formatCurrency(totals.total_remaining)}</td>
+              <td className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_paid)}</td>
+              <td className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_debt)}</td>
+              <td className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_daily_amount)}</td>
+              <td className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_remaining)}</td>
               <td className="py-2 px-3" colSpan={3}></td>
             </tr>
           </tfoot>
