@@ -58,7 +58,7 @@ export function usePawnCalculations() {
       // 3. Lấy danh sách credits đã đóng
       const { data: closedCreditsData } = await supabase
         .from('pawns')
-        .select('id')
+        .select('id, loan_amount, loan_date, loan_period')
         .eq('store_id', storeId)
         .eq('status', PawnStatus.CLOSED);
       
@@ -81,9 +81,7 @@ export function usePawnCalculations() {
 
         /* (a) range-limited */
         const { data: interestRowsR } = await supabase.rpc('get_pawn_paid_interest', {
-          p_pawn_ids: allIds,
-          p_start_date: start.toISOString(),
-          p_end_date  : end.toISOString(),
+          p_pawn_ids: allIds
         });
         interestRowsR?.forEach((r: any) =>
           interestRangeMap.set(r.pawn_id, Number(r.paid_interest || 0)));
@@ -106,7 +104,7 @@ export function usePawnCalculations() {
 
       // 5. RPC lấy old debt
       const { data: debtRows } = await supabase.rpc('get_pawn_old_debt', {
-        p_pawn_ids: activeIds,
+        p_pawn_ids: allIds,
       });
       const debtMap = new Map<string, number>();
       debtRows?.forEach((r: { pawn_id: string; old_debt: number }) =>
@@ -145,9 +143,9 @@ export function usePawnCalculations() {
           });
         }
       }
-        
-        const results = await Promise.all(
-        activeCreditsData!.map(c =>
+      
+      const results = await Promise.all(
+        [...(activeCreditsData || []), ...(closedCreditsData || [])].map(c =>
           calculatePawnMetrics(c, {
             principalMap,
             interestMap: interestTotalMap,
@@ -158,28 +156,28 @@ export function usePawnCalculations() {
         )
       );
         
-        // Aggregate results
-        results.forEach(result => {
-          if (result) {
-            newDetails[result.pawnId] = {
-              pawnId: result.pawnId,
-              actualLoanAmount: result.actualLoanAmount,
-              oldDebt: result.oldDebt,
-              expectedProfit: result.expectedProfit,
-              paidInterest: result.paidInterest,
-              interestToday: result.interestToday,
+      // Aggregate results
+      results.forEach(result => {
+        if (result) {
+          newDetails[result.pawnId] = {
+            pawnId: result.pawnId,
+            actualLoanAmount: result.actualLoanAmount,
+            oldDebt: result.oldDebt,
+            expectedProfit: result.expectedProfit,
+            paidInterest: result.paidInterest,
+            interestToday: result.interestToday,
             nextPayment: nextMap.get(result.pawnId)?.nextDate || null,
             isCompleted: nextMap.get(result.pawnId)?.isCompleted || false,
             hasPaid: nextMap.get(result.pawnId)?.hasPaid || false,
-              loading: false
-            };
-            
-            totalLoan += result.summaryLoan;
-            totalOldDebt += result.summaryDebt;
-            totalProfit += result.summaryProfit;
-            totalCollectedInterest += interestRangeMap.get(result.pawnId) ?? 0;
-          }
-        });
+            loading: false
+          };
+          
+          totalLoan += result.summaryLoan;
+          totalOldDebt += result.summaryDebt;
+          totalProfit += result.summaryProfit;
+          totalCollectedInterest += interestRangeMap.get(result.pawnId) ?? 0;
+        }
+      });
       
       // Cộng thêm lãi phí của các credit đã đóng
       closedIds.forEach(id => {

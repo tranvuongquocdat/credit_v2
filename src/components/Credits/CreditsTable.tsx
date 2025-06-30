@@ -354,13 +354,13 @@ export function CreditsTable({
         {totals && (
           <tfoot className="bg-gray-50 font-semibold">
             <TableRow>
-              <TableCell colSpan={4}>Tổng</TableCell>
-              <TableCell>{formatCurrency(totals.total_loan_amount)}</TableCell>
-              <TableCell />
-              <TableCell>{formatCurrency(totals.total_paid_interest)}</TableCell>
-              <TableCell>{formatCurrency(totals.total_old_debt)}</TableCell>
-              <TableCell className="text-rose-600 font-medium">{formatCurrency(totals.total_interest_today)}</TableCell>
-              <TableCell colSpan={3} />
+              <TableCell className="py-2 px-3 text-center" colSpan={4}>Tổng</TableCell>
+              <TableCell className="py-2 px-3 text-center">{formatCurrency(totals.total_loan_amount)}</TableCell>
+              <TableCell className="py-2 px-3" />
+              <TableCell className="py-2 px-3 text-center">{formatCurrency(totals.total_paid_interest)}</TableCell>
+              <TableCell className="py-2 px-3 text-center">{formatCurrency(totals.total_old_debt)}</TableCell>
+              <TableCell className="py-2 px-3 text-center text-rose-600 font-medium">{formatCurrency(totals.total_interest_today)}</TableCell>
+              <TableCell className="py-2 px-3" colSpan={3} />
             </TableRow>
           </tfoot>
         )}

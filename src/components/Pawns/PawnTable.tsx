@@ -42,6 +42,12 @@ interface PawnsTableProps {
   onUpdateStatus: (pawn: PawnWithCustomer) => void;
   onShowPaymentHistory?: (pawn: PawnWithCustomer) => void;
   onRefresh?: () => void;
+  totals?: {
+    total_loan_amount: number;
+    total_paid_interest: number;
+    total_old_debt: number;
+    total_interest_today: number;
+  };
 }
 
 export function PawnsTable({ 
@@ -52,7 +58,8 @@ export function PawnsTable({
   onEdit, 
   onDelete,
   onShowPaymentHistory,
-  onRefresh
+  onRefresh,
+  totals,
 }: PawnsTableProps) {
   // Toast hook
   const { toast } = useToast();
@@ -311,6 +318,20 @@ export function PawnsTable({
             ))
           )}
         </TableBody>
+        {/* Table end */}
+        {totals && (
+          <tfoot className="bg-gray-50 font-semibold">
+            <TableRow>
+              <TableCell className="py-2 px-3 text-center" colSpan={4}>Tổng</TableCell>
+              <TableCell className="py-2 px-3 text-center">{formatCurrency(totals.total_loan_amount)}</TableCell>
+              <TableCell className="py-2 px-3" />
+              <TableCell className="py-2 px-3 text-center">{formatCurrency(totals.total_paid_interest)}</TableCell>
+              <TableCell className="py-2 px-3 text-center">{formatCurrency(totals.total_old_debt)}</TableCell>
+              <TableCell className="py-2 px-3 text-center text-rose-600 font-medium">{formatCurrency(totals.total_interest_today)}</TableCell>
+              <TableCell className="py-2 px-3" colSpan={3} />
+            </TableRow>
+          </tfoot>
+        )}
       </Table>
     </div>
   );

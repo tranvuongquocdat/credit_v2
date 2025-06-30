@@ -55,10 +55,10 @@ export function useCreditCalculations() {
         .eq('store_id', storeId)
         .eq('status', CreditStatus.ON_TIME);
       
-      // 3. Lấy danh sách credits đã đóng
+      // 3. Lấy danh sách credits đã đóng (cần đủ thông tin tính toán)
       const { data: closedCreditsData } = await supabase
         .from('credits')
-        .select('id')
+        .select('id, loan_amount, loan_date, loan_period')
         .eq('store_id', storeId)
         .eq('status', CreditStatus.CLOSED);
       
@@ -149,7 +149,7 @@ export function useCreditCalculations() {
       }
         
         const results = await Promise.all(
-        activeCreditsData!.map(c =>
+        [...(activeCreditsData || []), ...(closedCreditsData || [])].map(c =>
           calculateCreditMetrics(c, {
             principalMap,
             interestMap: interestTotalMap,
@@ -170,9 +170,9 @@ export function useCreditCalculations() {
               expectedProfit: result.expectedProfit,
               paidInterest: result.paidInterest,
               interestToday: result.interestToday,
-            nextPayment: nextMap.get(result.creditId)?.nextDate || null,
-            isCompleted: nextMap.get(result.creditId)?.isCompleted || false,
-            hasPaid: nextMap.get(result.creditId)?.hasPaid || false,
+              nextPayment: nextMap.get(result.creditId)?.nextDate || null,
+              isCompleted: nextMap.get(result.creditId)?.isCompleted || false,
+              hasPaid: nextMap.get(result.creditId)?.hasPaid || false,
               loading: false
             };
             

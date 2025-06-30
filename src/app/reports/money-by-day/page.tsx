@@ -6,8 +6,6 @@ import { supabase } from '@/lib/supabase';
 import { useStore } from '@/contexts/StoreContext';
 import { format, startOfDay, endOfDay, parse, subDays } from 'date-fns';
 import { RefreshCw } from 'lucide-react';
-import { usePawnCalculations } from '@/hooks/usePawnCalculation';
-import { useCreditCalculations } from '@/hooks/useCreditCalculation';
 import { useInstallmentsSummary } from '@/hooks/useInstallmentsSummary';
 import { DatePickerWithControls } from '@/components/ui/date-picker-with-controls';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -26,6 +24,8 @@ import {
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { useCreditsSummary } from '@/hooks/useCreditsSummary';
+import { usePawnsSummary } from '@/hooks/usePawnsSummary';
 
 // Function to format currency
 const formatCurrency = (value: number | null | undefined) => {
@@ -113,8 +113,8 @@ export default function MoneyFlowByDayPage() {
   const [cashFlowData, setCashFlowData] = useState<DailyCashFlow[]>([]);
   
   // Use hooks for loan calculations - these will be used for the most recent day's data
-  const { summary: pawnSummary } = usePawnCalculations();
-  const { summary: creditSummary } = useCreditCalculations();
+  const { summary: pawnSummary } = usePawnsSummary();
+  const { summary: creditSummary } = useCreditsSummary();
   const { data: installmentSummary } = useInstallmentsSummary();
   
   // Use permissions hook

@@ -38,7 +38,8 @@ import { formatCurrencyExcel } from '@/lib/utils';
 import { getPawnInterestDisplayString } from '@/lib/interest-calculator';
 import * as XLSX from 'xlsx';
 import { isSameDay, addDays } from 'date-fns';
-import { calculatePawnMetrics } from '@/lib/Pawns/calculate_pawn_metrics';
+import { usePawnCalculations } from '@/hooks/usePawnCalculation';
+import { useStore } from '@/contexts/StoreContext';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -50,7 +51,13 @@ const statusMap: Record<string, { label: string, color: string }> = {
   [PawnStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
 };
 
-
+// Type for totals row returned by RPC
+interface PawnTotals {
+  total_loan_amount: number;
+  total_paid_interest: number;
+  total_old_debt: number;
+  total_interest_today: number;
+}
 
 export default function PawnsPage() {
   
@@ -81,90 +88,15 @@ export default function PawnsPage() {
   // Lấy dữ liệu tài chính tổng hợp (summary only)
   const { summary: financialSummary, refresh: refreshSummary } = usePawnsSummary();
   
-  // Chi tiết tài chính cho các hợp đồng trên trang hiện tại
-  const [pawnDetails, setPawnDetails] = useState<Record<string, PawnFinancialDetail>>({});
-  
-  const computeDetails = async (list = pawns) => {
-    const ids = list.map(p => p.id);
-    if (!ids.length) {
-      setPawnDetails({});
-      return;
-    }
-
-    // Bulk maps similar to previous hook
-    const { data: principalRows } = await supabase.rpc('get_pawn_current_principal', { p_pawn_ids: ids });
-    const principalMap = new Map<string, number>();
-    principalRows?.forEach((r: any) => principalMap.set(r.pawn_id, Number(r.current_principal || 0)));
-
-    const { data: debtRows } = await supabase.rpc('get_pawn_old_debt', { p_pawn_ids: ids });
-    const debtMap = new Map<string, number>();
-    debtRows?.forEach((r: any) => debtMap.set(r.pawn_id, Number(r.old_debt || 0)));
-
-    const { data: expRows } = await (supabase.rpc as any)('get_pawn_expected_interest', { p_pawn_ids: ids });
-    const expectedMap = new Map<string, number>();
-    const todayMap = new Map<string, number>();
-    expRows?.forEach((r: any) => {
-      expectedMap.set(r.pawn_id, Number(r.expected_profit || 0));
-      todayMap.set(r.pawn_id, Number(r.interest_today || 0));
-    });
-
-    const { data: paidRows } = await supabase.rpc('get_pawn_paid_interest', { p_pawn_ids: ids });
-    const interestMap = new Map<string, number>();
-    paidRows?.forEach((r: any) => interestMap.set(r.pawn_id, Number(r.paid_interest || 0)));
-
-    // next payment info
-    const { data: npRows } = await (supabase.rpc as any)('get_pawn_next_payment_info', { p_pawn_ids: ids });
-    const nextMap = new Map<string, { next_date: string | null; is_completed: boolean; has_paid: boolean }>();
-    npRows?.forEach((r: any) => nextMap.set(r.pawn_id, { next_date: r.next_date, is_completed: r.is_completed, has_paid: r.has_paid }));
-
-    const results = await Promise.all(
-      list.map(async (p) => {
-        return calculatePawnMetrics({
-          id: p.id,
-          loan_amount: p.loan_amount,
-          loan_date: p.loan_date as any,
-          loan_period: p.loan_period ?? 0,
-        }, {
-          interestMap,
-          principalMap,
-          debtMap,
-          expectedMap,
-          todayMap,
-        });
-      })
-    );
-
-    const map: Record<string, PawnFinancialDetail> = {};
-    results.forEach((r) => {
-      if (!r) return;
-      const n = nextMap.get(r.pawnId);
-      map[r.pawnId] = {
-        pawnId: r.pawnId,
-        actualLoanAmount: r.actualLoanAmount,
-        oldDebt: r.oldDebt,
-        expectedProfit: r.expectedProfit,
-        paidInterest: r.paidInterest,
-        interestToday: r.interestToday,
-        nextPayment: n?.next_date ?? null,
-        isCompleted: n?.is_completed ?? false,
-        hasPaid: n?.has_paid ?? false,
-        loading: false,
-      } as any;
-    });
-    setPawnDetails(map);
-  };
-
-  useEffect(() => {
-    computeDetails(pawns);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pawns]);
+  // Tính toán chi tiết tài chính bằng hook
+  const { details: pawnDetails, loading: calcLoading, refresh: refreshPawnDetails } = usePawnCalculations();
 
   // Use auto update cash fund hook
   const { triggerUpdate } = useAutoUpdateCashFund({
     onUpdate: (newCashFund) => {
       console.log('Cash fund updated to:', newCashFund);
       refreshSummary();
-      computeDetails(pawns);
+      refreshPawnDetails();
     }
   });
   // State for dialogs
@@ -184,6 +116,32 @@ export default function PawnsPage() {
   
   // Exporting state
   const [isExporting, setIsExporting] = useState(false);
+
+  // Totals state
+  const [totals, setTotals] = useState<PawnTotals | null>(null);
+
+  // Current store context
+  const { currentStore } = useStore();
+
+  const fetchTotals = async (f = filters) => {
+    if (!currentStore?.id) return;
+    try {
+      const { data, error } = await (supabase as any).rpc('pawn_get_totals', {
+        p_store_id: currentStore.id,
+        p_filters : f ?? null,
+      });
+      if (!error) {
+        setTotals((data as any)?.[0] ?? null);
+      }
+    } catch (err) {
+      console.error('pawn_get_totals error', err);
+    }
+  };
+
+  // Fetch totals when filters or store change
+  useEffect(() => {
+    fetchTotals(filters);
+  }, [JSON.stringify(filters), currentStore?.id]);
 
   const displayPawns = useMemo(() => {
     if (filters?.status !== 'due_tomorrow') return pawns;
@@ -453,7 +411,8 @@ export default function PawnsPage() {
   const handleRefresh = () => {
     refetch();
     refreshSummary();
-    computeDetails(pawns);
+    refreshPawnDetails();
+    fetchTotals(filters);
   };
   
   const { statuses: pawnStatuses } = usePawnStatuses(pawns.map(p => p.id));
@@ -513,6 +472,7 @@ export default function PawnsPage() {
               onShowPaymentHistory={handleOpenPaymentHistory}
               calculatedDetails={pawnDetails}
               calculatedStatuses={pawnStatuses}
+              totals={totals ?? undefined}
             />
             
             {/* Phân trang */}
