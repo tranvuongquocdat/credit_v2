@@ -266,6 +266,7 @@ export async function getCreditFinancialsForStore(storeId: string): Promise<Fina
 }
 
 export async function getInstallmentFinancialsForStore(storeId: string): Promise<FinancialSummary> {
+  // 1. Lấy danh sách installments đang hoạt động
   const { data: activeInstallments, error: installmentsError } = await supabase
     .from('installments_by_store')
     .select(`
@@ -285,8 +286,20 @@ export async function getInstallmentFinancialsForStore(storeId: string): Promise
   if (installmentsError) {
     throw installmentsError;
   }
-  
-  if (!activeInstallments || activeInstallments.length === 0) {
+
+  // 2. Lấy danh sách installments đã đóng/hoàn thành
+  const { data: closedInstallments } = await supabase
+    .from('installments_by_store')
+    .select('id')
+    .eq('store_id', storeId)
+    .in('status', [InstallmentStatus.CLOSED, InstallmentStatus.FINISHED]);
+
+  const activeIds = activeInstallments?.map(it => it.id).filter((id): id is string => id !== null) || [];
+  const closedIds = closedInstallments?.map(it => it.id).filter((id): id is string => id !== null) || [];
+  const allIds = [...activeIds, ...closedIds];
+
+  // Nếu không có hợp đồng nào, trả về 0
+  if (allIds.length === 0) {
     return {
         totalLoan: 0,
         oldDebt: 0,
@@ -294,50 +307,63 @@ export async function getInstallmentFinancialsForStore(storeId: string): Promise
         collectedInterest: 0,
     };
   }
-  const ids = activeInstallments
-  .map(it => it.id)
-  .filter((id): id is string => id !== null);   // → string[]
-
-  /* 3.1 oldDebt (đã có) */
-  const { data: debtRows } = await supabase.rpc(
-    'get_installment_old_debt', { p_installment_ids: ids }
-  );
-
-  /* 3.2 tổng paid (cho loanAmount) */
-  const { data: paidRows } = await supabase.rpc(
-    'installment_get_paid_amount', { p_installment_ids: ids }
-  );
-
-  /* 3.3 profitCollected  */
-  const { data: profitRows } = await supabase.rpc(
-    'installment_get_collected_profit', { p_installment_ids: ids }
-  );
-
-  /* 3. xây 3 map rồi truyền xuống calculateInstallmentMetrics */
-  const debtMap   = new Map(debtRows?.map(r => [r.installment_id, Number(r.old_debt)]));
-  const paidMap   = new Map(paidRows?.map(r => [r.installment_id, Number(r.paid_amount)]));
-  const profitMap = new Map(profitRows?.map(r => [r.installment_id, Number(r.profit_collected)]));
 
   let totalLoan = 0;
   let totalOldDebt = 0;
   let expectedProfit = 0;
   let collectedProfit = 0;
-  
-  const results = await Promise.all(
-    activeInstallments.map(installment => calculateInstallmentMetrics(installment, { debtMap, paidMap, profitMap }))
-  );
-  
-  results.forEach((result, idx) => {
-    const id = activeInstallments[idx].id;
-    const oldDebtVal = debtMap.get(id ?? '') ?? 0;       // dùng nợ cũ lấy từ RPC
-    totalOldDebt   += oldDebtVal;
 
-    if (result) {
-      collectedProfit += result.profitCollected;
-      totalLoan       += result.loanAmount;
-      expectedProfit  += result.expectedProfitAmount;
-    }
-  });
+  // 3. Tính toán cho hợp đồng đang hoạt động
+  if (activeInstallments && activeInstallments.length > 0) {
+    /* 3.1 oldDebt (đã có) */
+    const { data: debtRows } = await supabase.rpc(
+      'get_installment_old_debt', { p_installment_ids: activeIds }
+    );
+
+    /* 3.2 tổng paid (cho loanAmount) */
+    const { data: paidRows } = await supabase.rpc(
+      'installment_get_paid_amount', { p_installment_ids: activeIds }
+    );
+
+    /* 3.3 profitCollected cho active contracts */
+    const { data: profitRows } = await supabase.rpc(
+      'installment_get_collected_profit', { p_installment_ids: activeIds }
+    );
+
+    /* 3. xây 3 map rồi truyền xuống calculateInstallmentMetrics */
+    const debtMap   = new Map(debtRows?.map(r => [r.installment_id, Number(r.old_debt)]));
+    const paidMap   = new Map(paidRows?.map(r => [r.installment_id, Number(r.paid_amount)]));
+    const profitMap = new Map(profitRows?.map(r => [r.installment_id, Number(r.profit_collected)]));
+    
+    const results = await Promise.all(
+      activeInstallments.map(installment => calculateInstallmentMetrics(installment, { debtMap, paidMap, profitMap }))
+    );
+    
+    results.forEach((result, idx) => {
+      const id = activeInstallments[idx].id;
+      const oldDebtVal = debtMap.get(id ?? '') ?? 0;       // dùng nợ cũ lấy từ RPC
+      totalOldDebt   += oldDebtVal;
+
+      if (result) {
+        collectedProfit += result.profitCollected;
+        totalLoan       += result.loanAmount;
+        expectedProfit  += result.expectedProfitAmount;
+      }
+    });
+  }
+
+  // 4. Tính collectedProfit cho TẤT CẢ hợp đồng (cả active và closed)
+  if (allIds.length > 0) {
+    const { data: allProfitRows } = await supabase.rpc(
+      'installment_get_collected_profit', { p_installment_ids: allIds }
+    );
+
+    // Reset collectedProfit và tính lại cho tất cả hợp đồng
+    collectedProfit = 0;
+    allProfitRows?.forEach((r: { installment_id: string; profit_collected: number }) => {
+      collectedProfit += Number(r.profit_collected || 0);
+    });
+  }
 
   return {
     totalLoan: totalLoan,
