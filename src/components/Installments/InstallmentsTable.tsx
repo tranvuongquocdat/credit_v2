@@ -370,7 +370,6 @@ export function InstallmentsTable({
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
                   {installment.status === InstallmentStatus.CLOSED || 
                    installment.nextPaymentDate == "Hoàn thành" || 
-                   (installment.remainingToPay ?? 0) <= 0 || 
                    !installment.payment_due_date ? (
                     <div className="flex items-center justify-center gap-1">
                       <span className="text-green-600 font-medium">

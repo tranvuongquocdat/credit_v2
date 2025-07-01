@@ -3,6 +3,7 @@ import { CreateInstallmentParams, Installment, InstallmentFilters, InstallmentSt
 import { Customer } from '@/models/customer';
 import { formatCurrency } from '@/lib/utils';
 import { getCurrentUser } from './auth';
+import { calculateDebtToLatestPaidPeriod } from './Installments/calculate_remaining_debt';
 
 // Get all installments with pagination and filters
 export async function getInstallments(
@@ -246,12 +247,7 @@ export async function getInstallmentById(id: string) {
     } as Customer : undefined;
     
     // ngay trước khi return
-    const { data: row } = await (supabase.rpc as any)(
-      'get_installment_old_debt',
-      { p_installment_ids: [data.id] }
-    ).single();
-
-    const debtAmount = row ? Number(row.old_debt || 0) : 0;
+    const debtAmount = await calculateDebtToLatestPaidPeriod(data.id || '');
     
     // Transform data to match UI requirements
     const installment: InstallmentWithCustomer = {

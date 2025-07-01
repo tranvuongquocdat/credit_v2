@@ -36,30 +36,33 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Lấy thông tin người dùng từ cookie
-  console.log('Cookies in middleware:', request.cookies.getAll());
   try {
-    // Try to refresh the session first
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    // Get the current user
+    const { data: { user }, error } = await supabase.auth.getUser();
     
-    if (sessionError) {
-      console.log("Session error:", sessionError);
+    console.log("middleware user:", user);
+    console.log("middleware path:", request.nextUrl.pathname);
+
+    // Danh sách các trang được phép truy cập khi chưa login
+    const publicPaths = ['/', '/login', '/signup', '/portfolio/about', '/portfolio/projects'];
+    const currentPath = request.nextUrl.pathname;
+
+    // Nếu chưa login và không phải trang public → redirect về "/"
+    if (!user && !publicPaths.includes(currentPath)) {
+      console.log("User not authenticated, redirecting to home:", currentPath);
+      return NextResponse.redirect(new URL('/', request.url));
     }
 
-    // Then get the user
-    const { data: { user }, error } = await supabase.auth.getUser();
-    console.log("middleware user:", user);
-    console.log("middleware auth error:", error);
-
-    // Handle the case where there's no user but no error (expired session)
-    if (!user && !error && request.nextUrl.pathname.startsWith('/dashboard')) {
-      return NextResponse.redirect(new URL('/login', request.url));
+    // Handle authentication errors
+    if (error && !publicPaths.includes(currentPath)) {
+      console.log("Auth error, redirecting to home:", error.message);
+      return NextResponse.redirect(new URL('/', request.url));
     }
 
     // Kiểm tra trạng thái ban của người dùng nếu đã đăng nhập
     if (user) {
       try {
-        // Kiểm tra trạng thái người dùng trong bảng profiles hoặc user_status
+        // Kiểm tra trạng thái người dùng trong bảng profiles
         const { data: userStatus, error: statusError } = await supabase
           .from('profiles')
           .select('is_banned')
@@ -72,34 +75,23 @@ export async function middleware(request: NextRequest) {
           // Người dùng đã bị ban, đăng xuất họ
           console.log("User is banned, signing out:", user.id);
           await supabase.auth.signOut();
-          // Xóa tất cả cookies liên quan đến phiên đăng nhập
-          const cookies = request.cookies.getAll();
-          cookies.forEach(cookie => {
-            if (cookie.name.includes('supabase') || cookie.name.includes('sb')) {
-              response.cookies.set({
-                name: cookie.name,
-                value: '',
-                expires: new Date(0),
-              });
-            }
-          });
-          
-          return NextResponse.redirect(new URL('/login?error=account_banned', request.url));
+          return NextResponse.redirect(new URL('/', request.url));
         }
       } catch (err) {
         console.error("Error in ban check:", err);
       }
 
-      // Kiểm tra nếu người dùng đã đăng nhập và đang truy cập trang đăng nhập/đăng ký
-      if (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup') {
+      // Kiểm tra nếu người dùng đã đăng nhập và đang truy cập trang đăng nhập
+      if (currentPath === '/login' || currentPath === '/signup') {
         return NextResponse.redirect(new URL('/dashboard', request.url));
       }
     }
   } catch (authError) {
     console.error("Auth error in middleware:", authError);
-    // Redirect to login on any auth error
-    if (request.nextUrl.pathname.startsWith('/dashboard')) {
-      return NextResponse.redirect(new URL('/login', request.url));
+    // Redirect to home on any auth error for non-public routes
+    const publicPaths = ['/', '/login', '/signup'];
+    if (!publicPaths.includes(request.nextUrl.pathname)) {
+      return NextResponse.redirect(new URL('/', request.url));
     }
   }
 
@@ -107,5 +99,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/login', '/signup', '/store/:path*', '/customer/:path*', '/installments/:path*', '/employees/:path*', '/credits/:path*', '/pawns/:path*'],
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
 };
