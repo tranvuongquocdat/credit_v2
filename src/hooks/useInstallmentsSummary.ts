@@ -58,17 +58,47 @@ export function useInstallmentsSummary() {
         throw closedInstallmentsError;
       }
 
-      // Check if there are any installments to process
+      const closedIds = closedInstallments
+        ?.map(it => it.id)
+        .filter((id): id is string => id !== null) || [];   // → string[]
+
+      // Initialize summary data with store financial data
+      let summaryData: StoreFinancialData = {
+        totalFund: storeFinancialData.availableFund || 0,
+        availableFund: storeFinancialData.availableFund || 0,
+        totalLoan: 0,
+        oldDebt: 0,
+        profit: 0,
+        collectedInterest: 0
+      };
+
+      // Always calculate profit from closed installments, even if there are no active ones
+      if (closedIds.length > 0) {
+        const { data: closedProfitRows } = await supabase.rpc(
+          'installment_get_collected_profit', { p_installment_ids: closedIds }
+        );
+
+        if (closedProfitRows) {
+          const closedProfitMap = new Map(closedProfitRows.map(r => [r.installment_id, Number(r.profit_collected)]));
+          let collectedProfitFromClosed = 0;
+          closedIds.forEach(id => {
+            const profitVal = closedProfitMap.get(id ?? '') ?? 0;
+            collectedProfitFromClosed += profitVal;
+          });
+          // Only set this if there are no active installments to avoid double counting
+          if (!activeInstallments || activeInstallments.length === 0) {
+            summaryData.collectedInterest = collectedProfitFromClosed;
+          }
+        }
+      }
+
+      // Check if there are any active installments to process
       if (!activeInstallments || activeInstallments.length === 0) {
-        setData(storeFinancialData);
+        setData(summaryData);
         return;
       }
 
       const ids = activeInstallments
-        .map(it => it.id)
-        .filter((id): id is string => id !== null);   // → string[]
-
-      const closedIds = closedInstallments
         .map(it => it.id)
         .filter((id): id is string => id !== null);   // → string[]
 
@@ -115,12 +145,16 @@ export function useInstallmentsSummary() {
           expectedProfit  += result.expectedProfitAmount;
         }
       });
-      closedIds.forEach(id => {
-        const profitVal = profitMap.get(id ?? '') ?? 0;       // dùng nợ cũ lấy từ RPC
-        collectedProfit   += profitVal;
-      });
+      
+      // Add profit from closed installments (already calculated above if no active installments)
+      if (closedIds.length > 0) {
+        closedIds.forEach(id => {
+          const profitVal = profitMap.get(id ?? '') ?? 0;
+          collectedProfit += profitVal;
+        });
+      }
 
-      const summaryData: StoreFinancialData = {
+      summaryData = {
         // Use the cash_fund from the store financial data
         totalFund: storeFinancialData.availableFund || 0,
         availableFund: storeFinancialData.availableFund || 0,

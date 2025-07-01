@@ -472,34 +472,6 @@ export default function Sidebar() {
             </li>
           ))}
         </ul>
-        
-        {/* Nút đăng xuất ở dưới cùng */}
-        <div className="mt-auto pt-4 border-t">
-          <button
-            onClick={async () => {
-              try {
-                setIsLoggingOut(true);
-                await signOut();
-                localStorage.removeItem('currentStoreId');
-                router.push('/login');
-                router.refresh();
-              } catch (error) {
-                console.error('Lỗi khi đăng xuất:', error);
-              } finally {
-                setIsLoggingOut(false);
-              }
-            }}
-            disabled={isLoggingOut}
-            className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-red-600 hover:bg-red-50 ${isCollapsed ? 'justify-center' : ''}`}
-          >
-            <span className="flex-shrink-0">
-              <FiLogOut size={20} />
-            </span>
-            {!isCollapsed && (
-              <span>{isLoggingOut ? 'Đang đăng xuất...' : 'Đăng xuất'}</span>
-            )}
-          </button>
-        </div>
       </nav>
     </div>
   );

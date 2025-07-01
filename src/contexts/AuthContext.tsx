@@ -3,6 +3,8 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode, useCallback } from "react";
 import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
+import ActivityTracker from "@/components/ActivityTracker";
 
 interface AuthContextType {
   user: any | null;
@@ -31,6 +33,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const router = useRouter();
 
   const fetchAuthData = useCallback(async (forceRefresh = false) => {
     try {
@@ -99,17 +102,41 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        console.log('Auth state change:', event, session);
+        
         switch (event) {
           case 'SIGNED_IN':
+            console.log('User signed in, refreshing auth data');
+            fetchAuthData(true);
+            break;
+
           case 'SIGNED_OUT':
+            console.log('User signed out');
+            setUser(null);
+            setPermissions([]);
+            setIsAdmin(false);
+            setError(null);
+            
+            // Check if current page is public (consistent with middleware)
+            const currentPath = window.location.pathname;
+            const publicPaths = ['/', '/login', '/signup', '/portfolio/about', '/portfolio/projects'];
+            const isPublicPath = publicPaths.includes(currentPath);
+            
+            // If not on a public path, redirect to home
+            if (!isPublicPath) {
+              router.push('/');
+            }
+            break;
+
           case 'USER_UPDATED':
-            fetchAuthData(true);        // cần tải lại
+            console.log('User updated, refreshing auth data');
+            fetchAuthData(true);
             break;
 
           case 'TOKEN_REFRESHED':
+            console.log('Token refreshed');
             // User không đổi, chỉ cập nhật token trong state nếu muốn
             setUser((prev: any | null) => (prev ? { ...prev, ...session?.user } : prev));
-            // KHÔNG setLoading(true) ⇒ UI không flicker
             break;
 
           default:
@@ -119,7 +146,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     );
 
     return () => subscription.unsubscribe();
-  }, [fetchAuthData]);
+  }, [fetchAuthData, router]);
 
   const hasPermission = (permissionId: string) =>
     isAdmin ? true : permissions.includes(permissionId);
@@ -129,5 +156,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     [user, permissions, loading, error, isAdmin]
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      {/* Activity Tracker - Only active when user is logged in, no UI */}
+      {user && <ActivityTracker />}
+    </AuthContext.Provider>
+  );
 }; 

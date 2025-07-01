@@ -328,8 +328,7 @@ export function TopNavbar() {
                   resetStores();
                   const { signOut } = await import('@/lib/auth');
                   await signOut();
-                  router.push('/login');
-                  router.refresh();
+                  // Let AuthContext handle redirect automatically via SIGNED_OUT event
                 } catch (e) {
                   console.error('Lỗi khi đăng xuất:', e);
                 }

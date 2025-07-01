@@ -136,15 +136,17 @@ export async function createInstallmentAmountHistory(params: {
  * Ghi lại lịch sử khi thanh toán nợ
  */
 export async function recordDebtPayment(installmentId: string, employeeId: string, amount: number) {
+  // Amount < 0 => Tiền thừa => Phải bỏ tiền thanh toán
   if (amount < 0) return createInstallmentAmountHistory({
     installmentId,
-    creditAmount: Math.abs(amount),
+    debitAmount: Math.abs(amount),
     description: 'Thanh toán nợ',
     transactionType: TransactionType.DEBT_PAYMENT
   });
+  // Amount > 0 => Tiền thiếu => Phải nhận tiền thanh toán
   return createInstallmentAmountHistory({
     installmentId,
-    debitAmount: amount,
+    creditAmount: amount,
     description: 'Thanh toán nợ',
     transactionType: TransactionType.DEBT_PAYMENT
   });
