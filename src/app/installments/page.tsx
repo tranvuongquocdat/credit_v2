@@ -34,8 +34,7 @@ import { useStore } from '@/contexts/StoreContext';
 import { InstallmentStatus, InstallmentWithCustomer } from '@/models/installment';
 import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/lib/supabase';
-import { calculateRemainingToPay } from '@/lib/installmentCalculations';
-import { calculateMultipleInstallmentStatus } from '@/lib/Installments/calculate_installment_status';
+import { useInstallmentCalculation } from '@/hooks/useInstallmentCalculation';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -79,6 +78,15 @@ const formatCurrencyExcel = (value: number | undefined | null): string => {
   }
 };
 
+// Type for totals row returned by RPC
+interface InstallmentTotals {
+  total_amount_given: number;
+  total_paid: number;
+  total_debt: number;
+  total_daily_amount: number;
+  total_remaining: number;
+}
+
 export default function InstallmentsPage() {
   const { hasPermission, loading: permissionsLoading } = usePermissions();
   // Kiểm tra quyền xem danh sách hợp đồng trả góp
@@ -102,7 +110,8 @@ export default function InstallmentsPage() {
     handlePageChange,
     handleDelete,
     handleUpdateStatus,
-    refetch
+    refetch,
+    filters,
   } = useInstallments();
   
   // Sử dụng custom hook để lấy dữ liệu tài chính
@@ -136,10 +145,10 @@ export default function InstallmentsPage() {
   const [isPaymentActionsModalOpen, setIsPaymentActionsModalOpen] = useState(false);
   const [selectedInstallmentForPayment, setSelectedInstallmentForPayment] = useState<InstallmentWithCustomer | null>(null);
   
-  // NEW: state for enriched data & calc loading
-  const [processedInstallments, setProcessedInstallments] = useState<InstallmentWithCustomer[]>([]);
-  const [calcLoading, setCalcLoading] = useState(false);
-  // Exporting state for Excel export
+  // Tính toán dữ liệu đã xử lý qua custom hook
+  const { processedInstallments, loading: calcLoading } = useInstallmentCalculation(installments);
+  
+  // State cho quá trình xuất Excel
   const [isExporting, setIsExporting] = useState(false);
   
   // Calculate total pages
@@ -158,7 +167,7 @@ export default function InstallmentsPage() {
   
   // Handle export to Excel
   const handleExportExcel = async () => {
-    if (isExporting) return; // prevent multiple clicks
+    if (isExporting) return; // prevent multiple clicks or concurrent export
 
     if (!processedInstallments || processedInstallments.length === 0) {
       alert('Không có dữ liệu để xuất Excel');
@@ -341,110 +350,34 @@ export default function InstallmentsPage() {
     }
   };
 
-  // ------------------------------------------------------------
-  // Calculate paid amount + remaining + status once installments list changes
-  // ------------------------------------------------------------
-  useEffect(() => {
-    const compute = async () => {
-      if (installments.length === 0) {
-        setProcessedInstallments([]);
+  // -------------------- Grand totals ----------------------
+  const [totals, setTotals] = useState<InstallmentTotals | null>(null);
+  const [totalsLoading, setTotalsLoading] = useState(false);
+
+  const fetchTotals = async (f = filters) => {
+    if (!currentStore?.id) return;
+    setTotalsLoading(true);
+    try {
+      const { data, error } = await (supabase as any).rpc('installment_get_totals', {
+        p_store_id: currentStore.id,
+        p_filters : f ?? null,
+      });
+      if (error) {
+        console.error('installment_get_totals error:', error);
         return;
       }
-      setCalcLoading(true);
-      try {
-        const ids = installments.map((i) => i.id);
-        // RPC: tổng tiền đã đóng
-        const { data: paidRows, error: paidError } = await supabase.rpc('installment_get_paid_amount', {
-          p_installment_ids: ids,
-        });
-        if (paidError) {
-          console.error('installment_get_paid_amount error:', paidError);
-        }
-        const paidMap = new Map<string, number>(
-          (paidRows ?? []).map((r: any) => [r.installment_id, Number(r.total_paid ?? r.paid_amount ?? 0)])
-        );
+      setTotals((data as any)?.[0] ?? null);
+    } catch (err) {
+      console.error('Error fetching totals:', err);
+    } finally {
+      setTotalsLoading(false);
+    }
+  };
 
-        // RPC: tính trạng thái
-        const calculatedStatuses = await calculateMultipleInstallmentStatus(ids);
-
-        const enriched = installments.map((it) => {
-          const totalPaid = paidMap.get(it.id) ?? 0;
-          const remaining = calculateRemainingToPay(it, totalPaid);
-
-          // Tính nhãn ngày phải đóng tiếp theo
-          let nextPaymentDateLabel: string;
-          if (!it.payment_due_date) {
-            nextPaymentDateLabel = 'Hoàn thành';
-          } else {
-            const due = new Date(it.payment_due_date);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const diff = Math.floor((due.getTime() - today.getTime()) / 86400000);
-            if (diff === 0) nextPaymentDateLabel = 'Hôm nay';
-            else if (diff === 1) nextPaymentDateLabel = 'Ngày mai';
-            else {
-              const day = due.getDate().toString().padStart(2, '0');
-              const month = (due.getMonth() + 1).toString().padStart(2, '0');
-              nextPaymentDateLabel = `${day}/${month}`;
-            }
-          }
-
-          // Map status info
-          const calcStatus = calculatedStatuses[it.id];
-          let statusInfo: { label: string; color: string };
-          if (calcStatus) {
-            let color: string;
-            switch (calcStatus.statusCode) {
-              case 'CLOSED':
-                color = 'bg-blue-100 text-blue-800 border-blue-200';
-                break;
-              case 'DELETED':
-                color = 'bg-gray-100 text-gray-800 border-gray-200';
-                break;
-              case 'FINISHED':
-                color = 'bg-emerald-100 text-emerald-800 border-emerald-200';
-                break;
-              case 'BAD_DEBT':
-                color = 'bg-purple-100 text-purple-800 border-purple-200';
-                break;
-              case 'OVERDUE':
-                color = 'bg-red-100 text-red-800 border-red-200';
-                break;
-              case 'LATE_INTEREST':
-                color = 'bg-yellow-100 text-yellow-800 border-yellow-200';
-                break;
-              case 'ON_TIME':
-              default:
-                color = 'bg-green-100 text-green-800 border-green-200';
-                break;
-            }
-            statusInfo = { label: calcStatus.status, color };
-          } else {
-            statusInfo = statusMap[it.status] || {
-              label: 'Không xác định',
-              color: 'bg-gray-100 text-gray-800',
-            };
-          }
-
-          return {
-            ...it,
-            totalPaid,
-            remainingToPay: remaining,
-            nextPaymentDate: nextPaymentDateLabel,
-            statusInfo,
-          } as InstallmentWithCustomer;
-        });
-        console.log('enriched', enriched);
-        setProcessedInstallments(enriched);
-      } catch (err) {
-        console.error('Error computing installment aggregates:', err);
-      } finally {
-        setCalcLoading(false);
-      }
-    };
-
-    compute();
-  }, [installments]);
+  // Fetch totals whenever filters or store change
+  useEffect(() => {
+    fetchTotals(filters);
+  }, [JSON.stringify(filters), currentStore?.id]);
 
   return (
     <Layout>
@@ -502,10 +435,12 @@ export default function InstallmentsPage() {
             onUpdateStatus={handleOpenStatusDialog}
             onDelete={handleOpenDeleteDialog}
             onShowPaymentActions={handleShowPaymentActions}
+            totals={totals ?? undefined}
             onRefresh={() => {
               refetch();
               refreshFinancial();
               triggerUpdate();
+              fetchTotals(filters);
             }}
           />
         </div> 

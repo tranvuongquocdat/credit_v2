@@ -4,7 +4,7 @@ import {
   TableCell, 
   TableHead, 
   TableHeader, 
-  TableRow 
+  TableRow
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -43,6 +43,12 @@ interface CreditsTableProps {
   onUpdateStatus: (credit: CreditWithCustomer) => void;
   onShowPaymentHistory?: (credit: CreditWithCustomer) => void;
   onRefresh?: () => void;
+  totals?: {
+    total_loan_amount: number;
+    total_paid_interest: number;
+    total_old_debt: number;
+    total_interest_today: number;
+  };
 }
 
 // Kết quả truy vấn từ hàm calculateCreditPayment
@@ -79,7 +85,8 @@ export function CreditsTable({
   onEdit, 
   onDelete, 
   onShowPaymentHistory,
-  onRefresh
+  onRefresh,
+  totals,
 }: CreditsTableProps) {
   // Toast hook
   const { toast } = useToast();
@@ -344,6 +351,19 @@ export function CreditsTable({
             ))
           )}
         </TableBody>
+        {totals && (
+          <tfoot className="bg-yellow-200 font-semibold">
+            <TableRow>
+              <TableCell className="py-2 px-3 text-center font-bold" colSpan={4}>Tổng</TableCell>
+              <TableCell className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_loan_amount)}</TableCell>
+              <TableCell className="py-2 px-3" />
+              <TableCell className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_paid_interest)}</TableCell>
+              <TableCell className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_old_debt)}</TableCell>
+              <TableCell className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_interest_today)}</TableCell>
+              <TableCell className="py-2 px-3" colSpan={3} />
+            </TableRow>
+          </tfoot>
+        )}
       </Table>
     </div>
   );

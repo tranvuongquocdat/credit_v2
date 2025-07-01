@@ -67,6 +67,13 @@ interface InstallmentsTableProps {
   onShowPaymentHistory?: (installment: InstallmentWithStatusInfo) => void;
   onShowPaymentActions?: (installment: InstallmentWithStatusInfo) => void;
   onRefresh?: () => void;
+  totals?: {
+    total_amount_given: number;
+    total_paid: number;
+    total_debt: number;
+    total_daily_amount: number;
+    total_remaining: number;
+  };
 }
 
 export function InstallmentsTable({
@@ -79,6 +86,7 @@ export function InstallmentsTable({
   onShowPaymentHistory,
   onShowPaymentActions,
   onRefresh,
+  totals,
 }: InstallmentsTableProps) {
   // State để lưu trữ thông tin có kỳ thanh toán đã được thanh toán hay không cho mỗi installment
   const [hasPaidPaymentPeriods, setHasPaidPaymentPeriods] = useState<Record<string, boolean>>({});
@@ -519,6 +527,21 @@ export function InstallmentsTable({
             );
           })}
         </tbody>
+        {totals && (
+          <tfoot className="bg-yellow-200 font-semibold">
+            <tr>
+              <td className="py-2 px-3 text-center font-bold" colSpan={3}>Tổng</td>
+              <td className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_amount_given)}</td>
+              <td className="py-2 px-3" />
+              <td className="py-2 px-3" />
+              <td className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_paid)}</td>
+              <td className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_debt)}</td>
+              <td className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_daily_amount)}</td>
+              <td className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_remaining)}</td>
+              <td className="py-2 px-3" colSpan={3}></td>
+            </tr>
+          </tfoot>
+        )}
       </table>
       
       {/* Confirmation Dialog for Unlocking Contract */}

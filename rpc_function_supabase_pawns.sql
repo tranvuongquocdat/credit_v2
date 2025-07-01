@@ -420,3 +420,123 @@ begin
   end loop;
 end;
 $$;
+
+create or replace function public.pawn_get_totals(
+  p_store_id uuid,
+  p_filters  jsonb default null
+)
+returns table (
+  total_loan_amount    numeric,   -- số tiền đang cho vay thực tế
+  total_paid_interest  numeric,   -- lãi phí đã đóng
+  total_old_debt       numeric,   -- nợ cũ
+  total_interest_today numeric    -- lãi phí tính đến hôm nay
+)
+language sql
+as $$
+/* 1. Lấy pawns theo filter cơ bản (chưa tính due_tomorrow) */
+with base as (
+  select *
+  from   pawns p
+  where  p.store_id = p_store_id
+
+    /* ----- status (trừ due_tomorrow) ----- */
+    and (
+          coalesce(p_filters->>'status','') in ('', 'all', 'due_tomorrow')
+          or p.status = (p_filters->>'status')::pawn_status
+        )
+
+    /* ----- contract_code LIKE ----- */
+    and (
+          coalesce(p_filters->>'contract_code','') = ''
+          or p.contract_code ilike '%' || (p_filters->>'contract_code') || '%'
+        )
+
+    /* ----- loan_period = duration ----- */
+    and (
+          coalesce(p_filters->>'duration','') = ''
+          or p.loan_period = (p_filters->>'duration')::int
+        )
+
+    /* ----- loan_date range ----- */
+    and (
+          coalesce(p_filters->>'start_date','') = ''
+          or p.loan_date >= (p_filters->>'start_date')::date
+        )
+    and (
+          coalesce(p_filters->>'end_date','') = ''
+          or p.loan_date <= (p_filters->>'end_date')::date
+        )
+
+    /* ----- customer_name LIKE ----- */
+    and (
+          coalesce(p_filters->>'customer_name','') = ''
+          or exists (
+               select 1
+               from   customers cu
+               where  cu.id = p.customer_id
+                 and  cu.name ilike '%' || (p_filters->>'customer_name') || '%'
+          )
+        )
+),
+
+/* 2. Nếu client yêu cầu 'due_tomorrow' thì lọc tiếp bằng get_pawn_next_payment_info */
+base2 as (
+  select b.*
+  from   base b
+  where  (p_filters->>'status') <> 'due_tomorrow'          -- không lọc
+         /* nếu chọn due_tomorrow → chỉ giữ hợp đồng có kỳ thanh toán ngày mai */
+         or exists (
+              select 1
+              from   get_pawn_next_payment_info( array[b.id] ) np   -- hàm đã dùng ở hook
+              where  np.pawn_id = b.id
+                and  np.next_date = (current_date + interval '1 day')::date
+         )
+),
+
+/* 3. Gom ID thành mảng */
+ids as ( select array_agg(id) arr_ids from base2 ),
+
+/* 4. Các số liệu phụ y chang logic React ----------------------------- */
+
+/* 4.1 Tiền thực vay (principal hiện tại) */
+principal as (
+  select p.pawn_id, p.current_principal
+  from   ids
+  join   lateral get_pawn_current_principal(arr_ids) p on true
+),
+
+/* 4.2 Lãi phí đã đóng (tổng toàn đời hợp đồng)*/
+paid_int as (
+  select i.pawn_id,
+         i.paid_interest
+  from   ids
+  join   lateral get_pawn_paid_interest(arr_ids) i  -- ⬅ hàm đã có
+        on true
+),
+
+/* 4.3 Nợ cũ */
+old_debt as (
+  select d.pawn_id, d.old_debt
+  from   ids
+  join   lateral get_pawn_old_debt(arr_ids) d on true
+),
+
+/* 4.4 Lãi phí tính đến hôm nay */
+today_int as (
+  select e.pawn_id, e.interest_today
+  from   ids
+  join   lateral get_pawn_expected_interest(arr_ids) e on true
+)
+
+/* 5. SUM kết quả ------------------------------------------------------ */
+select
+  sum(coalesce(pr.current_principal, b.loan_amount)) as total_loan_amount,
+  sum(coalesce(pi.paid_interest,0))                 as total_paid_interest,
+  sum(coalesce(od.old_debt,0))                      as total_old_debt,
+  sum(coalesce(ti.interest_today,0))                as total_interest_today
+from base2 b
+left join principal pr on pr.pawn_id = b.id
+left join paid_int  pi on pi.pawn_id = b.id
+left join old_debt  od on od.pawn_id = b.id
+left join today_int ti on ti.pawn_id = b.id;
+$$;

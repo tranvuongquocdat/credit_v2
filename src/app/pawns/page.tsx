@@ -23,13 +23,12 @@ import { PawnEditModal } from '@/components/Pawns/PawnEditModal';
 
 // Import custom hooks
 import { usePawns } from '@/hooks/usePawns';
-
-// Import types and API functions
-import { PawnStatus, PawnWithCustomer } from '@/models/pawn';
-import { usePawnCalculations } from '@/hooks/usePawnCalculation';
+import { usePawnsSummary } from '@/hooks/usePawnsSummary';
+import type { PawnFinancialDetail } from '@/hooks/usePawnCalculation';
 import { useAutoUpdateCashFund } from '@/hooks/useCashFundUpdater';
 import { usePermissions } from '@/hooks/usePermissions';
 import { usePawnStatuses } from '@/hooks/usePawnStatuses';
+import { PawnStatus, PawnWithCustomer } from '@/models/pawn';
 import { reopenContract } from '@/lib/Pawns/reopen_contract';
 import { updatePawnStatus } from '@/lib/pawn';
 import { getLatestPaymentPaidDate } from '@/lib/Pawns/get_latest_payment_paid_date';
@@ -39,6 +38,8 @@ import { formatCurrencyExcel } from '@/lib/utils';
 import { getPawnInterestDisplayString } from '@/lib/interest-calculator';
 import * as XLSX from 'xlsx';
 import { isSameDay, addDays } from 'date-fns';
+import { usePawnCalculations } from '@/hooks/usePawnCalculation';
+import { useStore } from '@/contexts/StoreContext';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -50,7 +51,13 @@ const statusMap: Record<string, { label: string, color: string }> = {
   [PawnStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
 };
 
-
+// Type for totals row returned by RPC
+interface PawnTotals {
+  total_loan_amount: number;
+  total_paid_interest: number;
+  total_old_debt: number;
+  total_interest_today: number;
+}
 
 export default function PawnsPage() {
   
@@ -78,14 +85,18 @@ export default function PawnsPage() {
   // Kiểm tra quyền xem danh sách hợp đồng cầm đồ
   const canViewPawnsList = hasPermission('xem_danh_sach_hop_dong_cam_do');
   
-  // Lấy dữ liệu tài chính tổng hợp
-  const { summary: financialSummary, details: pawnDetails, refresh: refreshFinancial } = usePawnCalculations();
-  const { statuses: pawnStatuses, loading: pawnStatusesLoading } = usePawnStatuses(pawns.map(pawn => pawn.id));
+  // Lấy dữ liệu tài chính tổng hợp (summary only)
+  const { summary: financialSummary, refresh: refreshSummary } = usePawnsSummary();
+  
+  // Tính toán chi tiết tài chính bằng hook
+  const { details: pawnDetails, loading: calcLoading, refresh: refreshPawnDetails } = usePawnCalculations();
+
   // Use auto update cash fund hook
   const { triggerUpdate } = useAutoUpdateCashFund({
     onUpdate: (newCashFund) => {
       console.log('Cash fund updated to:', newCashFund);
-      refreshFinancial(); // Refresh financial data after cash fund update
+      refreshSummary();
+      refreshPawnDetails();
     }
   });
   // State for dialogs
@@ -105,6 +116,32 @@ export default function PawnsPage() {
   
   // Exporting state
   const [isExporting, setIsExporting] = useState(false);
+
+  // Totals state
+  const [totals, setTotals] = useState<PawnTotals | null>(null);
+
+  // Current store context
+  const { currentStore } = useStore();
+
+  const fetchTotals = async (f = filters) => {
+    if (!currentStore?.id) return;
+    try {
+      const { data, error } = await (supabase as any).rpc('pawn_get_totals', {
+        p_store_id: currentStore.id,
+        p_filters : f ?? null,
+      });
+      if (!error) {
+        setTotals((data as any)?.[0] ?? null);
+      }
+    } catch (err) {
+      console.error('pawn_get_totals error', err);
+    }
+  };
+
+  // Fetch totals when filters or store change
+  useEffect(() => {
+    fetchTotals(filters);
+  }, [JSON.stringify(filters), currentStore?.id]);
 
   const displayPawns = useMemo(() => {
     if (filters?.status !== 'due_tomorrow') return pawns;
@@ -291,7 +328,7 @@ export default function PawnsPage() {
       updatePawnStatus(pawn.id, PawnStatus.ON_TIME);
       
       // Refresh dữ liệu tài chính
-      refreshFinancial();
+      refreshSummary();
     } catch (error) {
       console.error('Error reopening contract:', error);
       toast({
@@ -337,7 +374,7 @@ export default function PawnsPage() {
       });
       
       // Refresh dữ liệu tài chính sau khi xóa thành công
-      refreshFinancial();
+      refreshSummary();
       // Trigger cash fund update
       triggerUpdate();
     } catch (error) {
@@ -372,10 +409,14 @@ export default function PawnsPage() {
   
   // Handle refresh after contract operations
   const handleRefresh = () => {
-    refetch(); // Refresh pawns list
-    refreshFinancial(); // Refresh financial data
+    refetch();
+    refreshSummary();
+    refreshPawnDetails();
+    fetchTotals(filters);
   };
   
+  const { statuses: pawnStatuses } = usePawnStatuses(pawns.map(p => p.id));
+
   return (
     <Layout>
       <div className="max-w-full">
@@ -394,7 +435,10 @@ export default function PawnsPage() {
         ) : hasPermission('xem_thong_tin_cam_do') ? (
           <FinancialSummary 
             fundStatus={financialSummary || undefined}
-            onRefresh={refreshFinancial}
+            onRefresh={() => {
+              handleRefresh();
+              triggerUpdate();
+            }}
             autoFetch={false}
             enableCashFundUpdate={true}
         />
@@ -428,6 +472,7 @@ export default function PawnsPage() {
               onShowPaymentHistory={handleOpenPaymentHistory}
               calculatedDetails={pawnDetails}
               calculatedStatuses={pawnStatuses}
+              totals={totals ?? undefined}
             />
             
             {/* Phân trang */}

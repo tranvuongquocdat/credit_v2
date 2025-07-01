@@ -21,12 +21,11 @@ import { CreditEditModal } from '@/components/Credits/CreditEditModal';
 
 // Import custom hooks
 import { useCredits } from '@/hooks/useCredits';
-
-// Import types and API functions
-import { CreditStatus, CreditWithCustomer } from '@/models/credit';
+import { useCreditsSummary } from '@/hooks/useCreditsSummary';
 import { useCreditCalculations } from '@/hooks/useCreditCalculation';
 import { useAutoUpdateCashFund } from '@/hooks/useCashFundUpdater';
 import { useCreditStatuses } from '@/hooks/useCreditStatuses';
+import { CreditStatus, CreditWithCustomer } from '@/models/credit';
 
 import { usePermissions } from '@/hooks/usePermissions';
 import * as XLSX from 'xlsx';
@@ -36,6 +35,7 @@ import { supabase } from '@/lib/supabase';
 import { getInterestDisplayString } from '@/lib/interest-calculator';
 import { formatCurrencyExcel } from '@/lib/utils';
 import { isSameDay, addDays } from 'date-fns';
+import { useStore } from '@/contexts/StoreContext';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -48,9 +48,17 @@ const statusMap: Record<string, { label: string, color: string }> = {
   [CreditStatus.FINISHED]: { label: 'Hoàn thành', color: 'bg-green-100 text-green-800' },
 };
 
+// Type for totals
+interface CreditTotals {
+  total_loan_amount: number;
+  total_paid_interest: number;
+  total_old_debt: number;
+  total_interest_today: number;
+}
 
 export default function CreditsPage() {
   const router = useRouter();
+  const { currentStore } = useStore();
   
   // Parse URL parameters for initial filters
   const initialFilters = useMemo(() => {
@@ -92,8 +100,11 @@ export default function CreditsPage() {
   // Track if initial filters have been processed
   const [hasProcessedInitialFilters, setHasProcessedInitialFilters] = useState(false);
   
-  // Lấy dữ liệu tài chính tổng hợp
-  const { summary: financialSummary, details: creditDetails, refresh: refreshFinancial } = useCreditCalculations();
+  // Lấy dữ liệu tài chính tổng hợp (summary only)
+  const { summary: financialSummary, refresh: refreshSummary } = useCreditsSummary();
+  
+  // Lấy chi tiết tài chính & summary qua hook chung
+  const { details: creditDetails } = useCreditCalculations();
   
   // Lấy trạng thái cho các hợp đồng trong trang hiện tại
   const { statuses: creditStatuses } = useCreditStatuses(credits.map((c) => c.id));
@@ -101,7 +112,7 @@ export default function CreditsPage() {
   const { triggerUpdate } = useAutoUpdateCashFund({
     onUpdate: (newCashFund) => {
       console.log('Cash fund updated to:', newCashFund);
-      refreshFinancial(); // Refresh financial data after cash fund update
+      refreshSummary(); // Refresh summary data after cash fund update
     }
   });
   // State for dialogs
@@ -121,6 +132,28 @@ export default function CreditsPage() {
   
   // Exporting state
   const [isExporting, setIsExporting] = useState(false);
+  
+  // Totals state & fetch
+  const [totals, setTotals] = useState<CreditTotals | null>(null);
+  
+  const fetchTotals = async (f = filters) => {
+    if (!currentStore?.id) return;
+    try {
+      const { data, error } = await (supabase as any).rpc('credit_get_totals', {
+        p_store_id: currentStore.id,
+        p_filters : f ?? null,
+      });
+      if (!error) {
+        setTotals((data as any)?.[0] ?? null);
+      }
+    } catch (err) {
+      console.error('fetchTotals error', err);
+    }
+  };
+  
+  useEffect(() => {
+    fetchTotals(filters);
+  }, [JSON.stringify(filters), currentStore?.id]);
   
   // Client-side filter: Ngày mai đóng lãi
   const displayCredits = useMemo(() => {
@@ -320,7 +353,7 @@ export default function CreditsPage() {
       updateCreditStatus(credit.id, CreditStatus.ON_TIME);
       
       // Refresh dữ liệu tài chính
-      refreshFinancial();
+      refreshSummary();
     } catch (error) {
       console.error('Error reopening contract:', error);
       toast({
@@ -366,7 +399,7 @@ export default function CreditsPage() {
       });
       
       // Refresh dữ liệu tài chính sau khi xóa thành công
-      refreshFinancial();
+      refreshSummary();
       // Trigger cash fund update
       triggerUpdate();
     } catch (error) {
@@ -402,7 +435,7 @@ export default function CreditsPage() {
   // Handle refresh after contract operations
   const handleRefresh = () => {
     refetch(); // Refresh credits list
-    refreshFinancial(); // Refresh financial data
+    refreshSummary(); // Refresh financial data
   };
   
   return (
@@ -423,7 +456,7 @@ export default function CreditsPage() {
         ) : hasPermission('xem_thong_tin_tin_chap') ? (
           <FinancialSummary 
             fundStatus={financialSummary || undefined}
-            onRefresh={refreshFinancial}
+            onRefresh={refreshSummary}
             autoFetch={false}
             enableCashFundUpdate={true}
         />
@@ -451,12 +484,16 @@ export default function CreditsPage() {
           statusMap={statusMap}
           calculatedDetails={creditDetails}
           calculatedStatuses={creditStatuses}
+          totals={totals ?? undefined}
           onView={handleViewCreditDetail}
           onEdit={handleEditCredit}
           onDelete={handleOpenDeleteDialog}
           onUpdateStatus={handleOpenStatusDialog}
           onShowPaymentHistory={handleOpenPaymentHistory}
-          onRefresh={handleRefresh}
+          onRefresh={() => {
+            handleRefresh();
+            fetchTotals(filters);
+          }}
         />
         
         {/* Phân trang */}
