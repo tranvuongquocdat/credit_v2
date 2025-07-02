@@ -572,6 +572,8 @@ export function PawnEditModal({
                     required
                     className="w-24"
                     placeholder="0"
+                    min={0}
+                    step="any"
                     disabled={hasPayments}
                   />
                   
