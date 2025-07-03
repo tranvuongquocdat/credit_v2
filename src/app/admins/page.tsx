@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { getCurrentUser } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
+import { DeletePasswordChangeDialog } from '@/components/Security/DeletePasswordChangeDialog';
 
 export default function AdminsPage() {
   const router = useRouter();
@@ -34,6 +35,7 @@ export default function AdminsPage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedAdmin, setSelectedAdmin] = useState<AdminWithProfile | null>(null);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [isPwdDialogOpen, setIsPwdDialogOpen] = useState(false);
 
   // Fetch danh sách admin
   const fetchAdmins = async () => {
@@ -131,6 +133,9 @@ export default function AdminsPage() {
             <h1 className="text-lg font-bold">Quản lý Admin</h1>
             <span className="text-sm text-gray-500">(Chỉ dành cho Superadmin)</span>
           </div>
+          <Button variant="outline" size="sm" onClick={() => setIsPwdDialogOpen(true)}>
+            Đổi mật khẩu xoá
+          </Button>
         </div>
 
         {/* Search và filter */}
@@ -353,6 +358,11 @@ export default function AdminsPage() {
         onClose={() => setIsBulkModalOpen(false)}
         admins={admins}
         onSuccess={() => fetchAdmins()}
+      />
+
+      <DeletePasswordChangeDialog
+        isOpen={isPwdDialogOpen}
+        onClose={() => setIsPwdDialogOpen(false)}
       />
     </Layout>
   );
