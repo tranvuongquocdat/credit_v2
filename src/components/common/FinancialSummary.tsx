@@ -122,62 +122,130 @@ export function FinancialSummary({
   
   return (
     <div className="mb-4">
-      <div className="flex py-1">
-        <div className="flex-1 text-center px-2">
-          <div className="flex items-center justify-center text-gray-500 text-sm mb-1">
+      {/* Desktop/Tablet view - all 5 columns */}
+      <div className="hidden md:flex py-1">
+        <div className="flex-1 text-center px-1 lg:px-2">
+          <div className="flex items-center justify-center text-gray-500 text-xs lg:text-sm mb-1">
             <span>Quỹ tiền mặt</span>
             <RefreshCw 
-              className={`ml-1 h-3.5 w-3.5 cursor-pointer hover:text-blue-500 ${loading ? 'animate-spin' : ''}`}
+              className={`ml-1 h-3 w-3 lg:h-3.5 lg:w-3.5 cursor-pointer hover:text-blue-500 ${loading ? 'animate-spin' : ''}`}
               onClick={onRefresh}
             />
           </div>
-          <div className="text-base font-semibold text-gray-800">
+          <div className="text-sm lg:text-base font-semibold text-gray-800">
             {Math.floor(fundStatus.availableFund).toLocaleString()}
           </div>
         </div>
         
-        <div className="w-px bg-gray-200 mx-2"></div>
+        <div className="w-px bg-gray-200 mx-1 lg:mx-2"></div>
         
-        <div className="flex-1 text-center px-2">
-          <div className="text-gray-500 text-sm mb-1">
+        <div className="flex-1 text-center px-1 lg:px-2">
+          <div className="text-gray-500 text-xs lg:text-sm mb-1">
             <span>Tiền cho vay</span>
           </div>
-          <div className="text-base font-semibold text-gray-800">
+          <div className="text-sm lg:text-base font-semibold text-gray-800">
             {Math.floor(fundStatus.totalLoan).toLocaleString()}
           </div>
         </div>
         
-        <div className="w-px bg-gray-200 mx-2"></div>
+        <div className="w-px bg-gray-200 mx-1 lg:mx-2"></div>
         
-        <div className="flex-1 text-center px-2">
-          <div className="text-gray-500 text-sm mb-1">
+        <div className="flex-1 text-center px-1 lg:px-2">
+          <div className="text-gray-500 text-xs lg:text-sm mb-1">
             <span>Tiền nợ</span>
           </div>
-          <div className="text-base font-semibold text-gray-800">
+          <div className="text-sm lg:text-base font-semibold text-gray-800">
             {Math.floor(fundStatus.oldDebt).toLocaleString()}
           </div>
         </div>
         
-        <div className="w-px bg-gray-200 mx-2"></div>
+        <div className="w-px bg-gray-200 mx-1 lg:mx-2"></div>
         
-        <div className="flex-1 text-center px-2">
-          <div className="text-gray-500 text-sm mb-1">
+        <div className="flex-1 text-center px-1 lg:px-2">
+          <div className="text-gray-500 text-xs lg:text-sm mb-1">
             <span>Lãi phí dự kiến</span>
           </div>
-          <div className="text-base font-semibold text-gray-800">
+          <div className="text-sm lg:text-base font-semibold text-gray-800">
             {Math.floor(fundStatus.profit).toLocaleString()}
           </div>
         </div>
         
-        <div className="w-px bg-gray-200 mx-2"></div>
+        <div className="w-px bg-gray-200 mx-1 lg:mx-2"></div>
         
-        <div className="flex-1 text-center px-2">
-          <div className="text-gray-500 text-sm mb-1">
+        <div className="flex-1 text-center px-1 lg:px-2">
+          <div className="text-gray-500 text-xs lg:text-sm mb-1">
             <span>Lãi phí đã thu</span>
           </div>
-          <div className="text-base font-semibold text-gray-800">
+          <div className="text-sm lg:text-base font-semibold text-gray-800">
             {Math.floor((fundStatus.collectedInterest || 0)).toLocaleString()}
           </div>
+        </div>
+      </div>
+
+      {/* Mobile view - 2 rows with most important info */}
+      <div className="md:hidden space-y-2">
+        {/* First row - 3 main financial metrics */}
+        <div className="flex py-1">
+          <div className="flex-1 text-center px-1">
+            <div className="flex items-center justify-center text-gray-500 text-xs mb-1">
+              <span>Quỹ tiền mặt</span>
+              <RefreshCw 
+                className={`ml-1 h-3 w-3 cursor-pointer hover:text-blue-500 ${loading ? 'animate-spin' : ''}`}
+                onClick={onRefresh}
+              />
+            </div>
+            <div className="text-sm font-semibold text-gray-800">
+              {Math.floor(fundStatus.availableFund).toLocaleString()}
+            </div>
+          </div>
+          
+          <div className="w-px bg-gray-200 mx-1"></div>
+          
+          <div className="flex-1 text-center px-1">
+            <div className="text-gray-500 text-xs mb-1">
+              <span>Tiền cho vay</span>
+            </div>
+            <div className="text-sm font-semibold text-gray-800">
+              {Math.floor(fundStatus.totalLoan).toLocaleString()}
+            </div>
+          </div>
+          
+          <div className="w-px bg-gray-200 mx-1"></div>
+          
+          <div className="flex-1 text-center px-1">
+            <div className="text-gray-500 text-xs mb-1">
+              <span>Lãi phí dự kiến</span>
+            </div>
+            <div className="text-sm font-semibold text-gray-800">
+              {Math.floor(fundStatus.profit).toLocaleString()}
+            </div>
+          </div>
+        </div>
+
+        {/* Second row - 2 additional metrics */}
+        <div className="flex py-1 border-t border-gray-100 pt-2">
+          <div className="flex-1 text-center px-1">
+            <div className="text-gray-500 text-xs mb-1">
+              <span>Tiền nợ</span>
+            </div>
+            <div className="text-sm font-semibold text-gray-800">
+              {Math.floor(fundStatus.oldDebt).toLocaleString()}
+            </div>
+          </div>
+          
+          <div className="w-px bg-gray-200 mx-1"></div>
+          
+          <div className="flex-1 text-center px-1">
+            <div className="text-gray-500 text-xs mb-1">
+              <span>Lãi phí đã thu</span>
+            </div>
+            <div className="text-sm font-semibold text-gray-800">
+              {Math.floor((fundStatus.collectedInterest || 0)).toLocaleString()}
+            </div>
+          </div>
+          
+          {/* Empty space to balance the layout */}
+          <div className="flex-1"></div>
         </div>
       </div>
     </div>

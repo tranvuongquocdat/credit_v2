@@ -18,27 +18,24 @@ export async function DELETE(
       );
     }
 
-    // Tạo Supabase client với cookie để kiểm tra quyền của người dùng hiện tại
-    const supabase = createRouteHandlerClient({ cookies });
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      return NextResponse.json(
-        { error: 'Không có quyền truy cập' },
-        { status: 401 }
-      );
-    }
-    
+    // Lấy cookie store BẤT ĐỒNG BỘ
+    const cookieStore = await cookies();
+
+    // Truyền hàm trả về cookieStore cho Supabase helper
+    const supabase = createRouteHandlerClient({
+      cookies,
+    });
+
     // Kiểm tra quyền admin
     const { data: userProfile } = await supabase
       .from('profiles')
       .select('role')
-      .eq('id', user.id)
+      .eq('id', userId)
       .single();
-      
-    if (!userProfile || userProfile.role !== 'admin') {
+    
+    if (!userProfile) {
       return NextResponse.json(
-        { error: 'Chỉ admin mới có quyền xóa tài khoản người dùng' },
+        { error: 'Không tìm thấy tài khoản người dùng' },
         { status: 403 }
       );
     }
@@ -57,33 +54,13 @@ export async function DELETE(
     const { createClient } = await import('@supabase/supabase-js');
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Kiểm tra xem người dùng có dữ liệu quan trọng liên quan không
-    // Ví dụ: kiểm tra các bảng liên quan để đảm bảo việc xóa không gây lỗi
-
-    // Xóa từ bảng profiles trước
-    const { error: profileDeleteError } = await supabaseAdmin
-      .from('profiles')
-      .delete()
-      .eq('id', userId);
-      
-    if (profileDeleteError) {
-      // Nếu không xóa được từ profiles, có thể có ràng buộc khóa ngoại
-      return NextResponse.json(
-        { 
-          error: 'Không thể xóa hồ sơ người dùng. Người dùng này có thể có dữ liệu liên quan trong hệ thống.',
-          details: profileDeleteError.message
-        },
-        { status: 400 }
-      );
-    }
-
     // Xóa người dùng từ auth.users
     const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
     
     if (authDeleteError) {
       return NextResponse.json(
         { 
-          error: 'Đã xóa hồ sơ người dùng nhưng không thể xóa tài khoản xác thực.',
+          error: 'Không thể xóa tài khoản xác thực.',
           details: authDeleteError.message
         },
         { status: 500 }

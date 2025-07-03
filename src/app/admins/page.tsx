@@ -6,10 +6,11 @@ import { SearchFilters, AdminSearchFilters } from '@/components/Admins/SearchFil
 import { AdminCreateModal } from '@/components/Admins/AdminCreateModal';
 import { AdminEditModal } from '@/components/Admins/AdminEditModal';
 import { AdminStatusDialog } from '@/components/Admins/AdminStatusDialog';
+import { AdminDeleteDialog } from '@/components/Admins/AdminDeleteDialog';
 import { AdminBulkDeactivateDialog } from '@/components/Admins/AdminBulkDeactivateDialog';
 import { getAdmins } from '@/lib/admin';
 import { AdminStatus, AdminWithProfile } from '@/models/admin';
-import { Edit, UserX, UserCheck, RefreshCw } from 'lucide-react';
+import { Edit, UserX, UserCheck, RefreshCw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { getCurrentUser } from '@/lib/auth';
@@ -30,6 +31,7 @@ export default function AdminsPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedAdmin, setSelectedAdmin] = useState<AdminWithProfile | null>(null);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
 
@@ -107,6 +109,12 @@ export default function AdminsPage() {
   const openStatusModal = (admin: AdminWithProfile) => {
     setSelectedAdmin(admin);
     setIsStatusModalOpen(true);
+  };
+
+  // Mở modal xóa
+  const openDeleteModal = (admin: AdminWithProfile) => {
+    setSelectedAdmin(admin);
+    setIsDeleteModalOpen(true);
   };
 
   // Xử lý thay đổi trang
@@ -264,6 +272,15 @@ export default function AdminsPage() {
                           >
                             {admin.status === AdminStatus.ACTIVE ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
                           </Button>
+                          <Button
+                            onClick={() => openDeleteModal(admin)}
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            title="Xóa"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -311,6 +328,18 @@ export default function AdminsPage() {
         isOpen={isStatusModalOpen}
         onClose={() => {
           setIsStatusModalOpen(false);
+          setSelectedAdmin(null);
+        }}
+        onSuccess={() => {
+          fetchAdmins();
+        }}
+        admin={selectedAdmin}
+      />
+
+      <AdminDeleteDialog
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
           setSelectedAdmin(null);
         }}
         onSuccess={() => {
