@@ -231,6 +231,11 @@ export function InstallmentEditModal({
         installmentData.start_date = startDate;
         installmentData.store_id = installment.store_id || '1';
         installmentData.advance_payment = advancePayment;
+        // Calculate initial payment_due_date as start_date + paymentPeriod - 1
+        const startDateObj = new Date(startDate);
+        const paymentDueDate = new Date(startDateObj);
+        paymentDueDate.setDate(startDateObj.getDate() + parseInt(paymentPeriod || '10') - 1);
+        installmentData.payment_due_date = format(paymentDueDate, 'yyyy-MM-dd');
       }
       debugger;
       // Call API to update installment
