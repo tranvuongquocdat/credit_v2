@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/select';
 import { PlusIcon, Loader2 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useDebounce } from '@/hooks/useDebounce';
 import { getCustomers } from '@/lib/customer';
 import { Customer } from '@/models/customer';
 import { useStore } from '@/contexts/StoreContext';
@@ -73,6 +74,9 @@ export function SearchFilters({
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  
+  // Debounce customer name để tránh gọi API liên tục khi nhập nhanh
+  const debouncedCustomerName = useDebounce(filters.customer_name, 300);
   // Load customers for autocomplete
   useEffect(() => {
     if (currentStore?.id) {
@@ -94,6 +98,34 @@ export function SearchFilters({
       loadCustomers();
     }
   }, [currentStore?.id]);
+
+  // Debounced customer search for autocomplete
+  useEffect(() => {
+    if (debouncedCustomerName.trim() === '') {
+      setFilteredCustomers([]);
+      setShowCustomerDropdown(false);
+    } else {
+      const filtered = customers.filter(customer =>
+        customer.name.toLowerCase().includes(debouncedCustomerName.toLowerCase()) ||
+        (customer.phone && customer.phone.includes(debouncedCustomerName)) ||
+        (customer.id_number && customer.id_number.includes(debouncedCustomerName))
+      );
+      setFilteredCustomers(filtered);
+      setShowCustomerDropdown(filtered.length > 0);
+    }
+  }, [debouncedCustomerName, customers]);
+
+  // Auto-search when debounced customer name changes
+  useEffect(() => {
+    // Only trigger search if we have current store
+    if (currentStore?.id) {
+      const newFilters = {
+        ...filters,
+        customer_name: debouncedCustomerName
+      };
+      onSearch(newFilters);
+    }
+  }, [debouncedCustomerName, currentStore?.id]);
 
   // Apply initial filters when component mounts
   useEffect(() => {
@@ -122,41 +154,26 @@ export function SearchFilters({
   // Handle customer name search with autocomplete
   const handleCustomerNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    const newFilters = {
-      ...filters,
+    setFilters(prev => ({
+      ...prev,
       customer_name: value
-    };
-    
-    setFilters(newFilters);
-    
-    if (value.trim() === '') {
-      setFilteredCustomers([]);
-      setShowCustomerDropdown(false);
-    } else {
-      const filtered = customers.filter(customer =>
-        customer.name.toLowerCase().includes(value.toLowerCase()) ||
-        (customer.phone && customer.phone.includes(value)) ||
-        (customer.id_number && customer.id_number.includes(value))
-      );
-      setFilteredCustomers(filtered);
-      setShowCustomerDropdown(filtered.length > 0);
-    }
-    
-    // Auto-search when customer name changes
-    onSearch(newFilters);
+    }));
+    // Note: Không auto-search ngay lập tức ở đây, sẽ được handle bởi debounced useEffect
   };
 
   // Handle customer selection from dropdown
   const handleCustomerSelect = (customerName: string) => {
+    setFilters(prev => ({
+      ...prev,
+      customer_name: customerName
+    }));
+    setShowCustomerDropdown(false);
+    
+    // Trigger immediate search for customer selection (bypass debounce)
     const newFilters = {
       ...filters,
       customer_name: customerName
     };
-    
-    setFilters(newFilters);
-    setShowCustomerDropdown(false);
-    
-    // Auto-search when customer is selected
     onSearch(newFilters);
   };
 
@@ -215,6 +232,8 @@ export function SearchFilters({
       duration: undefined
     };
     setFilters(resetFilters);
+    setShowCustomerDropdown(false);
+    setFilteredCustomers([]);
     onReset();
   };
 
