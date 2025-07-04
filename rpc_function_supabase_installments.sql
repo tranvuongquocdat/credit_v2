@@ -269,7 +269,7 @@ begin
     -- Calculate unpaid days and late periods
     if v_last_check >= v_first_unpaid then
       v_unpaid_days := (v_last_check - v_first_unpaid + 1);
-      v_late_periods := ceil(v_unpaid_days::numeric / coalesce(rec.payment_period, 10));
+      v_late_periods := floor(v_unpaid_days::numeric / coalesce(rec.payment_period, 10));
     else
       v_late_periods := 0;
     end if;
