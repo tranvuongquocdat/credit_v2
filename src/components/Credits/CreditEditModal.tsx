@@ -661,6 +661,7 @@ export function CreditEditModal({
                   className="w-32"
                   placeholder="0"
                   min={0}
+                  step="any"
                   disabled={hasPayments}
                 />
                 <div className="flex flex-wrap gap-4 items-center">

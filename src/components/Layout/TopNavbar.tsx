@@ -3,7 +3,7 @@
 import { Settings, User, Bike, DollarSign, Salad, Folder, ChevronDown, LogOut, Bell } from "lucide-react";
 import Link from "next/link";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useState, useEffect, memo, useCallback } from "react";
+import { useState, useEffect, memo, useCallback, useRef } from "react";
 import { useStore } from "@/contexts/StoreContext";
 import { useRouter } from "next/navigation";
 import { countInstallmentWarnings } from "@/lib/installmentPayment";
@@ -56,19 +56,19 @@ const StoreDropdown = memo(({
   return (
     <div className="relative">
       <button 
-        className="flex items-center px-4 py-2 hover:bg-white/10 transition-all duration-200 rounded-lg bg-white/5 border border-white/10" 
+        className="flex items-center px-2 md:px-4 py-2 hover:bg-white/10 transition-all duration-200 rounded-lg bg-white/5 border border-white/10" 
         onClick={toggleDropdown}
       >
         <Folder className="h-5 w-5 mr-2" />
-        <span className="text-white whitespace-nowrap mr-2 font-medium" suppressHydrationWarning>
+        <span className="text-white whitespace-nowrap mr-2 font-medium hidden md:inline-block" suppressHydrationWarning>
           {loading ? 'Đang tải...' : (currentStore?.name ? currentStore.name : 'Chọn cửa hàng')}
         </span>
-        <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`h-4 w-4 transition-transform duration-200 hidden md:block ${isOpen ? 'rotate-180' : ''}`} />
       </button>
       
       {/* Store dropdown menu */}
       {isOpen && (
-        <div className="absolute left-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-100 py-2 text-gray-700 z-50">
+        <div className="absolute right-0 md:left-0 md:right-auto top-full mt-2 w-64 md:w-72 bg-white rounded-xl shadow-xl border border-gray-100 py-2 text-gray-700 z-50">
           {/* Refresh button */}
           <div className="px-4 py-3 border-b border-gray-100">
             <button
@@ -223,8 +223,34 @@ export function TopNavbar() {
     return null;
   };
   
+  // User profile dropdown
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
 
-  
+  const toggleProfileDropdown = useCallback(() => {
+    setIsProfileOpen(prev => !prev);
+  }, []);
+
+  // Close profile dropdown when clicking outside
+  const handleClickOutside = useCallback((event: MouseEvent) => {
+    if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+      setIsProfileOpen(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isProfileOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    } else {
+      document.removeEventListener('mousedown', handleClickOutside);
+    }
+
+    // Cleanup
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isProfileOpen, handleClickOutside]);
+
   return (
     <div className="fixed top-0 left-0 right-0 h-16 bg-gradient-to-r from-[#4d7496] to-[#5a8bb0] text-white z-50 flex items-center justify-between px-6 shadow-lg border-b border-[#3a5a75]">
       {/* Left section with logo and settings icons */}
@@ -234,7 +260,7 @@ export function TopNavbar() {
           <div className="h-10 w-10 rounded-lg bg-white text-[#4d7496] flex items-center justify-center font-bold text-lg shadow-md group-hover:shadow-lg transition-all duration-200">
             CR
           </div>
-          <span className="ml-3 font-semibold text-lg tracking-wide">Quản lý Credit</span>
+          <span className="ml-2 font-semibold text-lg tracking-wide hidden sm:inline-block">Quản lý Credit</span>
         </Link>
 
 
@@ -243,7 +269,7 @@ export function TopNavbar() {
       {/* Right section with various icons */}
       <div className="flex items-center space-x-2">
         {/* Notification icons group */}
-        <div className="flex items-center space-x-1 bg-white/5 rounded-xl px-2 py-1">
+        <div className="flex items-center space-x-1 bg-white/5 rounded-xl px-1 sm:px-2 py-1 overflow-x-auto">
           <div 
             className="p-2.5 hover:bg-white/15 transition-all duration-200 rounded-lg relative group" 
             title="Danh sách khách hàng bị báo xấu"
@@ -303,42 +329,45 @@ export function TopNavbar() {
           storeVersion={storeVersion}
         />
         
-        {/* User profile with dropdown */}
-        <div className="relative group ml-2">
-          <button className="flex items-center space-x-2 p-2 hover:bg-white/10 transition-all duration-200 rounded-lg relative">
+        {/* User profile with dropdown - click to toggle */}
+        <div className="relative ml-2" ref={profileRef}>
+          <button
+            onClick={toggleProfileDropdown}
+            className="flex items-center space-x-2 p-2 hover:bg-white/10 transition-all duration-200 rounded-lg relative"
+          >
             <Avatar className="h-9 w-9 bg-gradient-to-br from-[#729bbe] to-[#5a8bb0] ring-2 ring-white/20">
               <AvatarFallback className="bg-gradient-to-br from-[#3a5a75] to-[#4d7496] text-white font-semibold">
                 {user?.username?.charAt(0).toUpperCase() || 'N/A'}
               </AvatarFallback>
             </Avatar>
             <span className="ml-1 hidden md:inline-block font-medium">{user?.username || 'N/A'}</span>
-            <ChevronDown className="h-4 w-4 hidden md:block group-hover:rotate-180 transition-transform duration-200" />
+            <ChevronDown className={`h-4 w-4 hidden md:block transition-transform duration-200 ${isProfileOpen ? 'rotate-180' : ''}`} />
           </button>
-          
-          {/* Dropdown menu */}
-          <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-gray-100 py-2 text-gray-700 invisible group-hover:visible transform opacity-0 group-hover:opacity-100 transition-all duration-200 z-50">
-            <Link href="/profile" className="block px-4 py-3 text-sm hover:bg-gray-50 flex items-center rounded-lg mx-2 transition-colors duration-150">
-              <User className="h-4 w-4 mr-3 text-gray-500" />
-              <span className="font-medium">Hồ sơ cá nhân</span>
-            </Link>
-            <div className="border-t border-gray-100 my-2"></div>
-            <button 
-              onClick={async () => {
-                try {
-                  resetStores();
-                  const { signOut } = await import('@/lib/auth');
-                  await signOut();
-                  // Let AuthContext handle redirect automatically via SIGNED_OUT event
-                } catch (e) {
-                  console.error('Lỗi khi đăng xuất:', e);
-                }
-              }}
-              className="block w-full text-left px-4 py-3 text-sm hover:bg-red-50 flex items-center text-red-600 rounded-lg mx-2 transition-colors duration-150"
-            >
-              <LogOut className="h-4 w-4 mr-3" />
-              <span className="font-medium">Đăng xuất</span>
-            </button>
-          </div>
+          {isProfileOpen && (
+            <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-gray-100 py-2 text-gray-700 z-50">
+              <Link href="/profile" className="block px-4 py-3 text-sm hover:bg-gray-50 flex items-center rounded-lg mx-2 transition-colors duration-150">
+                <User className="h-4 w-4 mr-3 text-gray-500" />
+                <span className="font-medium">Hồ sơ cá nhân</span>
+              </Link>
+              <div className="border-t border-gray-100 my-2"></div>
+              <button 
+                onClick={async () => {
+                  try {
+                    resetStores();
+                    const { signOut } = await import('@/lib/auth');
+                    await signOut();
+                    // Let AuthContext handle redirect automatically via SIGNED_OUT event
+                  } catch (e) {
+                    console.error('Lỗi khi đăng xuất:', e);
+                  }
+                }}
+                className="block w-full text-left px-4 py-3 text-sm hover:bg-red-50 flex items-center text-red-600 rounded-lg mx-2 transition-colors duration-150"
+              >
+                <LogOut className="h-4 w-4 mr-3" />
+                <span className="font-medium">Đăng xuất</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
