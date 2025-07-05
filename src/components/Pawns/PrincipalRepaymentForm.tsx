@@ -3,10 +3,11 @@ import { format, addDays } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
 import { toast } from '@/components/ui/use-toast';
-import { getPawnById } from '@/lib/pawn';
+import { getPawnById, getPawnStatus } from '@/lib/pawn';
 import { getLatestPaymentPaidDate } from '@/lib/Pawns/get_latest_payment_paid_date';
-import { PawnWithCustomerAndCollateral } from '@/models/pawn';
+import { PawnStatus, PawnWithCustomerAndCollateral } from '@/models/pawn';
 import { MoneyInput } from '@/components/ui/money-input';
+import { calculateActualLoanAmount } from '@/lib/Pawns/calculate_actual_loan_amount';
 
 interface PrincipalRepaymentFormProps {
   onSubmit: (data: {
@@ -158,13 +159,30 @@ export function PrincipalRepaymentForm({ onSubmit, pawnId, disabled = false, onS
       });
       return;
     }
-    
     // Validate amount does not exceed actual loan amount
+    const actualLoanAmount = await calculateActualLoanAmount(pawnId);
     if (amount > actualLoanAmount) {
       toast({
         variant: "destructive",
         title: "Lỗi",
         description: `Số tiền trả bớt gốc không thể vượt quá số tiền cầm hiện tại (${formatCurrency(actualLoanAmount)})`
+      });
+      return;
+    }
+
+    const status = await getPawnStatus(pawnId);
+    if (status === PawnStatus.CLOSED) {
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: "Hợp đồng đã đóng"
+      });
+      return;
+    } else if (status === PawnStatus.DELETED) {
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: "Hợp đồng đã bị xóa"
       });
       return;
     }

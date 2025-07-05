@@ -7,6 +7,7 @@ import { ExtensionList } from '../ExtensionList';
 import { addExtension } from '@/lib/extension';
 import { format } from 'date-fns';
 import { toast } from '@/components/ui/use-toast';
+import { getCreditStatus } from '@/lib/credit';
 
 interface ExtensionTabProps {
   credit: CreditWithCustomer;
@@ -36,6 +37,22 @@ export function ExtensionTab({ credit, onDataChange }: ExtensionTabProps) {
         disabled={isClosed}
         onSubmit={async (data) => {
           try {
+            const status = await getCreditStatus(credit.id);
+            if (status === CreditStatus.CLOSED) {
+              toast({
+                variant: "destructive",
+                title: "Lỗi",
+                description: "Hợp đồng đã đóng"
+              });
+              return;
+            } else if (status === CreditStatus.DELETED) {
+              toast({
+                variant: "destructive",
+                title: "Lỗi",
+                description: "Hợp đồng đã bị xóa"
+              });
+              return;
+            }
             if (!credit?.id || isSubmitting || isClosed) return;
             
             setIsSubmitting(true);

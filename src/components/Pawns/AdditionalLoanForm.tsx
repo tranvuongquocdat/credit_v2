@@ -3,9 +3,9 @@ import { format, addDays } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
 import { toast } from '@/components/ui/use-toast';
-import { getPawnById } from '@/lib/pawn';
+import { getPawnById, getPawnStatus } from '@/lib/pawn';
 import { getLatestPaymentPaidDate } from '@/lib/Pawns/get_latest_payment_paid_date';
-import { PawnWithCustomerAndCollateral } from '@/models/pawn';
+import { PawnStatus, PawnWithCustomerAndCollateral } from '@/models/pawn';
 import { MoneyInput } from '@/components/ui/money-input';
 
 interface AdditionalLoanFormProps {
@@ -78,9 +78,26 @@ export function AdditionalLoanForm({ onSubmit, pawnId, disabled = false, onSucce
     setLoanDate(date);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    // Validate pawn status
+    const status = await getPawnStatus(pawnId);
+    if (status === PawnStatus.CLOSED) {
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: "Hợp đồng đã đóng"
+      });
+      return;
+    } else if (status === PawnStatus.DELETED) {
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: "Hợp đồng đã bị xóa"
+      });
+      return;
+    }
+
     // Validate form
     if (amount <= 0) {
       toast({

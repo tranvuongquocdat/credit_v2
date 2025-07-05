@@ -5,6 +5,7 @@ import { CreditWithCustomer, CreditStatus } from '@/models/credit';
 import { AdditionalLoanForm } from '../AdditionalLoanForm';
 import { AdditionalLoanList } from '../AdditionalLoanList';
 import { toast } from '@/components/ui/use-toast';
+import { getCreditStatus } from '@/lib/credit';
 
 interface AdditionalLoanTabProps {
   credit: CreditWithCustomer;
@@ -35,6 +36,22 @@ export function AdditionalLoanTab({ credit, onDataChange }: AdditionalLoanTabPro
         onSuccess={refreshData}
         onSubmit={async (data) => {
           try {
+            const status = await getCreditStatus(credit.id);
+            if (status === CreditStatus.CLOSED) {
+              toast({
+                variant: "destructive",
+                title: "Lỗi",
+                description: "Hợp đồng đã đóng"
+              });
+              return;
+            } else if (status === CreditStatus.DELETED) {
+              toast({
+                variant: "destructive",
+                title: "Lỗi",
+                description: "Hợp đồng đã bị xóa"
+              });
+              return;
+            }
             if (!credit?.id || isSubmitting || isClosed) return;
             
             setIsSubmitting(true);

@@ -12,7 +12,7 @@ import { formatCurrency } from "@/lib/utils";
 import Spinner from "@/components/ui/spinner";
 import { useEffect, useState, useCallback } from "react";
 import { updateInstallmentStatus } from "@/lib/installmentPayment";
-import { updateInstallmentPaymentDueDate } from "@/lib/installment";
+import { getInstallmentStatus, updateInstallmentPaymentDueDate } from "@/lib/installment";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -168,6 +168,16 @@ export function InstallmentsTable({
     setUnlockConfirmOpen(false);
     
     try {
+      // If the installment is already open, throw error
+      const status = await getInstallmentStatus(installment.id);
+      if (status === InstallmentStatus.ON_TIME) {
+        toast({
+          title: "Lỗi", 
+          description: "Hợp đồng đã được mở lại",
+        });
+        onRefresh?.();
+        return;
+      }
       // Since updateInstallmentStatus doesn't support storeId parameter, we'll rely on the 
       // implementation to handle the store context if needed
       const { data, error } = await updateInstallmentStatus(

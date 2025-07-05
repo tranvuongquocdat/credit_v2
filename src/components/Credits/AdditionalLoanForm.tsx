@@ -3,9 +3,9 @@ import { format, addDays } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
 import { toast } from '@/components/ui/use-toast';
-import { getCreditById } from '@/lib/credit';
+import { getCreditById, getCreditStatus } from '@/lib/credit';
 import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_date';
-import { CreditWithCustomer } from '@/models/credit';
+import { CreditStatus, CreditWithCustomer } from '@/models/credit';
 import { MoneyInput } from '@/components/ui/money-input';
 
 interface AdditionalLoanFormProps {
@@ -80,7 +80,7 @@ export function AdditionalLoanForm({ onSubmit, creditId, disabled = false }: Add
     setLoanDate(date);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validate form
@@ -124,7 +124,23 @@ export function AdditionalLoanForm({ onSubmit, creditId, disabled = false }: Add
       });
       return;
     }
-    
+
+    const status = await getCreditStatus(creditId);
+    if (status === CreditStatus.CLOSED) {
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: "Hợp đồng đã đóng"
+      });
+      return;
+    } else if (status === CreditStatus.DELETED) {
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: "Hợp đồng đã bị xóa"
+      });
+      return;
+    }
     onSubmit({
       loanDate,
       amount,

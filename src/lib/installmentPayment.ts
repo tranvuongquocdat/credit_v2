@@ -7,6 +7,56 @@ const logError = (message: string, error: unknown) => {
   console.error(`[InstallmentPayment] ${message}:`, error);
 };
 
+// Make a payment for an installment
+export async function makePayment(params: {
+  installment_id: string;
+  amount: number;
+  store_id: string;
+  staff_id: string;
+  note?: string;
+}) {
+  try {
+    const { installment_id, amount, store_id, staff_id, note } = params;
+    
+    // Get the installment to check if it exists
+    const { data: installment, error: installmentError } = await supabase
+      .from('installments')
+      .select('*')
+      .eq('id', installment_id)
+      .single();
+      
+    if (installmentError) {
+      throw installmentError;
+    }
+    
+    if (!installment) {
+      throw new Error('Installment not found');
+    }
+    
+    // Insert payment record
+    const { data, error } = await supabase
+      .from('installment_history')
+      .insert({
+        installment_id,
+        credit_amount: amount,
+        transaction_type: 'payment',
+        transaction_date: new Date().toISOString(),
+        store_id,
+        staff_id,
+        note: note || 'Thanh toán nhanh',
+      });
+    
+    if (error) {
+      throw error;
+    }
+    
+    return { success: true, data };
+  } catch (error) {
+    logError('Error making payment', error);
+    return { success: false, error };
+  }
+}
+
 // Function to update debt amount when payment is checked/unchecked
 export async function updateInstallmentDebtAmount(
   installmentId: string,

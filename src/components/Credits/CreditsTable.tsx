@@ -14,7 +14,7 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
-import { CreditWithCustomer } from '@/models/credit';
+import { CreditStatus, CreditWithCustomer } from '@/models/credit';
 import { MoreVertical, DollarSignIcon, UnlockIcon, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
@@ -24,6 +24,7 @@ import { useToast } from '../ui/use-toast';
 import { CreditFinancialDetail } from '@/hooks/useCreditCalculation';
 import { CreditStatusResult } from '@/lib/Credits/calculate_credit_status';
 import { usePermissions } from '@/hooks/usePermissions';
+import { getCreditStatus } from '@/lib/credit';
 
 interface StatusMapType {
   [key: string]: { 
@@ -272,6 +273,20 @@ export function CreditsTable({
                             className="h-8 w-8 p-0 text-green-700" 
                             onClick={async () => { 
                               try {
+                                const status = await getCreditStatus(credit.id);
+                                if (status === CreditStatus.ON_TIME) {
+                                  toast({
+                                    title: "Lỗi",
+                                    description: "Hợp đồng đã được mở lại",
+                                  });
+                                  return;
+                                } else if (status === CreditStatus.DELETED) {
+                                  toast({
+                                    title: "Lỗi",
+                                    description: "Hợp đồng đã bị xóa",
+                                  });
+                                  return;
+                                }
                                 await reopenContract(credit.id);
                                 
                                 // Show success toast

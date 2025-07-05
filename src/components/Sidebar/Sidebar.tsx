@@ -142,7 +142,7 @@ const sidebarItems: SidebarItem[] = [
 ];
 
 export default function Sidebar() {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
 
@@ -153,7 +153,16 @@ export default function Sidebar() {
   const { hasPermission } = usePermissions();
 
   const toggleExpanded = (path: string) => {
-    if (isCollapsed) return; // Không mở submenu khi sidebar thu gọn
+    if (isCollapsed) {
+      // Nếu sidebar đang thu gọn và bấm vào menu có submenu, mở rộng sidebar
+      setIsCollapsed(false);
+      
+      // Sau đó mở submenu
+      setExpandedItems(prev => 
+        prev.includes(path) ? prev : [...prev, path]
+      );
+      return;
+    }
     
     setExpandedItems(prev => 
       prev.includes(path) 

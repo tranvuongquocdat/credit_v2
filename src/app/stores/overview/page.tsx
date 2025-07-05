@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { getCurrentUser } from '@/lib/auth';
 
 interface StoreData {
   id: string;
@@ -63,24 +64,58 @@ export default function OverviewPage() {
 
   // Fetch all data for all stores
   const fetchAllData = async () => {
+    const { id: userId, role} = await getCurrentUser();
     setIsLoading(true);
     setError(null);
     
     try {
-      const { data: storesData, error: storesError } = await supabase
-        .from('stores')
-        .select('id, name, cash_fund, investment')
-        .order('name', { ascending: true });
+      // If user is admin, only show stores created by user
+      // Else if user is employee, show store belong to that employee ( get store id in employee table)
+      let storesData: StoreData[] = [];
+      let storesError = null;
+      
+      if (role === 'admin') {
+        const { data, error } = await supabase
+          .from('stores')
+          .select('id, name, cash_fund, investment')
+          .eq('created_by', userId as string)
+          .order('name', { ascending: true });
+          
+        storesData = data as StoreData[] || [];
+        storesError = error;
+      } else {
+        // If user is employee, show store belong to that employee ( get store id in employee table)
+        const { data: employeeData, error: employeeError } = await supabase
+          .from('employees')
+          .select('store_id')
+          .eq('user_id', userId as string)
+          .single();
+        if (employeeError) {
+          throw new Error(employeeError.message);
+        }
+        const storeId = employeeData?.store_id;
+        if (!storeId) {
+          throw new Error('Không tìm thấy cửa hàng');
+        }
+        const { data, error } = await supabase
+          .from('stores')
+          .select('id, name, cash_fund, investment')
+          .eq('id', storeId)
+          .order('name', { ascending: true });
+          
+        storesData = data as StoreData[] || [];
+        storesError = error;
+      }
       
       if (storesError) {
         throw new Error(storesError.message);
       }
       
-      setStores(storesData || []);
+      setStores(storesData);
 
       const summaries: Record<string, StoreSummary> = {};
       
-      await Promise.all(storesData.map(async (store) => {
+      await Promise.all(storesData.map(async (store: StoreData) => {
         const [pawn, credit, installment] = await Promise.all([
           getPawnFinancialsForStore(store.id),
           getCreditFinancialsForStore(store.id),

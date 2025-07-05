@@ -204,6 +204,18 @@ export async function getPawnById(id: string, signal?: AbortSignal) {
   }
 }
 
+export async function getPawnStatus(id: string) {
+  const { data, error } = await supabase
+    .from('pawns')
+    .select('status')
+    .eq('id', id)
+    .single();
+  if (error) {
+    throw error;
+  }
+  return data?.status as PawnStatus;
+}
+
 /**
  * Tạo hợp đồng cầm đồ mới
  */

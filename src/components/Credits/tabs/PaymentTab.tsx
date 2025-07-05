@@ -304,7 +304,7 @@ export function PaymentTab({
         const totalDays = Math.floor((endDateObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)) + 1;
         
         if (totalDays <= 0) {
-          throw new Error('Ngày kết thúc phải sau ngày bắt đầu');
+          throw new Error('Ngày này đã được đóng lãi. Bạn có thể tải lại bảng để xem lại');
         }
         
         // 5. Lấy expected money để tính số tiền cho từng ngày
@@ -430,6 +430,17 @@ export function PaymentTab({
         
       } else {
         // Uncheck logic - chỉ cho phép uncheck kỳ gần nhất
+        // Lấy ra ngày cuối cùng đã đóng tiền
+        const latestPaidDate = await getLatestPaymentPaidDate(credit.id);
+        if (latestPaidDate) {
+          const latestPaidDateObj = new Date(latestPaidDate);
+          const endDate = new Date(period.end_date.split('T')[0]);
+          if (endDate.getTime() < latestPaidDateObj.getTime()) {
+            toast({ variant: 'destructive', title: 'Ngày này đã được đóng lãi. Bạn có thể tải lại bảng để xem lại' });
+            return;
+          }
+        }
+
         const checkedPeriods = periodsToDisplay.filter(p => 
           getEffectiveCheckedState(p)
         );

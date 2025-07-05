@@ -17,6 +17,7 @@ import { getExpectedMoney } from '@/lib/Pawns/get_expected_money';
 import { convertFromHistoryToTimeArrayWithStatus } from '@/lib/Pawns/convert_from_history_to_time_array';
 import { getCurrentUser } from '@/lib/auth';
 import { usePermissions } from '@/hooks/usePermissions';
+import { getPawnStatus } from '@/lib/pawn';
 
 type PaymentTabProps = {
   pawn: PawnWithCustomerAndCollateral | null;
@@ -172,7 +173,23 @@ export function PaymentTab({
   // Updated checkbox handler - simplified using cycles like Credit and Installment
   const handleCheckboxChange = async (period: PawnPaymentPeriod, checked: boolean, index: number) => {
     if (!pawn?.id || isProcessingCheckbox) return;
-    
+    // Kiểm tra trạng thái của pawn
+    const status = await getPawnStatus(pawn.id);
+    if (status === PawnStatus.CLOSED) {
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: "Hợp đồng đã đóng" 
+      });
+      return;
+    } else if (status === PawnStatus.DELETED) {
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: "Hợp đồng đã bị xóa"
+      });
+      return;
+    }
     // Kiểm tra quyền
     if (checked && !hasPermission('dong_lai_cam_do')) {
       toast({
@@ -227,7 +244,7 @@ export function PaymentTab({
         const totalDays = Math.floor((endDateObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)) + 1;
         
         if (totalDays <= 0) {
-          throw new Error('Ngày kết thúc phải sau ngày bắt đầu');
+          throw new Error('Ngày này đã được đóng lãi. Bạn có thể tải lại bảng để xem lại');
         }
         
         // 5. Get expected money for daily amounts
@@ -349,6 +366,16 @@ export function PaymentTab({
         
       } else {
         // Uncheck logic - only allow unchecking latest period
+        // Lấy ra ngày cuối cùng đã đóng tiền
+        const latestPaidDate = await getLatestPaymentPaidDate(pawn.id);
+        if (latestPaidDate) {
+          const latestPaidDateObj = new Date(latestPaidDate);
+          const endDate = new Date(period.end_date.split('T')[0]);
+          if (endDate.getTime() < latestPaidDateObj.getTime()) {
+            toast({ variant: 'destructive', title: 'Ngày này đã được đóng lãi. Bạn có thể tải lại bảng để xem lại' });
+            return;
+          }
+        }
         const checkedPeriods = periodsToDisplay.filter(p => 
           p.id && p.id.startsWith('db-') && (p.actual_amount || 0) > 0
         );

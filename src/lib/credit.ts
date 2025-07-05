@@ -201,6 +201,18 @@ export async function getCreditById(id: string) {
   }
 }
 
+export async function getCreditStatus(id: string) {
+  const { data, error } = await supabase
+    .from('credits')
+    .select('status')
+    .eq('id', id)
+    .single();
+  if (error) {
+    throw error;
+  }
+  return data?.status as CreditStatus;
+}
+
 /**
  * Tạo hợp đồng tín chấp mới
  */

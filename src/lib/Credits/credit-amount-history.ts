@@ -1,6 +1,5 @@
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '../auth';
-import { useAuth } from '@/contexts/AuthContext';
 
 export enum CreditTransactionType {
   PRINCIPAL_REPAYMENT = 'principal_repayment',
@@ -100,7 +99,7 @@ export async function recordPrincipalRepayment(
     // }
 
     // 2. Insert the history record with new schema format
-    const { user } = await useAuth();
+    const { user } = await getCurrentUser();
     const { data, error } = await supabase
       .from('credit_history')
       .insert({

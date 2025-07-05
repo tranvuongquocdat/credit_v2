@@ -10,7 +10,7 @@ import { getExpectedMoney } from '@/lib/Installments/get_expected_money';
 import { getLatestPaymentPaidDate } from '@/lib/Installments/get_latest_payment_paid_date';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getCurrentUser } from '@/lib/auth';
-import { updateInstallmentPaymentDueDate } from '@/lib/installment';
+import { getInstallmentStatus, updateInstallmentPaymentDueDate } from '@/lib/installment';
 import { DatePicker } from '@/components/ui/date-picker';
 import { format } from 'date-fns';
 
@@ -110,7 +110,14 @@ export function PaymentTabFast({
     checked: boolean,
   ) => {
     if (!installment?.id || isProcessingCheckbox) return;
-
+    const status = await getInstallmentStatus(installment.id);
+    if (status === InstallmentStatus.CLOSED) {
+      toast({ variant: 'destructive', title: 'Lỗi', description: 'Hợp đồng đã đóng' });
+      return;
+    } else if (status === InstallmentStatus.DELETED) {
+      toast({ variant: 'destructive', title: 'Lỗi', description: 'Hợp đồng đã bị xóa' });
+      return;
+    }
     // Permission check
     if (checked && !hasPermission('dong_lai_tra_gop')) {
       toast({ variant: 'destructive', title: 'Không có quyền', description: 'Bạn không có quyền đóng lãi' });
@@ -219,6 +226,16 @@ export function PaymentTabFast({
         setEditingPeriodId(null);
       } else {
         // ----- UNCHECK ----- only latest period
+        // Validate first, if the unchecked period has end date before latest paid date, throw error
+        const latestPaidDate = await getLatestPaymentPaidDate(installment.id);
+        if (latestPaidDate) {
+          const latestPaidDateObj = new Date(latestPaidDate);
+          const endDate = new Date(period.endDate?.split('T')[0] ?? period.dueDate.split('T')[0]);
+          if (endDate.getTime() < latestPaidDateObj.getTime()) {
+            toast({ variant: 'destructive', title: 'Ngày này đã được đóng lãi. Bạn có thể tải lại bảng để xem lại' });
+            return;
+          }
+        }
         const checkedPeriods = generatedPeriods.filter((p) => getEffectiveCheckedState(p));
         checkedPeriods.sort((a, b) => b.periodNumber - a.periodNumber);
         if (checkedPeriods.length > 0 && checkedPeriods[0].periodNumber !== period.periodNumber) {

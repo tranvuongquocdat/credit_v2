@@ -277,6 +277,18 @@ export async function getInstallmentById(id: string) {
   }
 }
 
+export async function getInstallmentStatus(id: string) {
+  const { data, error } = await supabase
+    .from('installments')
+    .select('status')
+    .eq('id', id)
+    .single();
+  if (error) {
+    throw error;
+  }
+  return data?.status as InstallmentStatus;
+}
+
 // Create a new installment
 export async function createInstallment(installment: CreateInstallmentParams) {
   try {
