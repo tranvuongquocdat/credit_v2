@@ -82,26 +82,6 @@ export function SearchFilters({
         </div>
 
         <div>
-          <label htmlFor="store" className="block text-sm font-medium text-gray-700 mb-1">
-            Cửa hàng
-          </label>
-          <Select
-            value={filters.store}
-            onValueChange={value => handleFilterChange('store', value)}
-          >
-            <SelectTrigger id="store" className="w-full">
-              <SelectValue placeholder="Cửa hàng" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả cửa hàng</SelectItem>
-              {stores.map(store => (
-                <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div>
           <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
             Trạng thái
           </label>
@@ -120,7 +100,7 @@ export function SearchFilters({
           </Select>
         </div>
         
-        <div className="flex flex-col justify-end gap-2 md:flex-row md:items-end">
+        <div className="flex flex-col gap-2 md:flex-row md:items-end">
           <Button 
             variant="outline" 
             size="sm" 

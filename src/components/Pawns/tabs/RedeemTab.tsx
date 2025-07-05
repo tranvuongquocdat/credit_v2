@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { PawnStatus, PawnWithCustomerAndCollateral } from '@/models/pawn';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
-import { updatePawn, updatePawnStatus } from '@/lib/pawn';
+import { getPawnStatus, updatePawn, updatePawnStatus } from '@/lib/pawn';
 import { useToast } from '@/components/ui/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
@@ -110,7 +110,23 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
     setIsRedeeming(true);
     
     try {
-      const contractRedeemAmount = actualLoanAmount; // Tiền gốc thực tế
+      const status = await getPawnStatus(pawnId);
+      if (status === PawnStatus.CLOSED) {
+        toast({
+          variant: "destructive",
+          title: "Lỗi",
+          description: "Hợp đồng đã đóng"
+        });
+        return;
+      } else if (status === PawnStatus.DELETED) {
+        toast({
+          variant: "destructive",
+          title: "Lỗi",
+          description: "Hợp đồng đã bị xóa"
+        });
+        return;
+      }
+      const contractRedeemAmount = await calculateActualLoanAmount(pawnId); // Tiền gốc thực tế
       const { id: userId } = await getCurrentUser();
       // Case 1: Nếu tiền lãi phí <= 0, chỉ cần chuyển trạng thái sang CLOSED
       if (remainingAmount <= 0) {

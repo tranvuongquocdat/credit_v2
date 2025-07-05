@@ -67,32 +67,16 @@ export async function getCreditWarnings(
     // 1. Lấy credits kèm customer theo store (chỉ cần các trường cần hiển thị)
     let creditsQuery = supabase
       .from('credits')
-      .select(
-        `*,
-        customer:customers(*)
+      .select(`
+        *,
+        customer:customers!inner(*)
       `)
       .eq('store_id', storeId)
       .order('created_at', { ascending: false });
 
     // Lọc theo tên khách hàng (nếu có)
     if (customerFilter) {
-      const { data: matchingCustomers } = await supabase
-        .from('customers')
-        .select('id')
-        .ilike('name', `%${customerFilter}%`);
-
-      if (matchingCustomers && matchingCustomers.length > 0) {
-        const customerIds = matchingCustomers.map((c) => c.id);
-        creditsQuery = creditsQuery.in('customer_id', customerIds);
-      } else {
-        // Không có khách khớp ⇒ trả rỗng
-        return {
-          data: [],
-          error: null,
-          totalItems: 0,
-          totalPages: 0,
-        };
-      }
+      creditsQuery = creditsQuery.ilike('customers.name', `%${customerFilter}%`);
     }
 
     const { data: credits, error: creditsError } = await creditsQuery;

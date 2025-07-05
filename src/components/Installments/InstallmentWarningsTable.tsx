@@ -4,7 +4,7 @@ import { formatCurrency } from "@/lib/utils";
 import Spinner from "@/components/ui/spinner";
 import { useEffect, useState } from "react";
 import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
-import { AlertTriangleIcon } from "lucide-react";
+import { AlertTriangleIcon, DollarSignIcon } from "lucide-react";
 import { useStore } from "@/contexts/StoreContext";
 import { useRouter } from "next/navigation";
 import { getExpectedMoney } from "@/lib/Installments/get_expected_money";
@@ -24,6 +24,7 @@ interface InstallmentWarningsTableProps {
   isLoading: boolean;
   onPayment?: (installment: InstallmentWithCustomer, amount: number) => void;
   onCustomerClick?: (installment: InstallmentWithCustomer) => void; // Optional callback for customer click
+  onShowPaymentHistory?: (installment: InstallmentWithCustomer) => void; // Optional callback for payment history modal
 }
 
 // ================= Helper functions for simplified overdue computation =================
@@ -94,6 +95,7 @@ export function InstallmentWarningsTable({
   isLoading,
   onPayment,
   onCustomerClick,
+  onShowPaymentHistory,
 }: InstallmentWarningsTableProps) {
   
   // Debug: Log installments received
@@ -270,12 +272,13 @@ export function InstallmentWarningsTable({
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Nợ cũ</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Số tiền</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-32">Lý do</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm">
+            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-52">
               <div className="flex flex-col">
                 <span>Đóng tiền nhanh</span>
                 <span className="text-xs text-gray-400">(đơn vị ngàn VND)</span>
               </div>
             </th>
+            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm w-20">Thao tác</th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
@@ -347,10 +350,22 @@ export function InstallmentWarningsTable({
                     Chậm {warning.latePeriods} kỳ !
                   </span>
                 </td>
-                <td className="py-3 px-3 text-center">
+                <td className="py-3 px-3 border-r border-gray-200 text-center">
                   <div className="flex flex-wrap justify-center gap-1">
                     {quickPayButtons}
                   </div>
+                </td>
+                <td className="py-3 px-3 text-center">
+                  {onShowPaymentHistory && (
+                    <Button 
+                      variant="ghost" 
+                      className="h-8 w-8 p-0" 
+                      onClick={() => onShowPaymentHistory(warning)}
+                      title="Lịch sử thanh toán"
+                    >
+                      <DollarSignIcon className="h-4 w-4 text-green-500" />
+                    </Button>
+                  )}
                 </td>
               </tr>
             );

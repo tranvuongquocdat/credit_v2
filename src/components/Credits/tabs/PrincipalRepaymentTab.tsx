@@ -5,6 +5,7 @@ import { CreditWithCustomer, CreditStatus } from '@/models/credit';
 import { PrincipalRepaymentForm } from '../PrincipalRepaymentForm';
 import { PrincipalRepaymentList } from '../PrincipalRepaymentList';
 import { toast } from '@/components/ui/use-toast';
+import { getCreditStatus } from '@/lib/credit';
 
 interface PrincipalRepaymentTabProps {
   credit: CreditWithCustomer;
@@ -44,6 +45,22 @@ export function PrincipalRepaymentTab({
         onSubmit={async (data) => {
           try {
             if (!credit?.id || isSubmitting || isClosed) return;
+            const status = await getCreditStatus(credit.id);
+            if (status === CreditStatus.CLOSED) {
+              toast({
+                variant: "destructive",
+                title: "Lỗi",
+                description: "Hợp đồng đã đóng"
+              });
+              return;
+            } else if (status === CreditStatus.DELETED) {
+              toast({
+                variant: "destructive",
+                title: "Lỗi",
+                description: "Hợp đồng đã bị xóa"
+              });
+              return;
+            }
             
             setIsSubmitting(true);
             

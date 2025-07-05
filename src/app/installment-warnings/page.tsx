@@ -25,9 +25,12 @@ import {
 } from "@/components/ui/select";
 import { getEmployees } from "@/lib/employee";
 import { useDebounce } from '@/hooks/useDebounce';
+import { InstallmentPaymentHistoryModal } from "@/components/Installments/InstallmentPaymentHistoryModal";
+import { makePayment } from "@/lib/installmentPayment";
 
 export default function InstallmentWarningsPage() {
   const [installments, setInstallments] = useState<InstallmentWithCustomer[]>([]);
+  const [filteredInstallments, setFilteredInstallments] = useState<InstallmentWithCustomer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [customerNameFilter, setCustomerNameFilter] = useState("");
   const [contractCodeFilter, setContractCodeFilter] = useState("");
@@ -49,6 +52,9 @@ export default function InstallmentWarningsPage() {
   
   const [employeeFilter, setEmployeeFilter] = useState<string>('all');
   const [employees, setEmployees] = useState<Employee[]>([]);
+  
+  const [selectedInstallment, setSelectedInstallment] = useState<InstallmentWithCustomer | null>(null);
+  const [isPaymentHistoryModalOpen, setIsPaymentHistoryModalOpen] = useState(false);
   
   // Load installments khi page load, store thay đổi, filter thay đổi hoặc trang thay đổi
   useEffect(() => {
@@ -89,6 +95,7 @@ export default function InstallmentWarningsPage() {
       }
       
       setInstallments(data || []);
+      setFilteredInstallments(data || []);
       setTotalItems(totalItems);
       setTotalPages(totalPages);
       
@@ -340,6 +347,11 @@ export default function InstallmentWarningsPage() {
     }
   };
   
+  const handleShowPaymentHistory = (installment: InstallmentWithCustomer) => {
+    setSelectedInstallment(installment);
+    setIsPaymentHistoryModalOpen(true);
+  };
+  
   return (
     <Layout>
       {permissionsLoading ? (
@@ -435,10 +447,11 @@ export default function InstallmentWarningsPage() {
           
           <div className="mt-6">
             <InstallmentWarningsTable
-              installments={installments}
+              installments={filteredInstallments}
               isLoading={isLoading}
               onPayment={handlePayment}
               onCustomerClick={handleCustomerClick}
+              onShowPaymentHistory={handleShowPaymentHistory}
             />
             
             {/* Pagination Component */}
@@ -455,6 +468,14 @@ export default function InstallmentWarningsPage() {
             )}
           </div>
         </div>
+      )}
+
+      {selectedInstallment && (
+        <InstallmentPaymentHistoryModal
+          isOpen={isPaymentHistoryModalOpen}
+          onClose={() => setIsPaymentHistoryModalOpen(false)}
+          installment={selectedInstallment}
+        />
       )}
     </Layout>
   );

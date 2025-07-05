@@ -29,7 +29,7 @@ export async function getPawns(
       .from('pawns')
       .select(`
         *,
-        customers (
+        customer:customers!inner(
           name,
           phone,
           id_number,
@@ -43,24 +43,8 @@ export async function getPawns(
     }
     
     if (filters?.customer_name) {
-      // Handle search with customer name support (similar to installments)
-      const queryWithoutCustomerFilter = query;
-      
-      // Get all customer IDs whose names match the filter
-      const { data: matchingCustomers } = await supabase
-        .from('customers')
-        .select('id')
-        .ilike('name', `%${filters.customer_name}%`);
-      
-      if (matchingCustomers && matchingCustomers.length > 0) {
-        // Extract customer IDs
-        const customerIds = matchingCustomers.map(c => c.id);
-        // Apply in filter to original query
-        query = queryWithoutCustomerFilter.in('customer_id', customerIds);
-      } else {
-        // No matching customers, return empty result
-        query = queryWithoutCustomerFilter.eq('id', '00000000-0000-0000-0000-000000000000'); // Non-existent ID
-      }
+      // Lọc trực tiếp trên cột name của bảng customers thông qua INNER JOIN
+      query = query.ilike('customers.name', `%${filters.customer_name}%`);
     }
     
     if (filters?.start_date) {
@@ -106,7 +90,7 @@ export async function getPawns(
     // Transform data to match UI requirements
     const pawnsWithRelations = (data || []).map(pawn => ({
       ...pawn,
-      customer: pawn.customers || { name: 'Unknown Customer', phone: null, id_number: null },
+      customer: pawn.customer || { name: 'Unknown Customer', phone: null, id_number: null },
       collateral_asset: null
     })) as PawnWithCustomerAndCollateral[];
     
@@ -182,7 +166,7 @@ export async function getPawnById(id: string, signal?: AbortSignal) {
       .from('pawns')
       .select(`
         *,
-        customers (
+        customer:customers!inner(
           name,
           phone,
           id_number,
@@ -202,7 +186,7 @@ export async function getPawnById(id: string, signal?: AbortSignal) {
     // Map the data to include customer information
     const pawnWithRelations = {
       ...data,
-      customer: data.customers || { name: 'Unknown Customer', phone: null, id_number: null },
+      customer: data.customer || { name: 'Unknown Customer', phone: null, id_number: null },
     };
     
     return { 
@@ -218,6 +202,18 @@ export async function getPawnById(id: string, signal?: AbortSignal) {
     console.error('Error fetching pawn by ID:', error);
     return { data: null, error };
   }
+}
+
+export async function getPawnStatus(id: string) {
+  const { data, error } = await supabase
+    .from('pawns')
+    .select('status')
+    .eq('id', id)
+    .single();
+  if (error) {
+    throw error;
+  }
+  return data?.status as PawnStatus;
 }
 
 /**

@@ -231,7 +231,7 @@ export async function getPawnWarnings(
       .from('pawns')
       .select(`
         *,
-        customer:customers(*),
+        customer:customers!inner(*),
         collateral_asset:collaterals(*)
       `)
       .not('status', 'in', `(${PawnStatus.CLOSED},${PawnStatus.DELETED})`)
@@ -245,24 +245,8 @@ export async function getPawnWarnings(
       
     // Áp dụng filter theo tên khách hàng nếu có
     if (customerFilter) {
-      // First apply other filters, then fetch customer IDs manually and apply a second filter
-      const queryWithoutCustomerFilter = pawnsQuery;
-      
-      // Get all customer IDs whose names match the filter
-      const { data: matchingCustomers } = await supabase
-        .from('customers')
-        .select('id')
-        .ilike('name', `%${customerFilter}%`);
-      
-      if (matchingCustomers && matchingCustomers.length > 0) {
-        // Extract customer IDs
-        const customerIds = matchingCustomers.map(c => c.id);
-        // Apply in filter to original query
-        pawnsQuery = queryWithoutCustomerFilter.in('customer_id', customerIds);
-      } else {
-        // No matching customers, return empty result
-        pawnsQuery = queryWithoutCustomerFilter.eq('id', '00000000-0000-0000-0000-000000000000'); // Non-existent ID
-      }
+      // Lọc trực tiếp trên cột name của bảng customers thông qua INNER JOIN
+      pawnsQuery = pawnsQuery.ilike('customers.name', `%${customerFilter}%`);
     }
     
     // Fetch all pawns matching our filters (no pagination yet)

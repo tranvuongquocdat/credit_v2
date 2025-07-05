@@ -366,4 +366,34 @@ export async function activateAdmin(adminId: string) {
       error: { message: 'Đã xảy ra lỗi khi kích hoạt admin' } 
     };
   }
+}
+
+// Delete admin
+export async function deleteAdmin(adminId: string) {
+  try {
+    console.log('🗑️ Starting deleteAdmin for adminId:', adminId);
+    
+    const response = await fetch(`/api/users/${adminId}/delete`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Không thể xóa admin');
+    }
+
+    const result = await response.json();
+    console.log('✅ Admin deleted successfully:', result);
+
+    return { data: { message: result.message }, error: null };
+  } catch (err) {
+    console.error('💥 Error in deleteAdmin:', err);
+    return { 
+      data: null, 
+      error: { message: err instanceof Error ? err.message : 'Đã xảy ra lỗi khi xóa admin' } 
+    };
+  }
 } 

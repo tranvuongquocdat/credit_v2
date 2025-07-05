@@ -123,7 +123,7 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "extensions_credit_id_fkey"
+            foreignKeyName: "credit_extension_histories_credit_id_fkey"
             columns: ["credit_id"]
             isOneToOne: false
             referencedRelation: "credits"
@@ -185,17 +185,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "credit_amount_history_credit_id_fkey"
-            columns: ["credit_id"]
-            isOneToOne: false
-            referencedRelation: "credits"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "credit_history_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_history_credit_id_fkey"
+            columns: ["credit_id"]
+            isOneToOne: false
+            referencedRelation: "credits"
             referencedColumns: ["id"]
           },
           {
@@ -884,6 +884,38 @@ export type Database = {
           },
         ]
       }
+      system_settings: {
+        Row: {
+          id: string
+          key: string
+          updated_at: string | null
+          updated_by: string
+          value: string
+        }
+        Insert: {
+          id?: string
+          key: string
+          updated_at?: string | null
+          updated_by: string
+          value: string
+        }
+        Update: {
+          id?: string
+          key?: string
+          updated_at?: string | null
+          updated_by?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transactions: {
         Row: {
           created_at: string
@@ -1031,6 +1063,15 @@ export type Database = {
           p_end: string
         }
         Returns: number
+      }
+      credit_get_totals: {
+        Args: { p_store_id: string; p_filters?: Json }
+        Returns: {
+          total_loan_amount: number
+          total_paid_interest: number
+          total_old_debt: number
+          total_interest_today: number
+        }[]
       }
       get_credit_statuses: {
         Args: { p_credit_ids: string[] }
@@ -1180,6 +1221,16 @@ export type Database = {
           paid_amount: number
         }[]
       }
+      installment_get_totals: {
+        Args: { p_store_id: string; p_filters?: Json }
+        Returns: {
+          total_amount_given: number
+          total_paid: number
+          total_debt: number
+          total_daily_amount: number
+          total_remaining: number
+        }[]
+      }
       installment_next_unpaid_date: {
         Args: { p_installment_ids: string[] }
         Returns: {
@@ -1194,6 +1245,15 @@ export type Database = {
           late_periods: number
           first_unpaid: string
           last_check: string
+        }[]
+      }
+      pawn_get_totals: {
+        Args: { p_store_id: string; p_filters?: Json }
+        Returns: {
+          total_loan_amount: number
+          total_paid_interest: number
+          total_old_debt: number
+          total_interest_today: number
         }[]
       }
     }

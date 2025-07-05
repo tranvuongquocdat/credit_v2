@@ -6,14 +6,16 @@ import { SearchFilters, AdminSearchFilters } from '@/components/Admins/SearchFil
 import { AdminCreateModal } from '@/components/Admins/AdminCreateModal';
 import { AdminEditModal } from '@/components/Admins/AdminEditModal';
 import { AdminStatusDialog } from '@/components/Admins/AdminStatusDialog';
+import { AdminDeleteDialog } from '@/components/Admins/AdminDeleteDialog';
 import { AdminBulkDeactivateDialog } from '@/components/Admins/AdminBulkDeactivateDialog';
 import { getAdmins } from '@/lib/admin';
 import { AdminStatus, AdminWithProfile } from '@/models/admin';
-import { Edit, UserX, UserCheck, RefreshCw } from 'lucide-react';
+import { Edit, UserX, UserCheck, RefreshCw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { getCurrentUser } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
+import { DeletePasswordChangeDialog } from '@/components/Security/DeletePasswordChangeDialog';
 
 export default function AdminsPage() {
   const router = useRouter();
@@ -30,8 +32,10 @@ export default function AdminsPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedAdmin, setSelectedAdmin] = useState<AdminWithProfile | null>(null);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [isPwdDialogOpen, setIsPwdDialogOpen] = useState(false);
 
   // Fetch danh sách admin
   const fetchAdmins = async () => {
@@ -109,6 +113,12 @@ export default function AdminsPage() {
     setIsStatusModalOpen(true);
   };
 
+  // Mở modal xóa
+  const openDeleteModal = (admin: AdminWithProfile) => {
+    setSelectedAdmin(admin);
+    setIsDeleteModalOpen(true);
+  };
+
   // Xử lý thay đổi trang
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -123,6 +133,9 @@ export default function AdminsPage() {
             <h1 className="text-lg font-bold">Quản lý Admin</h1>
             <span className="text-sm text-gray-500">(Chỉ dành cho Superadmin)</span>
           </div>
+          <Button variant="outline" size="sm" onClick={() => setIsPwdDialogOpen(true)}>
+            Đổi mật khẩu xoá
+          </Button>
         </div>
 
         {/* Search và filter */}
@@ -264,6 +277,15 @@ export default function AdminsPage() {
                           >
                             {admin.status === AdminStatus.ACTIVE ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
                           </Button>
+                          <Button
+                            onClick={() => openDeleteModal(admin)}
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            title="Xóa"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -319,11 +341,28 @@ export default function AdminsPage() {
         admin={selectedAdmin}
       />
 
+      <AdminDeleteDialog
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setSelectedAdmin(null);
+        }}
+        onSuccess={() => {
+          fetchAdmins();
+        }}
+        admin={selectedAdmin}
+      />
+
       <AdminBulkDeactivateDialog
         isOpen={isBulkModalOpen}
         onClose={() => setIsBulkModalOpen(false)}
         admins={admins}
         onSuccess={() => fetchAdmins()}
+      />
+
+      <DeletePasswordChangeDialog
+        isOpen={isPwdDialogOpen}
+        onClose={() => setIsPwdDialogOpen(false)}
       />
     </Layout>
   );

@@ -5,6 +5,7 @@ import { PawnWithCustomerAndCollateral, PawnStatus } from '@/models/pawn';
 import { AdditionalLoanForm } from '../AdditionalLoanForm';
 import { AdditionalLoanList } from '../AdditionalLoanList';
 import { toast } from '@/components/ui/use-toast';
+import { getPawnStatus } from '@/lib/pawn';
 
 interface AdditionalLoanTabProps {
   pawn: PawnWithCustomerAndCollateral;
@@ -34,6 +35,22 @@ export function AdditionalLoanTab({ pawn, onDataChange }: AdditionalLoanTabProps
         disabled={isClosed}
         onSubmit={async (data) => {
           try {
+            const status = await getPawnStatus(pawn.id);
+            if (status === PawnStatus.CLOSED) {
+              toast({
+                variant: "destructive",
+                title: "Lỗi",
+                description: "Hợp đồng đã đóng"
+              });
+              return;
+            } else if (status === PawnStatus.DELETED) {
+              toast({
+                variant: "destructive",
+                title: "Lỗi",
+                description: "Hợp đồng đã bị xóa"
+              });
+              return;
+            }
             if (!pawn?.id || isSubmitting || isClosed) return;
             
             setIsSubmitting(true);

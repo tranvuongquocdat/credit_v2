@@ -16,7 +16,7 @@ import {
 } from "@/models/installment";
 import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
 import { resetInstallmentDebtAmount } from "@/lib/installmentPayment";
-import { getInstallmentById, updateInstallmentPaymentDueDate } from "@/lib/installment";
+import { getInstallmentById, getInstallmentStatus, updateInstallmentPaymentDueDate } from "@/lib/installment";
 import { formatCurrency, formatDate, parseFormattedNumber } from "@/lib/utils";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -519,7 +519,21 @@ export function InstallmentPaymentHistoryModal({
   // Handler for rotating the contract (creating a new one and closing the current)
   const handleRotateContract = async () => {
     if (!installment?.id || !installment?.customer_id) return;
-
+    // If the installment is already closed, throw error
+    const status = await getInstallmentStatus(installment.id);
+    if (status === InstallmentStatus.CLOSED) {
+      toast({
+        title: "Lỗi",
+        description: "Hợp đồng đã được đóng",
+      });
+      return;
+    } else if (status === InstallmentStatus.DELETED) {
+      toast({
+        title: "Lỗi",
+        description: "Hợp đồng đã bị xóa",
+      });
+      return;
+    }
     setIsRotating(true); // Set loading state
 
     try {
@@ -640,6 +654,15 @@ export function InstallmentPaymentHistoryModal({
   // Handler for closing the installment
   const handleCloseInstallment = async () => {
     if (!installment?.id) return;
+    // If the installment is already closed, throw error
+    const status = await getInstallmentStatus(installment.id);
+    if (status === InstallmentStatus.CLOSED) {
+      toast({
+        title: "Lỗi",
+        description: "Hợp đồng đã được đóng",
+      });
+      return;
+    }
     
     // Close the confirmation dialog
     setIsCloseContractConfirmOpen(false);

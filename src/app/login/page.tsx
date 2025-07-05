@@ -29,7 +29,7 @@ function LoginForm() {
         }
       } else {
         router.refresh();
-        router.push('/dashboard');
+        router.push('/installments');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Đã có lỗi xảy ra');

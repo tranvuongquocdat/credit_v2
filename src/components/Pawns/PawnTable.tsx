@@ -14,7 +14,7 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
-import { PawnWithCustomer } from '@/models/pawn';
+import { PawnStatus, PawnWithCustomer } from '@/models/pawn';
 import { MoreVertical, DollarSignIcon, UnlockIcon, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
@@ -24,6 +24,7 @@ import { useToast } from '../ui/use-toast';
 import { PawnFinancialDetail } from '@/hooks/usePawnCalculation';
 import { PawnStatusResult } from '@/lib/Pawns/calculate_pawn_status';
 import { usePermissions } from '@/hooks/usePermissions';
+import { getPawnStatus } from '@/lib/pawn';
 
 interface StatusMapType {
   [key: string]: { 
@@ -239,6 +240,20 @@ export function PawnsTable({
                             className="h-8 w-8 p-0 text-green-700" 
                             onClick={async () => { 
                               try {
+                                const status = await getPawnStatus(pawn.id);
+                                if (status === PawnStatus.ON_TIME) {
+                                  toast({
+                                    title: "Lỗi",
+                                    description: "Hợp đồng đã được mở lại",
+                                  });
+                                  return;
+                                } else if (status === PawnStatus.DELETED) {
+                                  toast({
+                                    title: "Lỗi",
+                                    description: "Hợp đồng đã bị xóa",
+                                  });
+                                  return;
+                                }
                                 await reopenContract(pawn.id);
                                 
                                 // Show success toast

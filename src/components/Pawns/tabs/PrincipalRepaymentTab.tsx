@@ -5,6 +5,7 @@ import { PawnWithCustomerAndCollateral, PawnStatus } from '@/models/pawn';
 import { PrincipalRepaymentForm } from '../PrincipalRepaymentForm';
 import { PrincipalRepaymentList } from '../PrincipalRepaymentList';
 import { toast } from '@/components/ui/use-toast';
+import { getPawnStatus } from '@/lib/pawn';
 
 interface PrincipalRepaymentTabProps {
   pawn: PawnWithCustomerAndCollateral;
@@ -43,6 +44,22 @@ export function PrincipalRepaymentTab({
         disabled={isClosed}
         onSubmit={async (data) => {
           try {
+            const status = await getPawnStatus(pawn.id);
+            if (status === PawnStatus.CLOSED) {
+              toast({
+                variant: "destructive",
+                title: "Lỗi",
+                description: "Hợp đồng đã đóng"
+              });
+              return;
+            } else if (status === PawnStatus.DELETED) {
+              toast({
+                variant: "destructive",
+                title: "Lỗi",
+                description: "Hợp đồng đã bị xóa"
+              });
+              return;
+            }
             if (!pawn?.id || isSubmitting || isClosed) return;
             
             setIsSubmitting(true);

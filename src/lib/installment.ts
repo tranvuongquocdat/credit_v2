@@ -19,7 +19,7 @@ export async function getInstallments(
       .from('installments_by_store')
       .select(`
         *,
-        customer:customers(
+        customer:customers!inner(
           id, name, phone, address, blacklist_reason, id_number
         )
       `, { count: 'exact' })
@@ -30,24 +30,8 @@ export async function getInstallments(
     }
     
     if (filters?.customer_name) {
-      // First apply other filters, then we'll fetch customer IDs manually and apply a second filter
-      const queryWithoutCustomerFilter = query;
-      
-      // Get all customer IDs whose names match the filter
-      const { data: matchingCustomers } = await supabase
-        .from('customers')
-        .select('id')
-        .ilike('name', `%${filters.customer_name}%`);
-      
-      if (matchingCustomers && matchingCustomers.length > 0) {
-        // Extract customer IDs
-        const customerIds = matchingCustomers.map(c => c.id);
-        // Apply in filter to original query
-        query = queryWithoutCustomerFilter.in('customer_id', customerIds);
-      } else {
-        // No matching customers, return empty result
-        query = queryWithoutCustomerFilter.eq('id', '00000000-0000-0000-0000-000000000000'); // Non-existent ID
-      }
+      // Lọc trực tiếp trên cột name của bảng customers thông qua INNER JOIN
+      query = query.ilike('customers.name', `%${filters.customer_name}%`);
     }
     
     if (filters?.start_date) {
@@ -291,6 +275,18 @@ export async function getInstallmentById(id: string) {
       error 
     };
   }
+}
+
+export async function getInstallmentStatus(id: string) {
+  const { data, error } = await supabase
+    .from('installments')
+    .select('status')
+    .eq('id', id)
+    .single();
+  if (error) {
+    throw error;
+  }
+  return data?.status as InstallmentStatus;
 }
 
 // Create a new installment

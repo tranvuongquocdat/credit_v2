@@ -3,10 +3,10 @@ import { format, addDays } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
 import { toast } from '@/components/ui/use-toast';
-import { getCreditById } from '@/lib/credit';
+import { getCreditById, getCreditStatus } from '@/lib/credit';
 import { calculateActualLoanAmount } from '@/lib/Credits/calculate_actual_loan_amount';
 import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_date';
-import { CreditWithCustomer } from '@/models/credit';
+import { CreditStatus, CreditWithCustomer } from '@/models/credit';
 import { MoneyInput } from '@/components/ui/money-input';
 
 interface PrincipalRepaymentFormProps {
@@ -153,6 +153,23 @@ export function PrincipalRepaymentForm({ onSubmit, creditId, disabled = false, o
       });
       return;
     }
+    const status = await getCreditStatus(creditId);
+    if (status === CreditStatus.CLOSED) {
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: "Hợp đồng đã đóng"
+      });
+      return;
+    } else if (status === CreditStatus.DELETED) {
+      toast({
+        variant: "destructive",
+        title: "Lỗi",
+        description: "Hợp đồng đã bị xóa"
+      });
+      return;
+    }
+    const actualLoanAmount = await calculateActualLoanAmount(creditId);
     // Validate amount does not exceed actual loan amount
     if (amount > actualLoanAmount) {
       toast({

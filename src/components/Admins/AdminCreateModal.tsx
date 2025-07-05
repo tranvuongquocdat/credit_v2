@@ -16,7 +16,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { createAdmin } from '@/lib/admin';
 import { AdminFormData, AdminStatus } from '@/models/admin';
 import { toast } from '@/components/ui/use-toast';
 
@@ -57,20 +56,21 @@ export function AdminCreateModal({ isOpen, onClose, onSuccess }: AdminCreateModa
     setIsLoading(true);
     
     try {
-      const { data, error } = await createAdmin({
-        username: formData.username.trim(),
-        email: formData.email?.trim() || undefined,
-        password: formData.password,
-        status: formData.status,
+      const resp = await fetch('/api/admins/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: formData.username.trim(),
+          email: formData.email?.trim() || undefined,
+          password: formData.password,
+          status: formData.status,
+        }),
       });
 
-      if (error) {
-        toast({
-          title: 'Lỗi',
-          description: error.message || 'Không thể tạo admin',
-          variant: 'destructive',
-        });
-        return;
+      const result = await resp.json();
+
+      if (!resp.ok) {
+        throw new Error(result.error || 'Không thể tạo admin');
       }
 
       toast({
@@ -91,7 +91,7 @@ export function AdminCreateModal({ isOpen, onClose, onSuccess }: AdminCreateModa
     } catch (err) {
       toast({
         title: 'Lỗi',
-        description: 'Đã xảy ra lỗi khi tạo admin',
+        description: err instanceof Error ? err.message : 'Đã xảy ra lỗi khi tạo admin',
         variant: 'destructive',
       });
     } finally {

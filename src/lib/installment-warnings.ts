@@ -27,7 +27,7 @@ export async function getInstallmentWarnings(
       .from('installments_by_store')
       .select(`
         *,
-        customer:customers(*)
+        customer:customers!inner(*)
       `, { count: 'exact' })
       .eq('status', 'on_time')
       .eq('store_id', storeId)
@@ -37,17 +37,7 @@ export async function getInstallmentWarnings(
     
     // Áp dụng filter theo tên khách hàng nếu có
     if (customerFilter) {
-      const { data: matchingCustomers } = await supabase
-        .from('customers')
-        .select('id')
-        .ilike('name', `%${customerFilter}%`);
-      
-      if (matchingCustomers && matchingCustomers.length > 0) {
-        const customerIds = matchingCustomers.map(c => c.id);
-        query = query.in('customer_id', customerIds);
-      } else {
-        query = query.eq('id', '00000000-0000-0000-0000-000000000000'); // Non-existent ID
-      }
+      query = query.ilike('customers.name', `%${customerFilter}%`);
     }
     
     // Áp dụng filter theo mã hợp đồng nếu có

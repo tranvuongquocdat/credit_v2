@@ -36,7 +36,7 @@ export async function getEmployees(
       query = query.ilike('full_name', `%${searchQuery}%`);
     }
 
-    if (status) {
+    if (status && status !== 'all') {
       query = query.eq('status', status);
     }
 

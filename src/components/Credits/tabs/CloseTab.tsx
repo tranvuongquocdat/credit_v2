@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { CreditStatus, CreditWithCustomer } from '@/models/credit';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
-import { updateCredit, updateCreditStatus } from '@/lib/credit';
+import { getCreditStatus, updateCredit, updateCreditStatus } from '@/lib/credit';
 import { useToast } from '@/components/ui/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
@@ -109,7 +109,23 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
     setIsClosing(true);
     
     try {
-      const contractCloseAmount = loanAmount; // Tiền gốc
+      const status = await getCreditStatus(creditId);
+      if (status === CreditStatus.CLOSED) {
+        toast({
+          variant: "destructive",
+          title: "Lỗi",
+          description: "Hợp đồng đã đóng"
+        });
+        return;
+      } else if (status === CreditStatus.DELETED) {
+        toast({
+          variant: "destructive",
+          title: "Lỗi",
+          description: "Hợp đồng đã bị xóa"
+        });
+        return;
+      }
+      const contractCloseAmount = await calculateActualLoanAmount(creditId); // Tiền gốc
       
       // Case 1: Nếu tiền lãi phí <= 0, chỉ cần chuyển trạng thái sang CLOSED
       if (remainingAmount < 0) {
