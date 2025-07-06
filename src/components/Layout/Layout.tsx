@@ -9,7 +9,7 @@ interface LayoutProps {
 }
 
 export function Layout({ children }: LayoutProps) {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true); // Default to collapsed
   const [isMobile, setIsMobile] = useState(false);
   
   // Check if mobile on mount and resize
@@ -25,7 +25,7 @@ export function Layout({ children }: LayoutProps) {
   
   useEffect(() => {
     const handleSidebarToggle = (event: CustomEvent) => {
-      setSidebarCollapsed(prev => !prev);
+      setSidebarCollapsed(event.detail.isCollapsed);
     };
     
     window.addEventListener('sidebar-toggle', handleSidebarToggle as EventListener);
@@ -34,20 +34,25 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
-      <TopNavbar />
+      {/* Fixed top navigation bar */}
+      <div className="fixed top-0 left-0 right-0 z-50">
+        <TopNavbar />
+      </div>
       
       <div className="flex flex-1 pt-14">
-        {/* Desktop/Tablet Sidebar - Hidden on mobile */}
-        <div className={`hidden md:block ${sidebarCollapsed ? 'w-20' : 'w-64'} transition-all duration-300`}>
+        {/* Sidebar is positioned fixed */}
+        <div className="hidden md:block">
           <Sidebar />
         </div>
         
-        {/* Main Content */}
+        {/* Main Content - Adjust margin based on sidebar state */}
         <main className={`
           flex-1 
           p-2 md:p-8 
           min-w-0
+          transition-all duration-300
           ${isMobile ? 'pb-20' : 'pb-4'}
+          ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}
         `}>
           {children}
         </main>
