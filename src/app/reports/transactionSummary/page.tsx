@@ -86,7 +86,7 @@ export default function TransactionSummaryPage() {
   // Filter states
   const [selectedTransactionType, setSelectedTransactionType] = useState<string>('all');
   const [selectedEmployee, setSelectedEmployee] = useState<string>('all');
-  const [employees, setEmployees] = useState<{username: string}[]>([]);
+  const [employees, setEmployees] = useState<{full_name: string, username: string}[]>([]);
 
   // Function to format currency
   const formatCurrency = (value: number | null | undefined) => {
@@ -136,14 +136,25 @@ export default function TransactionSummaryPage() {
     
     try {
       const { data, error } = await supabase
-        .from('profiles')
-        .select('username')
-        .not('username', 'is', null)
-        .order('username');
+        .from('employees')
+        .select(`
+          full_name,
+          profiles!inner(username)
+        `)
+        .eq('store_id', currentStore.id)
+        .eq('status', 'working')
+        .not('full_name', 'is', null)
+        .order('full_name');
       
       if (error) throw error;
       
-      setEmployees(data || []);
+      // Transform the data to flatten the structure
+      const transformedData = (data || []).map(item => ({
+        full_name: item.full_name,
+        username: item.profiles?.username || ''
+      }));
+      
+      setEmployees(transformedData);
     } catch (err) {
       console.error('Error fetching employees:', err);
     }
