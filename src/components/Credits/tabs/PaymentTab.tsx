@@ -28,6 +28,7 @@ type PaymentTabProps = {
   calculateDaysBetween: (start: Date, end: Date) => number;
   onDataChange?: () => void;
   onOptimisticStateChange?: (hasOptimisticUpdates: boolean) => void;
+  onPaymentUpdate?: () => void;
 };
 
 // Helper function to format number with thousand separators for input
@@ -50,7 +51,8 @@ export function PaymentTab({
   formatDate,
   calculateDaysBetween,
   onDataChange,
-  onOptimisticStateChange
+  onOptimisticStateChange,
+  onPaymentUpdate
 }: PaymentTabProps) {
   // State for inline payment editing
   const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
@@ -497,6 +499,11 @@ export function PaymentTab({
       // 3. Background sync without disrupting UI
       setTimeout(() => {
         handleBackgroundSync();
+        // Thêm delay để đảm bảo database đã xử lý xong
+        setTimeout(() => {
+          // Gọi callback để cập nhật financial summary ngay lập tức
+          onPaymentUpdate?.();
+        }, 500);
       }, 100);
       
     } catch (error) {

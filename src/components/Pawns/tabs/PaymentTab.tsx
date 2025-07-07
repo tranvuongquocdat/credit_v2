@@ -29,6 +29,7 @@ type PaymentTabProps = {
   formatDate: (date: string) => string;
   calculateDaysBetween: (start: Date, end: Date) => number;
   onDataChange?: () => void;
+  onPaymentUpdate?: () => void;
 };
 
 export function PaymentTab({
@@ -40,7 +41,8 @@ export function PaymentTab({
   formatCurrency,
   formatDate,
   calculateDaysBetween,
-  onDataChange
+  onDataChange,
+  onPaymentUpdate
 }: PaymentTabProps) {
   // Add loading state for checkbox operations
   const [loadingPeriods, setLoadingPeriods] = useState<Record<string, boolean>>({});
@@ -435,6 +437,12 @@ export function PaymentTab({
       
       // Trigger data change to regenerate periods
       if (onDataChange) onDataChange();
+      
+      // Thêm delay để đảm bảo database đã xử lý xong
+      setTimeout(() => {
+        // Gọi callback để cập nhật financial summary ngay lập tức
+        onPaymentUpdate?.();
+      }, 500);
       
     } catch (error) {
       console.error('Error handling payment records:', error);

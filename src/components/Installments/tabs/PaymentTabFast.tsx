@@ -69,6 +69,7 @@ export function PaymentTabFast({
       onDataChange();
       await new Promise((r) => setTimeout(r, 600));
       setRefreshKey((k) => k + 1);
+      onOptimisticStateChange?.(true);
     } finally {
       setIsBackgroundSyncing(false);
     }
@@ -212,7 +213,7 @@ export function PaymentTabFast({
         const updatedLatestPaidDate = await getLatestPaymentPaidDate(installment.id);
         if (updatedLatestPaidDate) {
           const latestPaidDateObj = new Date(updatedLatestPaidDate);
-          const endDate = new Date(installment.loan_date || '');
+          const endDate = new Date(installment.start_date || '');
           endDate.setDate(endDate.getDate() + (installment.loan_period || 0) - 1);
           if (latestPaidDateObj.getTime() >= endDate.getTime()) {
             await updateInstallmentPaymentDueDate(installment.id, null);

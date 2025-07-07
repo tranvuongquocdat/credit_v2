@@ -341,12 +341,15 @@ export default function InstallmentsPage() {
   const handleClosePaymentHistory = (hasDataChanged?: boolean) => {
     setIsPaymentActionsModalOpen(false);
     setSelectedInstallmentForPayment(null);
+    
     // Only refresh data if there were actual changes
     if (hasDataChanged) {
-      refetch();
-      refreshFinancial();
-      // Trigger cash fund update when payment history changes
-      triggerUpdate();
+      // Thêm độ trễ để đảm bảo database đã xử lý xong
+      setTimeout(() => {
+        refetch();
+        refreshFinancial();
+        triggerUpdate();
+      }, 500); // 500ms delay
     }
   };
 

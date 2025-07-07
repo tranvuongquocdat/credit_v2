@@ -23,12 +23,14 @@ interface PawnHistoryModalProps {
   isOpen: boolean;
   onClose: (hasDataChanged?: boolean) => void;
   pawn: PawnWithCustomerAndCollateral;
+  onPaymentUpdate?: () => void;
 }
 
 export function PawnHistoryModal({
   isOpen,
   onClose,
-  pawn
+  pawn,
+  onPaymentUpdate
 }: PawnHistoryModalProps) {
   const [activeTab, setActiveTab] = useState<PawnTabId>('payment');
   const [loading, setLoading] = useState(false);
@@ -261,6 +263,7 @@ export function PawnHistoryModal({
             formatDate={formatDate}
             calculateDaysBetween={calculateDaysBetween}
             onDataChange={handleDataChange}
+            onPaymentUpdate={onPaymentUpdate}
           />
         );
       case 'principal-repayment':

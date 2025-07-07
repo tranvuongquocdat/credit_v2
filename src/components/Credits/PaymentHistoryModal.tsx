@@ -26,12 +26,14 @@ interface PaymentHistoryModalProps {
   isOpen: boolean;
   onClose: (hasDataChanged?: boolean) => void;
   credit: CreditWithCustomer;
+  onPaymentUpdate?: () => void;
 }
 
 export function PaymentHistoryModal({
   isOpen,
   onClose,
-  credit: initialCredit
+  credit: initialCredit,
+  onPaymentUpdate
 }: PaymentHistoryModalProps) {
   const { hasPermission, loading: permissionsLoading } = usePermissions();
   // Properly declare the variables to fix TypeScript errors
@@ -351,6 +353,208 @@ export function PaymentHistoryModal({
 
   const historyTotals = calculateHistoryTotals();
   
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'payment':
+        return (
+          <PaymentTab
+            credit={credit}
+            error={error}
+            showPaymentForm={showPaymentForm}
+            setShowPaymentForm={setShowPaymentForm}
+            formatCurrency={formatCurrency}
+            formatDate={formatDate}
+            calculateDaysBetween={calculateDaysBetween}
+            onDataChange={() => {
+              setDataChangeCounter(prev => prev + 1);                
+              reloadCreditInfo();
+            }}
+            onOptimisticStateChange={setHasOptimisticUpdates}
+            onPaymentUpdate={onPaymentUpdate}
+          />
+        );
+      case 'principal-repayment':
+        return hasPermission('tra_bot_goc_tin_chap') && (
+          <PrincipalRepaymentTab
+            credit={credit}
+            refreshRepayments={refreshRepayments}
+            setRefreshRepayments={setRefreshRepayments}
+            key={refreshRepayments}
+            onDataChange={() => {
+              setDataChangeCounter(prev => prev + 1);
+              setRefreshRepayments(prev => prev + 1);
+              reloadCreditInfo();
+            }}
+          />
+        );
+      case 'additional-loan':
+        return hasPermission('vay_them_goc_tin_chap') && (
+          <AdditionalLoanTab 
+            credit={credit}
+            key={refreshAdditionalLoans}
+            onDataChange={() => {
+              setDataChangeCounter(prev => prev + 1);
+              setRefreshAdditionalLoans(prev => prev + 1);
+              reloadCreditInfo();
+            }}
+          />
+        );
+      case 'extension':
+        return hasPermission('gia_han_tin_chap') && (
+          <ExtensionTab 
+            credit={credit} 
+            onDataChange={() => {
+              setDataChangeCounter(prev => prev + 1);
+              reloadCreditInfo();
+            }}
+          />
+        );
+      case 'close':
+        return hasPermission('dong_hop_dong_tin_chap') && (
+          <CloseTab credit={credit} onClose={() => onClose(dataChangeCounter > 0)} />
+        );
+      case 'documents':
+        return (
+          <DocumentsTab creditId={creditId} creditStatus={credit?.status || undefined} />
+        );
+      case 'history':
+        return (
+          <div className="p-4">
+            {/* Lịch sử thao tác */}
+            <div>
+              <div className="flex items-center mb-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                </svg>
+                <h3 className="text-lg font-medium">Lịch sử thao tác</h3>
+              </div>
+              
+              {historyLoading ? (
+                <div className="flex justify-center items-center py-10">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700"></div>
+                </div>
+              ) : creditHistory.length === 0 ? (
+                <div className="flex justify-center items-center py-10">
+                  <p className="text-gray-500">Chưa có lịch sử giao dịch</p>
+                </div>
+              ) : (
+                <>
+                  <div className="text-sm text-amber-600 italic mb-2">
+                    *Lưu ý: Ghi nợ (debit) là tiền ra, ghi có (credit) là tiền vào
+                  </div>
+                  <div className="border rounded-md overflow-hidden">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-100">
+                        <tr>
+                          <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700 w-16 text-center">STT</th>
+                          <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Ngày</th>
+                          <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Loại giao dịch</th>
+                          <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700 text-right">Số tiền ghi nợ</th>
+                          <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700 text-right">Số tiền ghi có</th>
+                          <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Nội dung</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {(() => {
+                          // Tạo danh sách records mở rộng với các bản ghi hủy
+                          const expandedHistory: Array<{
+                            id: string;
+                            created_at: string;
+                            transaction_type: string;
+                            debit_amount: number;
+                            credit_amount: number;
+                            description: string;
+                            isCancel?: boolean;
+                          }> = [];
+
+                          creditHistory.forEach(history => {
+                            // Thêm bản ghi gốc
+                            expandedHistory.push({
+                              id: history.id,
+                              created_at: history.created_at,
+                              transaction_type: history.transaction_type,
+                              debit_amount: history.debit_amount || 0,
+                              credit_amount: history.credit_amount || 0,
+                              description: history.description || '-'
+                            });
+
+                            // Nếu có updated_at và là payment, thêm bản ghi hủy
+                            if (history.updated_at && history.transaction_type === 'payment' && history.is_deleted === true) {
+                              expandedHistory.push({
+                                id: `${history.id}-cancel`,
+                                created_at: history.updated_at,
+                                transaction_type: 'payment_cancel',
+                                debit_amount: history.credit_amount || 0, // Số tiền ghi nợ của bản ghi gốc
+                                credit_amount: 0,
+                                description: `Hủy đóng lãi phí - ${history.description || ''}`,
+                                isCancel: true
+                              });
+                            }
+                          });
+
+                          // Sắp xếp theo thời gian
+                          expandedHistory.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+                          return expandedHistory.map((record, index) => (
+                            <tr key={record.id} className={record.isCancel ? 'bg-red-50' : ''}>
+                              <td className="px-4 py-3 text-sm text-gray-700 text-center">{index + 1}</td>
+                              <td className="px-4 py-3 text-sm text-gray-700">{formatDateTime(record.created_at)}</td>
+                              <td className="px-4 py-3 text-sm text-gray-700">
+                                {record.isCancel ? (
+                                  <span className="text-red-600 font-medium">Hủy đóng lãi phí</span>
+                                ) : (
+                                  getTransactionTypeDisplay(record.transaction_type)
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-700 text-right text-red-600">
+                                {formatCurrency(record.debit_amount)}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-700 text-right text-green-600">
+                                {formatCurrency(record.credit_amount)}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-700">{record.description}</td>
+                            </tr>
+                          ));
+                        })()}
+                        
+                        {/* Summary rows */}
+                        <tr className="bg-amber-50">
+                          <td colSpan={3} className="px-4 py-2 text-sm font-medium text-right">Tổng Tiền</td>
+                          <td className="px-4 py-2 text-sm font-medium text-right text-red-600">
+                            {formatCurrency(historyTotals.totalDebit)}
+                          </td>
+                          <td className="px-4 py-2 text-sm font-medium text-right text-green-600">
+                            {formatCurrency(historyTotals.totalCredit)}
+                          </td>
+                          <td></td>
+                        </tr>
+                        <tr className="bg-amber-100">
+                          <td colSpan={3} className="px-4 py-2 text-sm font-medium text-right">Chênh lệch</td>
+                          <td colSpan={2} className="px-4 py-2 text-sm font-medium text-right">
+                            <span className={historyTotals.totalDebit - historyTotals.totalCredit >= 0 ? "text-red-600" : "text-green-600"}>
+                              {formatCurrency(historyTotals.totalDebit - historyTotals.totalCredit)}
+                            </span>
+                          </td>
+                          <td></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      case 'bad-credit':
+        return (
+          <BadCreditTab credit={credit} />
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(dataChangeCounter > 0)}>
       <DialogContent 
@@ -472,199 +676,7 @@ export function PaymentHistoryModal({
           />
 
           {/* Nội dung theo tab */}
-          {activeTab === 'payment' && (
-            <PaymentTab
-              credit={credit}
-              error={error}
-              showPaymentForm={showPaymentForm}
-              setShowPaymentForm={setShowPaymentForm}
-              formatCurrency={formatCurrency}
-              formatDate={formatDate}
-              calculateDaysBetween={calculateDaysBetween}
-              onDataChange={() => {
-                setDataChangeCounter(prev => prev + 1);                
-                reloadCreditInfo();
-              }}
-              onOptimisticStateChange={setHasOptimisticUpdates}
-            />
-          )}
-          
-          {activeTab === 'principal-repayment' && hasPermission('tra_bot_goc_tin_chap') && (
-            <PrincipalRepaymentTab
-              credit={credit}
-              refreshRepayments={refreshRepayments}
-              setRefreshRepayments={setRefreshRepayments}
-              key={refreshRepayments}
-              onDataChange={() => {
-                setDataChangeCounter(prev => prev + 1);
-                setRefreshRepayments(prev => prev + 1);
-                reloadCreditInfo();
-              }}
-            />
-          )}
-          
-          {activeTab === 'additional-loan' && hasPermission('vay_them_goc_tin_chap') && (
-            <AdditionalLoanTab 
-              credit={credit}
-              key={refreshAdditionalLoans}
-              onDataChange={() => {
-                setDataChangeCounter(prev => prev + 1);
-                setRefreshAdditionalLoans(prev => prev + 1);
-                reloadCreditInfo();
-              }}
-            />
-          )}
-          
-          {activeTab === 'extension' && hasPermission('gia_han_tin_chap') && (
-            <ExtensionTab 
-              credit={credit} 
-              onDataChange={() => {
-                setDataChangeCounter(prev => prev + 1);
-                reloadCreditInfo();
-              }}
-            />
-          )}
-          
-          {activeTab === 'close' && hasPermission('dong_hop_dong_tin_chap') && (
-            <CloseTab credit={credit} onClose={() => onClose(dataChangeCounter > 0)} />
-          )}
-          
-          {activeTab === 'documents' && (
-            <DocumentsTab creditId={creditId} creditStatus={credit?.status || undefined} />
-          )}
-          
-          {activeTab === 'history' && credit && (
-            <div className="p-4">
-              {/* Lịch sử thao tác */}
-              <div>
-                <div className="flex items-center mb-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
-                    <path d="M12 20h9"></path>
-                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-                  </svg>
-                  <h3 className="text-lg font-medium">Lịch sử thao tác</h3>
-                </div>
-                
-                {historyLoading ? (
-                  <div className="flex justify-center items-center py-10">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700"></div>
-                  </div>
-                ) : creditHistory.length === 0 ? (
-                  <div className="flex justify-center items-center py-10">
-                    <p className="text-gray-500">Chưa có lịch sử giao dịch</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="text-sm text-amber-600 italic mb-2">
-                      *Lưu ý: Ghi nợ (debit) là tiền ra, ghi có (credit) là tiền vào
-                    </div>
-                    <div className="border rounded-md overflow-hidden">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-100">
-                          <tr>
-                            <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700 w-16 text-center">STT</th>
-                            <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Ngày</th>
-                            <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Loại giao dịch</th>
-                            <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700 text-right">Số tiền ghi nợ</th>
-                            <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700 text-right">Số tiền ghi có</th>
-                            <th scope="col" className="px-4 py-3 text-left text-sm font-medium text-gray-700">Nội dung</th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {(() => {
-                            // Tạo danh sách records mở rộng với các bản ghi hủy
-                            const expandedHistory: Array<{
-                              id: string;
-                              created_at: string;
-                              transaction_type: string;
-                              debit_amount: number;
-                              credit_amount: number;
-                              description: string;
-                              isCancel?: boolean;
-                            }> = [];
-
-                            creditHistory.forEach(history => {
-                              // Thêm bản ghi gốc
-                              expandedHistory.push({
-                                id: history.id,
-                                created_at: history.created_at,
-                                transaction_type: history.transaction_type,
-                                debit_amount: history.debit_amount || 0,
-                                credit_amount: history.credit_amount || 0,
-                                description: history.description || '-'
-                              });
-
-                              // Nếu có updated_at và là payment, thêm bản ghi hủy
-                              if (history.updated_at && history.transaction_type === 'payment' && history.is_deleted === true) {
-                                expandedHistory.push({
-                                  id: `${history.id}-cancel`,
-                                  created_at: history.updated_at,
-                                  transaction_type: 'payment_cancel',
-                                  debit_amount: history.credit_amount || 0, // Số tiền ghi nợ của bản ghi gốc
-                                  credit_amount: 0,
-                                  description: `Hủy đóng lãi phí - ${history.description || ''}`,
-                                  isCancel: true
-                                });
-                              }
-                            });
-
-                            // Sắp xếp theo thời gian
-                            expandedHistory.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-
-                            return expandedHistory.map((record, index) => (
-                              <tr key={record.id} className={record.isCancel ? 'bg-red-50' : ''}>
-                                <td className="px-4 py-3 text-sm text-gray-700 text-center">{index + 1}</td>
-                                <td className="px-4 py-3 text-sm text-gray-700">{formatDateTime(record.created_at)}</td>
-                                <td className="px-4 py-3 text-sm text-gray-700">
-                                  {record.isCancel ? (
-                                    <span className="text-red-600 font-medium">Hủy đóng lãi phí</span>
-                                  ) : (
-                                    getTransactionTypeDisplay(record.transaction_type)
-                                  )}
-                                </td>
-                                <td className="px-4 py-3 text-sm text-gray-700 text-right text-red-600">
-                                  {formatCurrency(record.debit_amount)}
-                                </td>
-                                <td className="px-4 py-3 text-sm text-gray-700 text-right text-green-600">
-                                  {formatCurrency(record.credit_amount)}
-                                </td>
-                                <td className="px-4 py-3 text-sm text-gray-700">{record.description}</td>
-                              </tr>
-                            ));
-                          })()}
-                          
-                          {/* Summary rows */}
-                          <tr className="bg-amber-50">
-                            <td colSpan={3} className="px-4 py-2 text-sm font-medium text-right">Tổng Tiền</td>
-                            <td className="px-4 py-2 text-sm font-medium text-right text-red-600">
-                              {formatCurrency(historyTotals.totalDebit)}
-                            </td>
-                            <td className="px-4 py-2 text-sm font-medium text-right text-green-600">
-                              {formatCurrency(historyTotals.totalCredit)}
-                            </td>
-                            <td></td>
-                          </tr>
-                          <tr className="bg-amber-100">
-                            <td colSpan={3} className="px-4 py-2 text-sm font-medium text-right">Chênh lệch</td>
-                            <td colSpan={2} className="px-4 py-2 text-sm font-medium text-right">
-                              <span className={historyTotals.totalDebit - historyTotals.totalCredit >= 0 ? "text-red-600" : "text-green-600"}>
-                                {formatCurrency(historyTotals.totalDebit - historyTotals.totalCredit)}
-                              </span>
-                            </td>
-                            <td></td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-          
-          {activeTab === 'bad-credit' && (
-            <BadCreditTab credit={credit} />
-          )}
+          {renderTabContent()}
         </div>
       </DialogContent>
     </Dialog>

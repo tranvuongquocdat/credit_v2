@@ -424,11 +424,12 @@ export default function CreditsPage() {
   const handleClosePaymentHistory = (hasDataChanged?: boolean) => {
     setIsPaymentHistoryModalOpen(false);
     setPaymentHistoryCredit(null);
-    // Only refresh data if there were actual changes
     if (hasDataChanged) {
-      handleRefresh();
-      // Trigger cash fund update when payment history changes
-      triggerUpdate();
+      setTimeout(() => {
+        handleRefresh();
+        fetchTotals(filters);
+        triggerUpdate();
+      }, 1000);
     }
   };
   
