@@ -33,9 +33,13 @@ export function useCredits(initialFilters?: Partial<SearchFilters>) {
       customer_name: searchFilters.customer_name || undefined,
       start_date: searchFilters.start_date || undefined,
       end_date: searchFilters.end_date || undefined,
-      status: searchFilters.status && searchFilters.status !== 'due_tomorrow'
-        ? (searchFilters.status as CreditStatus)
-        : undefined,
+      // Chỉ gửi những trạng thái vốn lưu trong DB. Các trạng thái tính toán động
+      // (due_tomorrow, overdue, late_interest) sẽ được lọc phía client.
+      status:
+        searchFilters.status &&
+        !['due_tomorrow', 'overdue', 'late_interest'].includes(searchFilters.status)
+          ? (searchFilters.status as CreditStatus)
+          : undefined,
       duration: searchFilters.duration || undefined,
       store_id: currentStore?.id // Sử dụng currentStore?.id để tránh lỗi null
     };

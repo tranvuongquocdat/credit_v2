@@ -107,7 +107,10 @@ export default function CreditsPage() {
   const { details: creditDetails } = useCreditCalculations();
   
   // Lấy trạng thái cho các hợp đồng trong trang hiện tại
-  const { statuses: creditStatuses } = useCreditStatuses(credits.map((c) => c.id));
+  const {
+    statuses: creditStatuses,
+    loading: creditStatusesLoading,
+  } = useCreditStatuses(credits.map((c) => c.id));
   // Use auto update cash fund hook
   const { triggerUpdate } = useAutoUpdateCashFund({
     onUpdate: (newCashFund) => {
@@ -170,22 +173,29 @@ export default function CreditsPage() {
         });
       }
 
-      case 'overdue':
-        return credits.filter(c => 
-          creditStatuses[c.id]?.statusCode === 'OVERDUE'
+      case 'overdue': {
+        if (creditStatusesLoading) return credits; // hiển thị tạm tất cả trong lúc chờ kết quả RPC
+        return credits.filter(
+          (c) => creditStatuses[c.id]?.statusCode === 'OVERDUE'
         );
+      }
 
-      case 'late_interest':
-        return credits.filter(c => 
-          creditStatuses[c.id]?.statusCode === 'LATE_INTEREST'
+      case 'late_interest': {
+        if (creditStatusesLoading) return credits;
+        return credits.filter(
+          (c) => creditStatuses[c.id]?.statusCode === 'LATE_INTEREST'
         );
+      }
 
       default:
         return credits;
     }
   }, [credits, filters?.status, creditDetails, creditStatuses]);
-  debugger;
-  const effectiveTotalItems = filters?.status === 'due_tomorrow' ? displayCredits.length : totalItems;
+  const requiresClientFilter =
+    filters?.status && ['due_tomorrow', 'overdue', 'late_interest'].includes(filters.status);
+  const effectiveTotalItems = requiresClientFilter
+    ? displayCredits.length
+    : totalItems;
   const totalPages = Math.ceil(effectiveTotalItems / itemsPerPage);
   
   // Process initial filters only once
