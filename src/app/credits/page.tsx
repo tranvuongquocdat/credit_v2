@@ -157,15 +157,34 @@ export default function CreditsPage() {
   
   // Client-side filter: Ngày mai đóng lãi
   const displayCredits = useMemo(() => {
-    if (filters?.status !== 'due_tomorrow') return credits;
-    const tomorrow = addDays(new Date().setHours(0,0,0,0) as any, 1);
-    return credits.filter(c => {
-      const next = creditDetails[c.id]?.nextPayment;
-      if (!next) return false;
-      return isSameDay(new Date(next), tomorrow);
-    });
-  }, [credits, filters?.status, creditDetails]);
+    // Nếu không phải filter đặc biệt -> trả về nguyên bản
+    if (!filters?.status) return credits;
+    console.log('creditStatuses', creditStatuses);
+    switch (filters.status) {
+      case 'due_tomorrow': {
+        const tomorrow = addDays(new Date().setHours(0,0,0,0) as any, 1);
+        return credits.filter(c => {
+          const next = creditDetails[c.id]?.nextPayment;
+          if (!next) return false;
+          return isSameDay(new Date(next), tomorrow);
+        });
+      }
 
+      case 'overdue':
+        return credits.filter(c => 
+          creditStatuses[c.id]?.statusCode === 'OVERDUE'
+        );
+
+      case 'late_interest':
+        return credits.filter(c => 
+          creditStatuses[c.id]?.statusCode === 'LATE_INTEREST'
+        );
+
+      default:
+        return credits;
+    }
+  }, [credits, filters?.status, creditDetails, creditStatuses]);
+  debugger;
   const effectiveTotalItems = filters?.status === 'due_tomorrow' ? displayCredits.length : totalItems;
   const totalPages = Math.ceil(effectiveTotalItems / itemsPerPage);
   

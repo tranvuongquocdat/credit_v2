@@ -27,6 +27,7 @@ export interface CreditFinancialDetail {
   isCompleted: boolean;
   hasPaid: boolean;
   loading: boolean;
+  latestPaidDate: string | null;
 }
 
 export function useCreditCalculations() {
@@ -131,6 +132,19 @@ export function useCreditCalculations() {
         }
       }
 
+      /* ---------- 7.1. RPC lấy latest payment paid date cho tất cả credit ---------- */
+      const latestPaidMap = new Map<string, string | null>();
+      if (allIds.length) {
+        const { data: latestPaidRows, error: latestPaidErr } = await (supabase.rpc as any)('get_latest_payment_paid_dates', {
+          p_credit_ids: allIds,
+        });
+        if (!latestPaidErr && Array.isArray(latestPaidRows)) {
+          latestPaidRows.forEach((r: any) => {
+            latestPaidMap.set(r.credit_id, r.latest_paid_date || null);
+          });
+        }
+      }
+
       /* ---------- 7. RPC lấy thông tin kỳ thanh toán tiếp theo ---------- */
       const nextMap = new Map<string, { nextDate: string | null; isCompleted: boolean; hasPaid: boolean }>();
       if (activeIds.length) {
@@ -173,7 +187,8 @@ export function useCreditCalculations() {
               nextPayment: nextMap.get(result.creditId)?.nextDate || null,
               isCompleted: nextMap.get(result.creditId)?.isCompleted || false,
               hasPaid: nextMap.get(result.creditId)?.hasPaid || false,
-              loading: false
+              loading: false,
+              latestPaidDate: latestPaidMap.get(result.creditId) || null
             };
             
             totalLoan += result.summaryLoan;

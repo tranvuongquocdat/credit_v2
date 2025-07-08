@@ -25,6 +25,7 @@ import { CreditFinancialDetail } from '@/hooks/useCreditCalculation';
 import { CreditStatusResult } from '@/lib/Credits/calculate_credit_status';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getCreditStatus } from '@/lib/credit';
+import { useState, useEffect } from 'react';
 
 interface StatusMapType {
   [key: string]: { 
@@ -200,13 +201,55 @@ export function CreditsTable({
                   </div>
                 </TableCell>
                 <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
-                  {formatCurrency(calculatedDetails?.[credit.id]?.paidInterest ?? 0)}
+                  {(() => {
+                    const paidValue = calculatedDetails?.[credit.id]?.paidInterest ?? 0;
+                    const latestPaid = calculatedDetails?.[credit.id]?.latestPaidDate;
+                    let daysPaid: number | null = null;
+                    if (latestPaid) {
+                      const start = new Date(credit.loan_date);
+                      const end   = new Date(latestPaid);
+                      start.setHours(0,0,0,0);
+                      end.setHours(0,0,0,0);
+                      const diff = Math.floor((end.getTime() - start.getTime()) / (24*3600*1000)) + 1;
+                      daysPaid = diff > 0 ? diff : 0;
+                    }
+                    return (
+                      <div className="flex flex-col items-center">
+                        <span>{formatCurrency(paidValue)}</span>
+                        {daysPaid !== null && (
+                          <span className="text-xs text-gray-400">{daysPaid} ngày</span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </TableCell>
                 <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
                   {formatCurrency(calculatedDetails?.[credit.id]?.oldDebt ?? 0)}
                 </TableCell>
                 <TableCell className="py-3 px-3 text-center text-rose-600 font-medium border-b border-r border-gray-200">
-                  {formatCurrency(calculatedDetails?.[credit.id]?.interestToday ?? 0)}
+                  {(() => {
+                    const todayValue = calculatedDetails?.[credit.id]?.interestToday ?? 0;
+                    const latestPaid = calculatedDetails?.[credit.id]?.latestPaidDate;
+                    const today = new Date();
+                    today.setHours(0,0,0,0);
+                    let startRef: Date;
+                    if (latestPaid) {
+                      startRef = new Date(latestPaid);
+                    } else {
+                      startRef = new Date(credit.loan_date);
+                    }
+                    startRef.setHours(0,0,0,0);
+                    const diff = Math.floor((today.getTime() - startRef.getTime()) / (24*3600*1000));
+
+                    const daysSince = diff > 0 ? diff : 0;
+
+                    return (
+                      <div className="flex flex-col items-center text-rose-600">
+                        <span>{formatCurrency(todayValue)}</span>
+                        <span className="text-xs text-gray-400">{daysSince} ngày</span>
+                      </div>
+                    );
+                  })()}
                 </TableCell>
                 <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
                   {/* Ngày phải đóng lãi phí */}

@@ -55,6 +55,8 @@ export function SearchFilters({
     [CreditStatus.CLOSED]:      { label: 'Đã đóng',        color: 'bg-blue-100 text-blue-800' },
     [CreditStatus.DELETED]:     { label: 'Đã xóa',         color: 'bg-gray-100 text-gray-800' },
     due_tomorrow:               { label: 'Ngày mai đóng lãi', color: 'bg-amber-100 text-amber-800' },
+    overdue:                    { label: 'Quá hạn',        color: 'bg-red-100 text-red-800' },
+    late_interest:              { label: 'Trễ lãi',        color: 'bg-yellow-100 text-yellow-800' },
   } as any; // cast any để chấp nhận key string tuỳ chỉnh
   const [filters, setFilters] = useState<SearchFilters>({
     contract_code: '',

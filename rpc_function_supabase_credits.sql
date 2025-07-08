@@ -233,7 +233,7 @@ AS $$
 BEGIN
   RETURN QUERY
   SELECT
-    c.id,
+    c.id AS credit_id,
     /* cả kỳ: loan_date + loan_period - 1 ngày */
     public.calc_expected_until(
         c.id,
@@ -241,11 +241,23 @@ BEGIN
     )                                                  AS expected_profit,
     /* tới hôm nay (nếu sau ngày vay) */
     CASE
-      WHEN CURRENT_DATE >= c.loan_date::date
-      THEN public.calc_expected_until(c.id, CURRENT_DATE)
+      WHEN CURRENT_DATE >= c.loan_date::date THEN
+           public.calc_expected_until(c.id, CURRENT_DATE)
+         - COALESCE(
+             public.calc_expected_until(c.id, lp.last_paid_date),
+             0
+           )
       ELSE 0
     END                                                AS interest_today
   FROM public.credits c
+  /* Tìm ngày thanh toán lãi cuối cùng bằng lateral, trả về 1 cột duy nhất */
+  LEFT JOIN LATERAL (
+    SELECT max(ch.effective_date)::date AS last_paid_date
+    FROM   credit_history ch
+    WHERE  ch.credit_id = c.id
+      AND  ch.transaction_type = 'payment'
+      AND  ch.is_deleted = FALSE
+  ) lp ON true
   WHERE c.id = ANY(p_credit_ids);
 END;
 $$;
@@ -419,6 +431,29 @@ begin
     return next;
   end loop;
 end;
+$$;
+
+create or replace function public.get_latest_payment_paid_dates(
+  p_credit_ids uuid[]
+)
+returns table (
+  credit_id uuid,
+  latest_paid_date date
+)
+language sql
+as $$
+with ids as (
+  select unnest(p_credit_ids) as credit_id
+)
+select
+  ids.credit_id,
+  max(ch.effective_date)::date as latest_paid_date
+from ids
+left join credit_history ch
+  on ch.credit_id = ids.credit_id
+  and ch.transaction_type = 'payment'
+  and ch.is_deleted = false
+group by ids.credit_id;
 $$;
 
 create or replace function public.credit_get_totals(
