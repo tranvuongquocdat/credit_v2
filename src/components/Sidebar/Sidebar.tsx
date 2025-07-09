@@ -410,12 +410,12 @@ export default function Sidebar() {
                 <div>
                   <button
                     onClick={() => toggleExpanded(item.path)}
-                    className={`w-full flex items-center justify-between p-2.5 rounded-lg transition-colors ${
+                    className={`w-full flex items-center ${!isCollapsed ? 'justify-between' : 'justify-center'} p-2.5 rounded-lg transition-colors ${
                       isItemActive(item)
                         ? 'bg-blue-50 text-blue-600'
                         : 'text-gray-600 hover:bg-gray-50'
-                    } ${isCollapsed ? 'justify-center' : ''} ${
-                      item.superAdminOnly ? 'border-2' : ''
+                    } ${
+                      item.superAdminOnly ? 'border-2 border-red-200' : ''
                     }`}
                   >
                     <div className="flex items-center space-x-3">
@@ -462,12 +462,12 @@ export default function Sidebar() {
               ) : (
                 <Link
                   href={item.path}
-                  className={`flex items-center space-x-3 p-2.5 rounded-lg transition-colors ${
+                  className={`flex items-center ${!isCollapsed ? 'space-x-3' : ''} p-2.5 rounded-lg transition-colors ${
                     pathname.startsWith(item.path)
                       ? 'bg-blue-50 text-blue-600'
                       : 'text-gray-600 hover:bg-gray-50'
                   } ${isCollapsed ? 'justify-center' : ''} ${
-                    item.superAdminOnly ? 'border-2' : ''
+                    item.superAdminOnly ? 'border-2 border-red-200' : ''
                   }`}
                 >
                   <span className="flex-shrink-0">{item.icon}</span>
