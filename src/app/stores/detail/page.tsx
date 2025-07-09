@@ -220,7 +220,7 @@ export default function StoreDetailPage() {
   const fetchInstallmentData = async (storeId: string, summaryData?: StoreSummary): Promise<ContractSummary> => {
     // Use database status for faster performance instead of calculating each status
     const { data: contracts, error } = await supabase
-      .from('installments_by_store')
+      .from('installments_by_store_tmp' as any)
       .select('id, installment_amount, status')
       .eq('store_id', storeId);
 

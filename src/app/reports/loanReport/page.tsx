@@ -12,7 +12,7 @@ import { useRouter } from 'next/navigation';
 // Import status calculation functions
 import { calculatePawnStatus } from '@/lib/Pawns/calculate_pawn_status';
 import { calculateCreditStatus } from '@/lib/Credits/calculate_credit_status';
-import { calculateInstallmentStatus } from '@/lib/Installments/calculate_installment_status';
+// import { calculateInstallmentStatus } from '@/lib/Installments/calculate_installment_status'; // No longer needed
 
 // Import Excel Export component
 import ExcelExport from './components/ExcelExport';
@@ -220,13 +220,14 @@ export default function LoanReportPage() {
       // Fetch installments (all records, no status filtering)
       if (selectedContractType === 'all' || selectedContractType === 'Trả góp') {
         let installmentQuery = supabase
-          .from('installments_by_store')
+          .from('installments_by_store_tmp' as any)
           .select(`
             id,
             contract_code,
             installment_amount,
             loan_date,
             status,
+            status_code,
             customers(name)
           `)
           .eq('store_id', storeId)
@@ -264,7 +265,7 @@ export default function LoanReportPage() {
       const installmentContracts = allRawData.filter(item => item.type === 'Trả góp');
 
       // Get all statuses using RPC functions in parallel
-      const [pawnStatuses, creditStatuses, installmentStatuses] = await Promise.all([
+      const [pawnStatuses, creditStatuses] = await Promise.all([
         // Get pawn statuses
         pawnContracts.length > 0 ? (async () => {
           const pawnIds = pawnContracts.map(p => p.id).filter(id => id !== null);
@@ -286,19 +287,6 @@ export default function LoanReportPage() {
           });
           if (error) {
             console.error('Error getting credit statuses:', error);
-            return [];
-          }
-          return data || [];
-        })() : Promise.resolve([]),
-
-        // Get installment statuses
-        installmentContracts.length > 0 ? (async () => {
-          const installmentIds = installmentContracts.map(i => i.id).filter(id => id !== null);
-          const { data, error } = await supabase.rpc('get_installment_statuses', {
-            p_installment_ids: installmentIds
-          });
-          if (error) {
-            console.error('Error getting installment statuses:', error);
             return [];
           }
           return data || [];
@@ -324,14 +312,7 @@ export default function LoanReportPage() {
         });
       });
 
-      const installmentStatusMap = new Map();
-      installmentStatuses.forEach((s: any) => {
-        installmentStatusMap.set(s.installment_id, {
-          statusCode: s.status_code,
-          status: s.status,
-          description: s.description
-        });
-      });
+      // For installments, status_code is already included in the data
 
       // Process all contracts with their statuses
       for (const item of allRawData) {
@@ -344,7 +325,12 @@ export default function LoanReportPage() {
           } else if (item.type === 'Tín chấp') {
             statusResult = creditStatusMap.get(item.id);
           } else if (item.type === 'Trả góp') {
-            statusResult = installmentStatusMap.get(item.id);
+            // For installments, status_code is already in the data
+            statusResult = {
+              statusCode: item.status_code || 'ON_TIME',
+              status: item.status || 'on_time',
+              description: item.status_code || 'ON_TIME'
+            };
           }
           
           // Only include contracts that are currently active (being loaned)

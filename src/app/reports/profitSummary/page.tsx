@@ -12,7 +12,7 @@ import { useRouter } from 'next/navigation';
 // Import status calculation functions
 import { calculatePawnStatus } from '@/lib/Pawns/calculate_pawn_status';
 import { calculateCreditStatus } from '@/lib/Credits/calculate_credit_status';
-import { calculateInstallmentStatus } from '@/lib/Installments/calculate_installment_status';
+// import { calculateInstallmentStatus } from '@/lib/Installments/calculate_installment_status'; // No longer needed
 
 // Note: RPC functions are now used for interest calculation instead of individual contract calculations
 
@@ -152,8 +152,8 @@ export default function ProfitSummaryPage() {
     if (contractType === 'installments') {
       // Query for new contracts in date range
       newQuery = supabase
-        .from('installments_by_store')
-        .select(selectString)
+        .from('installments_by_store_tmp' as any)
+        .select(selectString + ', status_code')
         .eq('store_id', storeId)
         .gte('loan_date', startDateObj.toISOString())
         .lte('loan_date', endDateObj.toISOString())
@@ -161,8 +161,8 @@ export default function ProfitSummaryPage() {
         
       // Query for all contracts for status calculation
       allQuery = supabase
-        .from('installments_by_store')
-        .select(selectString)
+        .from('installments_by_store_tmp' as any)
+        .select(selectString + ', status_code')
         .eq('store_id', storeId)
         .order('loan_date', { ascending: false });
         // Removed limit - get all for accurate counts
@@ -211,60 +211,78 @@ export default function ProfitSummaryPage() {
         .filter(id => id !== null);
       
       try {
-        let statusData: any[] = [];
-        
-        // Use appropriate RPC function based on contract type
         if (contractType === 'installments') {
-          const { data, error } = await supabase.rpc('get_installment_statuses', {
-            p_installment_ids: allIds
+          // For installments, use status_code from the view directly
+          (allContracts || []).forEach((contract: any) => {
+            if (contract && typeof contract === 'object') {
+              contractsWithStatus.push({
+                ...contract,
+                calculatedStatus: contract.status_code || 'ON_TIME',
+                statusDescription: contract.status_code || 'Không thể tính trạng thái'
+              });
+            }
           });
-          if (!error && data) statusData = data;
-        } else if (contractType === 'pawns') {
-          const { data, error } = await supabase.rpc('get_pawn_statuses', {
-            p_pawn_ids: allIds
+          
+          // Map new contracts with their statuses
+          (newContracts || []).forEach((contract: any) => {
+            if (contract && typeof contract === 'object') {
+              newContractsWithStatus.push({
+                ...contract,
+                calculatedStatus: contract.status_code || 'ON_TIME',
+                statusDescription: contract.status_code || 'Không thể tính trạng thái'
+              });
+            }
           });
-          if (!error && data) statusData = data;
-        } else if (contractType === 'credits') {
-          const { data, error } = await supabase.rpc('get_credit_statuses', {
-            p_credit_ids: allIds
+        } else {
+          // For pawns and credits, still use RPC functions
+          let statusData: any[] = [];
+          
+          if (contractType === 'pawns') {
+            const { data, error } = await supabase.rpc('get_pawn_statuses', {
+              p_pawn_ids: allIds
+            });
+            if (!error && data) statusData = data;
+          } else if (contractType === 'credits') {
+            const { data, error } = await supabase.rpc('get_credit_statuses', {
+              p_credit_ids: allIds
+            });
+            if (!error && data) statusData = data;
+          }
+          
+          // Create status map for quick lookup
+          const statusMap = new Map();
+          statusData.forEach((s: any) => {
+            const idKey = contractType === 'pawns' ? s.pawn_id : s.credit_id;
+            statusMap.set(idKey, {
+              statusCode: s.status_code,
+              description: s.description
+            });
           });
-          if (!error && data) statusData = data;
+          
+          // Map contracts with their statuses
+          (allContracts || []).forEach((contract: any) => {
+            if (contract && typeof contract === 'object') {
+              const status = statusMap.get(contract.id) || { statusCode: 'ON_TIME', description: 'Không thể tính trạng thái' };
+              contractsWithStatus.push({
+                ...contract,
+                calculatedStatus: status.statusCode,
+                statusDescription: status.description
+              });
+            }
+          });
+          
+          // Map new contracts with their statuses
+          (newContracts || []).forEach((contract: any) => {
+            if (contract && typeof contract === 'object') {
+              const status = statusMap.get(contract.id) || { statusCode: 'ON_TIME', description: 'Không thể tính trạng thái' };
+              newContractsWithStatus.push({
+                ...contract,
+                calculatedStatus: status.statusCode,
+                statusDescription: status.description
+              });
+            }
+          });
         }
-        
-        // Create status map for quick lookup
-        const statusMap = new Map();
-        statusData.forEach((s: any) => {
-          const idKey = contractType === 'installments' ? s.installment_id : 
-                       contractType === 'pawns' ? s.pawn_id : s.credit_id;
-          statusMap.set(idKey, {
-            statusCode: s.status_code,
-            description: s.description
-          });
-        });
-        
-        // Map contracts with their statuses
-        (allContracts || []).forEach((contract: any) => {
-          if (contract && typeof contract === 'object') {
-            const status = statusMap.get(contract.id) || { statusCode: 'ON_TIME', description: 'Không thể tính trạng thái' };
-            contractsWithStatus.push({
-              ...contract,
-              calculatedStatus: status.statusCode,
-              statusDescription: status.description
-            });
-          }
-        });
-        
-        // Map new contracts with their statuses
-        (newContracts || []).forEach((contract: any) => {
-          if (contract && typeof contract === 'object') {
-            const status = statusMap.get(contract.id) || { statusCode: 'ON_TIME', description: 'Không thể tính trạng thái' };
-            newContractsWithStatus.push({
-              ...contract,
-              calculatedStatus: status.statusCode,
-              statusDescription: status.description
-            });
-          }
-        });
         
       } catch (error) {
         console.error(`Error getting ${contractType} statuses:`, error);

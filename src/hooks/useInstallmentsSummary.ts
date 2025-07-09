@@ -28,7 +28,7 @@ export function useInstallmentsSummary() {
       
       // Lấy tất cả hợp đồng chưa bị xóa, chưa đóng và thuộc cửa hàng hiện tại
       const { data: activeInstallments, error: installmentsError } = await supabase
-        .from('installments_by_store')
+        .from('installments_by_store_tmp' as any)
         .select(`
           id,
           contract_code,
@@ -49,7 +49,7 @@ export function useInstallmentsSummary() {
 
       // Lấy danh sách hợp đồng đã đóng
       const { data: closedInstallments, error: closedInstallmentsError } = await supabase
-        .from('installments_by_store')
+        .from('installments_by_store_tmp' as any)
         .select('id')
         .eq('status', InstallmentStatus.CLOSED)
         .eq('store_id', currentStore.id);

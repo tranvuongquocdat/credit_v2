@@ -209,7 +209,7 @@ function calculateDueDate(loanDate: string, loanPeriod: number): string {
 export async function getInstallmentById(id: string) {
   try {
     const { data, error } = await supabase
-      .from('installments_by_store')
+      .from('installments_by_store_tmp' as any)
       .select(`
         *,
         customer:customers(

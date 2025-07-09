@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { InstallmentWithCustomer, InstallmentStatus } from '@/models/installment';
 import { calculateRemainingToPay } from '@/lib/installmentCalculations';
-import { calculateMultipleInstallmentStatus } from '@/lib/Installments/calculate_installment_status';
+// import { calculateMultipleInstallmentStatus } from '@/lib/Installments/calculate_installment_status'; // No longer needed
 
 // Map trạng thái thành nhãn và màu sắc (fallback khi không lấy được từ RPC)
 const statusMap: Record<string, { label: string; color: string }> = {
@@ -57,8 +57,16 @@ export function useInstallmentCalculation(
       const paidMap = new Map<string, number>(
         (paidRows ?? []).map((r: any) => [r.installment_id, Number(r.total_paid ?? r.paid_amount ?? 0)])
       );
-      /** 2. Tính trạng thái (dùng giá trị truyền vào nếu có) */
-      const calculatedStatuses = precalculatedStatuses ?? await calculateMultipleInstallmentStatus(ids);
+      /** 2. Tính trạng thái (dùng giá trị truyền vào nếu có hoặc từ status_code trong data) */
+      const calculatedStatuses = precalculatedStatuses ?? 
+        Object.fromEntries(installments.map(it => [
+          it.id, 
+          {
+            statusCode: (it as any).status_code || 'ON_TIME',
+            status: (it as any).status_code || 'ON_TIME',
+            description: (it as any).status_code || 'ON_TIME'
+          }
+        ]));
 
       /** 3. Build enriched list */
       const enriched: ProcessedInstallment[] = installments.map((it) => {

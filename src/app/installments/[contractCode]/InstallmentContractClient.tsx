@@ -26,7 +26,7 @@ import {
 import { toast } from '@/components/ui/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/lib/supabase';
-import { calculateMultipleInstallmentStatus } from '@/lib/Installments/calculate_installment_status';
+// import { calculateMultipleInstallmentStatus } from '@/lib/Installments/calculate_installment_status'; // No longer needed
 import { calculateRemainingToPay } from '@/lib/installmentCalculations';
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -233,8 +233,15 @@ export function InstallmentContractClient({ contractCode }: InstallmentContractC
           (paidRows ?? []).map((r: any) => [r.installment_id, Number(r.total_paid ?? r.paid_amount ?? 0)])
         );
 
-        // RPC: tính trạng thái
-        const calculatedStatuses = await calculateMultipleInstallmentStatus(ids);
+        // Use status_code from the view data instead of RPC
+        const calculatedStatuses = Object.fromEntries(installments.map(it => [
+          it.id, 
+          {
+            statusCode: (it as any).status_code || 'ON_TIME',
+            status: (it as any).status_code || 'ON_TIME',
+            description: (it as any).status_code || 'ON_TIME'
+          }
+        ]));
 
         const enriched = installments.map((it) => {
           const totalPaid = paidMap.get(it.id) ?? 0;
