@@ -14,9 +14,9 @@ export async function getInstallments(
 ) {
   // Debug logging removed - race condition fixed with AbortController
   try {
-    // Use the installments_by_store view to include store_id
+    // Use the installments_by_store_tmp view to include store_id and status_code
     let query = supabase
-      .from('installments_by_store')
+      .from('installments_by_store_tmp')
       .select(`
         *,
         customer:customers!inner(
@@ -46,27 +46,40 @@ export async function getInstallments(
       query = query.eq('loan_period', filters.duration);
     }
     
-    // Special case: nếu filter status là 'due_tomorrow' thì lọc theo payment_due_date = ngày mai
-    if (filters?.status === InstallmentStatus.DUE_TOMORROW) {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const yyyy = tomorrow.getFullYear();
-      const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
-      const dd = String(tomorrow.getDate()).padStart(2, '0');
-      const tomorrowStr = `${yyyy}-${mm}-${dd}`;
-      query = query.eq('payment_due_date', tomorrowStr);
-    } else if (filters?.status && filters.status !== 'all' && filters.status !== '' as any) {
-      // Convert enum value to string for the database query
-      query = query.eq(
-        'status',
-        filters.status as
-          | 'on_time'
-          | 'overdue'
-          | 'late_interest'
-          | 'bad_debt'
-          | 'closed'
-          | 'deleted'
-      );
+    // Filter by status using the new status_code column from the view
+    if (filters?.status) {
+      switch (filters.status) {
+        case InstallmentStatus.DUE_TOMORROW:
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const yyyy = tomorrow.getFullYear();
+          const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
+          const dd = String(tomorrow.getDate()).padStart(2, '0');
+          const tomorrowStr = `${yyyy}-${mm}-${dd}`;
+          query = query.eq('payment_due_date', tomorrowStr);
+          break;
+        case InstallmentStatus.OVERDUE:
+          query = query.eq('status_code', 'OVERDUE');
+          break;
+        case InstallmentStatus.LATE_INTEREST:
+          query = query.eq('status_code', 'LATE_INTEREST');
+          break;
+        case InstallmentStatus.ON_TIME:
+          query = query.in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']);
+          break;
+        case InstallmentStatus.CLOSED:
+          query = query.eq('status_code', 'CLOSED');
+          break;
+        case InstallmentStatus.DELETED:
+          query = query.eq('status_code', 'DELETED');
+          break;
+        case InstallmentStatus.BAD_DEBT:
+          query = query.eq('status_code', 'BAD_DEBT');
+          break;
+        case InstallmentStatus.FINISHED:
+          query = query.eq('status_code', 'FINISHED');
+          break;
+      }
     }
     
     if (filters?.store_id) {
