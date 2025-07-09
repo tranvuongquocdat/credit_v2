@@ -75,7 +75,7 @@ export function usePawns() {
         customer_name: filters.customerName,
         start_date: filters.startDate,
         end_date: filters.endDate,
-        status: filters.status && filters.status !== 'due_tomorrow' ? (filters.status as any) : undefined,
+        status: filters.status && !['due_tomorrow', 'overdue', 'late_interest'].includes(filters.status) ? (filters.status as any) : undefined,
         loan_period: filters.duration || undefined,
         store_id: currentStore.id // Sử dụng currentStore.id trực tiếp thay vì || ''
       };

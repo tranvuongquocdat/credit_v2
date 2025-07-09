@@ -142,18 +142,34 @@ export default function PawnsPage() {
   useEffect(() => {
     fetchTotals(filters);
   }, [JSON.stringify(filters), currentStore?.id]);
+  const { statuses: pawnStatuses, loading: pawnStatusesLoading } = usePawnStatuses(pawns.map(p => p.id));
 
   const displayPawns = useMemo(() => {
-    if (filters?.status !== 'due_tomorrow') return pawns;
-    const tomorrow = addDays(new Date().setHours(0,0,0,0) as any, 1);
-    return pawns.filter(p => {
-      const next = pawnDetails[p.id]?.nextPayment;
-      if (!next) return false;
-      return isSameDay(new Date(next), tomorrow);
-    });
-  }, [pawns, filters?.status, pawnDetails]);
-
-  const effectiveTotalItems = filters?.status === 'due_tomorrow' ? displayPawns.length : totalItems;
+    if (!filters?.status) return pawns;
+    switch (filters?.status) {
+      case 'due_tomorrow':
+        const tomorrow = addDays(new Date().setHours(0,0,0,0) as any, 1);
+        return pawns.filter(p => {
+          const next = pawnDetails[p.id]?.nextPayment;
+          if (!next) return false;
+          return isSameDay(new Date(next), tomorrow);
+        });
+      case 'overdue':
+        if (pawnStatusesLoading) return pawns;
+        return pawns.filter(p => pawnStatuses[p.id]?.statusCode === 'OVERDUE');
+      case 'late_interest':
+        if (pawnStatusesLoading) return pawns;
+        return pawns.filter(p => pawnStatuses[p.id]?.statusCode === 'LATE_INTEREST');
+      default:
+        return pawns;
+    }
+  }, [pawns, filters?.status, pawnDetails, pawnStatuses]);
+  
+  const requiresClientFilter =
+    filters?.status && ['due_tomorrow', 'overdue', 'late_interest'].includes(filters.status);
+  const effectiveTotalItems = requiresClientFilter
+    ? displayPawns.length
+    : totalItems;
   const totalPages = Math.ceil(effectiveTotalItems / itemsPerPage);
   
   // Handle search filters
@@ -418,7 +434,6 @@ export default function PawnsPage() {
     fetchTotals(filters);
   };
   
-  const { statuses: pawnStatuses } = usePawnStatuses(pawns.map(p => p.id));
 
   return (
     <Layout>

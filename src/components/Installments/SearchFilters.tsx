@@ -55,6 +55,8 @@ export function SearchFilters({
     [InstallmentStatus.CLOSED]: { label: 'Đã đóng', color: 'bg-blue-100 text-blue-800' },
     [InstallmentStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
     [InstallmentStatus.DUE_TOMORROW]: { label: 'Ngày mai đóng', color: 'bg-amber-100 text-amber-800' },
+    [InstallmentStatus.OVERDUE]: { label: 'Quá hạn', color: 'bg-red-100 text-red-800' },
+    [InstallmentStatus.LATE_INTEREST]: { label: 'Trễ lãi', color: 'bg-red-100 text-red-800' },
   };
   // Get store context
   const { currentStore } = useStore();

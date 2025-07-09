@@ -519,10 +519,15 @@ base2 as (
   select b.*
   from   base b
   where
-    /* Không chọn status đặc biệt → giữ nguyên */
-    p_filters->>'status' in ('', 'all')
+    /* -------------------------------------------------------------
+       Các trường hợp không phải status đặc biệt → giữ nguyên hàng
+       ------------------------------------------------------------- */
+    (p_filters->>'status' is null
+     or p_filters->>'status' = ''
+     or p_filters->>'status' = 'all'
+     or p_filters->>'status' not in ('due_tomorrow', 'overdue', 'late_interest'))
 
-    /* due_tomorrow */
+    /* -------------------- status = due_tomorrow ------------------ */
     or (
       p_filters->>'status' = 'due_tomorrow'
       and exists (
@@ -533,7 +538,7 @@ base2 as (
       )
     )
 
-    /* overdue */
+    /* -------------------- status = overdue ----------------------- */
     or (
       p_filters->>'status' = 'overdue'
       and exists (
@@ -544,7 +549,7 @@ base2 as (
       )
     )
 
-    /* late_interest */
+    /* -------------------- status = late_interest ----------------- */
     or (
       p_filters->>'status' = 'late_interest'
       and exists (

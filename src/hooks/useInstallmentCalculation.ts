@@ -30,7 +30,10 @@ export interface ProcessedInstallment extends InstallmentWithCustomer {
   };
 }
 
-export function useInstallmentCalculation(installments: InstallmentWithCustomer[]) {
+export function useInstallmentCalculation(
+  installments: InstallmentWithCustomer[],
+  precalculatedStatuses?: Record<string, any>
+) {
   const [processedInstallments, setProcessedInstallments] = useState<ProcessedInstallment[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -54,9 +57,8 @@ export function useInstallmentCalculation(installments: InstallmentWithCustomer[
       const paidMap = new Map<string, number>(
         (paidRows ?? []).map((r: any) => [r.installment_id, Number(r.total_paid ?? r.paid_amount ?? 0)])
       );
-
-      /** 2. Tính trạng thái */
-      const calculatedStatuses = await calculateMultipleInstallmentStatus(ids);
+      /** 2. Tính trạng thái (dùng giá trị truyền vào nếu có) */
+      const calculatedStatuses = precalculatedStatuses ?? await calculateMultipleInstallmentStatus(ids);
 
       /** 3. Build enriched list */
       const enriched: ProcessedInstallment[] = installments.map((it) => {
@@ -133,7 +135,7 @@ export function useInstallmentCalculation(installments: InstallmentWithCustomer[
     } finally {
       setLoading(false);
     }
-  }, [installments]);
+  }, [installments, precalculatedStatuses]);
 
   useEffect(() => {
     compute();

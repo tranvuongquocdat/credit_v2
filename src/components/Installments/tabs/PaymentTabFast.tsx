@@ -214,7 +214,7 @@ export function PaymentTabFast({
         if (updatedLatestPaidDate) {
           const latestPaidDateObj = new Date(updatedLatestPaidDate);
           const endDate = new Date(installment.start_date || '');
-          endDate.setDate(endDate.getDate() + (installment.loan_period || 0) - 1);
+          endDate.setDate(endDate.getDate() + (installment.duration || 0) - 1);
           if (latestPaidDateObj.getTime() >= endDate.getTime()) {
             await updateInstallmentPaymentDueDate(installment.id, null);
           } else {
@@ -229,6 +229,7 @@ export function PaymentTabFast({
         // ----- UNCHECK ----- only latest period
         // Validate first, if the unchecked period has end date before latest paid date, throw error
         const latestPaidDate = await getLatestPaymentPaidDate(installment.id);
+        debugger;
         if (latestPaidDate) {
           const latestPaidDateObj = new Date(latestPaidDate);
           const endDate = new Date(period.endDate?.split('T')[0] ?? period.dueDate.split('T')[0]);
@@ -259,8 +260,8 @@ export function PaymentTabFast({
         const updatedLatestPaidDate = await getLatestPaymentPaidDate(installment.id);
         if (updatedLatestPaidDate) {
           const latestPaidDateObj = new Date(updatedLatestPaidDate);
-          const endDate = new Date(installment.loan_date || '');
-          endDate.setDate(endDate.getDate() + (installment.loan_period || 0) - 1);
+          const endDate = new Date(installment.start_date || '');
+          endDate.setDate(endDate.getDate() + (installment.duration || 0) - 1);
           if (latestPaidDateObj.getTime() >= endDate.getTime()) {
             await updateInstallmentPaymentDueDate(installment.id, null);
           } else {

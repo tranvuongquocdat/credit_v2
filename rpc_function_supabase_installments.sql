@@ -307,109 +307,213 @@ returns table (
   total_daily_amount numeric,
   total_remaining    numeric
 )
-language sql
-as $$
-/* =========================
-   1. Tập hợp hợp đồng sau khi áp dụng TẤT CẢ filter
-   ========================= */
-with base as (
-  select *
-  from   installments_by_store i
-  where  i.store_id = p_store_id
+language plpgsql as
+$$
+declare
+  v_ids uuid[];
+begin
+  /* =========== 1. Base set =========== */
+  with base as (
+    select *
+    from   installments_by_store i
+    where  i.store_id = p_store_id
 
-    /* ---- status ---- */
-    and (
-          coalesce(p_filters->>'status','') in ('', 'all')         -- không lọc
-          or ( p_filters->>'status') = 'due_tomorrow'              -- xử lý riêng ở dưới
-          or i.status = (p_filters->>'status')::installment_status -- enum
-        )
-
-    /* ---- due_tomorrow đặc biệt ---- */
-    and (
-          (p_filters->>'status') <> 'due_tomorrow'
-          or i.payment_due_date = (current_date + interval '1 day')::date
-        )
-
-    /* ---- mã hợp đồng ---- */
-    and (
-          coalesce(p_filters->>'contract_code','') = ''
-          or i.contract_code ilike '%' || (p_filters->>'contract_code') || '%'
-        )
-
-    /* ---- thời hạn vay (loan_period) ---- */
-    and (
-          coalesce(p_filters->>'duration','') = ''
-          or i.loan_period = (p_filters->>'duration')::int
-        )
-
-    /* ---- khoảng ngày vay ---- */
-    and (
-          coalesce(p_filters->>'start_date','') = ''
-          or i.loan_date >= (p_filters->>'start_date')::date
-        )
-    and (
-          coalesce(p_filters->>'end_date','') = ''
-          or i.loan_date <= (p_filters->>'end_date')::date
-        )
-
-    /* ---- tên khách hàng ---- */
-    and (
-          coalesce(p_filters->>'customer_name','') = ''
-          or exists (
-                select 1
-                from   customers c
-                where  c.id   = i.customer_id
-                  and  c.name ilike '%' || (p_filters->>'customer_name') || '%'
+      /* ---- status ---- */
+      and (
+            coalesce(p_filters->>'status','') in ('', 'all')             -- không lọc
+            or (p_filters->>'status') in ('due_tomorrow','overdue','late_interest')
+            or i.status = (p_filters->>'status')::installment_status     -- enum tĩnh
           )
-        )
-),
 
-/* =========================
-   2. Lấy mảng ID để gọi các hàm tổng hợp con
-   ========================= */
-ids as (
-  select array_agg(id) arr_ids from base
-),
+      /* ---- due_tomorrow đặc biệt ---- */
+      and (
+            (p_filters->>'status') <> 'due_tomorrow'
+            or i.payment_due_date = (current_date + interval '1 day')::date
+          )
 
-/* ---- Tiền đã đóng (logic trùng với UI) ---- */
-paid as (
-  select p.installment_id, p.paid_amount as paid
-  from   ids
-  join   lateral installment_get_paid_amount(arr_ids) p on true
-),
+      /* ---- overdue đặc biệt ---- */
+      and (
+            (p_filters->>'status') <> 'overdue'
+            or exists (
+                  select 1
+                  from   get_installment_statuses( array[i.id] ) st
+                  where  st.installment_id = i.id
+                    and  st.status_code    = 'OVERDUE'
+            )
+          )
 
-/* ---- Nợ (old_debt) – logic trùng UI ---- */
-debt as (
-  select d.installment_id, d.old_debt
-  from   ids
-  join   lateral get_installment_old_debt(arr_ids) d on true
-)
+      /* ---- late_interest đặc biệt ---- */
+      and (
+            (p_filters->>'status') <> 'late_interest'
+            or exists (
+                  select 1
+                  from   get_installment_statuses( array[i.id] ) st
+                  where  st.installment_id = i.id
+                    and  st.status_code    = 'LATE_INTEREST'
+            )
+          )
 
-/* =========================
-   3. Tổng hợp kết quả
-   ========================= */
-select
-  /* Tiền giao khách */
-  sum(b.down_payment)                                    as total_amount_given,
+      /* ---- mã hợp đồng ---- */
+      and (
+            coalesce(p_filters->>'contract_code','') = ''
+            or i.contract_code ilike '%' || (p_filters->>'contract_code') || '%'
+          )
 
-  /* Tiền đã đóng */
-  sum(coalesce(p.paid,0))                                as total_paid,
+      /* ---- thời hạn vay (loan_period) ---- */
+      and (
+            coalesce(p_filters->>'duration','') = ''
+            or i.loan_period = (p_filters->>'duration')::int
+          )
 
-  /* Nợ hiện tại */
-  sum(coalesce(d.old_debt,0))                            as total_debt,
+      /* ---- khoảng ngày vay ---- */
+      and (
+            coalesce(p_filters->>'start_date','') = ''
+            or i.loan_date >= (p_filters->>'start_date')::date
+          )
+      and (
+            coalesce(p_filters->>'end_date','') = ''
+            or i.loan_date <= (p_filters->>'end_date')::date
+          )
 
-  /* Tiền 1 ngày */
-  sum(
-        case
-          when coalesce(b.loan_period,0) > 0
-          then b.installment_amount / b.loan_period
-          else 0
-        end
-  )                                                      as total_daily_amount,
+      /* ---- tên khách hàng ---- */
+      and (
+            coalesce(p_filters->>'customer_name','') = ''
+            or exists (
+                  select 1
+                  from   customers c
+                  where  c.id   = i.customer_id
+                    and  c.name ilike '%' || (p_filters->>'customer_name') || '%'
+            )
+          )
+  )
+  select array_agg(id) into v_ids from base;
 
-  /* Còn phải đóng */
-  sum(b.installment_amount - coalesce(p.paid,0))         as total_remaining
-from base b
-left join paid p  on p.installment_id  = b.id
-left join debt d  on d.installment_id  = b.id;
+  -- DEBUG
+  raise log 'installment_get_totals – IDs after filter: %', v_ids;
+
+  /* =========== 2. Phần còn lại giống cũ =========== */
+  return query
+  with base as (
+    select *
+    from   installments_by_store i
+    where  i.store_id = p_store_id
+
+      /* ---- status ---- */
+      and (
+            coalesce(p_filters->>'status','') in ('', 'all')             -- không lọc
+            or (p_filters->>'status') in ('due_tomorrow','overdue','late_interest')
+            or i.status = (p_filters->>'status')::installment_status     -- enum tĩnh
+          )
+
+      /* ---- due_tomorrow đặc biệt ---- */
+      and (
+            (p_filters->>'status') <> 'due_tomorrow'
+            or i.payment_due_date = (current_date + interval '1 day')::date
+          )
+
+      /* ---- overdue đặc biệt ---- */
+      and (
+            (p_filters->>'status') <> 'overdue'
+            or exists (
+                  select 1
+                  from   get_installment_statuses( array[i.id] ) st
+                  where  st.installment_id = i.id
+                    and  st.status_code    = 'OVERDUE'
+            )
+          )
+
+      /* ---- late_interest đặc biệt ---- */
+      and (
+            (p_filters->>'status') <> 'late_interest'
+            or exists (
+                  select 1
+                  from   get_installment_statuses( array[i.id] ) st
+                  where  st.installment_id = i.id
+                    and  st.status_code    = 'LATE_INTEREST'
+            )
+          )
+
+      /* ---- mã hợp đồng ---- */
+      and (
+            coalesce(p_filters->>'contract_code','') = ''
+            or i.contract_code ilike '%' || (p_filters->>'contract_code') || '%'
+          )
+
+      /* ---- thời hạn vay (loan_period) ---- */
+      and (
+            coalesce(p_filters->>'duration','') = ''
+            or i.loan_period = (p_filters->>'duration')::int
+          )
+
+      /* ---- khoảng ngày vay ---- */
+      and (
+            coalesce(p_filters->>'start_date','') = ''
+            or i.loan_date >= (p_filters->>'start_date')::date
+          )
+      and (
+            coalesce(p_filters->>'end_date','') = ''
+            or i.loan_date <= (p_filters->>'end_date')::date
+          )
+
+      /* ---- tên khách hàng ---- */
+      and (
+            coalesce(p_filters->>'customer_name','') = ''
+            or exists (
+                  select 1
+                  from   customers c
+                  where  c.id   = i.customer_id
+                    and  c.name ilike '%' || (p_filters->>'customer_name') || '%'
+            )
+          )
+  ),
+
+  /* =========================
+     2. Lấy mảng ID để gọi các hàm tổng hợp con
+     ========================= */
+  ids as (
+    select array_agg(id) arr_ids from base
+  ),
+
+  /* ---- Tiền đã đóng (logic trùng với UI) ---- */
+  paid as (
+    select p.installment_id, p.paid_amount as paid
+    from   ids
+    join   lateral installment_get_paid_amount(arr_ids) p on true
+  ),
+
+  /* ---- Nợ (old_debt) – logic trùng UI ---- */
+  debt as (
+    select d.installment_id, d.old_debt
+    from   ids
+    join   lateral get_installment_old_debt(arr_ids) d on true
+  )
+
+  /* =========================
+     3. Tổng hợp kết quả
+     ========================= */
+  select
+    /* Tiền giao khách */
+    sum(b.down_payment)                                    as total_amount_given,
+
+    /* Tiền đã đóng */
+    sum(coalesce(p.paid,0))                                as total_paid,
+
+    /* Nợ hiện tại */
+    sum(coalesce(d.old_debt,0))                            as total_debt,
+
+    /* Tiền 1 ngày */
+    sum(
+          case
+            when coalesce(b.loan_period,0) > 0
+            then b.installment_amount / b.loan_period
+            else 0
+          end
+    )                                                      as total_daily_amount,
+
+    /* Còn phải đóng */
+    sum(b.installment_amount - coalesce(p.paid,0))         as total_remaining
+  from base b
+  left join paid p  on p.installment_id  = b.id
+  left join debt d  on d.installment_id  = b.id;
+end;
 $$;
