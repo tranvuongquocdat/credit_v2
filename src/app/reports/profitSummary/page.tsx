@@ -411,17 +411,94 @@ export default function ProfitSummaryPage() {
     const endDateObj = endOfDay(parse(endDate, 'yyyy-MM-dd', new Date()));
 
     try {
-      const { data: transactions } = await supabase
+      // Get all transactions without is_deleted filter
+      const { data: allTransactions } = await supabase
         .from('transactions')
-        .select('credit_amount, debit_amount')
-        .eq('store_id', storeId)
-        .gte('created_at', startDateObj.toISOString())
-        .lte('created_at', endDateObj.toISOString())
-        .eq('is_deleted', false);
+        .select('*')
+        .eq('store_id', storeId);
 
-      if (transactions) {
-        const income = transactions.reduce((sum, t) => sum + (t.credit_amount || 0), 0);
-        const expense = transactions.reduce((sum, t) => sum + (t.debit_amount || 0), 0);
+      if (allTransactions) {
+        // Transform transactions to display format (same as other reports)
+        const transformTransactionsForDisplay = (rawTransactions: any[]) => {
+          const displayTransactions: any[] = [];
+          
+          rawTransactions.forEach(transaction => {
+            if (transaction.is_deleted) {
+              // Add original transaction record
+              displayTransactions.push({
+                ...transaction,
+                is_cancellation: false,
+              });
+              
+              // Add cancellation record
+              displayTransactions.push({
+                ...transaction,
+                id: `${transaction.id}_cancel`,
+                is_cancellation: true,
+                created_at: transaction.update_at || transaction.created_at,
+                // Reverse amounts for cancellation
+                credit_amount: transaction.credit_amount ? -transaction.credit_amount : null,
+                debit_amount: transaction.debit_amount ? -transaction.debit_amount : null,
+                amount: transaction.amount ? -transaction.amount : null,
+              });
+            } else {
+              // Add normal transaction record
+              displayTransactions.push({
+                ...transaction,
+                is_cancellation: false,
+              });
+            }
+          });
+          
+          return displayTransactions;
+        };
+
+        const displayTransactions = transformTransactionsForDisplay(allTransactions);
+        
+        // Filter by date range after transformation
+        const transactionsData = displayTransactions.filter(transaction => {
+          const transactionDate = new Date(transaction.created_at);
+          return transactionDate >= startDateObj && transactionDate <= endDateObj;
+        });
+
+        // Calculate income and expense with proper handling of negative amounts
+        let income = 0;
+        let expense = 0;
+
+        transactionsData.forEach((item: any) => {
+          if (item.transaction_type === 'income') {
+            const amount = Number(item.amount || 0);
+            if (amount >= 0) {
+              income += amount;
+            } else {
+              expense += Math.abs(amount);
+            }
+          } else if (item.transaction_type === 'expense') {
+            const amount = Number(item.amount || 0);
+            if (amount >= 0) {
+              expense += amount;
+            } else {
+              income += Math.abs(amount);
+            }
+          } else {
+            // Handle credit/debit amounts
+            const creditAmount = Number(item.credit_amount || 0);
+            const debitAmount = Number(item.debit_amount || 0);
+            
+            if (creditAmount >= 0) {
+              income += creditAmount;
+            } else {
+              expense += Math.abs(creditAmount);
+            }
+            
+            if (debitAmount >= 0) {
+              expense += debitAmount;
+            } else {
+              income += Math.abs(debitAmount);
+            }
+          }
+        });
+
         return { income, expense };
       }
     } catch (error) {
