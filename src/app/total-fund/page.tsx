@@ -360,6 +360,7 @@ export default function TotalFundPage() {
         .from('transactions')
         .select('*')
         .eq('store_id', storeId)
+        .or('is_deleted.is.null,is_deleted.eq.false')
         .limit(10000);
       
       if (transactionsData) processItems(transactionsData, 'Thu chi');

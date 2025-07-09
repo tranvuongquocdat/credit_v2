@@ -5,7 +5,7 @@ import { Layout } from '@/components/Layout';
 import { FinancialSummary } from '@/components/common/FinancialSummary';
 import { useAutoUpdateCashFund } from '@/hooks/useCashFundUpdater';
 import { useStore } from '@/contexts/StoreContext';
-import { Plus, Pencil, Trash2, RefreshCw, MoreVertical, FilterIcon, CalendarIcon, Printer } from 'lucide-react';
+import { Plus, Pencil, Trash2, RefreshCw, FilterIcon, CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/auth';
@@ -35,13 +35,7 @@ import {
   PaginationPrevious
 } from "@/components/ui/pagination";
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+
 
 import {
   Dialog,
@@ -125,6 +119,11 @@ const transactionTypeMap = {
     label: "Chi khác",
     color: "bg-red-50 text-red-700 border-red-200 hover:bg-red-100",
   },
+  // Cancelled transaction type
+  "cancelled": {
+    label: "Huỷ chi",
+    color: "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100",
+  },
 };
 
 // Transaction form data type
@@ -151,6 +150,12 @@ type Transaction = {
   credit_amount: number | null;
   description: string | null;
   store_id: string | null;
+  is_deleted: boolean | null;
+};
+
+// Extended transaction type for display purposes
+type DisplayTransaction = Transaction & {
+  is_cancellation?: boolean; // Flag to indicate if this is a cancellation record
 };
 
 // Customer type
@@ -199,14 +204,14 @@ export default function OutgoingPage() {
   const [transactionTypeFilter, setTransactionTypeFilter] = useState<string>('all');
 
   // State for data and loading
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactions, setTransactions] = useState<DisplayTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // State for dialogs
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [selectedRecord, setSelectedRecord] = useState<Transaction | null>(null);
+  const [selectedRecord, setSelectedRecord] = useState<DisplayTransaction | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // State for customers
@@ -243,6 +248,39 @@ export default function OutgoingPage() {
     } catch {
       return dateString;
     }
+  };
+
+  // Transform transactions to display format (separate records for original and cancellation)
+  const transformTransactionsForDisplay = (rawTransactions: Transaction[]): DisplayTransaction[] => {
+    const displayTransactions: DisplayTransaction[] = [];
+    
+    rawTransactions.forEach(transaction => {
+      if (transaction.is_deleted) {
+        // Add original transaction record
+        displayTransactions.push({
+          ...transaction,
+          is_cancellation: false,
+        });
+        
+        // Add cancellation record
+        displayTransactions.push({
+          ...transaction,
+          id: `${transaction.id}_cancel`,
+          is_cancellation: true,
+          created_at: transaction.update_at || transaction.created_at,
+          debit_amount: transaction.debit_amount ? -transaction.debit_amount : null, // Negative for expense cancellation (becomes positive income)
+          credit_amount: transaction.credit_amount,
+        });
+      } else {
+        // Add normal transaction record
+        displayTransactions.push({
+          ...transaction,
+          is_cancellation: false,
+        });
+      }
+    });
+    
+    return displayTransactions;
   };
 
   // Redirect if no permission
@@ -303,24 +341,12 @@ export default function OutgoingPage() {
     setError(null);
 
     try {
-      // First, get transactions
+      // First, get transactions (without date filter in query)
       let query = supabase
         .from('transactions')
         .select('*', { count: 'exact' })
         .or(`transaction_type.eq.${TRANSACTION_TYPES.EXPENSE_SALARY},transaction_type.eq.${TRANSACTION_TYPES.EXPENSE_INTEREST},transaction_type.eq.${TRANSACTION_TYPES.EXPENSE_CONSUMPTION},transaction_type.eq.${TRANSACTION_TYPES.EXPENSE_FUND},transaction_type.eq.${TRANSACTION_TYPES.EXPENSE_ADVANCE},transaction_type.eq.${TRANSACTION_TYPES.EXPENSE_COMMISSION},transaction_type.eq.${TRANSACTION_TYPES.EXPENSE_TICKET},transaction_type.eq.${TRANSACTION_TYPES.EXPENSE_OFFICE},transaction_type.eq.${TRANSACTION_TYPES.EXPENSE_OTHER}`)
         .order('created_at', { ascending: false });
-
-      // Apply date range filter if provided
-      if (dateFrom) {
-        query = query.gte('created_at', dateFrom);
-      }
-
-      if (dateTo) {
-        // Add one day to include the end date
-        const nextDay = new Date(dateTo);
-        nextDay.setDate(nextDay.getDate() + 1);
-        query = query.lt('created_at', nextDay.toISOString());
-      }
 
       // Apply transaction type filter if provided
       if (transactionTypeFilter && transactionTypeFilter !== 'all') {
@@ -332,18 +358,14 @@ export default function OutgoingPage() {
         query = query.eq('store_id', currentStore.id);
       }
 
-      // Apply pagination
-      const from = (currentPage - 1) * pageSize;
-      const to = from + pageSize - 1;
-      query = query.range(from, to);
-
-      const { data: transactionData, error: fetchError, count } = await query;
+      // Get all data without pagination first (for date filtering after transform)
+      const { data: allTransactionData, error: fetchError } = await query;
 
       if (fetchError) throw fetchError;
       
       // Get employee and customer information for all transactions
       const transactionsWithInfo = await Promise.all(
-        (transactionData || []).map(async (transaction) => {
+        (allTransactionData || []).map(async (transaction) => {
           // Start with an object containing transaction data
           const enhancedTransaction: Partial<Transaction> = { ...transaction };
           
@@ -404,9 +426,41 @@ export default function OutgoingPage() {
         })
       );
 
-      setTransactions(transactionsWithInfo);
-      setTotalRecords(count || 0);
-      setTotalPages(count ? Math.ceil(count / pageSize) : 0);
+      // Transform transactions to display format
+      const displayTransactions = transformTransactionsForDisplay(transactionsWithInfo);
+      
+      // Apply date range filter AFTER transformation
+      let filteredTransactions = displayTransactions;
+      if (dateFrom || dateTo) {
+        filteredTransactions = displayTransactions.filter(transaction => {
+          const transactionDate = new Date(transaction.created_at);
+          let withinRange = true;
+          
+          if (dateFrom) {
+            const fromDate = new Date(dateFrom);
+            withinRange = withinRange && transactionDate >= fromDate;
+          }
+          
+          if (dateTo) {
+            const toDate = new Date(dateTo);
+            toDate.setDate(toDate.getDate() + 1); // Include the end date
+            withinRange = withinRange && transactionDate < toDate;
+          }
+          
+          return withinRange;
+        });
+      }
+      
+      // Apply pagination after filtering
+      const totalFilteredRecords = filteredTransactions.length;
+      const totalPages = Math.ceil(totalFilteredRecords / pageSize);
+      const from = (currentPage - 1) * pageSize;
+      const to = from + pageSize;
+      const paginatedTransactions = filteredTransactions.slice(from, to);
+
+      setTransactions(paginatedTransactions);
+      setTotalRecords(totalFilteredRecords);
+      setTotalPages(totalPages);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -557,6 +611,11 @@ export default function OutgoingPage() {
     setError(null);
     
     try {
+      // Get the original transaction ID (remove _cancel suffix if present)
+      const originalId = selectedRecord.id.includes('_cancel') ? 
+        selectedRecord.id.replace('_cancel', '') : 
+        selectedRecord.id;
+
       // Update transaction record
       const { error: updateError } = await supabase
         .from('transactions')
@@ -566,7 +625,7 @@ export default function OutgoingPage() {
           description: formData.description,
           update_at: new Date().toISOString(),
         })
-        .eq('id', selectedRecord.id);
+        .eq('id', originalId);
         
       if (updateError) throw updateError;
       
@@ -601,16 +660,32 @@ export default function OutgoingPage() {
     }
   };
 
-  // Handle deleting transaction
+  // Handle deleting transaction (soft delete)
   const handleDeleteTransaction = async () => {
-    if (!selectedRecord) return;
+    if (!selectedRecord || selectedRecord.is_cancellation) return;
     setIsSubmitting(true);
 
     try {
+      // Get the original transaction ID (remove _cancel suffix if present)
+      const originalId = selectedRecord.id.includes('_cancel') ? 
+        selectedRecord.id.replace('_cancel', '') : 
+        selectedRecord.id;
+
+      // Format current time and date
+      const now = new Date();
+      const timeString = format(now, 'HH:mm dd/MM/yyyy');
+      
+      // Create cancel description
+      const cancelDescription = `Hủy chi, NV : ${currentUser?.username || 'N/A'}, vào lúc : ${timeString}`;
+
       const { error: deleteError } = await supabase
         .from('transactions')
-        .delete()
-        .eq('id', selectedRecord.id);
+        .update({
+          is_deleted: true,
+          update_at: now.toISOString(),
+          description: cancelDescription
+        })
+        .eq('id', originalId);
 
       if (deleteError) throw deleteError;
 
@@ -628,7 +703,9 @@ export default function OutgoingPage() {
   };
 
   // Open edit modal
-  const openEditModal = (record: Transaction) => {
+  const openEditModal = (record: DisplayTransaction) => {
+    if (record.is_cancellation) return; // Don't allow editing cancellation records
+    
     setSelectedRecord(record);
     
     // Set form data from the transaction record
@@ -681,7 +758,9 @@ export default function OutgoingPage() {
   };
 
   // Open delete modal
-  const openDeleteModal = (record: Transaction) => {
+  const openDeleteModal = (record: DisplayTransaction) => {
+    if (record.is_cancellation) return; // Don't allow deleting cancellation records
+    
     setSelectedRecord(record);
     setIsDeleteModalOpen(true);
   };
@@ -951,18 +1030,22 @@ export default function OutgoingPage() {
                       </TableCell>
                       <TableCell className="py-3 px-3 border-b border-r border-gray-200">
                         <Badge 
-                          className={record.transaction_type ? 
-                            transactionTypeMap[record.transaction_type as keyof typeof transactionTypeMap]?.color || '' : ''}
+                          className={record.is_cancellation ? 
+                            transactionTypeMap["cancelled"]?.color || '' : 
+                            (record.transaction_type ? 
+                              transactionTypeMap[record.transaction_type as keyof typeof transactionTypeMap]?.color || '' : '')}
                           variant="outline"
                         >
-                          {record.transaction_type ? 
-                            transactionTypeMap[record.transaction_type as keyof typeof transactionTypeMap]?.label || 
-                            record.transaction_type : 'Không xác định'}
+                          {record.is_cancellation ? 
+                            transactionTypeMap["cancelled"]?.label || 'Huỷ chi' :
+                            (record.transaction_type ? 
+                              transactionTypeMap[record.transaction_type as keyof typeof transactionTypeMap]?.label || 
+                              record.transaction_type : 'Không xác định')}
                         </Badge>
                       </TableCell>
                       <TableCell className="py-3 px-3 text-right font-medium border-b border-r border-gray-200">
-                        <span className="text-red-600">
-                          -{formatCurrency(record.debit_amount)}
+                        <span className={record.debit_amount && record.debit_amount >= 0 ? "text-red-600" : "text-green-600"}>
+                          {record.debit_amount && record.debit_amount >= 0 ? '-' : '+'}{formatCurrency(record.debit_amount ? Math.abs(record.debit_amount) : 0)}
                         </span>
                       </TableCell>
                       <TableCell className="py-3 px-3 border-b border-r border-gray-200">
@@ -970,47 +1053,27 @@ export default function OutgoingPage() {
                       </TableCell>
                       <TableCell className="py-3 px-3 border-b border-gray-200">
                         <div className="flex justify-center space-x-1">
-                          <Button 
-                            variant="ghost" 
-                            className="h-8 w-8 p-0" 
-                            onClick={() => openEditModal(record)}
-                          >
-                            <Pencil className="h-4 w-4 text-gray-500" />
-                          </Button>
-                          {hasPermission('xoa_hoat_dong_thu_chi') && (
-                          <Button 
-                            variant="ghost" 
-                            className="h-8 w-8 p-0" 
-                            onClick={() => openDeleteModal(record)}
-                          >
-                            <Trash2 className="h-4 w-4 text-gray-500" />
-                          </Button>
-                          )}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" className="h-8 w-8 p-0">
-                                <span className="sr-only">Mở menu</span>
-                                <MoreVertical className="h-4 w-4 text-gray-500" />
+                          {!record.is_cancellation && (
+                            <>
+                              <Button 
+                                variant="ghost" 
+                                className="h-8 w-8 p-0" 
+                                onClick={() => openEditModal(record)}
+                                disabled={!!record.is_deleted}
+                              >
+                                <Pencil className="h-4 w-4 text-gray-500" />
                               </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44">
-                              <DropdownMenuItem onClick={() => openEditModal(record)}>
-                                <Pencil className="mr-2 h-4 w-4" />
-                                Sửa thông tin
-                              </DropdownMenuItem>
-                              <DropdownMenuItem>
-                                <Printer className="mr-2 h-4 w-4" />
-                                In phiếu
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              {hasPermission('xoa_hoat_dong_thu_chi') && (
-                              <DropdownMenuItem onClick={() => openDeleteModal(record)} className="text-red-600">
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Xóa giao dịch
-                              </DropdownMenuItem>
+                              {hasPermission('xoa_hoat_dong_thu_chi') && !record.is_deleted && (
+                              <Button 
+                                variant="ghost" 
+                                className="h-8 w-8 p-0" 
+                                onClick={() => openDeleteModal(record)}
+                              >
+                                <Trash2 className="h-4 w-4 text-gray-500" />
+                              </Button>
                               )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                            </>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -1022,8 +1085,8 @@ export default function OutgoingPage() {
                         Tổng
                       </TableCell>
                       <TableCell className="py-3 px-3 text-right font-semibold border-b border-r border-t border-gray-200">
-                        <span className="text-red-600">
-                          -{formatCurrency(calculateTotal())}
+                        <span className={calculateTotal() >= 0 ? "text-red-600" : "text-green-600"}>
+                          {calculateTotal() >= 0 ? '-' : '+'}{formatCurrency(Math.abs(calculateTotal()))}
                         </span>
                       </TableCell>
                       <TableCell colSpan={2} className="py-3 px-3 border-b border-t border-gray-200"></TableCell>

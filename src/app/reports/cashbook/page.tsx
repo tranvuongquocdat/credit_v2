@@ -272,16 +272,55 @@ export default function CashbookPage() {
       }));
       setInstallmentTransactions(formattedInstallmentData);
       
-      // Fetch transactions (income/expense)
-      const transactionsData = await fetchAllData(
+      // Fetch transactions (income/expense) - Remove is_deleted filter and apply transform logic
+      const allTransactionsData = await fetchAllData(
         supabase
           .from('transactions')
           .select('*')
           .eq('store_id', storeId)
-          .eq('is_deleted', false)
-          .gte('created_at', startDateISO)
-          .lte('created_at', endDateISO)
       );
+      
+      // Transform transactions to display format (same as income/outgoing pages)
+      const transformTransactionsForDisplay = (rawTransactions: any[]) => {
+        const displayTransactions: any[] = [];
+        
+        rawTransactions.forEach(transaction => {
+          if (transaction.is_deleted) {
+            // Add original transaction record
+            displayTransactions.push({
+              ...transaction,
+              is_cancellation: false,
+            });
+            
+            // Add cancellation record
+            displayTransactions.push({
+              ...transaction,
+              id: `${transaction.id}_cancel`,
+              is_cancellation: true,
+              created_at: transaction.update_at || transaction.created_at,
+              // Reverse amounts for cancellation
+              credit_amount: transaction.credit_amount ? -transaction.credit_amount : null,
+              debit_amount: transaction.debit_amount ? -transaction.debit_amount : null,
+            });
+          } else {
+            // Add normal transaction record
+            displayTransactions.push({
+              ...transaction,
+              is_cancellation: false,
+            });
+          }
+        });
+        
+        return displayTransactions;
+      };
+      
+      const displayTransactions = transformTransactionsForDisplay(allTransactionsData);
+      
+      // Filter by date range after transformation
+      const transactionsData = displayTransactions.filter(transaction => {
+        const transactionDate = new Date(transaction.created_at);
+        return transactionDate >= startDateObj && transactionDate <= endDateObj;
+      });
       
       // Format transaction data
       const formattedTransactionData: Transaction[] = transactionsData.map((item: any) => {

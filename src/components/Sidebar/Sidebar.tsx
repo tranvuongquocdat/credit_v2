@@ -80,7 +80,7 @@ const sidebarItems: SidebarItem[] = [
     submenu: [
       { title: 'Tổng quát chuỗi cửa hàng', path: '/stores/overview', icon: <FiPieChart size={18} /> },
       { title: 'Thông tin chi tiết cửa hàng', path: '/stores/detail', icon: <FiFileText size={18} /> },
-      { title: 'Danh sách cửa hàng', path: '/stores', icon: <FiShoppingBag size={18} /> },
+      { title: 'Danh sách cửa hàng', path: '/stores/list', icon: <FiShoppingBag size={18} /> },
       { title: 'Cấu hình hàng hóa', path: '/stores/collaterals', icon: <FiPackage size={18} /> },
     ]
   },

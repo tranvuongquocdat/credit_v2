@@ -504,8 +504,8 @@ export default function ProfilePage() {
           </Card>
         )}
 
-        {/* Password Change Section - Only for employees */}
-        {profile.employee && (
+        {/* Password Change Section - For employees, admins, and superadmins */}
+        {(profile.employee || profile.role === 'admin' || profile.role === 'superadmin') && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

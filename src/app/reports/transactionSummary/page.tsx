@@ -270,16 +270,55 @@ export default function TransactionSummaryPage() {
           .lte('created_at', endDateISO)
       );
       
-      // Fetch income/expense transactions
-      const transactionsData = await fetchAllData(
+      // Fetch income/expense transactions - Remove is_deleted filter and apply transform logic
+      const allTransactionsData = await fetchAllData(
         supabase
           .from('transactions')
           .select('*')
           .eq('store_id', storeId)
-          .eq('is_deleted', false)
-          .gte('created_at', startDateISO)
-          .lte('created_at', endDateISO)
       );
+      
+      // Transform transactions to display format (same as income/outgoing pages)
+      const transformTransactionsForDisplay = (rawTransactions: any[]) => {
+        const displayTransactions: any[] = [];
+        
+        rawTransactions.forEach(transaction => {
+          if (transaction.is_deleted) {
+            // Add original transaction record
+            displayTransactions.push({
+              ...transaction,
+              is_cancellation: false,
+            });
+            
+            // Add cancellation record
+            displayTransactions.push({
+              ...transaction,
+              id: `${transaction.id}_cancel`,
+              is_cancellation: true,
+              created_at: transaction.update_at || transaction.created_at,
+              // Reverse amounts for cancellation
+              credit_amount: transaction.credit_amount ? -transaction.credit_amount : null,
+              debit_amount: transaction.debit_amount ? -transaction.debit_amount : null,
+            });
+          } else {
+            // Add normal transaction record
+            displayTransactions.push({
+              ...transaction,
+              is_cancellation: false,
+            });
+          }
+        });
+        
+        return displayTransactions;
+      };
+      
+      const displayTransactions = transformTransactionsForDisplay(allTransactionsData);
+      
+      // Filter by date range after transformation
+      const transactionsData = displayTransactions.filter(transaction => {
+        const transactionDate = new Date(transaction.created_at);
+        return transactionDate >= startDateObj && transactionDate <= endDateObj;
+      });
       
       // Fetch capital transactions
       const capitalData = await fetchAllData(
@@ -332,13 +371,35 @@ export default function TransactionSummaryPage() {
       if (transactionsData) {
         transactionsData.forEach((item: any) => {
           if (item.transaction_type === 'income') {
-            incomeExpenseIncome += Number(item.amount || 0);
+            const amount = Number(item.amount || 0);
+            if (amount >= 0) {
+              incomeExpenseIncome += amount;
+            } else {
+              incomeExpenseExpense += Math.abs(amount);
+            }
           } else if (item.transaction_type === 'expense') {
-            incomeExpenseExpense += Number(item.amount || 0);
+            const amount = Number(item.amount || 0);
+            if (amount >= 0) {
+              incomeExpenseExpense += amount;
+            } else {
+              incomeExpenseIncome += Math.abs(amount);
+            }
           } else {
             // Handle credit/debit amounts
-            incomeExpenseIncome += Number(item.credit_amount || 0);
-            incomeExpenseExpense += Number(item.debit_amount || 0);
+            const creditAmount = Number(item.credit_amount || 0);
+            const debitAmount = Number(item.debit_amount || 0);
+            
+            if (creditAmount >= 0) {
+              incomeExpenseIncome += creditAmount;
+            } else {
+              incomeExpenseExpense += Math.abs(creditAmount);
+            }
+            
+            if (debitAmount >= 0) {
+              incomeExpenseExpense += debitAmount;
+            } else {
+              incomeExpenseIncome += Math.abs(debitAmount);
+            }
           }
         });
       }
