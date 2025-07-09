@@ -523,7 +523,8 @@ export async function updateCashFundFromAllSources(storeId: string) {
     const { data: transactionData } = await supabase
       .from('transactions')
       .select('*')
-      .eq('store_id', storeId);
+      .eq('store_id', storeId)
+      .or('is_deleted.is.null,is_deleted.eq.false');
     
     if (transactionData) {
       processItems(transactionData, 'Thu chi');
