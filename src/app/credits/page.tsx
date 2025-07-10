@@ -24,7 +24,7 @@ import { useCredits } from '@/hooks/useCredits';
 import { useCreditsSummary } from '@/hooks/useCreditsSummary';
 import { useCreditCalculations } from '@/hooks/useCreditCalculation';
 import { useAutoUpdateCashFund } from '@/hooks/useCashFundUpdater';
-import { useCreditStatuses } from '@/hooks/useCreditStatuses';
+// Removed: import { useCreditStatuses } from '@/hooks/useCreditStatuses';
 import { CreditStatus, CreditWithCustomer } from '@/models/credit';
 
 import { usePermissions } from '@/hooks/usePermissions';
@@ -34,19 +34,10 @@ import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_
 import { supabase } from '@/lib/supabase';
 import { getInterestDisplayString } from '@/lib/interest-calculator';
 import { formatCurrencyExcel } from '@/lib/utils';
-import { isSameDay, addDays } from 'date-fns';
 import { useStore } from '@/contexts/StoreContext';
 
-// Map trạng thái thành nhãn và màu sắc
-const statusMap: Record<string, { label: string, color: string }> = {
-  [CreditStatus.ON_TIME]: { label: 'Đang vay', color: 'bg-green-100 text-green-800' },
-  [CreditStatus.OVERDUE]: { label: 'Quá hạn', color: 'bg-red-100 text-red-800' },
-  [CreditStatus.LATE_INTEREST]: { label: 'Chậm lãi', color: 'bg-yellow-100 text-yellow-800' },
-  [CreditStatus.BAD_DEBT]: { label: 'Nợ xấu', color: 'bg-purple-100 text-purple-800' },
-  [CreditStatus.CLOSED]: { label: 'Đã đóng', color: 'bg-blue-100 text-blue-800' },
-  [CreditStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
-  [CreditStatus.FINISHED]: { label: 'Hoàn thành', color: 'bg-green-100 text-green-800' },
-};
+// Import shared status utility
+import { getCreditStatusInfo } from '@/lib/credit-status-utils';
 
 // Type for totals
 interface CreditTotals {
@@ -106,11 +97,7 @@ export default function CreditsPage() {
   // Lấy chi tiết tài chính & summary qua hook chung
   const { details: creditDetails } = useCreditCalculations();
   
-  // Lấy trạng thái cho các hợp đồng trong trang hiện tại
-  const {
-    statuses: creditStatuses,
-    loading: creditStatusesLoading,
-  } = useCreditStatuses(credits.map((c) => c.id));
+  // Status codes are now available directly in credits data from credits_by_store view
   // Use auto update cash fund hook
   const { triggerUpdate } = useAutoUpdateCashFund({
     onUpdate: (newCashFund) => {
@@ -142,9 +129,28 @@ export default function CreditsPage() {
   const fetchTotals = async (f = filters) => {
     if (!currentStore?.id) return;
     try {
+      // Transform filters for RPC compatibility
+      let rpcFilters = f;
+      if (f?.status && f.status !== 'all' && f.status !== 'due_tomorrow') {
+        // Map lowercase status to uppercase for RPC
+        const statusMapping: Record<string, string> = {
+          'on_time': 'ON_TIME',
+          'late_interest': 'LATE_INTEREST', 
+          'overdue': 'OVERDUE',
+          'finished': 'FINISHED',
+          'closed': 'CLOSED',
+          'deleted': 'DELETED',
+          'bad_debt': 'BAD_DEBT',
+        };
+        rpcFilters = {
+          ...f,
+          status: statusMapping[f.status] || f.status
+        };
+      }
+      
       const { data, error } = await (supabase as any).rpc('credit_get_totals', {
         p_store_id: currentStore.id,
-        p_filters : f ?? null,
+        p_filters : rpcFilters ?? null,
       });
       if (!error) {
         setTotals((data as any)?.[0] ?? null);
@@ -158,44 +164,9 @@ export default function CreditsPage() {
     fetchTotals(filters);
   }, [JSON.stringify(filters), currentStore?.id]);
   
-  // Client-side filter: Ngày mai đóng lãi
-  const displayCredits = useMemo(() => {
-    // Nếu không phải filter đặc biệt -> trả về nguyên bản
-    if (!filters?.status) return credits;
-    console.log('creditStatuses', creditStatuses);
-    switch (filters.status) {
-      case 'due_tomorrow': {
-        const tomorrow = addDays(new Date().setHours(0,0,0,0) as any, 1);
-        return credits.filter(c => {
-          const next = creditDetails[c.id]?.nextPayment;
-          if (!next) return false;
-          return isSameDay(new Date(next), tomorrow);
-        });
-      }
-
-      case 'overdue': {
-        if (creditStatusesLoading) return credits; // hiển thị tạm tất cả trong lúc chờ kết quả RPC
-        return credits.filter(
-          (c) => creditStatuses[c.id]?.statusCode === 'OVERDUE'
-        );
-      }
-
-      case 'late_interest': {
-        if (creditStatusesLoading) return credits;
-        return credits.filter(
-          (c) => creditStatuses[c.id]?.statusCode === 'LATE_INTEREST'
-        );
-      }
-
-      default:
-        return credits;
-    }
-  }, [credits, filters?.status, creditDetails, creditStatuses]);
-  const requiresClientFilter =
-    filters?.status && ['due_tomorrow', 'overdue', 'late_interest'].includes(filters.status);
-  const effectiveTotalItems = requiresClientFilter
-    ? displayCredits.length
-    : totalItems;
+  // All filtering is now handled server-side via enhanced credits_by_store view
+  const displayCredits = credits;
+  const effectiveTotalItems = totalItems;
   const totalPages = Math.ceil(effectiveTotalItems / itemsPerPage);
   
   // Process initial filters only once
@@ -511,9 +482,9 @@ export default function CreditsPage() {
         {/* Bảng dữ liệu hợp đồng */}
         <CreditsTable
           credits={displayCredits}
-          statusMap={statusMap}
+          statusMap={undefined}
           calculatedDetails={creditDetails}
-          calculatedStatuses={creditStatuses}
+          calculatedStatuses={undefined}
           totals={totals ?? undefined}
           onView={handleViewCreditDetail}
           onEdit={handleEditCredit}

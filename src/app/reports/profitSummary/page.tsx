@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 
 // Import status calculation functions
 import { calculatePawnStatus } from '@/lib/Pawns/calculate_pawn_status';
-import { calculateCreditStatus } from '@/lib/Credits/calculate_credit_status';
+// Removed: import { calculateCreditStatus } from '@/lib/Credits/calculate_credit_status';
 // calculateInstallmentStatus no longer needed - using status_code from database view
 
 // Note: RPC functions are now used for interest calculation instead of individual contract calculations
@@ -166,7 +166,28 @@ export default function ProfitSummaryPage() {
         .eq('store_id', storeId)
         .order('loan_date', { ascending: false });
         // Removed limit - get all for accurate counts
+    } else if (contractType === 'credits') {
+      // Use credits_by_store view for credits to get status_code
+      const selectWithStatus = selectString + ', status_code';
+      
+      // Query for new contracts in date range
+      newQuery = supabase
+        .from('credits_by_store')
+        .select(selectWithStatus)
+        .eq('store_id', storeId)
+        .gte('loan_date', startDateObj.toISOString())
+        .lte('loan_date', endDateObj.toISOString())
+        .order('loan_date', { ascending: false });
+        
+      // Query for all contracts for status calculation
+      allQuery = supabase
+        .from('credits_by_store')
+        .select(selectWithStatus)
+        .eq('store_id', storeId)
+        .order('loan_date', { ascending: false });
+        // Removed limit - get all for accurate counts
     } else {
+      // For pawns, use the original table
       // Query for new contracts in date range
       newQuery = supabase
         .from(contractType)
@@ -579,7 +600,7 @@ export default function ProfitSummaryPage() {
         transactionSummary
       ] = await Promise.all([
         getContractsWithStatus('pawns', calculatePawnStatus),
-        getContractsWithStatus('credits', calculateCreditStatus),
+        getContractsWithStatus('credits', () => Promise.resolve(null)),
         getContractsWithStatus('installments', () => Promise.resolve(null)),
         getPawnFinancialsForStore(currentStore.id),
         getCreditFinancialsForStore(currentStore.id),

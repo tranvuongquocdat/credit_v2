@@ -19,7 +19,7 @@ import { calculateDebtToLatestPaidPeriod } from '@/lib/Credits/calculate_remaini
 import { getCreditPaymentHistory } from '@/lib/Credits/payment_history';
 import { calculateActualLoanAmount } from '@/lib/Credits/calculate_actual_loan_amount';
 import { Badge } from '@/components/ui/badge';
-import { calculateCreditStatus, CreditStatusResult } from '@/lib/Credits/calculate_credit_status';
+import { getCreditStatusInfo } from '@/lib/credit-status-utils';
 import { usePermissions } from '@/hooks/usePermissions';
 
 interface PaymentHistoryModalProps {
@@ -66,8 +66,8 @@ export function PaymentHistoryModal({
   const [actualLoanAmount, setActualLoanAmount] = useState<number>(0);
   const [loadingActualAmount, setLoadingActualAmount] = useState(false);
   
-  // Thêm state cho credit status
-  const [creditStatus, setCreditStatus] = useState<CreditStatusResult | null>(null);
+  // Thêm state cho credit status (simplified since status comes from view)
+  const [creditStatus, setCreditStatus] = useState<{label: string, color: string} | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
   
   // Cập nhật state credit khi initialCredit thay đổi
@@ -85,10 +85,12 @@ export function PaymentHistoryModal({
       
       setLoadingStatus(true);
       try {
-        const status = await calculateCreditStatus(credit.id);
-        setCreditStatus(status);
+        // Status is now available directly from the credit data if it came from credits_by_store view
+        const statusCode = credit.status_code || 'ON_TIME';
+        const statusInfo = getCreditStatusInfo(statusCode);
+        setCreditStatus(statusInfo);
       } catch (error) {
-        console.error('Error calculating credit status:', error);
+        console.error('Error getting credit status:', error);
         setCreditStatus(null);
       } finally {
         setLoadingStatus(false);
@@ -110,38 +112,10 @@ export function PaymentHistoryModal({
       </Badge>;
     }
     
-    // Áp dụng màu sắc dựa trên statusCode
-    switch (creditStatus.statusCode) {
-      case 'CLOSED':
-        return <Badge className="bg-blue-100 text-blue-800 border-blue-200">
-          {creditStatus.status}
-        </Badge>;
-      case 'DELETED':
-        return <Badge className="bg-gray-100 text-gray-800 border-gray-200">
-          {creditStatus.status}
-        </Badge>;
-      case 'FINISHED':
-        return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">
-          {creditStatus.status}
-        </Badge>;
-      case 'BAD_DEBT':
-        return <Badge className="bg-purple-100 text-purple-800 border-purple-200">
-          {creditStatus.status}
-        </Badge>;
-      case 'OVERDUE':
-        return <Badge className="bg-red-100 text-red-800 border-red-200">
-          {creditStatus.status}
-        </Badge>;
-      case 'LATE_INTEREST':
-        return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
-          {creditStatus.status}
-        </Badge>;
-      case 'ON_TIME':
-      default:
-        return <Badge className="bg-green-100 text-green-800 border-green-200">
-          {creditStatus.status}
-        </Badge>;
-    }
+    // Use the color and label from the status utility
+    return <Badge className={creditStatus.color}>
+      {creditStatus.label}
+    </Badge>;
   };
 
   // Hàm reload thông tin hợp đồng

@@ -22,7 +22,7 @@ import { getInterestDisplayString } from '@/lib/interest-calculator';
 import { reopenContract } from '@/lib/Credits/reopen_contract';
 import { useToast } from '../ui/use-toast';
 import { CreditFinancialDetail } from '@/hooks/useCreditCalculation';
-import { CreditStatusResult } from '@/lib/Credits/calculate_credit_status';
+import { getCreditStatusInfo } from '@/lib/credit-status-utils';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getCreditStatus } from '@/lib/credit';
 import { useState, useEffect } from 'react';
@@ -36,9 +36,9 @@ interface StatusMapType {
 
 interface CreditsTableProps {
   credits: CreditWithCustomer[];
-  statusMap: StatusMapType;
+  statusMap?: StatusMapType; // Now optional since we use shared utility
   calculatedDetails?: Record<string, CreditFinancialDetail>;
-  calculatedStatuses?: Record<string, CreditStatusResult>;
+  calculatedStatuses?: Record<string, any>; // Legacy, no longer used
   onView: (id: string) => void;
   onEdit: (id: string) => void;
   onDelete: (credit: CreditWithCustomer) => void;
@@ -83,7 +83,7 @@ export function CreditsTable({
   credits, 
   statusMap,
   calculatedDetails,
-  calculatedStatuses,
+  calculatedStatuses, // Legacy, no longer used
   onEdit, 
   onDelete, 
   onShowPaymentHistory,
@@ -270,40 +270,11 @@ export function CreditsTable({
                 <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
                   {/* ----- Status Cell ----- */}
                   {(() => {
-                    const st = calculatedStatuses?.[credit.id];
-                    if (!st) {
-                      // Fallback to raw status
-                      return <Badge className="bg-gray-100 text-gray-800">{credit.status === 'closed' ? 'Đã đóng' : 'Đang vay'}</Badge>;
-                    }
-                    let colorClass = '';
-                    switch (st.statusCode) {
-                      case 'CLOSED':
-                        colorClass = 'bg-blue-100 text-blue-800 border-blue-200';
-                        break;
-                      case 'DELETED':
-                        colorClass = 'bg-gray-100 text-gray-800 border-gray-200';
-                        break;
-                      case 'FINISHED':
-                        colorClass = 'bg-emerald-100 text-emerald-800 border-emerald-200';
-                        break;
-                      case 'BAD_DEBT':
-                        colorClass = 'bg-purple-100 text-purple-800 border-purple-200';
-                        break;
-                      case 'OVERDUE':
-                        colorClass = 'bg-red-100 text-red-800 border-red-200';
-                        break;
-                      case 'LATE_INTEREST':
-                        colorClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
-                        break;
-                      case 'ON_TIME':
-                      default:
-                        colorClass = 'bg-green-100 text-green-800 border-green-200';
-                        break;
-                    }
-                    const labelText = st.status && st.status.trim() !== ''
-                      ? st.status
-                      : statusMap[st.statusCode.toLowerCase()]?.label || st.statusCode;
-                    return <Badge className={colorClass}>{labelText}</Badge>;
+                    // Use status_code from credits_by_store view
+                    const statusCode = credit.status_code || 'ON_TIME';
+                    const statusInfo = getCreditStatusInfo(statusCode);
+                    
+                    return <Badge className={statusInfo.color}>{statusInfo.label}</Badge>;
                   })()}
                 </TableCell>
                 <TableCell className="py-3 px-3 border-b border-r border-gray-200">

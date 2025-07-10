@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 
 // Import status calculation functions
 import { calculatePawnStatus } from '@/lib/Pawns/calculate_pawn_status';
-import { calculateCreditStatus } from '@/lib/Credits/calculate_credit_status';
+// Removed: import { calculateCreditStatus } from '@/lib/Credits/calculate_credit_status';
 // import { calculateInstallmentStatus } from '@/lib/Installments/calculate_installment_status'; // No longer needed
 
 // Import Excel Export component
@@ -181,13 +181,14 @@ export default function LoanReportPage() {
       // Fetch credits (all records, no status filtering)
       if (selectedContractType === 'all' || selectedContractType === 'Tín chấp') {
         let creditQuery = supabase
-          .from('credits')
+          .from('credits_by_store')
           .select(`
             id,
             contract_code,
             loan_amount,
             loan_date,
             status,
+            status_code,
             customers(name),
             collateral
           `)
@@ -265,7 +266,7 @@ export default function LoanReportPage() {
       const installmentContracts = allRawData.filter(item => item.type === 'Trả góp');
 
       // Get all statuses using RPC functions in parallel
-      const [pawnStatuses, creditStatuses] = await Promise.all([
+      const [pawnStatuses] = await Promise.all([
         // Get pawn statuses
         pawnContracts.length > 0 ? (async () => {
           const pawnIds = pawnContracts.map(p => p.id).filter(id => id !== null);
@@ -279,18 +280,8 @@ export default function LoanReportPage() {
           return data || [];
         })() : Promise.resolve([]),
 
-        // Get credit statuses  
-        creditContracts.length > 0 ? (async () => {
-          const creditIds = creditContracts.map(c => c.id).filter(id => id !== null);
-          const { data, error } = await supabase.rpc('get_credit_statuses', {
-            p_credit_ids: creditIds
-          });
-          if (error) {
-            console.error('Error getting credit statuses:', error);
-            return [];
-          }
-          return data || [];
-        })() : Promise.resolve([])
+        // Credit statuses are now included in the view data
+        Promise.resolve([])
       ]);
 
       // Create status maps for quick lookup
@@ -303,27 +294,23 @@ export default function LoanReportPage() {
         });
       });
 
-      const creditStatusMap = new Map();
-      creditStatuses.forEach((s: any) => {
-        creditStatusMap.set(s.credit_id, {
-          statusCode: s.status_code,
-          status: s.status,
-          description: s.description
-        });
-      });
-
-      // For installments, status_code is already included in the data
+      // For credits and installments, status_code is already included in the data
 
       // Process all contracts with their statuses
       for (const item of allRawData) {
         try {
           let statusResult;
           
-          // Get status from appropriate map
+          // Get status from appropriate source
           if (item.type === 'Cầm đồ') {
             statusResult = pawnStatusMap.get(item.id);
           } else if (item.type === 'Tín chấp') {
-            statusResult = creditStatusMap.get(item.id);
+            // For credits, status_code is already in the data from credits_by_store view
+            statusResult = {
+              statusCode: item.status_code || 'ON_TIME',
+              status: item.status || 'on_time',
+              description: item.status_code || 'ON_TIME'
+            };
           } else if (item.type === 'Trả góp') {
             // For installments, status_code is already in the data
             statusResult = {

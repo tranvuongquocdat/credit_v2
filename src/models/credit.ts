@@ -85,6 +85,11 @@ export interface CreditWithCustomer extends Credit {
     phone?: string | null;
     id_number?: string | null;
   };
+  // Pre-calculated fields from credits_by_store view
+  status_code?: string;
+  next_payment_date?: string;
+  is_completed?: boolean;
+  has_paid?: boolean;
   // Custom fields for warnings
   reason?: string;
   latestPaymentDate?: string | null;

@@ -10,36 +10,19 @@ export async function countCreditWarnings(storeId: string): Promise<{ count: num
       return { count: 0, error: "Không có cửa hàng" };
     }
 
-    // 1. Lấy tất cả credit id thuộc cửa hàng
+    // Use credits_by_store view to get status_code directly
     const { data: credits, error: creditsError } = await supabase
-      .from('credits')
-      .select('id')
-      .eq('store_id', storeId);
+      .from('credits_by_store')
+      .select('id, status_code')
+      .eq('store_id', storeId)
+      .in('status_code', ['OVERDUE', 'LATE_INTEREST']);
 
     if (creditsError) {
       console.error('Error fetching credits for count:', creditsError);
       return { count: 0, error: creditsError };
     }
 
-    const creditIds = (credits || []).map((c: any) => c.id);
-
-    if (creditIds.length === 0) {
-      return { count: 0, error: null };
-    }
-
-    // 2. Gọi RPC lấy status
-    const { data: statuses, error: statusError } = await supabase.rpc('get_credit_statuses', {
-      p_credit_ids: creditIds,
-    });
-
-    if (statusError) {
-      console.error('Error calling get_credit_statuses:', statusError);
-      return { count: 0, error: statusError };
-    }
-
-    const warningCount = (statuses || []).filter((s: any) =>
-      ['OVERDUE', 'LATE_INTEREST'].includes(s.status_code)
-    ).length;
+    const warningCount = (credits || []).length;
 
     return { count: warningCount, error: null };
   } catch (err) {
@@ -64,14 +47,15 @@ export async function getCreditWarnings(
       };
     }
 
-    // 1. Lấy credits kèm customer theo store (chỉ cần các trường cần hiển thị)
+    // 1. Use credits_by_store view to get credits with status_code, filtered for warnings
     let creditsQuery = supabase
-      .from('credits')
+      .from('credits_by_store')
       .select(`
         *,
         customer:customers!inner(*)
       `)
       .eq('store_id', storeId)
+      .in('status_code', ['OVERDUE', 'LATE_INTEREST'])
       .order('created_at', { ascending: false });
 
     // Lọc theo tên khách hàng (nếu có)
@@ -90,21 +74,7 @@ export async function getCreditWarnings(
       return { data: [], error: null, totalItems: 0, totalPages: 0 };
     }
 
-    const creditIds = credits.map((c) => c.id);
-
-    // 2. Lấy status qua RPC
-    const { data: statuses, error: statusError } = await supabase.rpc('get_credit_statuses', {
-      p_credit_ids: creditIds,
-    });
-
-    if (statusError) {
-      console.error('Error calling get_credit_statuses:', statusError);
-      return { data: [], error: statusError, totalItems: 0, totalPages: 0 };
-    }
-
-    const statusMap = new Map<string, string>(
-      (statuses || []).map((s: any) => [s.credit_id, s.status_code])
-    );
+    const creditIds = credits.map((c) => c.id).filter((id): id is string => id !== null);
 
     // 3. Lấy thông tin kỳ kế tiếp để tính số kỳ chậm
     const { data: nextInfos, error: nextError } = await supabase.rpc('get_next_payment_info', {
@@ -119,11 +89,10 @@ export async function getCreditWarnings(
 
     const today = new Date();
 
-    // 4. Lọc những credit cần cảnh báo và tạo reason chi tiết
+    // 4. Credits are already filtered for warnings by the query, create reason details
     const warningCredits: CreditWithCustomer[] = credits
-      .filter((c: any) => ['OVERDUE', 'LATE_INTEREST'].includes(statusMap.get(c.id) || ''))
       .map((c: any) => {
-        const status = statusMap.get(c.id);
+        const status = c.status_code; // status_code is now available directly from the view
         const nextInfo = nextMap.get(c.id);
 
         // Overdue days
