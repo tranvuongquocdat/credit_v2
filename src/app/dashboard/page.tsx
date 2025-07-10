@@ -125,7 +125,7 @@ export default function Dashboard() {
           .gte('loan_date', startOfCurrentMonth.toISOString())
           .lte('loan_date', endOfCurrentMonth.toISOString()),
         supabase
-          .from('installments_by_store_tmp' as any)
+          .from('installments_by_store')
           .select('id', { count: 'exact' })
           .eq('store_id', currentStore.id)
           .gte('loan_date', startOfCurrentMonth.toISOString())
@@ -185,7 +185,7 @@ export default function Dashboard() {
             .gte('loan_date', monthStart.toISOString())
             .lte('loan_date', monthEnd.toISOString()),
           supabase
-            .from('installments_by_store_tmp' as any)
+            .from('installments_by_store')
             .select('installment_amount')
             .eq('store_id', currentStore.id)
             .gte('loan_date', monthStart.toISOString())

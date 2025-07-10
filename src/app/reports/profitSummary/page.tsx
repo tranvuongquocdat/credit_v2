@@ -12,7 +12,7 @@ import { useRouter } from 'next/navigation';
 // Import status calculation functions
 import { calculatePawnStatus } from '@/lib/Pawns/calculate_pawn_status';
 import { calculateCreditStatus } from '@/lib/Credits/calculate_credit_status';
-// import { calculateInstallmentStatus } from '@/lib/Installments/calculate_installment_status'; // No longer needed
+// calculateInstallmentStatus no longer needed - using status_code from database view
 
 // Note: RPC functions are now used for interest calculation instead of individual contract calculations
 
@@ -152,7 +152,7 @@ export default function ProfitSummaryPage() {
     if (contractType === 'installments') {
       // Query for new contracts in date range
       newQuery = supabase
-        .from('installments_by_store_tmp' as any)
+        .from('installments_by_store')
         .select(selectString + ', status_code')
         .eq('store_id', storeId)
         .gte('loan_date', startDateObj.toISOString())
@@ -161,7 +161,7 @@ export default function ProfitSummaryPage() {
         
       // Query for all contracts for status calculation
       allQuery = supabase
-        .from('installments_by_store_tmp' as any)
+        .from('installments_by_store')
         .select(selectString + ', status_code')
         .eq('store_id', storeId)
         .order('loan_date', { ascending: false });
@@ -580,7 +580,7 @@ export default function ProfitSummaryPage() {
       ] = await Promise.all([
         getContractsWithStatus('pawns', calculatePawnStatus),
         getContractsWithStatus('credits', calculateCreditStatus),
-        getContractsWithStatus('installments', calculateInstallmentStatus),
+        getContractsWithStatus('installments', () => Promise.resolve(null)),
         getPawnFinancialsForStore(currentStore.id),
         getCreditFinancialsForStore(currentStore.id),
         getInstallmentFinancialsForStore(currentStore.id),

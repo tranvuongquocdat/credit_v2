@@ -14,9 +14,9 @@ export async function getInstallments(
 ) {
   // Debug logging removed - race condition fixed with AbortController
   try {
-    // Use the installments_by_store_tmp view to include store_id and status_code
+    // Use the installments_by_store view to include store_id and status_code
     let query = supabase
-      .from('installments_by_store_tmp')
+      .from('installments_by_store')
       .select(`
         *,
         customer:customers!inner(
@@ -156,7 +156,7 @@ export async function getInstallments(
         daily_amount: installmentAmount / loanPeriod,
         installment_amount: installmentAmount,
         remaining_amount: downPayment,
-        status: item.status as InstallmentStatus,
+        status: item.status_code as InstallmentStatus,
         due_date: calculateDueDate(loanDate, loanPeriod),
         start_date: new Date(loanDate).toISOString().split('T')[0],
         payment_due_date: item.payment_due_date || null,
@@ -209,7 +209,7 @@ function calculateDueDate(loanDate: string, loanPeriod: number): string {
 export async function getInstallmentById(id: string) {
   try {
     const { data, error } = await supabase
-      .from('installments_by_store_tmp' as any)
+      .from('installments_by_store')
       .select(`
         *,
         customer:customers(
@@ -259,7 +259,7 @@ export async function getInstallmentById(id: string) {
       old_debt: debtAmount, // Lấy trực tiếp từ DB
       daily_amount: installmentAmount / loanPeriod,
       remaining_amount: downPayment,
-      status: data.status as InstallmentStatus,
+      status: data.status_code as InstallmentStatus,
       due_date: calculateDueDate(loanDate, loanPeriod),
       start_date: new Date(loanDate).toISOString().split('T')[0],
       

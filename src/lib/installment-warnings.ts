@@ -24,7 +24,7 @@ export async function getInstallmentWarnings(
     // Chỉ lấy các hợp đồng có payment_due_date <= ngày hiện tại
     // hoặc payment_due_date là null và loan_date <= ngày hiện tại
     let query = supabase
-      .from('installments_by_store_tmp' as any)
+      .from('installments_by_store')
       .select(`
         *,
         customer:customers!inner(*)

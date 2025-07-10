@@ -28,7 +28,7 @@ export function useInstallmentsSummary() {
       
       // Lấy tất cả hợp đồng chưa bị xóa, chưa đóng và thuộc cửa hàng hiện tại
       const { data: activeInstallments, error: installmentsError } = await supabase
-        .from('installments_by_store_tmp' as any)
+        .from('installments_by_store')
         .select(`
           id,
           contract_code,
@@ -40,7 +40,7 @@ export function useInstallmentsSummary() {
           store_id,
           debt_amount
         `)
-        .eq('status', InstallmentStatus.ON_TIME)
+        .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST'])
         .eq('store_id', currentStore.id);
       
       if (installmentsError) {
@@ -49,9 +49,9 @@ export function useInstallmentsSummary() {
 
       // Lấy danh sách hợp đồng đã đóng
       const { data: closedInstallments, error: closedInstallmentsError } = await supabase
-        .from('installments_by_store_tmp' as any)
+        .from('installments_by_store')
         .select('id')
-        .eq('status', InstallmentStatus.CLOSED)
+        .eq('status_code', 'CLOSED')
         .eq('store_id', currentStore.id);
       
       if (closedInstallmentsError) {

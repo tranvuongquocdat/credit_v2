@@ -220,8 +220,8 @@ export default function StoreDetailPage() {
   const fetchInstallmentData = async (storeId: string, summaryData?: StoreSummary): Promise<ContractSummary> => {
     // Use database status for faster performance instead of calculating each status
     const { data: contracts, error } = await supabase
-      .from('installments_by_store_tmp' as any)
-      .select('id, installment_amount, status')
+      .from('installments_by_store')
+      .select('id, installment_amount, status_code')
       .eq('store_id', storeId);
 
     if (error) {
@@ -242,9 +242,9 @@ export default function StoreDetailPage() {
     let closed = 0;
 
     (contracts || []).forEach(contract => {
-      if (contract.status === 'closed' || contract.status === 'finished') {
+      if (contract.status_code === 'CLOSED' || contract.status_code === 'FINISHED') {
         closed++;
-      } else if (contract.status === 'on_time' || contract.status === 'overdue' || contract.status === 'late_interest') {
+      } else if (contract.status_code === 'ON_TIME' || contract.status_code === 'OVERDUE' || contract.status_code === 'LATE_INTEREST') {
         active++;
       }
     });

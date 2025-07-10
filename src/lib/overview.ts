@@ -268,7 +268,7 @@ export async function getCreditFinancialsForStore(storeId: string): Promise<Fina
 export async function getInstallmentFinancialsForStore(storeId: string): Promise<FinancialSummary> {
   // 1. Lấy danh sách installments đang hoạt động
   const { data: activeInstallments, error: installmentsError } = await supabase
-    .from('installments_by_store_tmp' as any)
+    .from('installments_by_store')
     .select(`
       id,
       contract_code,

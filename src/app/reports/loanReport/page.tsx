@@ -220,7 +220,7 @@ export default function LoanReportPage() {
       // Fetch installments (all records, no status filtering)
       if (selectedContractType === 'all' || selectedContractType === 'Trả góp') {
         let installmentQuery = supabase
-          .from('installments_by_store_tmp' as any)
+          .from('installments_by_store')
           .select(`
             id,
             contract_code,
