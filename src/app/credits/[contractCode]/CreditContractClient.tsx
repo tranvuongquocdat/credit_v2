@@ -26,7 +26,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from '@/components/ui/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
-// Removed: import { useCreditStatuses } from '@/hooks/useCreditStatuses';
 
 // No longer need statusMap - using shared utility in CreditsTable
 

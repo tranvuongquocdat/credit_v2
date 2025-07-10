@@ -49,19 +49,19 @@ export function useCreditCalculations() {
         .eq('id', storeId)
         .single();
       
-      // 2. Lấy danh sách credits ON_TIME
+      // 2. Lấy danh sách credits đang hoạt động từ view (bao gồm ON_TIME, OVERDUE, LATE_INTEREST)
       const { data: activeCreditsData } = await supabase
-        .from('credits')
+        .from('credits_by_store')
         .select('id, loan_amount, loan_date, loan_period')
         .eq('store_id', storeId)
-        .eq('status', CreditStatus.ON_TIME);
+        .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']);
       
-      // 3. Lấy danh sách credits đã đóng (cần đủ thông tin tính toán)
+      // 3. Lấy danh sách credits đã đóng từ view
       const { data: closedCreditsData } = await supabase
-        .from('credits')
+        .from('credits_by_store')
         .select('id, loan_amount, loan_date, loan_period')
         .eq('store_id', storeId)
-        .eq('status', CreditStatus.CLOSED);
+        .eq('status_code', 'CLOSED');
       
       let totalLoan = 0;
       let totalOldDebt = 0;
@@ -75,8 +75,8 @@ export function useCreditCalculations() {
 
       const interestRangeMap = new Map<string, number>();
       const interestTotalMap = new Map<string, number>();
-      const activeIds  = activeCreditsData?.map(c => c.id) || [];
-      const closedIds  = closedCreditsData?.map(c => c.id) || [];
+      const activeIds  = activeCreditsData?.map(c => c.id).filter((id): id is string => id !== null) || [];
+      const closedIds  = closedCreditsData?.map(c => c.id).filter((id): id is string => id !== null) || [];
       const allIds     = [...activeIds, ...closedIds];
 
       if (allIds.length) {
@@ -163,15 +163,17 @@ export function useCreditCalculations() {
       }
         
         const results = await Promise.all(
-        [...(activeCreditsData || []), ...(closedCreditsData || [])].map(c =>
-          calculateCreditMetrics(c, {
-            principalMap,
-            interestMap: interestTotalMap,
-            debtMap,
-            expectedMap,
-            todayMap,
-          })
-        )
+        [...(activeCreditsData || []), ...(closedCreditsData || [])]
+          .filter(c => c.id !== null && c.loan_amount !== null && c.loan_date !== null && c.loan_period !== null)
+          .map(c =>
+            calculateCreditMetrics(c as any, {
+              principalMap,
+              interestMap: interestTotalMap,
+              debtMap,
+              expectedMap,
+              todayMap,
+            })
+          )
       );
         
         // Aggregate results
@@ -203,7 +205,7 @@ export function useCreditCalculations() {
         totalCollectedInterest += interestRangeMap.get(id) ?? 0;
       });
       
-      /* ---------- 8. Bỏ tính trạng thái tại đây - đã chuyển sang RPC per page */
+      /* ---------- 8. Status calculation removed - now handled by credits_by_store view */
       
       // 7. Set results
       setSummary({

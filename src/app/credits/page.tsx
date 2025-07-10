@@ -24,7 +24,6 @@ import { useCredits } from '@/hooks/useCredits';
 import { useCreditsSummary } from '@/hooks/useCreditsSummary';
 import { useCreditCalculations } from '@/hooks/useCreditCalculation';
 import { useAutoUpdateCashFund } from '@/hooks/useCashFundUpdater';
-// Removed: import { useCreditStatuses } from '@/hooks/useCreditStatuses';
 import { CreditStatus, CreditWithCustomer } from '@/models/credit';
 
 import { usePermissions } from '@/hooks/usePermissions';
@@ -129,24 +128,8 @@ export default function CreditsPage() {
   const fetchTotals = async (f = filters) => {
     if (!currentStore?.id) return;
     try {
-      // Transform filters for RPC compatibility
+      // Use lowercase status codes directly - RPC now handles credits_by_store view
       let rpcFilters = f;
-      if (f?.status && f.status !== 'all' && f.status !== 'due_tomorrow') {
-        // Map lowercase status to uppercase for RPC
-        const statusMapping: Record<string, string> = {
-          'on_time': 'ON_TIME',
-          'late_interest': 'LATE_INTEREST', 
-          'overdue': 'OVERDUE',
-          'finished': 'FINISHED',
-          'closed': 'CLOSED',
-          'deleted': 'DELETED',
-          'bad_debt': 'BAD_DEBT',
-        };
-        rpcFilters = {
-          ...f,
-          status: statusMapping[f.status] || f.status
-        };
-      }
       
       const { data, error } = await (supabase as any).rpc('credit_get_totals', {
         p_store_id: currentStore.id,
