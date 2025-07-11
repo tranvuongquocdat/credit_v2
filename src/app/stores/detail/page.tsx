@@ -153,10 +153,13 @@ export default function StoreDetailPage() {
     storeId: string,
     summaryData?: StoreSummary
   ): Promise<ContractSummary> => {
-    // Use database status for faster performance instead of calculating each status
+    // Use optimized views for better performance
+    const tableName = contractType === 'pawns' ? 'pawns_by_store' : 'credits_by_store';
+    const statusField = contractType === 'pawns' ? 'status_code' : 'status_code';
+    
     const { data: contracts, error } = await supabase
-      .from(contractType)
-      .select('id, loan_amount, status')
+      .from(tableName)
+      .select(`id, loan_amount, ${statusField}`)
       .eq('store_id', storeId);
 
     if (error) {
@@ -172,14 +175,15 @@ export default function StoreDetailPage() {
       };
     }
 
-    // Count by database status for better performance (no individual status calculation)
+    // Count by database status_code for better performance (no individual status calculation)
     let active = 0;
     let closed = 0;
 
     (contracts || []).forEach(contract => {
-      if (contract.status === 'closed') {
+      const statusCode = contract.status_code;
+      if (statusCode === 'CLOSED') {
         closed++;
-      } else if (contract.status === 'on_time' || contract.status === 'overdue' || contract.status === 'late_interest') {
+      } else if (statusCode === 'ON_TIME' || statusCode === 'OVERDUE' || statusCode === 'LATE_INTEREST') {
         active++;
       }
     });

@@ -654,6 +654,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pawn_history_pawn_id_fkey"
+            columns: ["pawn_id"]
+            isOneToOne: false
+            referencedRelation: "pawns_by_store"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "pawn_history_updated_by_fkey"
             columns: ["updated_by"]
             isOneToOne: false
@@ -1018,15 +1025,18 @@ export type Database = {
           created_at: string | null
           customer_id: string | null
           debt_amount: number | null
+          has_paid: boolean | null
           id: string | null
           interest_notation: string | null
           interest_period: number | null
           interest_type: Database["public"]["Enums"]["interest_type"] | null
           interest_ui_type: string | null
           interest_value: number | null
+          is_completed: boolean | null
           loan_amount: number | null
           loan_date: string | null
           loan_period: number | null
+          next_payment_date: string | null
           notes: string | null
           status: Database["public"]["Enums"]["credit_status"] | null
           status_code: string | null
@@ -1091,6 +1101,56 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pawns_by_store: {
+        Row: {
+          collateral_detail: Json | null
+          collateral_id: string | null
+          contract_code: string | null
+          created_at: string | null
+          customer_id: string | null
+          debt_amount: number | null
+          has_paid: boolean | null
+          id: string | null
+          interest_notation: string | null
+          interest_period: number | null
+          interest_type: Database["public"]["Enums"]["interest_type"] | null
+          interest_ui_type: string | null
+          interest_value: number | null
+          is_completed: boolean | null
+          loan_amount: number | null
+          loan_date: string | null
+          loan_period: number | null
+          next_payment_date: string | null
+          notes: string | null
+          status: Database["public"]["Enums"]["pawn_status"] | null
+          status_code: string | null
+          store_id: string | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pawns_collateral_id_fkey"
+            columns: ["collateral_id"]
+            isOneToOne: false
+            referencedRelation: "collaterals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pawns_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pawns_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
             referencedColumns: ["id"]
           },
         ]

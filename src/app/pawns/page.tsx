@@ -27,7 +27,7 @@ import { usePawnsSummary } from '@/hooks/usePawnsSummary';
 import type { PawnFinancialDetail } from '@/hooks/usePawnCalculation';
 import { useAutoUpdateCashFund } from '@/hooks/useCashFundUpdater';
 import { usePermissions } from '@/hooks/usePermissions';
-import { usePawnStatuses } from '@/hooks/usePawnStatuses';
+// Removed: import { usePawnStatuses } from '@/hooks/usePawnStatuses';
 import { PawnStatus, PawnWithCustomer } from '@/models/pawn';
 import { reopenContract } from '@/lib/Pawns/reopen_contract';
 import { updatePawnStatus } from '@/lib/pawn';
@@ -142,34 +142,13 @@ export default function PawnsPage() {
   useEffect(() => {
     fetchTotals(filters);
   }, [JSON.stringify(filters), currentStore?.id]);
-  const { statuses: pawnStatuses, loading: pawnStatusesLoading } = usePawnStatuses(pawns.map(p => p.id));
+  // Removed: Status calculation now handled by pawns_by_store view directly
 
-  const displayPawns = useMemo(() => {
-    if (!filters?.status) return pawns;
-    switch (filters?.status) {
-      case 'due_tomorrow':
-        const tomorrow = addDays(new Date().setHours(0,0,0,0) as any, 1);
-        return pawns.filter(p => {
-          const next = pawnDetails[p.id]?.nextPayment;
-          if (!next) return false;
-          return isSameDay(new Date(next), tomorrow);
-        });
-      case 'overdue':
-        if (pawnStatusesLoading) return pawns;
-        return pawns.filter(p => pawnStatuses[p.id]?.statusCode === 'OVERDUE');
-      case 'late_interest':
-        if (pawnStatusesLoading) return pawns;
-        return pawns.filter(p => pawnStatuses[p.id]?.statusCode === 'LATE_INTEREST');
-      default:
-        return pawns;
-    }
-  }, [pawns, filters?.status, pawnDetails, pawnStatuses]);
+  // No client-side filtering needed - all filtering now handled server-side by pawns_by_store view
+  const displayPawns = pawns;
   
-  const requiresClientFilter =
-    filters?.status && ['due_tomorrow', 'overdue', 'late_interest'].includes(filters.status);
-  const effectiveTotalItems = requiresClientFilter
-    ? displayPawns.length
-    : totalItems;
+  // All filtering now server-side - no need for client-side pagination adjustments
+  const effectiveTotalItems = totalItems;
   const totalPages = Math.ceil(effectiveTotalItems / itemsPerPage);
   
   // Handle search filters
@@ -489,7 +468,7 @@ export default function PawnsPage() {
               onUpdateStatus={handleOpenStatusDialog}
               onShowPaymentHistory={handleOpenPaymentHistory}
               calculatedDetails={pawnDetails}
-              calculatedStatuses={pawnStatuses}
+              calculatedStatuses={undefined} // Status now in pawn.status_code from view
               totals={totals ?? undefined}
             />
             

@@ -24,9 +24,9 @@ export async function getPawns(
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
     
-    // Build base query with customer join
+    // Build base query using pawns_by_store view with customer join
     let query = supabase
-      .from('pawns')
+      .from('pawns_by_store')
       .select(`
         *,
         customer:customers!inner(
@@ -59,8 +59,30 @@ export async function getPawns(
       query = query.eq('loan_period', filters.loan_period);
     }
     
-    if (filters?.status && filters.status !== 'all' && filters.status !== '' as any) {
-      query = query.eq('status', filters.status as PawnStatus);
+    // Server-side status filtering using status_code from view
+    if (filters?.status && filters.status !== 'all') {
+      if (filters.status === 'overdue') {
+        query = query.eq('status_code', 'OVERDUE');
+      } else if (filters.status === 'late_interest') {
+        query = query.eq('status_code', 'LATE_INTEREST');
+      } else if (filters.status === 'due_tomorrow') {
+        // For due_tomorrow, we need to filter by next_payment_date = tomorrow
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowStr = tomorrow.toISOString().split('T')[0];
+        query = query.eq('next_payment_date', tomorrowStr);
+      } else if (filters.status === PawnStatus.ON_TIME) {
+        query = query.eq('status_code', 'ON_TIME');
+      } else if (filters.status === PawnStatus.CLOSED) {
+        query = query.eq('status_code', 'CLOSED');
+      } else if (filters.status === PawnStatus.DELETED) {
+        query = query.eq('status_code', 'DELETED');
+      } else if (filters.status === PawnStatus.BAD_DEBT) {
+        query = query.eq('status_code', 'BAD_DEBT');
+      } else {
+        // Fallback to original status field for backward compatibility
+        query = query.eq('status', filters.status as PawnStatus);
+      }
     }
     
     if (filters?.store_id) {
@@ -163,7 +185,7 @@ export async function getPawnsLegacy(
 export async function getPawnById(id: string, signal?: AbortSignal) {
   try {
     const { data, error } = await supabase
-      .from('pawns')
+      .from('pawns_by_store')
       .select(`
         *,
         customer:customers!inner(

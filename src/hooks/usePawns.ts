@@ -69,15 +69,15 @@ export function usePawns() {
     setError(null);
     
     try {
-      // Convert SearchFilters to PawnFilters
+      // Convert SearchFilters to PawnFilters - now all status filtering is server-side
       const pawnFilters: PawnFilters = {
         contract_code: filters.contractCode,
         customer_name: filters.customerName,
         start_date: filters.startDate,
         end_date: filters.endDate,
-        status: filters.status && !['due_tomorrow', 'overdue', 'late_interest'].includes(filters.status) ? (filters.status as any) : undefined,
+        status: filters.status as PawnFilters['status'] || undefined, // All status filtering now handled server-side in view
         loan_period: filters.duration || undefined,
-        store_id: currentStore.id // Sử dụng currentStore.id trực tiếp thay vì || ''
+        store_id: currentStore.id
       };
       
       // Check if request was cancelled

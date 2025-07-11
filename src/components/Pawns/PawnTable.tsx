@@ -22,7 +22,7 @@ import { getPawnInterestDisplayString } from '@/lib/interest-calculator';
 import { reopenContract } from '@/lib/Pawns/reopen_contract';
 import { useToast } from '../ui/use-toast';
 import { PawnFinancialDetail } from '@/hooks/usePawnCalculation';
-import { PawnStatusResult } from '@/lib/Pawns/calculate_pawn_status';
+// Removed: import { PawnStatusResult } from '@/lib/Pawns/calculate_pawn_status';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getPawnStatus } from '@/lib/pawn';
 
@@ -37,7 +37,7 @@ interface PawnsTableProps {
   pawns: PawnWithCustomer[];
   statusMap: StatusMapType;
   calculatedDetails?: Record<string, PawnFinancialDetail>;
-  calculatedStatuses?: Record<string, PawnStatusResult>;
+  calculatedStatuses?: Record<string, {status: string; statusCode: string}>;
   onEdit: (id: string) => void;
   onDelete: (pawn: PawnWithCustomer) => void;
   onUpdateStatus: (pawn: PawnWithCustomer) => void;

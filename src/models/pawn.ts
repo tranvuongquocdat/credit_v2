@@ -89,7 +89,12 @@ export interface PawnWithCustomerAndCollateral extends Pawn {
     address?: string | null;
   };
   collateral_asset?: Collateral | null;
-  // Warning fields
+  // From pawns_by_store view - calculated fields
+  status_code?: string;           // ON_TIME | OVERDUE | LATE_INTEREST | CLOSED | DELETED | BAD_DEBT | FINISHED
+  next_payment_date?: string;     // Next payment due date
+  is_completed?: boolean;         // Contract completion status
+  has_paid?: boolean;            // Payment status flag
+  // Warning fields (legacy)
   latestPaymentDate?: string | null;
   reason?: string;
   needsWarning?: boolean;
@@ -106,6 +111,11 @@ export interface PawnWithCustomer extends Pawn {
     phone?: string | null;
     id_number?: string | null;
   };
+  // From pawns_by_store view - calculated fields
+  status_code?: string;           // ON_TIME | OVERDUE | LATE_INTEREST | CLOSED | DELETED | BAD_DEBT | FINISHED
+  next_payment_date?: string;     // Next payment due date
+  is_completed?: boolean;         // Contract completion status
+  has_paid?: boolean;            // Payment status flag
 }
 
 export interface PawnFilters {
@@ -114,6 +124,6 @@ export interface PawnFilters {
   start_date?: string;
   end_date?: string;
   loan_period?: number;
-  status?: PawnStatus | "all";
+  status?: PawnStatus | "all" | "due_tomorrow" | "overdue" | "late_interest" | "";
   store_id?: string;
 } 

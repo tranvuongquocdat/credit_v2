@@ -9,8 +9,7 @@ import { RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useRouter } from 'next/navigation';
 
-// Import status calculation functions
-import { calculatePawnStatus } from '@/lib/Pawns/calculate_pawn_status';
+// Status calculation functions - now using view data instead of RPC
 // Removed: import { calculateCreditStatus } from '@/lib/Credits/calculate_credit_status';
 // import { calculateInstallmentStatus } from '@/lib/Installments/calculate_installment_status'; // No longer needed
 
@@ -142,13 +141,14 @@ export default function LoanReportPage() {
       // Fetch pawns (all records, no status filtering)
       if (selectedContractType === 'all' || selectedContractType === 'Cầm đồ') {
         let pawnQuery = supabase
-          .from('pawns')
+          .from('pawns_by_store')
           .select(`
             id,
             contract_code,
             loan_amount,
             loan_date,
             status,
+            status_code,
             customers(name),
             collateral_detail
           `)
@@ -265,45 +265,23 @@ export default function LoanReportPage() {
       const creditContracts = allRawData.filter(item => item.type === 'Tín chấp');
       const installmentContracts = allRawData.filter(item => item.type === 'Trả góp');
 
-      // Get all statuses using RPC functions in parallel
-      const [pawnStatuses] = await Promise.all([
-        // Get pawn statuses
-        pawnContracts.length > 0 ? (async () => {
-          const pawnIds = pawnContracts.map(p => p.id).filter(id => id !== null);
-          const { data, error } = await supabase.rpc('get_pawn_statuses', {
-            p_pawn_ids: pawnIds
-          });
-          if (error) {
-            console.error('Error getting pawn statuses:', error);
-            return [];
-          }
-          return data || [];
-        })() : Promise.resolve([]),
-
-        // Credit statuses are now included in the view data
-        Promise.resolve([])
-      ]);
-
-      // Create status maps for quick lookup
-      const pawnStatusMap = new Map();
-      pawnStatuses.forEach((s: any) => {
-        pawnStatusMap.set(s.pawn_id, {
-          statusCode: s.status_code,
-          status: s.status,
-          description: s.description
-        });
-      });
-
-      // For credits and installments, status_code is already included in the data
+      // OPTIMIZED: No more RPC calls needed - all status_code data is already available from views
+      // All loan product views (pawns_by_store, credits_by_store, installments_by_store) 
+      // now include pre-calculated status_code field
 
       // Process all contracts with their statuses
       for (const item of allRawData) {
         try {
           let statusResult;
           
-          // Get status from appropriate source
+          // Get status from view data (no RPC calls needed)
           if (item.type === 'Cầm đồ') {
-            statusResult = pawnStatusMap.get(item.id);
+            // For pawns, status_code is already in the data from pawns_by_store view
+            statusResult = {
+              statusCode: item.status_code || 'ON_TIME',
+              status: item.status || 'on_time',
+              description: item.status_code || 'ON_TIME'
+            };
           } else if (item.type === 'Tín chấp') {
             // For credits, status_code is already in the data from credits_by_store view
             statusResult = {

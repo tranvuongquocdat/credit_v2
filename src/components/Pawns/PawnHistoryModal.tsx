@@ -17,7 +17,7 @@ import { formatCurrency, calculateDaysBetween, formatDate, formatDateTime } from
 import { calculateActualLoanAmount } from '@/lib/Pawns/calculate_actual_loan_amount';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Badge } from '@/components/ui/badge';
-import { calculatePawnStatus, PawnStatusResult } from '@/lib/Pawns/calculate_pawn_status';
+// Removed: import { calculatePawnStatus, PawnStatusResult } from '@/lib/Pawns/calculate_pawn_status';
 
 interface PawnHistoryModalProps {
   isOpen: boolean;
@@ -42,7 +42,7 @@ export function PawnHistoryModal({
   const [historyLoading, setHistoryLoading] = useState(false);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [actualLoanAmount, setActualLoanAmount] = useState<number>(0);
-  const [pawnStatus, setPawnStatus] = useState<PawnStatusResult | null>(null);
+  const [pawnStatus, setPawnStatus] = useState<{status: string; statusCode: string} | null>(null);
   
   // State to track if data has changed
   const [hasDataChanged, setHasDataChanged] = useState(false);
@@ -67,13 +67,30 @@ export function PawnHistoryModal({
     }
   }, [isOpen, pawn?.id, initialLoadComplete]);
 
-  // Load pawn status
+  // Load pawn status - optimized to use view data if available
   const loadPawnStatus = async () => {
     if (!pawn?.id) return;
     
     try {
-      const status = await calculatePawnStatus(pawn.id);
-      setPawnStatus(status);
+      // If status_code is already available from the view, use it directly
+      if (pawn.status_code) {
+        // Map status_code to status result directly
+        const statusMapping: Record<string, { status: string; statusCode: string }> = {
+          'ON_TIME': { status: 'Đang vay', statusCode: 'ON_TIME' },
+          'CLOSED': { status: 'Đã đóng', statusCode: 'CLOSED' },
+          'DELETED': { status: 'Đã xóa', statusCode: 'DELETED' },
+          'OVERDUE': { status: 'Quá hạn', statusCode: 'OVERDUE' },
+          'LATE_INTEREST': { status: 'Chậm lãi', statusCode: 'LATE_INTEREST' },
+          'FINISHED': { status: 'Hoàn thành', statusCode: 'FINISHED' },
+          'BAD_DEBT': { status: 'Nợ xấu', statusCode: 'BAD_DEBT' },
+        };
+        
+        const mappedStatus = statusMapping[pawn.status_code] || statusMapping['ON_TIME'];
+        setPawnStatus(mappedStatus);
+      } else {
+        // Fallback: assume ON_TIME if status_code not available
+        setPawnStatus({ status: 'Đang vay', statusCode: 'ON_TIME' });
+      }
     } catch (error) {
       console.error('Error loading pawn status:', error);
       setPawnStatus(null);

@@ -9,8 +9,7 @@ import { RefreshCw, FileSpreadsheet } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useRouter } from 'next/navigation';
 
-// Import status calculation functions
-import { calculatePawnStatus } from '@/lib/Pawns/calculate_pawn_status';
+// Status calculation functions - now using view data instead of RPC
 // Removed: import { calculateCreditStatus } from '@/lib/Credits/calculate_credit_status';
 // calculateInstallmentStatus no longer needed - using status_code from database view
 
@@ -187,11 +186,13 @@ export default function ProfitSummaryPage() {
         .order('loan_date', { ascending: false });
         // Removed limit - get all for accurate counts
     } else {
-      // For pawns, use the original table
+      // For pawns, use pawns_by_store view to get status_code
+      const selectWithStatus = selectString + ', status_code';
+      
       // Query for new contracts in date range
       newQuery = supabase
-        .from(contractType)
-        .select(selectString)
+        .from('pawns_by_store')
+        .select(selectWithStatus)
         .eq('store_id', storeId)
         .gte('loan_date', startDateObj.toISOString())
         .lte('loan_date', endDateObj.toISOString())
@@ -199,8 +200,8 @@ export default function ProfitSummaryPage() {
         
       // Query for all contracts for status calculation
       allQuery = supabase
-        .from(contractType)
-        .select(selectString)
+        .from('pawns_by_store')
+        .select(selectWithStatus)
         .eq('store_id', storeId)
         .order('loan_date', { ascending: false });
         // Removed limit - get all for accurate counts
@@ -255,39 +256,14 @@ export default function ProfitSummaryPage() {
             }
           });
         } else {
-          // For pawns and credits, still use RPC functions
-          let statusData: any[] = [];
-          
-          if (contractType === 'pawns') {
-            const { data, error } = await supabase.rpc('get_pawn_statuses', {
-              p_pawn_ids: allIds
-            });
-            if (!error && data) statusData = data;
-          } else if (contractType === 'credits') {
-            const { data, error } = await supabase.rpc('get_credit_statuses', {
-              p_credit_ids: allIds
-            });
-            if (!error && data) statusData = data;
-          }
-          
-          // Create status map for quick lookup
-          const statusMap = new Map();
-          statusData.forEach((s: any) => {
-            const idKey = contractType === 'pawns' ? s.pawn_id : s.credit_id;
-            statusMap.set(idKey, {
-              statusCode: s.status_code,
-              description: s.description
-            });
-          });
-          
+          // For pawns and credits, use status_code from the views directly (optimized)
           // Map contracts with their statuses
           (allContracts || []).forEach((contract: any) => {
             if (contract && typeof contract === 'object') {
-              const status = statusMap.get(contract.id) || { statusCode: 'ON_TIME', description: 'Không thể tính trạng thái' };
               contractsWithStatus.push({
                 ...contract,
-                calculatedStatus: status.statusCode,
-                statusDescription: status.description
+                calculatedStatus: contract.status_code || 'ON_TIME',
+                statusDescription: contract.status_code || 'Không thể tính trạng thái'
               });
             }
           });
@@ -295,11 +271,10 @@ export default function ProfitSummaryPage() {
           // Map new contracts with their statuses
           (newContracts || []).forEach((contract: any) => {
             if (contract && typeof contract === 'object') {
-              const status = statusMap.get(contract.id) || { statusCode: 'ON_TIME', description: 'Không thể tính trạng thái' };
               newContractsWithStatus.push({
                 ...contract,
-                calculatedStatus: status.statusCode,
-                statusDescription: status.description
+                calculatedStatus: contract.status_code || 'ON_TIME',
+                statusDescription: contract.status_code || 'Không thể tính trạng thái'
               });
             }
           });
@@ -599,7 +574,7 @@ export default function ProfitSummaryPage() {
         installmentFinancials,
         transactionSummary
       ] = await Promise.all([
-        getContractsWithStatus('pawns', calculatePawnStatus),
+        getContractsWithStatus('pawns', () => Promise.resolve(null)),
         getContractsWithStatus('credits', () => Promise.resolve(null)),
         getContractsWithStatus('installments', () => Promise.resolve(null)),
         getPawnFinancialsForStore(currentStore.id),

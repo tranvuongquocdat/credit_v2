@@ -13,7 +13,7 @@ import { Download, Search } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { Input } from '@/components/ui/input';
 import { PawnWarningsPagination } from '@/components/Pawns/PawnWarningsPagination';
-import { calculatePawnStatus } from '@/lib/Pawns/calculate_pawn_status';
+// Removed: import { calculatePawnStatus } from '@/lib/Pawns/calculate_pawn_status';
 import { usePermissions } from "@/hooks/usePermissions";
 import { useDebounce } from '@/hooks/useDebounce';
 
@@ -105,10 +105,27 @@ export default function PawnWarningsPage() {
     }
   };
 
-  // Handle view detail
+  // Handle view detail - optimized to use view data if available
   const handleViewDetail = async (pawn: PawnWithCustomerAndCollateral) => {
-    const status = await calculatePawnStatus(pawn.id);
-    pawn.status = status.statusCode as PawnStatus;
+    // If status_code is already available from the view, use it directly
+    if (pawn.status_code) {
+      // Map status_code to PawnStatus enum
+      const statusMapping: Record<string, PawnStatus> = {
+        'ON_TIME': PawnStatus.ON_TIME,
+        'CLOSED': PawnStatus.CLOSED,
+        'DELETED': PawnStatus.DELETED,
+        'OVERDUE': PawnStatus.ON_TIME, // Map to ON_TIME for now
+        'LATE_INTEREST': PawnStatus.LATE_INTEREST,
+        'FINISHED': PawnStatus.CLOSED, // Map to CLOSED
+        'BAD_DEBT': PawnStatus.BAD_DEBT,
+      };
+      
+      pawn.status = statusMapping[pawn.status_code] || PawnStatus.ON_TIME;
+    } else {
+      // Fallback: assume ON_TIME if status_code not available
+      pawn.status = PawnStatus.ON_TIME;
+    }
+    
     setSelectedPawn(pawn);
     setIsHistoryModalOpen(true);
   };

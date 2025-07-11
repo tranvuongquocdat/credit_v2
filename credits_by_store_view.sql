@@ -14,10 +14,10 @@ SELECT
     WHEN (c.loan_date::date + (c.loan_period - 1) * INTERVAL '1 day')::date < CURRENT_DATE THEN
       'OVERDUE'
     
-    -- 3. Finished status check (paid until contract end)
-    WHEN lp.latest_payment_date IS NOT NULL 
-         AND lp.latest_payment_date = (c.loan_date::date + (c.loan_period - 1) * INTERVAL '1 day')::date THEN
-      'FINISHED'
+    -- 3. Finished status check (paid until contract end) - COMMENTED OUT
+    -- WHEN lp.latest_payment_date IS NOT NULL 
+    --      AND lp.latest_payment_date = (c.loan_date::date + (c.loan_period - 1) * INTERVAL '1 day')::date THEN
+    --   'FINISHED'
     
     -- 4. Late interest check
     WHEN (
