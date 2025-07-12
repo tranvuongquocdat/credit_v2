@@ -197,62 +197,17 @@ export async function countInstallmentWarnings(storeId?: string) {
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString().slice(0, 10);
     
-    // Query 1: Contracts with payment warnings (payment due today/tomorrow)
-    const paymentQuery = supabase
+    // Single hybrid query: Use status-based filtering + payment timing
+    const { data, error } = await supabase
       .from('installments_by_store')
-      .select('id, loan_date, loan_period')
+      .select('id')
       .eq('store_id', storeId || '')
-      .lte('payment_due_date', tomorrowStr)
-      .eq('status', 'on_time');
+      .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']) // Include all warning statuses
+      .or(`payment_due_date.lte.${tomorrowStr},status_code.eq.OVERDUE,status_code.eq.LATE_INTEREST`);
     
-    // Query 2: Contracts ending today
-    // First, get the actual maximum loan period from database for this store
-    const { data: maxPeriodResult } = await supabase
-      .from('installments_by_store')
-      .select('loan_period')
-      .eq('store_id', storeId || '')
-      .eq('status', 'on_time')
-      .order('loan_period', { ascending: false })
-      .limit(1);
+    if (error) throw error;
     
-    const maxLoanPeriod = maxPeriodResult?.[0]?.loan_period || 180; // Fallback to 180 days
-    const earliestPossibleStart = new Date();
-    earliestPossibleStart.setDate(earliestPossibleStart.getDate() - (maxLoanPeriod - 1));
-    const earliestStartStr = earliestPossibleStart.toISOString().slice(0, 10);
-    
-    const endingQuery = supabase
-      .from('installments_by_store')
-      .select('id, loan_date, loan_period')
-      .eq('store_id', storeId || '')
-      .gte('loan_date', earliestStartStr)
-      .lte('loan_date', today)
-      .eq('status', 'on_time');
-    
-    // Execute both queries in parallel
-    const [paymentResult, endingResult] = await Promise.all([
-      paymentQuery,
-      endingQuery
-    ]);
-    
-    if (paymentResult.error) throw paymentResult.error;
-    if (endingResult.error) throw endingResult.error;
-    
-    // Filter ending query to only contracts that actually end today
-    const paymentInstallments = paymentResult.data || [];
-    const endingInstallments = (endingResult.data || []).filter(item => {
-      if (!item.loan_date || !item.loan_period) return false;
-      
-      const contractStart = new Date(item.loan_date);
-      const contractEnd = new Date(contractStart);
-      contractEnd.setDate(contractEnd.getDate() + item.loan_period - 1);
-      const contractEndStr = contractEnd.toISOString().slice(0, 10);
-      return contractEndStr === today;
-    });
-    
-    // Remove duplicates and count
-    const paymentIds = new Set(paymentInstallments.map(item => item.id));
-    const uniqueEndingInstallments = endingInstallments.filter(item => !paymentIds.has(item.id));
-    const totalCount = paymentInstallments.length + uniqueEndingInstallments.length;
+    const totalCount = data?.length || 0;
     
     return {
       count: totalCount,

@@ -70,6 +70,7 @@ export interface Installment {
 export interface InstallmentWithCustomer extends Installment {
   customer?: Customer;
   reason?: string; // Add optional reason field for warnings
+  status_code?: string; // Calculated status from database view
 }
 
 // Interface for creating a new installment - matches DB schema

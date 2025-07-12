@@ -223,8 +223,8 @@ SELECT i.*,
          WHEN i.status = 'closed'   THEN 'CLOSED'
          WHEN i.status = 'deleted'  THEN 'DELETED'
          WHEN i.status = 'bad_debt' THEN 'BAD_DEBT'
-         WHEN i.payment_due_date IS NOT NULL 
-              AND (i.loan_date + (i.loan_period - 1) * interval '1 day')::date < current_date
+         -- Check contract end date for OVERDUE status regardless of payment_due_date
+         WHEN (i.loan_date + (i.loan_period - 1) * interval '1 day')::date < current_date
               THEN 'OVERDUE'
          WHEN i.payment_due_date IS NOT NULL 
               AND COALESCE(
