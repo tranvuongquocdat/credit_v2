@@ -59,29 +59,51 @@ export async function getPawns(
       query = query.eq('loan_period', filters.loan_period);
     }
     
-    // Server-side status filtering using status_code from view
+    // Filter by status using enhanced pawns_by_store view
     if (filters?.status && filters.status !== 'all') {
-      if (filters.status === 'overdue') {
-        query = query.eq('status_code', 'OVERDUE');
-      } else if (filters.status === 'late_interest') {
-        query = query.eq('status_code', 'LATE_INTEREST');
-      } else if (filters.status === 'due_tomorrow') {
-        // For due_tomorrow, we need to filter by next_payment_date = tomorrow
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomorrowStr = tomorrow.toISOString().split('T')[0];
-        query = query.eq('next_payment_date', tomorrowStr);
-      } else if (filters.status === PawnStatus.ON_TIME) {
-        query = query.eq('status_code', 'ON_TIME');
-      } else if (filters.status === PawnStatus.CLOSED) {
-        query = query.eq('status_code', 'CLOSED');
-      } else if (filters.status === PawnStatus.DELETED) {
-        query = query.eq('status_code', 'DELETED');
-      } else if (filters.status === PawnStatus.BAD_DEBT) {
-        query = query.eq('status_code', 'BAD_DEBT');
-      } else {
-        // Fallback to original status field for backward compatibility
-        query = query.eq('status', filters.status as PawnStatus);
+      switch (filters.status) {
+        case 'overdue':
+          query = query.eq('status_code', 'OVERDUE');
+          break;
+        case 'late_interest':
+          query = query.eq('status_code', 'LATE_INTEREST');
+          break;
+        case 'on_time':
+          query = query.in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']);
+          break;
+        case 'closed':
+          query = query.eq('status_code', 'CLOSED');
+          break;
+        case 'deleted':
+          query = query.eq('status_code', 'DELETED');
+          break;
+        case 'bad_debt':
+          query = query.eq('status_code', 'BAD_DEBT');
+          break;
+        case 'finished':
+          query = query.eq('status_code', 'FINISHED');
+          break;
+        case 'due_tomorrow':
+          // Server-side filtering using next_payment_date from pawns_by_store view
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const tomorrowStr = tomorrow.toISOString().split('T')[0]; // YYYY-MM-DD format
+          query = query.eq('next_payment_date', tomorrowStr);
+          break;
+        default:
+          // Fallback to original status field for backward compatibility
+          if (filters.status === PawnStatus.ON_TIME) {
+            query = query.eq('status_code', 'ON_TIME');
+          } else if (filters.status === PawnStatus.CLOSED) {
+            query = query.eq('status_code', 'CLOSED');
+          } else if (filters.status === PawnStatus.DELETED) {
+            query = query.eq('status_code', 'DELETED');
+          } else if (filters.status === PawnStatus.BAD_DEBT) {
+            query = query.eq('status_code', 'BAD_DEBT');
+          } else {
+            query = query.eq('status', filters.status as PawnStatus);
+          }
+          break;
       }
     }
     

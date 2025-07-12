@@ -124,6 +124,6 @@ export interface PawnFilters {
   start_date?: string;
   end_date?: string;
   loan_period?: number;
-  status?: PawnStatus | "all" | "due_tomorrow" | "overdue" | "late_interest" | "";
+  status?: string; // Status filter values: 'overdue', 'late_interest', 'on_time', 'closed', 'deleted', 'bad_debt', 'finished', 'due_tomorrow', 'all'
   store_id?: string;
 } 

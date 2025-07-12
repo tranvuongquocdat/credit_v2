@@ -41,16 +41,6 @@ import { isSameDay, addDays } from 'date-fns';
 import { usePawnCalculations } from '@/hooks/usePawnCalculation';
 import { useStore } from '@/contexts/StoreContext';
 
-// Map trạng thái thành nhãn và màu sắc
-const statusMap: Record<string, { label: string, color: string }> = {
-  [PawnStatus.ON_TIME]: { label: 'Đang vay', color: 'bg-green-100 text-green-800' },
-  [PawnStatus.OVERDUE]: { label: 'Quá hạn', color: 'bg-red-100 text-red-800' },
-  [PawnStatus.LATE_INTEREST]: { label: 'Chậm lãi', color: 'bg-yellow-100 text-yellow-800' },
-  [PawnStatus.BAD_DEBT]: { label: 'Nợ xấu', color: 'bg-purple-100 text-purple-800' },
-  [PawnStatus.CLOSED]: { label: 'Đã đóng', color: 'bg-blue-100 text-blue-800' },
-  [PawnStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
-};
-
 // Type for totals row returned by RPC
 interface PawnTotals {
   total_loan_amount: number;
@@ -462,7 +452,7 @@ export default function PawnsPage() {
             {/* Bảng dữ liệu hợp đồng */}
             <PawnsTable
               pawns={displayPawns}
-              statusMap={statusMap}
+              statusMap={undefined} // Now optional since we use shared utility
               onEdit={handleEditPawn}
               onDelete={handleOpenDeleteDialog}
               onUpdateStatus={handleOpenStatusDialog}
