@@ -124,6 +124,19 @@ export async function getInstallments(
       (r: { installment_id: string; old_debt: number }) =>
         debtMap.set(r.installment_id, Number(r.old_debt || 0))
     );
+
+    // Get latest payment dates for all installments
+    const { data: latestPaymentRows, error: latestPaymentErr } = await (supabase.rpc as any)(
+      'get_latest_installment_payment_paid_dates',
+      { p_installment_ids: ids }
+    );
+    if (latestPaymentErr) throw latestPaymentErr;
+
+    const latestPaymentMap = new Map<string, string>();
+    (latestPaymentRows ?? []).forEach(
+      (r: { installment_id: string; latest_paid_date: string }) =>
+        latestPaymentMap.set(r.installment_id, r.latest_paid_date)
+    );
     // Transform data to match UI requirements
     const installmentPromises = (data || []).map(async (item: any) => {
       // Ensure values are not null
@@ -165,6 +178,7 @@ export async function getInstallments(
         updated_at: item.updated_at || undefined,
         notes: item.notes || '',
         debt_amount: debtMap.get(item.id) ?? 0,
+        latest_payment_date: latestPaymentMap.get(item.id) ?? null,
         customer: customerData
       };
     });

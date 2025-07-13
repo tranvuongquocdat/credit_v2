@@ -7,7 +7,6 @@ import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
 import { AlertTriangleIcon, DollarSignIcon } from "lucide-react";
 import { useStore } from "@/contexts/StoreContext";
 import { useRouter } from "next/navigation";
-import { getExpectedMoney } from "@/lib/Installments/get_expected_money";
 import { supabase } from "@/lib/supabase";
 import { calculateInstallmentReason, ReasonFilter, categorizeReason } from "@/lib/installment-warnings";
 
@@ -240,7 +239,7 @@ export function InstallmentWarningsTable({
                 payments: [],
                 latePeriods: 0,
                 buttonValues: [],
-                totalDueAmount: 0,
+                totalDueAmount: oldDebtMap.get(installment.id) || 0,
                 reason // Add calculated reason
               });
             }

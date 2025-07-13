@@ -27,6 +27,9 @@ import { getEmployees } from "@/lib/employee";
 import { useDebounce } from '@/hooks/useDebounce';
 import { InstallmentPaymentHistoryModal } from "@/components/Installments/InstallmentPaymentHistoryModal";
 import { makePayment } from "@/lib/installmentPayment";
+import * as XLSX from 'xlsx';
+import { format } from 'date-fns';
+import { formatCurrencyExcel } from "@/lib/utils";
 
 export default function InstallmentWarningsPage() {
   const [installments, setInstallments] = useState<InstallmentWithCustomer[]>([]);
@@ -57,6 +60,9 @@ export default function InstallmentWarningsPage() {
   
   const [selectedInstallment, setSelectedInstallment] = useState<InstallmentWithCustomer | null>(null);
   const [isPaymentHistoryModalOpen, setIsPaymentHistoryModalOpen] = useState(false);
+  
+  // Exporting state
+  const [isExporting, setIsExporting] = useState(false);
   
   // Load installments khi page load, store thay đổi, filter thay đổi hoặc trang thay đổi
   useEffect(() => {
@@ -166,6 +172,100 @@ export default function InstallmentWarningsPage() {
   // Handle page change
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
+  };
+  
+  // Handle export to Excel
+  const handleExportExcel = async () => {
+    if (isExporting) return;
+
+    if (!allFilteredWarnings || allFilteredWarnings.length === 0) {
+      alert('Không có dữ liệu để xuất Excel');
+      return;
+    }
+
+    setIsExporting(true);
+
+    try {
+      const rows = allFilteredWarnings.map((warning, index) => {
+        // Format dates
+        const startDateStr = warning.start_date ? format(new Date(warning.start_date), 'dd/MM/yyyy') : '';
+        let endDateStr = '';
+        try {
+          if (warning.start_date && warning.duration) {
+            const startDate = new Date(warning.start_date);
+            const endDate = new Date(startDate);
+            endDate.setDate(startDate.getDate() + warning.duration - 1);
+            endDateStr = format(endDate, 'dd/MM/yyyy');
+          }
+        } catch {}
+
+        const paymentDueDateStr = warning.payment_due_date 
+          ? format(new Date(warning.payment_due_date), 'dd/MM/yyyy') 
+          : '';
+        
+        // Calculate total amount to display
+        const totalAmountToDisplay = warning.buttonValues && warning.buttonValues.length > 0 
+          ? warning.buttonValues[warning.buttonValues.length - 1] 
+          : 0;
+
+        return {
+          'STT': index + 1,
+          'Mã hợp đồng': warning.contract_code || '',
+          'Tên khách hàng': warning.customer?.name || '',
+          'SĐT': warning.customer?.phone || '',
+          'Địa chỉ': warning.customer?.address || '',
+          'Nợ cũ': formatCurrencyExcel(warning.totalDueAmount || 0),
+          'Số tiền': formatCurrencyExcel(totalAmountToDisplay),
+          'Lý do': warning.reason || '',
+          'Ngày vay': startDateStr,
+          'Ngày kết thúc': endDateStr,
+          'Ngày phải đóng': paymentDueDateStr,
+          'Ghi chú': warning.notes || '',
+        } as Record<string, any>;
+      });
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(rows);
+
+      ws['!cols'] = [
+        { width: 6 },   // STT
+        { width: 15 },  // Mã hợp đồng
+        { width: 20 },  // Tên khách hàng
+        { width: 15 },  // SĐT
+        { width: 25 },  // Địa chỉ
+        { width: 15 },  // Nợ cũ
+        { width: 15 },  // Số tiền
+        { width: 30 },  // Lý do
+        { width: 12 },  // Ngày vay
+        { width: 12 },  // Ngày kết thúc
+        { width: 15 },  // Ngày phải đóng
+        { width: 30 },  // Ghi chú
+      ];
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Cảnh báo trả góp');
+
+      // Style header
+      const headerKeys = Object.keys(rows[0] || {});
+      headerKeys.forEach((_, idx) => {
+        const cellRef = XLSX.utils.encode_cell({ r: 0, c: idx });
+        const cell = ws[cellRef];
+        if (cell) {
+          cell.s = {
+            fill: { fgColor: { rgb: '4472C4' } },
+            font: { bold: true, color: { rgb: 'FFFFFF' } },
+            alignment: { horizontal: 'center', vertical: 'center' },
+          } as any;
+        }
+      });
+
+      const fileName = `CanhBaoTraGop_${format(new Date(), 'yyyyMMdd_HHmmss')}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    } catch (err) {
+      console.error('Export Excel error', err);
+      alert('Có lỗi khi xuất Excel');
+    } finally {
+      setIsExporting(false);
+    }
   };
   
   // Process payment after confirmation
@@ -469,6 +569,14 @@ export default function InstallmentWarningsPage() {
                 disabled={!customerNameFilter && !contractCodeFilter && employeeFilter==='all' && reasonFilter==='all'}
               >
                 Xóa bộ lọc
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={handleExportExcel}
+                disabled={isExporting || allFilteredWarnings.length === 0}
+                className="bg-green-50 hover:bg-green-100 text-green-700 border-green-300"
+              >
+                {isExporting ? 'Đang xuất...' : 'Xuất Excel'}
               </Button>
             </div>
             {/* Show filter info if active */}

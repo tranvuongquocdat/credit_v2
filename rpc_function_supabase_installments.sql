@@ -517,3 +517,28 @@ begin
   left join debt d  on d.installment_id  = b.id;
 end;
 $$;
+
+-- Function to get latest payment dates for multiple installments (similar to credits system)
+create or replace function public.get_latest_installment_payment_paid_dates(
+  p_installment_ids uuid[]
+)
+returns table (
+  installment_id uuid,
+  latest_paid_date date
+)
+language sql
+stable
+as $$
+with ids as (
+  select unnest(p_installment_ids) as installment_id
+)
+select
+  ids.installment_id,
+  max(ih.effective_date)::date as latest_paid_date
+from ids
+left join installment_history ih
+  on ih.installment_id = ids.installment_id
+  and ih.transaction_type = 'payment'
+  and ih.is_deleted = false
+group by ids.installment_id;
+$$;

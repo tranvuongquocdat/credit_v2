@@ -356,7 +356,35 @@ export function InstallmentsTable({
                   })()}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  {formatCurrency((installment.totalPaid ?? 0))}
+                  {(() => {
+                    const paidAmount = installment.totalPaid ?? 0;
+                    const paymentPeriod = installment.payment_period || 10; // Default 10 days per period
+                    let paidPeriods: number | null = null;
+                    
+                    // Try to use latest payment date if available (similar to credits system)
+                    const latestPaymentDate = installment.latest_payment_date;
+                    if (latestPaymentDate && installment.start_date) {
+                      const startDate = new Date(installment.start_date);
+                      const latestPaidDate = new Date(latestPaymentDate);
+                      startDate.setHours(0, 0, 0, 0);
+                      latestPaidDate.setHours(0, 0, 0, 0);
+                      
+                      // Calculate days paid from start date to latest payment date
+                      const daysPaid = Math.floor((latestPaidDate.getTime() - startDate.getTime()) / (24 * 3600 * 1000)) + 1;
+                      if (daysPaid > 0) {
+                        paidPeriods = Math.floor(daysPaid / paymentPeriod);
+                      }
+                    }
+                    
+                    return (
+                      <div className="flex flex-col items-center">
+                        <span>{formatCurrency(paidAmount)}</span>
+                        {paidPeriods !== null && paidPeriods > 0 && (
+                          <span className="text-xs text-gray-400">{paidPeriods} kỳ</span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
                   <span className={installment.debt_amount && installment.debt_amount > 0 ? 'text-red-600' : 'text-green-600'}>
@@ -367,7 +395,46 @@ export function InstallmentsTable({
                   {formatCurrency(calculateDailyAmount(installment))}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  {formatCurrency(installment.remainingToPay ?? 0)}
+                  {(() => {
+                    const remainingAmount = installment.remainingToPay ?? 0;
+                    const paymentPeriod = installment.payment_period || 10; // Default 10 days per period
+                    let remainingPeriods: number | null = null;
+                    
+                    // Calculate remaining periods based on contract duration and paid periods
+                    const totalPeriods = Math.ceil(installment.duration / paymentPeriod);
+                    
+                    // Try to use latest payment date if available (similar to credits system)
+                    const latestPaymentDate = installment.latest_payment_date;
+                    if (latestPaymentDate && installment.start_date) {
+                      const startDate = new Date(installment.start_date);
+                      const latestPaidDate = new Date(latestPaymentDate);
+                      startDate.setHours(0, 0, 0, 0);
+                      latestPaidDate.setHours(0, 0, 0, 0);
+                      
+                      // Calculate days paid from start date to latest payment date
+                      const daysPaid = Math.floor((latestPaidDate.getTime() - startDate.getTime()) / (24 * 3600 * 1000)) + 1;
+                      if (daysPaid > 0) {
+                        const paidPeriods = Math.floor(daysPaid / paymentPeriod);
+                        remainingPeriods = Math.max(0, totalPeriods - paidPeriods);
+                      }
+                    } else {
+                      // Fallback: calculate based on remaining amount if no payment date available
+                      const dailyAmount = calculateDailyAmount(installment);
+                      if (remainingAmount > 0 && dailyAmount > 0) {
+                        const remainingDays = Math.ceil(remainingAmount / dailyAmount);
+                        remainingPeriods = Math.ceil(remainingDays / paymentPeriod);
+                      }
+                    }
+                    
+                    return (
+                      <div className="flex flex-col items-center">
+                        <span>{formatCurrency(remainingAmount)}</span>
+                        {remainingPeriods !== null && remainingPeriods > 0 && (
+                          <span className="text-xs text-gray-400">{remainingPeriods} kỳ</span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
                   <Badge

@@ -49,10 +49,8 @@ export function SearchFilters({
     'on_time': { label: 'Đang vay', color: 'bg-green-100 text-green-800' },
     'late_interest': { label: 'Chậm lãi', color: 'bg-yellow-100 text-yellow-800' },
     'overdue': { label: 'Quá hạn', color: 'bg-red-100 text-red-800' },
-    'finished': { label: 'Hoàn thành', color: 'bg-green-100 text-green-800' },
     'closed': { label: 'Đã đóng', color: 'bg-blue-100 text-blue-800' },
     'deleted': { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
-    'bad_debt': { label: 'Nợ xấu', color: 'bg-purple-100 text-purple-800' },
     'due_tomorrow': { label: 'Ngày mai đóng lãi', color: 'bg-amber-100 text-amber-800' },
   } as any;
   const [filters, setFilters] = useState<SearchFilters>({
