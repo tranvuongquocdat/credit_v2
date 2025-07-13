@@ -260,11 +260,16 @@ export function InstallmentWarningsTable({
         
         // Calculate totals across all filtered results
         const totalOldDebt = filteredResults.reduce((sum, w) => sum + (w.totalDueAmount || 0), 0);
-        const totalAmount = filteredResults.reduce(
-          (sum, w) =>
-            sum + (w.buttonValues.length > 0 ? w.buttonValues[w.buttonValues.length - 1] : 0),
-          0
-        );
+        const totalAmount = filteredResults.reduce((sum, w) => {
+          // Calculate exact amount using same logic as display
+          if (w.latePeriods === 0) return sum;
+          
+          const unpaidDays = w.latePeriods * (w.payment_period || 10);
+          const dailyAmount = (w.installment_amount || 0) / w.duration;
+          const exactAmount = Math.round(unpaidDays * dailyAmount);
+          
+          return sum + exactAmount;
+        }, 0);
         setTotals({ totalOldDebt, totalAmount });
 
         // Apply client-side pagination
