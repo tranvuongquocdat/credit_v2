@@ -24,9 +24,9 @@ export async function getPawns(
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
     
-    // Build base query with customer join
+    // Build base query using pawns_by_store view with customer join
     let query = supabase
-      .from('pawns')
+      .from('pawns_by_store')
       .select(`
         *,
         customer:customers!inner(
@@ -59,8 +59,52 @@ export async function getPawns(
       query = query.eq('loan_period', filters.loan_period);
     }
     
-    if (filters?.status && filters.status !== 'all' && filters.status !== '' as any) {
-      query = query.eq('status', filters.status as PawnStatus);
+    // Filter by status using enhanced pawns_by_store view
+    if (filters?.status && filters.status !== 'all') {
+      switch (filters.status) {
+        case 'overdue':
+          query = query.eq('status_code', 'OVERDUE');
+          break;
+        case 'late_interest':
+          query = query.eq('status_code', 'LATE_INTEREST');
+          break;
+        case 'on_time':
+          query = query.in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']);
+          break;
+        case 'closed':
+          query = query.eq('status_code', 'CLOSED');
+          break;
+        case 'deleted':
+          query = query.eq('status_code', 'DELETED');
+          break;
+        case 'bad_debt':
+          query = query.eq('status_code', 'BAD_DEBT');
+          break;
+        case 'finished':
+          query = query.eq('status_code', 'FINISHED');
+          break;
+        case 'due_tomorrow':
+          // Server-side filtering using next_payment_date from pawns_by_store view
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const tomorrowStr = tomorrow.toISOString().split('T')[0]; // YYYY-MM-DD format
+          query = query.eq('next_payment_date', tomorrowStr);
+          break;
+        default:
+          // Fallback to original status field for backward compatibility
+          if (filters.status === PawnStatus.ON_TIME) {
+            query = query.eq('status_code', 'ON_TIME');
+          } else if (filters.status === PawnStatus.CLOSED) {
+            query = query.eq('status_code', 'CLOSED');
+          } else if (filters.status === PawnStatus.DELETED) {
+            query = query.eq('status_code', 'DELETED');
+          } else if (filters.status === PawnStatus.BAD_DEBT) {
+            query = query.eq('status_code', 'BAD_DEBT');
+          } else {
+            query = query.eq('status', filters.status as PawnStatus);
+          }
+          break;
+      }
     }
     
     if (filters?.store_id) {
@@ -163,7 +207,7 @@ export async function getPawnsLegacy(
 export async function getPawnById(id: string, signal?: AbortSignal) {
   try {
     const { data, error } = await supabase
-      .from('pawns')
+      .from('pawns_by_store')
       .select(`
         *,
         customer:customers!inner(

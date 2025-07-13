@@ -12,7 +12,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUser } from "@/lib/auth";
 import { InstallmentWarningsTable } from "@/components/Installments/InstallmentWarningsTable";
-import { getInstallmentWarnings } from "@/lib/installment-warnings";
+import { getInstallmentWarnings, ReasonFilter, categorizeReason } from "@/lib/installment-warnings";
 import { InstallmentWarningsPagination } from "@/components/Installments/InstallmentWarningsPagination";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Employee } from "@/models/employee";
@@ -27,13 +27,18 @@ import { getEmployees } from "@/lib/employee";
 import { useDebounce } from '@/hooks/useDebounce';
 import { InstallmentPaymentHistoryModal } from "@/components/Installments/InstallmentPaymentHistoryModal";
 import { makePayment } from "@/lib/installmentPayment";
+import * as XLSX from 'xlsx';
+import { format } from 'date-fns';
+import { formatCurrencyExcel } from "@/lib/utils";
 
 export default function InstallmentWarningsPage() {
   const [installments, setInstallments] = useState<InstallmentWithCustomer[]>([]);
   const [filteredInstallments, setFilteredInstallments] = useState<InstallmentWithCustomer[]>([]);
+  const [allFilteredWarnings, setAllFilteredWarnings] = useState<any[]>([]); // Store all filtered warnings
   const [isLoading, setIsLoading] = useState(true);
   const [customerNameFilter, setCustomerNameFilter] = useState("");
   const [contractCodeFilter, setContractCodeFilter] = useState("");
+  const [reasonFilter, setReasonFilter] = useState<ReasonFilter>("all");
   const debouncedCustomerFilter = useDebounce(customerNameFilter, 500);
   const debouncedContractFilter = useDebounce(contractCodeFilter, 500);
   const [currentPage, setCurrentPage] = useState(1);
@@ -56,12 +61,15 @@ export default function InstallmentWarningsPage() {
   const [selectedInstallment, setSelectedInstallment] = useState<InstallmentWithCustomer | null>(null);
   const [isPaymentHistoryModalOpen, setIsPaymentHistoryModalOpen] = useState(false);
   
+  // Exporting state
+  const [isExporting, setIsExporting] = useState(false);
+  
   // Load installments khi page load, store thay đổi, filter thay đổi hoặc trang thay đổi
   useEffect(() => {
     if (canViewInstallmentsList) {
       loadInstallments();
     }
-  }, [currentStore, debouncedCustomerFilter, debouncedContractFilter, employeeFilter, currentPage, canViewInstallmentsList]);
+  }, [currentStore, debouncedCustomerFilter, debouncedContractFilter, employeeFilter, canViewInstallmentsList]);
   
   useEffect(() => {
     (async () => {
@@ -77,8 +85,8 @@ export default function InstallmentWarningsPage() {
     setIsLoading(true);
     try {
       const { data, error, totalItems, totalPages } = await getInstallmentWarnings(
-        currentPage,
-        itemsPerPage,
+        1, // Always fetch from page 1
+        1000, // Fetch all records for client-side filtering
         currentStore.id,
         debouncedCustomerFilter,
         debouncedContractFilter,
@@ -95,9 +103,7 @@ export default function InstallmentWarningsPage() {
       }
       
       setInstallments(data || []);
-      setFilteredInstallments(data || []);
-      setTotalItems(totalItems);
-      setTotalPages(totalPages);
+      setFilteredInstallments(data || []); // This will be updated by the table component
       
       console.log(`Loaded ${data.length} installments out of ${totalItems} total (page ${currentPage}/${totalPages})`);
     } catch (err) {
@@ -141,12 +147,125 @@ export default function InstallmentWarningsPage() {
     setCustomerNameFilter("");
     setContractCodeFilter("");
     setEmployeeFilter("all");
+    setReasonFilter("all");
     setCurrentPage(1);
   };
   
+  // Handle filtered results from table component
+  const handleFilteredResults = (filteredWarnings: any[]) => {
+    setAllFilteredWarnings(filteredWarnings);
+    
+    // Calculate pagination based on filtered results
+    const totalFilteredItems = filteredWarnings.length;
+    const totalFilteredPages = Math.ceil(totalFilteredItems / itemsPerPage);
+    
+    // Update pagination state
+    setTotalItems(totalFilteredItems);
+    setTotalPages(totalFilteredPages);
+    
+    // If current page is beyond available pages, reset to page 1
+    if (currentPage > totalFilteredPages && totalFilteredPages > 0) {
+      setCurrentPage(1);
+    }
+  };
+
   // Handle page change
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
+  };
+  
+  // Handle export to Excel
+  const handleExportExcel = async () => {
+    if (isExporting) return;
+
+    if (!allFilteredWarnings || allFilteredWarnings.length === 0) {
+      alert('Không có dữ liệu để xuất Excel');
+      return;
+    }
+
+    setIsExporting(true);
+
+    try {
+      const rows = allFilteredWarnings.map((warning, index) => {
+        // Format dates
+        const startDateStr = warning.start_date ? format(new Date(warning.start_date), 'dd/MM/yyyy') : '';
+        let endDateStr = '';
+        try {
+          if (warning.start_date && warning.duration) {
+            const startDate = new Date(warning.start_date);
+            const endDate = new Date(startDate);
+            endDate.setDate(startDate.getDate() + warning.duration - 1);
+            endDateStr = format(endDate, 'dd/MM/yyyy');
+          }
+        } catch {}
+
+        const paymentDueDateStr = warning.payment_due_date 
+          ? format(new Date(warning.payment_due_date), 'dd/MM/yyyy') 
+          : '';
+        
+        // Calculate total amount to display
+        const totalAmountToDisplay = warning.buttonValues && warning.buttonValues.length > 0 
+          ? warning.buttonValues[warning.buttonValues.length - 1] 
+          : 0;
+
+        return {
+          'STT': index + 1,
+          'Mã hợp đồng': warning.contract_code || '',
+          'Tên khách hàng': warning.customer?.name || '',
+          'SĐT': warning.customer?.phone || '',
+          'Địa chỉ': warning.customer?.address || '',
+          'Nợ cũ': formatCurrencyExcel(warning.totalDueAmount || 0),
+          'Số tiền': formatCurrencyExcel(totalAmountToDisplay),
+          'Lý do': warning.reason || '',
+          'Ngày vay': startDateStr,
+          'Ngày kết thúc': endDateStr,
+          'Ngày phải đóng': paymentDueDateStr,
+          'Ghi chú': warning.notes || '',
+        } as Record<string, any>;
+      });
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(rows);
+
+      ws['!cols'] = [
+        { width: 6 },   // STT
+        { width: 15 },  // Mã hợp đồng
+        { width: 20 },  // Tên khách hàng
+        { width: 15 },  // SĐT
+        { width: 25 },  // Địa chỉ
+        { width: 15 },  // Nợ cũ
+        { width: 15 },  // Số tiền
+        { width: 30 },  // Lý do
+        { width: 12 },  // Ngày vay
+        { width: 12 },  // Ngày kết thúc
+        { width: 15 },  // Ngày phải đóng
+        { width: 30 },  // Ghi chú
+      ];
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Cảnh báo trả góp');
+
+      // Style header
+      const headerKeys = Object.keys(rows[0] || {});
+      headerKeys.forEach((_, idx) => {
+        const cellRef = XLSX.utils.encode_cell({ r: 0, c: idx });
+        const cell = ws[cellRef];
+        if (cell) {
+          cell.s = {
+            fill: { fgColor: { rgb: '4472C4' } },
+            font: { bold: true, color: { rgb: 'FFFFFF' } },
+            alignment: { horizontal: 'center', vertical: 'center' },
+          } as any;
+        }
+      });
+
+      const fileName = `CanhBaoTraGop_${format(new Date(), 'yyyyMMdd_HHmmss')}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    } catch (err) {
+      console.error('Export Excel error', err);
+      alert('Có lỗi khi xuất Excel');
+    } finally {
+      setIsExporting(false);
+    }
   };
   
   // Process payment after confirmation
@@ -388,7 +507,7 @@ export default function InstallmentWarningsPage() {
                 />
               </div>
               {/* Contract code input */}
-              <div className="relative flex-1 max-w-md">
+              {/* <div className="relative flex-1 max-w-md">
                 <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                   <Search className="h-4 w-4 text-gray-400" />
                 </div>
@@ -400,7 +519,7 @@ export default function InstallmentWarningsPage() {
                   onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                   className="pl-10"
                 />
-              </div>
+              </div> */}
               {/* Employee Select */}
               <div className="max-w-xs">
                 <Select
@@ -421,12 +540,43 @@ export default function InstallmentWarningsPage() {
                   </SelectContent>
                 </Select>
               </div>
+              
+              {/* Reason Filter */}
+              <div className="max-w-xs">
+                <Select
+                  value={reasonFilter}
+                  onValueChange={(v: ReasonFilter) => {
+                    setReasonFilter(v);
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Lý do" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả trạng thái</SelectItem>
+                    <SelectItem value="today_due">Hôm nay đóng</SelectItem>
+                    <SelectItem value="tomorrow_due">Ngày mai đóng</SelectItem>
+                    <SelectItem value="late_periods">Chậm kỳ</SelectItem>
+                    <SelectItem value="overdue">Quá hạn</SelectItem>
+                    <SelectItem value="ending_today">Hôm nay là kỳ cuối</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <Button 
                 variant="outline" 
                 onClick={clearFilter}
-                disabled={!customerNameFilter && !contractCodeFilter && employeeFilter==='all'}
+                disabled={!customerNameFilter && !contractCodeFilter && employeeFilter==='all' && reasonFilter==='all'}
               >
                 Xóa bộ lọc
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={handleExportExcel}
+                disabled={isExporting || allFilteredWarnings.length === 0}
+                className="bg-green-50 hover:bg-green-100 text-green-700 border-green-300"
+              >
+                {isExporting ? 'Đang xuất...' : 'Xuất Excel'}
               </Button>
             </div>
             {/* Show filter info if active */}
@@ -449,6 +599,10 @@ export default function InstallmentWarningsPage() {
             <InstallmentWarningsTable
               installments={filteredInstallments}
               isLoading={isLoading}
+              reasonFilter={reasonFilter}
+              currentPage={currentPage}
+              itemsPerPage={itemsPerPage}
+              onFilteredResults={handleFilteredResults}
               onPayment={handlePayment}
               onCustomerClick={handleCustomerClick}
               onShowPaymentHistory={handleShowPaymentHistory}

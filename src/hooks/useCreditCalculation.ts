@@ -27,6 +27,7 @@ export interface CreditFinancialDetail {
   isCompleted: boolean;
   hasPaid: boolean;
   loading: boolean;
+  latestPaidDate: string | null;
 }
 
 export function useCreditCalculations() {
@@ -48,19 +49,19 @@ export function useCreditCalculations() {
         .eq('id', storeId)
         .single();
       
-      // 2. Lấy danh sách credits ON_TIME
+      // 2. Lấy danh sách credits đang hoạt động từ view (bao gồm ON_TIME, OVERDUE, LATE_INTEREST)
       const { data: activeCreditsData } = await supabase
-        .from('credits')
+        .from('credits_by_store')
         .select('id, loan_amount, loan_date, loan_period')
         .eq('store_id', storeId)
-        .eq('status', CreditStatus.ON_TIME);
+        .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']);
       
-      // 3. Lấy danh sách credits đã đóng (cần đủ thông tin tính toán)
+      // 3. Lấy danh sách credits đã đóng từ view
       const { data: closedCreditsData } = await supabase
-        .from('credits')
+        .from('credits_by_store')
         .select('id, loan_amount, loan_date, loan_period')
         .eq('store_id', storeId)
-        .eq('status', CreditStatus.CLOSED);
+        .eq('status_code', 'CLOSED');
       
       let totalLoan = 0;
       let totalOldDebt = 0;
@@ -74,8 +75,8 @@ export function useCreditCalculations() {
 
       const interestRangeMap = new Map<string, number>();
       const interestTotalMap = new Map<string, number>();
-      const activeIds  = activeCreditsData?.map(c => c.id) || [];
-      const closedIds  = closedCreditsData?.map(c => c.id) || [];
+      const activeIds  = activeCreditsData?.map(c => c.id).filter((id): id is string => id !== null) || [];
+      const closedIds  = closedCreditsData?.map(c => c.id).filter((id): id is string => id !== null) || [];
       const allIds     = [...activeIds, ...closedIds];
 
       if (allIds.length) {
@@ -131,6 +132,19 @@ export function useCreditCalculations() {
         }
       }
 
+      /* ---------- 7.1. RPC lấy latest payment paid date cho tất cả credit ---------- */
+      const latestPaidMap = new Map<string, string | null>();
+      if (allIds.length) {
+        const { data: latestPaidRows, error: latestPaidErr } = await (supabase.rpc as any)('get_latest_payment_paid_dates', {
+          p_credit_ids: allIds,
+        });
+        if (!latestPaidErr && Array.isArray(latestPaidRows)) {
+          latestPaidRows.forEach((r: any) => {
+            latestPaidMap.set(r.credit_id, r.latest_paid_date || null);
+          });
+        }
+      }
+
       /* ---------- 7. RPC lấy thông tin kỳ thanh toán tiếp theo ---------- */
       const nextMap = new Map<string, { nextDate: string | null; isCompleted: boolean; hasPaid: boolean }>();
       if (activeIds.length) {
@@ -149,15 +163,17 @@ export function useCreditCalculations() {
       }
         
         const results = await Promise.all(
-        [...(activeCreditsData || []), ...(closedCreditsData || [])].map(c =>
-          calculateCreditMetrics(c, {
-            principalMap,
-            interestMap: interestTotalMap,
-            debtMap,
-            expectedMap,
-            todayMap,
-          })
-        )
+        [...(activeCreditsData || []), ...(closedCreditsData || [])]
+          .filter(c => c.id !== null && c.loan_amount !== null && c.loan_date !== null && c.loan_period !== null)
+          .map(c =>
+            calculateCreditMetrics(c as any, {
+              principalMap,
+              interestMap: interestTotalMap,
+              debtMap,
+              expectedMap,
+              todayMap,
+            })
+          )
       );
         
         // Aggregate results
@@ -173,7 +189,8 @@ export function useCreditCalculations() {
               nextPayment: nextMap.get(result.creditId)?.nextDate || null,
               isCompleted: nextMap.get(result.creditId)?.isCompleted || false,
               hasPaid: nextMap.get(result.creditId)?.hasPaid || false,
-              loading: false
+              loading: false,
+              latestPaidDate: latestPaidMap.get(result.creditId) || null
             };
             
             totalLoan += result.summaryLoan;
@@ -188,7 +205,7 @@ export function useCreditCalculations() {
         totalCollectedInterest += interestRangeMap.get(id) ?? 0;
       });
       
-      /* ---------- 8. Bỏ tính trạng thái tại đây - đã chuyển sang RPC per page */
+      /* ---------- 8. Status calculation removed - now handled by credits_by_store view */
       
       // 7. Set results
       setSummary({

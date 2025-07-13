@@ -48,19 +48,19 @@ export function usePawnCalculations() {
         .eq('id', storeId)
         .single();
       
-      // 2. Lấy danh sách credits ON_TIME
+      // 2. Lấy danh sách pawns ON_TIME - using optimized view
       const { data: activeCreditsData } = await supabase
-        .from('pawns')
+        .from('pawns_by_store')
         .select('id, loan_amount, loan_date, loan_period')
         .eq('store_id', storeId)
-        .eq('status', PawnStatus.ON_TIME);
+        .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']);
       
-      // 3. Lấy danh sách credits đã đóng
+      // 3. Lấy danh sách pawns đã đóng - using optimized view
       const { data: closedCreditsData } = await supabase
-        .from('pawns')
+        .from('pawns_by_store')
         .select('id, loan_amount, loan_date, loan_period')
         .eq('store_id', storeId)
-        .eq('status', PawnStatus.CLOSED);
+        .eq('status_code', 'CLOSED');
       
       let totalLoan = 0;
       let totalOldDebt = 0;
@@ -71,8 +71,8 @@ export function usePawnCalculations() {
       /* ---------- 4. RPC lấy paidInterest (2 phiên bản) ---------- */
       const interestRangeMap = new Map<string, number>();  // giới hạn theo start_date & end_date
       const interestTotalMap = new Map<string, number>();  // toàn thời gian
-      const activeIds  = activeCreditsData?.map(c => c.id) || [];
-      const closedIds  = closedCreditsData?.map(c => c.id) || [];
+      const activeIds  = activeCreditsData?.map(c => c.id).filter(id => id !== null) || [];
+      const closedIds  = closedCreditsData?.map(c => c.id).filter(id => id !== null) || [];
       const allIds     = [...activeIds, ...closedIds];
       
       if (allIds.length) {
@@ -144,8 +144,13 @@ export function usePawnCalculations() {
         }
       }
       
+      const validPawnData = [...(activeCreditsData || []), ...(closedCreditsData || [])]
+        .filter((c): c is { id: string; loan_amount: number; loan_date: string; loan_period: number } => 
+          c?.id !== null && c?.loan_amount !== null && c?.loan_date !== null && c?.loan_period !== null
+        );
+      
       const results = await Promise.all(
-        [...(activeCreditsData || []), ...(closedCreditsData || [])].map(c =>
+        validPawnData.map(c =>
           calculatePawnMetrics(c, {
             principalMap,
             interestMap: interestTotalMap,

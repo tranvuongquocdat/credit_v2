@@ -26,19 +26,11 @@ import {
 import { toast } from '@/components/ui/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/lib/supabase';
-import { calculateMultipleInstallmentStatus } from '@/lib/Installments/calculate_installment_status';
 import { calculateRemainingToPay } from '@/lib/installmentCalculations';
-// Map trạng thái thành nhãn và màu sắc
-const statusMap: Record<string, { label: string, color: string }> = {
-  [InstallmentStatus.ON_TIME]: { label: 'Đang vay', color: 'bg-green-100 text-green-800 border-green-200' },
-  [InstallmentStatus.OVERDUE]: { label: 'Quá hạn', color: 'bg-red-100 text-red-800 border-red-200' },
-  [InstallmentStatus.LATE_INTEREST]: { label: 'Chậm trả', color: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
-  [InstallmentStatus.BAD_DEBT]: { label: 'Nợ xấu', color: 'bg-purple-100 text-purple-800 border-purple-200' },
-  [InstallmentStatus.CLOSED]: { label: 'Đã đóng', color: 'bg-blue-100 text-blue-800 border-blue-200' },
-  [InstallmentStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800 border-gray-200' },
-  [InstallmentStatus.DUE_TOMORROW]: { label: 'Ngày mai đóng', color: 'bg-amber-100 text-amber-800 border-amber-200' },
-  [InstallmentStatus.FINISHED]: { label: 'Hoàn thành', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
-};
+import { getInstallmentStatusInfo, getInstallmentStatusCode, INSTALLMENT_STATUS_MAP } from '@/lib/installment-status-utils';
+
+// Use the shared status map for backward compatibility
+const statusMap = INSTALLMENT_STATUS_MAP;
 
 // Skeleton displayed while loading FinancialSummary lazily
 function SkeletonFinancialSummary() {
@@ -233,8 +225,7 @@ export function InstallmentContractClient({ contractCode }: InstallmentContractC
           (paidRows ?? []).map((r: any) => [r.installment_id, Number(r.total_paid ?? r.paid_amount ?? 0)])
         );
 
-        // RPC: tính trạng thái
-        const calculatedStatuses = await calculateMultipleInstallmentStatus(ids);
+        // No need for complex status calculation - use status_code directly from view
 
         const enriched = installments.map((it) => {
           const totalPaid = paidMap.get(it.id) ?? 0;
@@ -258,42 +249,9 @@ export function InstallmentContractClient({ contractCode }: InstallmentContractC
             }
           }
 
-          // Map status info
-          const calcStatus = calculatedStatuses[it.id];
-          let statusInfo: { label: string; color: string };
-          if (calcStatus) {
-            let color: string;
-            switch (calcStatus.statusCode) {
-              case 'CLOSED':
-                color = 'bg-blue-100 text-blue-800 border-blue-200';
-                break;
-              case 'DELETED':
-                color = 'bg-gray-100 text-gray-800 border-gray-200';
-                break;
-              case 'FINISHED':
-                color = 'bg-emerald-100 text-emerald-800 border-emerald-200';
-                break;
-              case 'BAD_DEBT':
-                color = 'bg-purple-100 text-purple-800 border-purple-200';
-                break;
-              case 'OVERDUE':
-                color = 'bg-red-100 text-red-800 border-red-200';
-                break;
-              case 'LATE_INTEREST':
-                color = 'bg-yellow-100 text-yellow-800 border-yellow-200';
-                break;
-              case 'ON_TIME':
-              default:
-                color = 'bg-green-100 text-green-800 border-green-200';
-                break;
-            }
-            statusInfo = { label: calcStatus.status, color };
-          } else {
-            statusInfo = statusMap[it.status] || {
-              label: 'Không xác định',
-              color: 'bg-gray-100 text-gray-800',
-            };
-          }
+          // Get status info using simplified utility
+          const statusCode = getInstallmentStatusCode(it);
+          const statusInfo = getInstallmentStatusInfo(statusCode);
 
           return {
             ...it,

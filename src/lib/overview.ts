@@ -14,19 +14,19 @@ export interface FinancialSummary {
 }
 
 export async function getPawnFinancialsForStore(storeId: string): Promise<FinancialSummary> {
-  // 1. Lấy danh sách pawns ON_TIME
+  // 1. Lấy danh sách pawns đang hoạt động từ view (bao gồm ON_TIME, OVERDUE, LATE_INTEREST)
   const { data: activePawnsData } = await supabase
-    .from('pawns')
+    .from('pawns_by_store')
     .select('id, loan_amount, loan_date, loan_period')
     .eq('store_id', storeId)
-    .eq('status', PawnStatus.ON_TIME);
+    .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']);
 
-  // 2. Lấy danh sách credits đã đóng
+  // 2. Lấy danh sách pawns đã đóng từ view
   const { data: closedPawnsData } = await supabase
-    .from('pawns')
+    .from('pawns_by_store')
     .select('id')
     .eq('store_id', storeId)
-    .eq('status', PawnStatus.CLOSED);
+    .eq('status_code', 'CLOSED');
 
   let totalLoan = 0;
   let totalOldDebt = 0;
@@ -36,8 +36,8 @@ export async function getPawnFinancialsForStore(storeId: string): Promise<Financ
       
   /* ---------- 4. RPC duy nhất lấy paidInterest cho active + closed ---------- */
   const interestMap = new Map<string, number>();
-  const activeIds  = activePawnsData?.map(c => c.id) || [];
-  const closedIds  = closedPawnsData?.map(c => c.id) || [];
+  const activeIds  = activePawnsData?.map(c => c.id).filter((id): id is string => id !== null) || [];
+  const closedIds  = closedPawnsData?.map(c => c.id).filter((id): id is string => id !== null) || [];
   const allIds     = [...activeIds, ...closedIds];
   
   if (allIds.length) {
@@ -104,17 +104,22 @@ export async function getPawnFinancialsForStore(storeId: string): Promise<Financ
     }
   }
     
+    const validPawnData = (activePawnsData || [])
+      .filter((c): c is { id: string; loan_amount: number; loan_date: string; loan_period: number } => 
+        c?.id !== null && c?.loan_amount !== null && c?.loan_date !== null && c?.loan_period !== null
+      );
+
     const results = await Promise.all(
-    activePawnsData!.map(c =>
-      calculatePawnMetrics(c, {
-        principalMap,
-        interestMap,
-        debtMap,
-        expectedMap,
-        todayMap,
-      })
-    )
-  );
+      validPawnData.map(c =>
+        calculatePawnMetrics(c, {
+          principalMap,
+          interestMap,
+          debtMap,
+          expectedMap,
+          todayMap,
+        })
+      )
+    );
     
     // Aggregate results
     results.forEach(result => {
@@ -140,19 +145,19 @@ export async function getPawnFinancialsForStore(storeId: string): Promise<Financ
 }
 
 export async function getCreditFinancialsForStore(storeId: string): Promise<FinancialSummary> {
-  // 1. Lấy danh sách credits ON_TIME
+  // 1. Lấy danh sách credits đang hoạt động từ view (bao gồm ON_TIME, OVERDUE, LATE_INTEREST)
   const { data: activeCreditsData } = await supabase
-    .from('credits')
+    .from('credits_by_store')
     .select('id, loan_amount, loan_date, loan_period')
     .eq('store_id', storeId)
-    .eq('status', CreditStatus.ON_TIME);
+    .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']);
 
-  // 2. Lấy danh sách credits đã đóng
+  // 2. Lấy danh sách credits đã đóng từ view
   const { data: closedCreditsData } = await supabase
-    .from('credits')
+    .from('credits_by_store')
     .select('id')
     .eq('store_id', storeId)
-    .eq('status', CreditStatus.CLOSED);
+    .eq('status_code', 'CLOSED');
 
   let totalLoan = 0;
   let totalOldDebt = 0;
@@ -162,8 +167,8 @@ export async function getCreditFinancialsForStore(storeId: string): Promise<Fina
       
   /* ---------- 4. RPC duy nhất lấy paidInterest cho active + closed ---------- */
   const interestMap = new Map<string, number>();
-  const activeIds  = activeCreditsData?.map(c => c.id) || [];
-  const closedIds  = closedCreditsData?.map(c => c.id) || [];
+  const activeIds  = activeCreditsData?.map(c => c.id).filter((id): id is string => id !== null) || [];
+  const closedIds  = closedCreditsData?.map(c => c.id).filter((id): id is string => id !== null) || [];
   const allIds     = [...activeIds, ...closedIds];
   
   if (allIds.length) {
@@ -231,15 +236,17 @@ export async function getCreditFinancialsForStore(storeId: string): Promise<Fina
   }
     
     const results = await Promise.all(
-    activeCreditsData!.map(c =>
-      calculateCreditMetrics(c, {
-        principalMap,
-        interestMap,
-        debtMap,
-        expectedMap,
-        todayMap,
-      })
-    )
+    (activeCreditsData || [])
+      .filter(c => c.id !== null && c.loan_amount !== null && c.loan_date !== null && c.loan_period !== null)
+      .map(c =>
+        calculateCreditMetrics(c as any, {
+          principalMap,
+          interestMap,
+          debtMap,
+          expectedMap,
+          todayMap,
+        })
+      )
   );
     
     // Aggregate results

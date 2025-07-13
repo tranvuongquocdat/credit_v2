@@ -439,9 +439,9 @@ with base as (
   from   pawns p
   where  p.store_id = p_store_id
 
-    /* ----- status (trừ due_tomorrow) ----- */
+    /* ----- status (loại trừ các trạng thái đặc biệt tính động) ----- */
     and (
-          coalesce(p_filters->>'status','') in ('', 'all', 'due_tomorrow')
+          coalesce(p_filters->>'status','') in ('', 'all', 'due_tomorrow', 'overdue', 'late_interest')
           or p.status = (p_filters->>'status')::pawn_status
         )
 
@@ -479,18 +479,51 @@ with base as (
         )
 ),
 
-/* 2. Nếu client yêu cầu 'due_tomorrow' thì lọc tiếp bằng get_pawn_next_payment_info */
+/* 2. Lọc thêm khi client yêu cầu các trạng thái đặc biệt */
 base2 as (
   select b.*
   from   base b
-  where  (p_filters->>'status') <> 'due_tomorrow'          -- không lọc
-         /* nếu chọn due_tomorrow → chỉ giữ hợp đồng có kỳ thanh toán ngày mai */
-         or exists (
-              select 1
-              from   get_pawn_next_payment_info( array[b.id] ) np   -- hàm đã dùng ở hook
-              where  np.pawn_id = b.id
-                and  np.next_date = (current_date + interval '1 day')::date
-         )
+  where
+    /* -------------------------------------------------------------
+       Các trường hợp không phải status đặc biệt → giữ nguyên hàng
+       ------------------------------------------------------------- */
+    (p_filters->>'status' is null
+     or p_filters->>'status' = ''
+     or p_filters->>'status' = 'all'
+     or p_filters->>'status' not in ('due_tomorrow', 'overdue', 'late_interest'))
+
+    /* -------------------- status = due_tomorrow ------------------ */
+    or (
+      p_filters->>'status' = 'due_tomorrow'
+      and exists (
+        select 1
+        from   get_pawn_next_payment_info( array[b.id] ) np
+        where  np.pawn_id = b.id
+          and  np.next_date = (current_date + interval '1 day')::date
+      )
+    )
+
+    /* -------------------- status = overdue ----------------------- */
+    or (
+      p_filters->>'status' = 'overdue'
+      and exists (
+        select 1
+        from   get_pawn_statuses( array[b.id] ) st
+        where  st.pawn_id  = b.id
+          and  st.status_code = 'OVERDUE'
+      )
+    )
+
+    /* -------------------- status = late_interest ----------------- */
+    or (
+      p_filters->>'status' = 'late_interest'
+      and exists (
+        select 1
+        from   get_pawn_statuses( array[b.id] ) st
+        where  st.pawn_id  = b.id
+          and  st.status_code = 'LATE_INTEREST'
+      )
+    )
 ),
 
 /* 3. Gom ID thành mảng */

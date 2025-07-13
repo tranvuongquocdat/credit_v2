@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useStore } from '@/contexts/StoreContext';
-import { CreditStatus } from '@/models/credit';
 
 export interface CreditStoreSummary {
   totalFund: number;
@@ -30,21 +29,21 @@ export function useCreditsSummary() {
         .eq('id', storeId)
         .single();
 
-      // active + closed ids
+      // active + closed ids using credits_by_store view
       const { data: activeCredits } = await supabase
-        .from('credits')
+        .from('credits_by_store')
         .select('id, loan_amount')
         .eq('store_id', storeId)
-        .eq('status', CreditStatus.ON_TIME);
+        .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']);
 
       const { data: closedCredits } = await supabase
-        .from('credits')
+        .from('credits_by_store')
         .select('id')
         .eq('store_id', storeId)
-        .eq('status', CreditStatus.CLOSED);
+        .eq('status_code', 'CLOSED');
 
-      const activeIds = activeCredits?.map(c => c.id) ?? [];
-      const closedIds = closedCredits?.map(c => c.id) ?? [];
+      const activeIds = activeCredits?.map(c => c.id).filter((id): id is string => id !== null) ?? [];
+      const closedIds = closedCredits?.map(c => c.id).filter((id): id is string => id !== null) ?? [];
       const allIds = [...activeIds, ...closedIds];
 
       let totalLoan = 0;

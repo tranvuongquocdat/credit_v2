@@ -904,7 +904,9 @@ export function InstallmentPaymentHistoryModal({
             <PaymentTabFast
               installment={installment}
               onDataChange={reloadInstallmentInfo}
-              onOptimisticStateChange={setHasOptimisticUpdates}
+              onOptimisticStateChange={(hasUpdates) => {
+                if (hasUpdates) setHasDataChanged(true);
+              }}
             />
             </div>
           )}

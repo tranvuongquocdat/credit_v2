@@ -27,7 +27,7 @@ import { usePawnsSummary } from '@/hooks/usePawnsSummary';
 import type { PawnFinancialDetail } from '@/hooks/usePawnCalculation';
 import { useAutoUpdateCashFund } from '@/hooks/useCashFundUpdater';
 import { usePermissions } from '@/hooks/usePermissions';
-import { usePawnStatuses } from '@/hooks/usePawnStatuses';
+// Removed: import { usePawnStatuses } from '@/hooks/usePawnStatuses';
 import { PawnStatus, PawnWithCustomer } from '@/models/pawn';
 import { reopenContract } from '@/lib/Pawns/reopen_contract';
 import { updatePawnStatus } from '@/lib/pawn';
@@ -40,16 +40,6 @@ import * as XLSX from 'xlsx';
 import { isSameDay, addDays } from 'date-fns';
 import { usePawnCalculations } from '@/hooks/usePawnCalculation';
 import { useStore } from '@/contexts/StoreContext';
-
-// Map trạng thái thành nhãn và màu sắc
-const statusMap: Record<string, { label: string, color: string }> = {
-  [PawnStatus.ON_TIME]: { label: 'Đang vay', color: 'bg-green-100 text-green-800' },
-  [PawnStatus.OVERDUE]: { label: 'Quá hạn', color: 'bg-red-100 text-red-800' },
-  [PawnStatus.LATE_INTEREST]: { label: 'Chậm lãi', color: 'bg-yellow-100 text-yellow-800' },
-  [PawnStatus.BAD_DEBT]: { label: 'Nợ xấu', color: 'bg-purple-100 text-purple-800' },
-  [PawnStatus.CLOSED]: { label: 'Đã đóng', color: 'bg-blue-100 text-blue-800' },
-  [PawnStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
-};
 
 // Type for totals row returned by RPC
 interface PawnTotals {
@@ -142,18 +132,13 @@ export default function PawnsPage() {
   useEffect(() => {
     fetchTotals(filters);
   }, [JSON.stringify(filters), currentStore?.id]);
+  // Removed: Status calculation now handled by pawns_by_store view directly
 
-  const displayPawns = useMemo(() => {
-    if (filters?.status !== 'due_tomorrow') return pawns;
-    const tomorrow = addDays(new Date().setHours(0,0,0,0) as any, 1);
-    return pawns.filter(p => {
-      const next = pawnDetails[p.id]?.nextPayment;
-      if (!next) return false;
-      return isSameDay(new Date(next), tomorrow);
-    });
-  }, [pawns, filters?.status, pawnDetails]);
-
-  const effectiveTotalItems = filters?.status === 'due_tomorrow' ? displayPawns.length : totalItems;
+  // No client-side filtering needed - all filtering now handled server-side by pawns_by_store view
+  const displayPawns = pawns;
+  
+  // All filtering now server-side - no need for client-side pagination adjustments
+  const effectiveTotalItems = totalItems;
   const totalPages = Math.ceil(effectiveTotalItems / itemsPerPage);
   
   // Handle search filters
@@ -401,9 +386,12 @@ export default function PawnsPage() {
     setPaymentHistoryPawn(null);
     // Only refresh data if there were actual changes
     if (hasDataChanged) {
-      handleRefresh();
-      // Trigger cash fund update when payment history changes
-      triggerUpdate();
+      // Thêm độ trễ để đảm bảo database đã xử lý xong
+      setTimeout(() => {
+        handleRefresh();
+        // Trigger cash fund update when payment history changes
+        triggerUpdate();
+      }, 500); // 500ms delay
     }
   };
   
@@ -415,7 +403,6 @@ export default function PawnsPage() {
     fetchTotals(filters);
   };
   
-  const { statuses: pawnStatuses } = usePawnStatuses(pawns.map(p => p.id));
 
   return (
     <Layout>
@@ -465,13 +452,13 @@ export default function PawnsPage() {
             {/* Bảng dữ liệu hợp đồng */}
             <PawnsTable
               pawns={displayPawns}
-              statusMap={statusMap}
+              statusMap={undefined} // Now optional since we use shared utility
               onEdit={handleEditPawn}
               onDelete={handleOpenDeleteDialog}
               onUpdateStatus={handleOpenStatusDialog}
               onShowPaymentHistory={handleOpenPaymentHistory}
               calculatedDetails={pawnDetails}
-              calculatedStatuses={pawnStatuses}
+              calculatedStatuses={undefined} // Status now in pawn.status_code from view
               totals={totals ?? undefined}
             />
             

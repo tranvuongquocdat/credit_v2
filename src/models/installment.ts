@@ -65,10 +65,13 @@ export interface Installment {
   loan_period?: number;       // Direct reference to DB field 
   loan_date?: string;         // Direct reference to DB field
   debt_amount?: number;       // Direct reference to DB field
+  latest_payment_date?: string | null; // Latest payment date from installment_history
 }
 
 export interface InstallmentWithCustomer extends Installment {
   customer?: Customer;
+  reason?: string; // Add optional reason field for warnings
+  status_code?: string; // Calculated status from database view
 }
 
 // Interface for creating a new installment - matches DB schema

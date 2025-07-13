@@ -33,9 +33,9 @@ export function useCredits(initialFilters?: Partial<SearchFilters>) {
       customer_name: searchFilters.customer_name || undefined,
       start_date: searchFilters.start_date || undefined,
       end_date: searchFilters.end_date || undefined,
-      status: searchFilters.status && searchFilters.status !== 'due_tomorrow'
-        ? (searchFilters.status as CreditStatus)
-        : undefined,
+      // Send all status values to server for filtering via enhanced credits_by_store view
+      // All status filtering including due_tomorrow is now handled server-side
+      status: searchFilters.status || undefined,
       duration: searchFilters.duration || undefined,
       store_id: currentStore?.id // Sử dụng currentStore?.id để tránh lỗi null
     };

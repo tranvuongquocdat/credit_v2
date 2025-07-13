@@ -14,7 +14,7 @@ export async function getInstallments(
 ) {
   // Debug logging removed - race condition fixed with AbortController
   try {
-    // Use the installments_by_store view to include store_id
+    // Use the installments_by_store view to include store_id and status_code
     let query = supabase
       .from('installments_by_store')
       .select(`
@@ -46,27 +46,40 @@ export async function getInstallments(
       query = query.eq('loan_period', filters.duration);
     }
     
-    // Special case: nếu filter status là 'due_tomorrow' thì lọc theo payment_due_date = ngày mai
-    if (filters?.status === InstallmentStatus.DUE_TOMORROW) {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const yyyy = tomorrow.getFullYear();
-      const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
-      const dd = String(tomorrow.getDate()).padStart(2, '0');
-      const tomorrowStr = `${yyyy}-${mm}-${dd}`;
-      query = query.eq('payment_due_date', tomorrowStr);
-    } else if (filters?.status && filters.status !== 'all' && filters.status !== '' as any) {
-      // Convert enum value to string for the database query
-      query = query.eq(
-        'status',
-        filters.status as
-          | 'on_time'
-          | 'overdue'
-          | 'late_interest'
-          | 'bad_debt'
-          | 'closed'
-          | 'deleted'
-      );
+    // Filter by status using the new status_code column from the view
+    if (filters?.status) {
+      switch (filters.status) {
+        case InstallmentStatus.DUE_TOMORROW:
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const yyyy = tomorrow.getFullYear();
+          const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
+          const dd = String(tomorrow.getDate()).padStart(2, '0');
+          const tomorrowStr = `${yyyy}-${mm}-${dd}`;
+          query = query.eq('payment_due_date', tomorrowStr);
+          break;
+        case InstallmentStatus.OVERDUE:
+          query = query.eq('status_code', 'OVERDUE');
+          break;
+        case InstallmentStatus.LATE_INTEREST:
+          query = query.eq('status_code', 'LATE_INTEREST');
+          break;
+        case InstallmentStatus.ON_TIME:
+          query = query.in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']);
+          break;
+        case InstallmentStatus.CLOSED:
+          query = query.eq('status_code', 'CLOSED');
+          break;
+        case InstallmentStatus.DELETED:
+          query = query.eq('status_code', 'DELETED');
+          break;
+        case InstallmentStatus.BAD_DEBT:
+          query = query.eq('status_code', 'BAD_DEBT');
+          break;
+        case InstallmentStatus.FINISHED:
+          query = query.eq('status_code', 'FINISHED');
+          break;
+      }
     }
     
     if (filters?.store_id) {
@@ -111,6 +124,19 @@ export async function getInstallments(
       (r: { installment_id: string; old_debt: number }) =>
         debtMap.set(r.installment_id, Number(r.old_debt || 0))
     );
+
+    // Get latest payment dates for all installments
+    const { data: latestPaymentRows, error: latestPaymentErr } = await (supabase.rpc as any)(
+      'get_latest_installment_payment_paid_dates',
+      { p_installment_ids: ids }
+    );
+    if (latestPaymentErr) throw latestPaymentErr;
+
+    const latestPaymentMap = new Map<string, string>();
+    (latestPaymentRows ?? []).forEach(
+      (r: { installment_id: string; latest_paid_date: string }) =>
+        latestPaymentMap.set(r.installment_id, r.latest_paid_date)
+    );
     // Transform data to match UI requirements
     const installmentPromises = (data || []).map(async (item: any) => {
       // Ensure values are not null
@@ -143,7 +169,7 @@ export async function getInstallments(
         daily_amount: installmentAmount / loanPeriod,
         installment_amount: installmentAmount,
         remaining_amount: downPayment,
-        status: item.status as InstallmentStatus,
+        status: item.status_code as InstallmentStatus,
         due_date: calculateDueDate(loanDate, loanPeriod),
         start_date: new Date(loanDate).toISOString().split('T')[0],
         payment_due_date: item.payment_due_date || null,
@@ -152,6 +178,7 @@ export async function getInstallments(
         updated_at: item.updated_at || undefined,
         notes: item.notes || '',
         debt_amount: debtMap.get(item.id) ?? 0,
+        latest_payment_date: latestPaymentMap.get(item.id) ?? null,
         customer: customerData
       };
     });
@@ -246,7 +273,7 @@ export async function getInstallmentById(id: string) {
       old_debt: debtAmount, // Lấy trực tiếp từ DB
       daily_amount: installmentAmount / loanPeriod,
       remaining_amount: downPayment,
-      status: data.status as InstallmentStatus,
+      status: data.status_code as InstallmentStatus,
       due_date: calculateDueDate(loanDate, loanPeriod),
       start_date: new Date(loanDate).toISOString().split('T')[0],
       

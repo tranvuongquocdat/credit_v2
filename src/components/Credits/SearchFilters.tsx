@@ -16,12 +16,6 @@ import { getCustomers } from '@/lib/customer';
 import { Customer } from '@/models/customer';
 import { useStore } from '@/contexts/StoreContext';
 import { CreditStatus } from '@/models/credit';
-interface StatusMapType {
-  [key: string]: { 
-    label: string; 
-    color: string;
-  }
-}
 
 interface SearchFiltersProps {
   onSearch: (filters: SearchFilters) => void;
@@ -51,11 +45,14 @@ export function SearchFilters({
   initialFilters 
 }: SearchFiltersProps) {
   const statusMap = {
-    [CreditStatus.ON_TIME]:     { label: 'Đang vay',       color: 'bg-green-100 text-green-800' },
-    [CreditStatus.CLOSED]:      { label: 'Đã đóng',        color: 'bg-blue-100 text-blue-800' },
-    [CreditStatus.DELETED]:     { label: 'Đã xóa',         color: 'bg-gray-100 text-gray-800' },
-    due_tomorrow:               { label: 'Ngày mai đóng lãi', color: 'bg-amber-100 text-amber-800' },
-  } as any; // cast any để chấp nhận key string tuỳ chỉnh
+    // Map filter values to display labels
+    'on_time': { label: 'Đang vay', color: 'bg-green-100 text-green-800' },
+    'late_interest': { label: 'Chậm lãi', color: 'bg-yellow-100 text-yellow-800' },
+    'overdue': { label: 'Quá hạn', color: 'bg-red-100 text-red-800' },
+    'closed': { label: 'Đã đóng', color: 'bg-blue-100 text-blue-800' },
+    'deleted': { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
+    'due_tomorrow': { label: 'Ngày mai đóng lãi', color: 'bg-amber-100 text-amber-800' },
+  } as any;
   const [filters, setFilters] = useState<SearchFilters>({
     contract_code: '',
     customer_name: '',

@@ -30,21 +30,21 @@ export function usePawnsSummary() {
         .eq('id', storeId)
         .single();
 
-      // 2. List pawn ids (ON_TIME & CLOSED)
+      // 2. List pawn ids (ON_TIME & CLOSED) - using optimized view
       const { data: activePawns } = await supabase
-        .from('pawns')
+        .from('pawns_by_store')
         .select('id')
         .eq('store_id', storeId)
-        .eq('status', PawnStatus.ON_TIME);
+        .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']);
 
       const { data: closedPawns } = await supabase
-        .from('pawns')
+        .from('pawns_by_store')
         .select('id')
         .eq('store_id', storeId)
-        .eq('status', PawnStatus.CLOSED);
+        .eq('status_code', 'CLOSED');
 
-      const activeIds = activePawns?.map(p => p.id) ?? [];
-      const closedIds = closedPawns?.map(p => p.id) ?? [];
+      const activeIds = activePawns?.map(p => p.id).filter(id => id !== null) ?? [];
+      const closedIds = closedPawns?.map(p => p.id).filter(id => id !== null) ?? [];
       const allIds = [...activeIds, ...closedIds];
 
       let totalLoan = 0;

@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Layout } from '@/components/Layout/Layout';
 import dynamicImport from 'next/dynamic';
@@ -147,11 +147,12 @@ export default function InstallmentsPage() {
   
   // Tính toán dữ liệu đã xử lý qua custom hook
   const { processedInstallments, loading: calcLoading } = useInstallmentCalculation(installments);
-  
+
   // State cho quá trình xuất Excel
   const [isExporting, setIsExporting] = useState(false);
-  
-  // Calculate total pages
+
+  // Use server-side filtering and pagination - no client-side filtering needed
+  const displayInstallments = processedInstallments;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   
   // Handle search filters
@@ -341,12 +342,15 @@ export default function InstallmentsPage() {
   const handleClosePaymentHistory = (hasDataChanged?: boolean) => {
     setIsPaymentActionsModalOpen(false);
     setSelectedInstallmentForPayment(null);
+    
     // Only refresh data if there were actual changes
     if (hasDataChanged) {
-      refetch();
-      refreshFinancial();
-      // Trigger cash fund update when payment history changes
-      triggerUpdate();
+      // Thêm độ trễ để đảm bảo database đã xử lý xong
+      setTimeout(() => {
+        refetch();
+        refreshFinancial();
+        triggerUpdate();
+      }, 500); // 500ms delay
     }
   };
 
@@ -428,7 +432,7 @@ export default function InstallmentsPage() {
         {/* Installments Table */}
         <div className="rounded-md border mt-4 mb-1 border-gray-200 shadow-sm overflow-hidden">
           <InstallmentsTable
-            installments={processedInstallments}
+            installments={displayInstallments}
             statusMap={statusMap}
             isLoading={loading || calcLoading}
             onEdit={handleEditInstallment}

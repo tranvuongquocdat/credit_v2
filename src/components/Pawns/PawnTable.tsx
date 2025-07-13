@@ -22,7 +22,8 @@ import { getPawnInterestDisplayString } from '@/lib/interest-calculator';
 import { reopenContract } from '@/lib/Pawns/reopen_contract';
 import { useToast } from '../ui/use-toast';
 import { PawnFinancialDetail } from '@/hooks/usePawnCalculation';
-import { PawnStatusResult } from '@/lib/Pawns/calculate_pawn_status';
+// Removed: import { PawnStatusResult } from '@/lib/Pawns/calculate_pawn_status';
+import { getPawnStatusInfo } from '@/lib/pawn-status-utils';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getPawnStatus } from '@/lib/pawn';
 
@@ -35,9 +36,9 @@ interface StatusMapType {
 
 interface PawnsTableProps {
   pawns: PawnWithCustomer[];
-  statusMap: StatusMapType;
+  statusMap?: StatusMapType; // Now optional since we use shared utility
   calculatedDetails?: Record<string, PawnFinancialDetail>;
-  calculatedStatuses?: Record<string, PawnStatusResult>;
+  calculatedStatuses?: Record<string, {status: string; statusCode: string}>;
   onEdit: (id: string) => void;
   onDelete: (pawn: PawnWithCustomer) => void;
   onUpdateStatus: (pawn: PawnWithCustomer) => void;
@@ -200,34 +201,11 @@ export function PawnsTable({
                 <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
                   {/* ----- Status Cell ----- */}
                   {(() => {
-                    const st = calculatedStatuses?.[pawn.id];
-                    if (!st) {
-                      // Fallback to raw status
-                      return <Badge className="bg-gray-100 text-gray-800">{pawn.status === 'closed' ? 'Đã đóng' : 'Đang vay'}</Badge>;
-                    }
-                    let colorClass = '';
-                    switch (st.statusCode) {
-                      case 'CLOSED':
-                        colorClass = 'bg-blue-100 text-blue-800 border-blue-200';
-                        break;
-                      case 'DELETED':
-                        colorClass = 'bg-gray-100 text-gray-800 border-gray-200';
-                        break;
-                      case 'OVERDUE':
-                        colorClass = 'bg-red-100 text-red-800 border-red-200';
-                        break;
-                      case 'LATE_INTEREST':
-                        colorClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
-                        break;
-                      case 'ON_TIME':
-                      default:
-                        colorClass = 'bg-green-100 text-green-800 border-green-200';
-                        break;
-                    }
-                    const labelText = st.status && st.status.trim() !== ''
-                      ? st.status
-                      : statusMap[st.statusCode.toLowerCase()]?.label || st.statusCode;
-                    return <Badge className={colorClass}>{labelText}</Badge>;
+                    // Use status_code from pawns_by_store view
+                    const statusCode = pawn.status_code || 'ON_TIME';
+                    const statusInfo = getPawnStatusInfo(statusCode);
+                    
+                    return <Badge className={statusInfo.color}>{statusInfo.label}</Badge>;
                   })()}
                 </TableCell>
                 <TableCell className="py-3 px-3 border-b border-r border-gray-200">

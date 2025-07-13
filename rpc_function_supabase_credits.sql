@@ -233,7 +233,7 @@ AS $$
 BEGIN
   RETURN QUERY
   SELECT
-    c.id,
+    c.id AS credit_id,
     /* cả kỳ: loan_date + loan_period - 1 ngày */
     public.calc_expected_until(
         c.id,
@@ -241,11 +241,23 @@ BEGIN
     )                                                  AS expected_profit,
     /* tới hôm nay (nếu sau ngày vay) */
     CASE
-      WHEN CURRENT_DATE >= c.loan_date::date
-      THEN public.calc_expected_until(c.id, CURRENT_DATE)
+      WHEN CURRENT_DATE >= c.loan_date::date THEN
+           public.calc_expected_until(c.id, CURRENT_DATE)
+         - COALESCE(
+             public.calc_expected_until(c.id, lp.last_paid_date),
+             0
+           )
       ELSE 0
     END                                                AS interest_today
   FROM public.credits c
+  /* Tìm ngày thanh toán lãi cuối cùng bằng lateral, trả về 1 cột duy nhất */
+  LEFT JOIN LATERAL (
+    SELECT max(ch.effective_date)::date AS last_paid_date
+    FROM   credit_history ch
+    WHERE  ch.credit_id = c.id
+      AND  ch.transaction_type = 'payment'
+      AND  ch.is_deleted = FALSE
+  ) lp ON true
   WHERE c.id = ANY(p_credit_ids);
 END;
 $$;
@@ -421,6 +433,29 @@ begin
 end;
 $$;
 
+create or replace function public.get_latest_payment_paid_dates(
+  p_credit_ids uuid[]
+)
+returns table (
+  credit_id uuid,
+  latest_paid_date date
+)
+language sql
+as $$
+with ids as (
+  select unnest(p_credit_ids) as credit_id
+)
+select
+  ids.credit_id,
+  max(ch.effective_date)::date as latest_paid_date
+from ids
+left join credit_history ch
+  on ch.credit_id = ids.credit_id
+  and ch.transaction_type = 'payment'
+  and ch.is_deleted = false
+group by ids.credit_id;
+$$;
+
 create or replace function public.credit_get_totals(
   p_store_id uuid,
   p_filters  jsonb default null
@@ -439,9 +474,9 @@ with base as (
   from   credits c
   where  c.store_id = p_store_id
 
-    /* ----- status (trừ due_tomorrow) ----- */
+    /* ----- status (loại trừ các trạng thái đặc biệt tính động) ----- */
     and (
-          coalesce(p_filters->>'status','') in ('', 'all', 'due_tomorrow')
+          coalesce(p_filters->>'status','') in ('', 'all', 'due_tomorrow', 'overdue', 'late_interest')
           or c.status = (p_filters->>'status')::credit_status
         )
 
@@ -479,18 +514,51 @@ with base as (
         )
 ),
 
-/* 2. Nếu client yêu cầu 'due_tomorrow' thì lọc tiếp bằng get_next_payment_info */
+/* 2. Lọc thêm khi client yêu cầu các trạng thái đặc biệt */
 base2 as (
   select b.*
   from   base b
-  where  (p_filters->>'status') <> 'due_tomorrow'          -- không lọc
-         /* nếu chọn due_tomorrow → chỉ giữ hợp đồng có kỳ thanh toán ngày mai */
-         or exists (
-              select 1
-              from   get_next_payment_info( array[b.id] ) np   -- hàm đã dùng ở hook
-              where  np.credit_id = b.id
-                and  np.next_date = (current_date + interval '1 day')::date
-         )
+  where
+    /* -------------------------------------------------------------
+       Các trường hợp không phải status đặc biệt → giữ nguyên hàng
+       ------------------------------------------------------------- */
+    (p_filters->>'status' is null
+     or p_filters->>'status' = ''
+     or p_filters->>'status' = 'all'
+     or p_filters->>'status' not in ('due_tomorrow', 'overdue', 'late_interest'))
+
+    /* -------------------- status = due_tomorrow ------------------ */
+    or (
+      p_filters->>'status' = 'due_tomorrow'
+      and exists (
+        select 1
+        from   get_next_payment_info( array[b.id] ) np
+        where  np.credit_id = b.id
+          and  np.next_date = (current_date + interval '1 day')::date
+      )
+    )
+
+    /* -------------------- status = overdue ----------------------- */
+    or (
+      p_filters->>'status' = 'overdue'
+      and exists (
+        select 1
+        from   get_credit_statuses( array[b.id] ) st
+        where  st.credit_id  = b.id
+          and  st.status_code = 'OVERDUE'
+      )
+    )
+
+    /* -------------------- status = late_interest ----------------- */
+    or (
+      p_filters->>'status' = 'late_interest'
+      and exists (
+        select 1
+        from   get_credit_statuses( array[b.id] ) st
+        where  st.credit_id  = b.id
+          and  st.status_code = 'LATE_INTEREST'
+      )
+    )
 ),
 
 /* 3. Gom ID thành mảng */

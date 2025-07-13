@@ -40,7 +40,7 @@ export function useInstallmentsSummary() {
           store_id,
           debt_amount
         `)
-        .eq('status', InstallmentStatus.ON_TIME)
+        .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST'])
         .eq('store_id', currentStore.id);
       
       if (installmentsError) {
@@ -51,7 +51,7 @@ export function useInstallmentsSummary() {
       const { data: closedInstallments, error: closedInstallmentsError } = await supabase
         .from('installments_by_store')
         .select('id')
-        .eq('status', InstallmentStatus.CLOSED)
+        .eq('status_code', 'CLOSED')
         .eq('store_id', currentStore.id);
       
       if (closedInstallmentsError) {

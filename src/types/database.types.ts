@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instanciate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "12.2.3 (519615d)"
+  }
   public: {
     Tables: {
       collaterals: {
@@ -129,6 +134,13 @@ export type Database = {
             referencedRelation: "credits"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "credit_extension_histories_credit_id_fkey"
+            columns: ["credit_id"]
+            isOneToOne: false
+            referencedRelation: "credits_by_store"
+            referencedColumns: ["id"]
+          },
         ]
       }
       credit_history: {
@@ -196,6 +208,13 @@ export type Database = {
             columns: ["credit_id"]
             isOneToOne: false
             referencedRelation: "credits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_history_credit_id_fkey"
+            columns: ["credit_id"]
+            isOneToOne: false
+            referencedRelation: "credits_by_store"
             referencedColumns: ["id"]
           },
           {
@@ -621,17 +640,24 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "pawn_amount_history_pawn_id_fkey"
+            foreignKeyName: "pawn_history_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pawn_history_pawn_id_fkey"
             columns: ["pawn_id"]
             isOneToOne: false
             referencedRelation: "pawns"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "pawn_history_created_by_fkey"
-            columns: ["created_by"]
+            foreignKeyName: "pawn_history_pawn_id_fkey"
+            columns: ["pawn_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "pawns_by_store"
             referencedColumns: ["id"]
           },
           {
@@ -992,6 +1018,48 @@ export type Database = {
       }
     }
     Views: {
+      credits_by_store: {
+        Row: {
+          collateral: string | null
+          contract_code: string | null
+          created_at: string | null
+          customer_id: string | null
+          debt_amount: number | null
+          has_paid: boolean | null
+          id: string | null
+          interest_notation: string | null
+          interest_period: number | null
+          interest_type: Database["public"]["Enums"]["interest_type"] | null
+          interest_ui_type: string | null
+          interest_value: number | null
+          is_completed: boolean | null
+          loan_amount: number | null
+          loan_date: string | null
+          loan_period: number | null
+          next_payment_date: string | null
+          notes: string | null
+          status: Database["public"]["Enums"]["credit_status"] | null
+          status_code: string | null
+          store_id: string | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credits_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credits_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       installments_by_store: {
         Row: {
           contract_code: string | null
@@ -1009,6 +1077,7 @@ export type Database = {
           payment_due_date: string | null
           payment_period: number | null
           status: Database["public"]["Enums"]["installment_status"] | null
+          status_code: string | null
           store_id: string | null
           updated_at: string | null
         }
@@ -1032,6 +1101,56 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pawns_by_store: {
+        Row: {
+          collateral_detail: Json | null
+          collateral_id: string | null
+          contract_code: string | null
+          created_at: string | null
+          customer_id: string | null
+          debt_amount: number | null
+          has_paid: boolean | null
+          id: string | null
+          interest_notation: string | null
+          interest_period: number | null
+          interest_type: Database["public"]["Enums"]["interest_type"] | null
+          interest_ui_type: string | null
+          interest_value: number | null
+          is_completed: boolean | null
+          loan_amount: number | null
+          loan_date: string | null
+          loan_period: number | null
+          next_payment_date: string | null
+          notes: string | null
+          status: Database["public"]["Enums"]["pawn_status"] | null
+          status_code: string | null
+          store_id: string | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pawns_collateral_id_fkey"
+            columns: ["collateral_id"]
+            isOneToOne: false
+            referencedRelation: "collaterals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pawns_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pawns_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
             referencedColumns: ["id"]
           },
         ]
@@ -1119,6 +1238,13 @@ export type Database = {
           status_code: string
           status: string
           description: string
+        }[]
+      }
+      get_latest_payment_paid_dates: {
+        Args: { p_credit_ids: string[] }
+        Returns: {
+          credit_id: string
+          latest_paid_date: string
         }[]
       }
       get_next_payment_info: {
@@ -1329,21 +1455,25 @@ export type Database = {
   }
 }
 
-type DefaultSchema = Database[Extract<keyof Database, "public">]
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
@@ -1361,14 +1491,16 @@ export type Tables<
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
@@ -1384,14 +1516,16 @@ export type TablesInsert<
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
@@ -1407,14 +1541,16 @@ export type TablesUpdate<
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = DefaultSchemaEnumNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
@@ -1422,14 +1558,16 @@ export type Enums<
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never = never,
-> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never

@@ -188,20 +188,29 @@ export async function hasInstallmentAnyPayments(installmentId: string) {
 
 /**
  * Count overdue installment payments for notifications
+ * Uses same logic as getInstallmentWarnings to ensure consistency
  */
 export async function countInstallmentWarnings(storeId?: string) {
   try {
     const today = new Date().toISOString().slice(0, 10);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().slice(0, 10);
     
+    // Single hybrid query: Use status-based filtering + payment timing
     const { data, error } = await supabase
       .from('installments_by_store')
-      .select('id, payment_due_date')
+      .select('id')
       .eq('store_id', storeId || '')
-      .lte('payment_due_date', today)
-      .eq('status', 'on_time');
+      .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']) // Include all warning statuses
+      .or(`payment_due_date.lte.${tomorrowStr},status_code.eq.OVERDUE,status_code.eq.LATE_INTEREST`);
+    
+    if (error) throw error;
+    
+    const totalCount = data?.length || 0;
     
     return {
-      count: data?.length || 0,
+      count: totalCount,
       error: null
     };
   } catch (error) {

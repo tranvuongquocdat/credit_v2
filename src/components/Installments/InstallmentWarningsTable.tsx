@@ -7,8 +7,8 @@ import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
 import { AlertTriangleIcon, DollarSignIcon } from "lucide-react";
 import { useStore } from "@/contexts/StoreContext";
 import { useRouter } from "next/navigation";
-import { getExpectedMoney } from "@/lib/Installments/get_expected_money";
 import { supabase } from "@/lib/supabase";
+import { calculateInstallmentReason, ReasonFilter, categorizeReason } from "@/lib/installment-warnings";
 
 // Extended interface with warning-specific fields
 interface InstallmentWarning extends InstallmentWithCustomer {
@@ -17,11 +17,16 @@ interface InstallmentWarning extends InstallmentWithCustomer {
   latePeriods: number;
   totalDueAmount: number;
   buttonValues: number[];
+  reason: string; // Add reason field
 }
 
 interface InstallmentWarningsTableProps {
   installments: InstallmentWithCustomer[];
   isLoading: boolean;
+  reasonFilter?: ReasonFilter; // Add reason filter prop
+  currentPage?: number; // Add current page prop
+  itemsPerPage?: number; // Add items per page prop
+  onFilteredResults?: (results: InstallmentWarning[]) => void; // Callback for filtered results
   onPayment?: (installment: InstallmentWithCustomer, amount: number) => void;
   onCustomerClick?: (installment: InstallmentWithCustomer) => void; // Optional callback for customer click
   onShowPaymentHistory?: (installment: InstallmentWithCustomer) => void; // Optional callback for payment history modal
@@ -93,6 +98,10 @@ function getOverdueInfo(
 export function InstallmentWarningsTable({
   installments,
   isLoading,
+  reasonFilter = "all",
+  currentPage = 1,
+  itemsPerPage = 30,
+  onFilteredResults,
   onPayment,
   onCustomerClick,
   onShowPaymentHistory,
@@ -103,6 +112,12 @@ export function InstallmentWarningsTable({
   // State for storing processed warnings
   const [warnings, setWarnings] = useState<InstallmentWarning[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
+
+  // ===== Totals across ALL filtered results (not just current page) =====
+  const [totals, setTotals] = useState<{ totalOldDebt: number; totalAmount: number }>({
+    totalOldDebt: 0,
+    totalAmount: 0,
+  });
   
   // Get current store from store context
   const { currentStore } = useStore();
@@ -204,6 +219,9 @@ export function InstallmentWarningsTable({
               }
             }
 
+            // Calculate reason after RPC calls and button values are determined
+            const reason = calculateInstallmentReason(installment, buttonValues);
+            
             if (latePeriods > 0 && buttonValues.length > 0) {
               // Có kỳ quá hạn và có nút thanh toán nhanh
               warningResults.push({
@@ -211,7 +229,8 @@ export function InstallmentWarningsTable({
                 payments: [],
                 latePeriods,
                 buttonValues,
-                totalDueAmount: oldDebtMap.get(installment.id) || 0
+                totalDueAmount: oldDebtMap.get(installment.id) || 0,
+                reason // Add calculated reason
               });
             } else {
               // Chưa đến kỳ phải đóng hoặc đã thanh toán đủ — hiển thị nhưng không có nút
@@ -220,7 +239,8 @@ export function InstallmentWarningsTable({
                 payments: [],
                 latePeriods: 0,
                 buttonValues: [],
-                totalDueAmount: 0
+                totalDueAmount: oldDebtMap.get(installment.id) || 0,
+                reason // Add calculated reason
               });
             }
             
@@ -230,7 +250,39 @@ export function InstallmentWarningsTable({
           }
         }
         
-        setWarnings(warningResults);
+        // Apply reason filtering
+        const filteredResults = reasonFilter === "all" 
+          ? warningResults 
+          : warningResults.filter(warning => {
+              const reasonCategories = categorizeReason(warning.reason);
+              return reasonCategories.includes(reasonFilter);
+            });
+        
+        // Calculate totals across all filtered results
+        const totalOldDebt = filteredResults.reduce((sum, w) => sum + (w.totalDueAmount || 0), 0);
+        const totalAmount = filteredResults.reduce((sum, w) => {
+          // Calculate exact amount using same logic as display
+          if (w.latePeriods === 0) return sum;
+          
+          const unpaidDays = w.latePeriods * (w.payment_period || 10);
+          const dailyAmount = (w.installment_amount || 0) / w.duration;
+          const exactAmount = Math.round(unpaidDays * dailyAmount);
+          
+          return sum + exactAmount;
+        }, 0);
+        setTotals({ totalOldDebt, totalAmount });
+
+        // Apply client-side pagination
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        const paginatedResults = filteredResults.slice(startIndex, endIndex);
+
+        setWarnings(paginatedResults);
+
+        // Pass all filtered results back to parent for pagination calculation
+        if (onFilteredResults) {
+          onFilteredResults(filteredResults);
+        }
       } catch (err) {
         console.error("Error processing installment warnings:", err);
       } finally {
@@ -239,7 +291,7 @@ export function InstallmentWarningsTable({
     }
     
     processWarnings();
-  }, [installments, currentStore]);
+  }, [installments, currentStore, reasonFilter, currentPage, itemsPerPage]);
 
   if (isLoading || loadingPayments) {
     return (
@@ -287,10 +339,30 @@ export function InstallmentWarningsTable({
             const maxButtons = Math.min(10, warning.buttonValues.length);
             const quickPayButtons = [];
             
-            // Tính tổng số tiền cần thanh toán - lấy phần tử cuối cùng trong mảng buttonValues
-            const totalAmountToDisplay = warning.buttonValues.length > 0 
-              ? warning.buttonValues[warning.buttonValues.length - 1] 
-              : 0;
+            // Tính tổng số tiền cần thanh toán thực tế
+            const totalAmountToDisplay = (() => {
+              // If no late periods, show 0
+              if (warning.latePeriods === 0) return 0;
+              
+              // Calculate exact amount based on unpaid days from latest payment to today/contract end
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              
+              const loanStart = new Date(warning.start_date);
+              loanStart.setHours(0, 0, 0, 0);
+              
+              const contractEnd = new Date(loanStart);
+              contractEnd.setDate(contractEnd.getDate() + warning.duration - 1);
+              contractEnd.setHours(0, 0, 0, 0);
+              
+              const effectiveDate = today > contractEnd ? contractEnd : today;
+              
+              // Calculate unpaid days using late periods from RPC
+              const unpaidDays = warning.latePeriods * (warning.payment_period || 10);
+              const dailyAmount = (warning.installment_amount || 0) / warning.duration;
+              
+              return Math.round(unpaidDays * dailyAmount);
+            })();
             
             for (let i = 0; i < maxButtons; i++) {
               // Lấy giá trị từ mảng buttonValues đã được tính toán
@@ -346,8 +418,8 @@ export function InstallmentWarningsTable({
                   {formatCurrency(totalAmountToDisplay)}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  <span className="text-red-600 font-medium">
-                    Chậm {warning.latePeriods} kỳ !
+                  <span className="text-orange-600 font-medium">
+                    {warning.reason}
                   </span>
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
@@ -371,6 +443,20 @@ export function InstallmentWarningsTable({
             );
           })}
         </tbody>
+        {warnings.length > 0 && (
+          <tfoot className="bg-yellow-200 font-semibold">
+            <tr>
+              <td colSpan={5} className="py-2 px-3 text-center font-bold">Tổng</td>
+              <td className="py-2 px-3 text-center text-rose-600 font-bold">
+                {formatCurrency(totals.totalOldDebt)}
+              </td>
+              <td className="py-2 px-3 text-center text-rose-600 font-bold">
+                {formatCurrency(totals.totalAmount)}
+              </td>
+              <td colSpan={3} className="py-2 px-3" />
+            </tr>
+          </tfoot>
+        )}
       </table>
     </div>
   );

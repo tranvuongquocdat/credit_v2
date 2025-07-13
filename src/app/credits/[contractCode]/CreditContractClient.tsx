@@ -26,17 +26,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from '@/components/ui/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
-import { useCreditStatuses } from '@/hooks/useCreditStatuses';
 
-// Map trạng thái thành nhãn và màu sắc
-const statusMap: Record<string, { label: string, color: string }> = {
-  [CreditStatus.ON_TIME]: { label: 'Đang vay', color: 'bg-green-100 text-green-800' },
-  [CreditStatus.OVERDUE]: { label: 'Quá hạn', color: 'bg-red-100 text-red-800' },
-  [CreditStatus.LATE_INTEREST]: { label: 'Chậm lãi', color: 'bg-yellow-100 text-yellow-800' },
-  [CreditStatus.BAD_DEBT]: { label: 'Nợ xấu', color: 'bg-purple-100 text-purple-800' },
-  [CreditStatus.CLOSED]: { label: 'Đã đóng', color: 'bg-blue-100 text-blue-800' },
-  [CreditStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
-};
+// No longer need statusMap - using shared utility in CreditsTable
 
 interface CreditContractClientProps {
   contractCode: string;
@@ -71,8 +62,7 @@ export function CreditContractClient({ contractCode }: CreditContractClientProps
   
   // Lấy dữ liệu tài chính tổng hợp
   const { summary: financialSummary, details: creditDetails, refresh: refreshFinancial } = useCreditCalculations();
-  // Lấy trạng thái cho các hợp đồng trong trang hiện tại
-  const { statuses: creditStatuses } = useCreditStatuses(credits.map((c) => c.id));
+  // Status codes are now available directly in credits data from credits_by_store view
   // State for dialogs
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedCredit, setSelectedCredit] = useState<CreditWithCustomer | null>(null);
@@ -277,9 +267,9 @@ export function CreditContractClient({ contractCode }: CreditContractClientProps
         {/* Bảng dữ liệu hợp đồng */}
         <CreditsTable
           credits={displayCredits}
-          statusMap={statusMap}
+          statusMap={undefined}
           calculatedDetails={creditDetails}
-          calculatedStatuses={creditStatuses}
+          calculatedStatuses={undefined}
           onView={handleViewCreditDetail}
           onEdit={handleEditCredit}
           onDelete={handleOpenDeleteDialog}

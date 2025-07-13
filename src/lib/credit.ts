@@ -15,34 +15,13 @@ export interface CreditFilters {
   customer_name?: string;
   start_date?: string;
   end_date?: string;
-  status?: CreditStatus | "all";
+  status?: string; // Status filter values: 'overdue', 'late_interest', 'on_time', 'closed', 'deleted', 'bad_debt', 'finished', 'due_tomorrow', 'all'
+  status_code?: string; // Direct filter by calculated status code from view
   store_id?: string;
   duration?: number;
 }
 
-// Narrow set of statuses that actually exist in DB enum
-type DbCreditStatus =
-  | CreditStatus.ON_TIME
-  | CreditStatus.OVERDUE
-  | CreditStatus.LATE_INTEREST
-  | CreditStatus.BAD_DEBT
-  | CreditStatus.CLOSED
-  | CreditStatus.DELETED;
-
-const dbStatuses: DbCreditStatus[] = [
-  CreditStatus.ON_TIME,
-  CreditStatus.OVERDUE,
-  CreditStatus.LATE_INTEREST,
-  CreditStatus.BAD_DEBT,
-  CreditStatus.CLOSED,
-  CreditStatus.DELETED,
-];
-
-function isDbCreditStatus(status: CreditStatus): status is DbCreditStatus {
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  return dbStatuses.includes(status);
-}
+// Legacy code removed - now using status_code from credits_by_store view
 
 /**
  * Lấy danh sách hợp đồng tín chấp có phân trang và tìm kiếm
@@ -55,13 +34,14 @@ export async function getCredits(
 ) {
   try {
     
-    // Tạo query cơ bản với join bảng customers để lấy thông tin khách hàng
+    // Use the credits_by_store view to include status_code and join customers
     let query = supabase
-      .from('credits')
+      .from('credits_by_store')
       .select(`
         *,
         customer:customers!inner(name, phone, id_number, blacklist_reason)
       `, { count: 'exact' })
+      
     
     // Set AbortController signal
     if (signal) {
@@ -87,8 +67,43 @@ export async function getCredits(
         query = query.lte('loan_date', filters.end_date);
       }
       
-      if (filters.status && filters.status !== 'all' && isDbCreditStatus(filters.status)) {
-        query = query.eq('status', filters.status);
+      // Filter by status using enhanced credits_by_store view
+      if (filters.status) {
+        switch (filters.status) {
+          case 'overdue':
+            query = query.eq('status_code', 'OVERDUE');
+            break;
+          case 'late_interest':
+            query = query.eq('status_code', 'LATE_INTEREST');
+            break;
+          case 'on_time':
+            query = query.in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']);
+            break;
+          case 'closed':
+            query = query.eq('status_code', 'CLOSED');
+            break;
+          case 'deleted':
+            query = query.eq('status_code', 'DELETED');
+            break;
+          case 'bad_debt':
+            query = query.eq('status_code', 'BAD_DEBT');
+            break;
+          case 'finished':
+            query = query.eq('status_code', 'FINISHED');
+            break;
+          case 'due_tomorrow':
+            // Server-side filtering using next_payment_date from credits_by_store view
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const tomorrowStr = tomorrow.toISOString().split('T')[0]; // YYYY-MM-DD format
+            query = query.eq('next_payment_date', tomorrowStr);
+            break;
+        }
+      }
+      
+      // Direct filter by calculated status_code (more efficient than RPC calls)
+      if (filters.status_code) {
+        query = query.eq('status_code', filters.status_code);
       }
       
       if (filters.store_id) {
@@ -111,6 +126,7 @@ export async function getCredits(
       .range(from, to);
     
     if (error) throw error;
+    
     
     return {
       data: data as CreditWithCustomer[],
@@ -180,7 +196,7 @@ export async function getCreditsLegacy(
 export async function getCreditById(id: string) {
   try {
     const { data, error } = await supabase
-      .from('credits')
+      .from('credits_by_store')
       .select(`
         *,
         customer:customers(name, phone, id_number, blacklist_reason)
@@ -331,7 +347,7 @@ export async function updateCredit(id: string, params: UpdateCreditParams) {
       .single();
     
     // Cập nhật lịch sử thanh toán
-    const { data: paymentData, error: paymentError } = await supabase
+    await supabase
       .from('credit_history')
       .insert({
         credit_id: id,
@@ -548,7 +564,7 @@ export async function hasCreditAnyPayments(id: string) {
 export async function updateCreditStatus(id: string, status: CreditStatus) {
   const { data, error } = await supabase
     .from('credits')
-    .update({ status: (isDbCreditStatus(status) ? status : CreditStatus.ON_TIME) as DbCreditStatus, updated_at: new Date().toISOString() })
+    .update({ status: status as any, updated_at: new Date().toISOString() })
     .eq('id', id)
     .select()
     .single();

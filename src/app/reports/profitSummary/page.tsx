@@ -9,10 +9,9 @@ import { RefreshCw, FileSpreadsheet } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useRouter } from 'next/navigation';
 
-// Import status calculation functions
-import { calculatePawnStatus } from '@/lib/Pawns/calculate_pawn_status';
-import { calculateCreditStatus } from '@/lib/Credits/calculate_credit_status';
-import { calculateInstallmentStatus } from '@/lib/Installments/calculate_installment_status';
+// Status calculation functions - now using view data instead of RPC
+// Removed: import { calculateCreditStatus } from '@/lib/Credits/calculate_credit_status';
+// calculateInstallmentStatus no longer needed - using status_code from database view
 
 // Note: RPC functions are now used for interest calculation instead of individual contract calculations
 
@@ -153,7 +152,7 @@ export default function ProfitSummaryPage() {
       // Query for new contracts in date range
       newQuery = supabase
         .from('installments_by_store')
-        .select(selectString)
+        .select(selectString + ', status_code')
         .eq('store_id', storeId)
         .gte('loan_date', startDateObj.toISOString())
         .lte('loan_date', endDateObj.toISOString())
@@ -162,15 +161,18 @@ export default function ProfitSummaryPage() {
       // Query for all contracts for status calculation
       allQuery = supabase
         .from('installments_by_store')
-        .select(selectString)
+        .select(selectString + ', status_code')
         .eq('store_id', storeId)
         .order('loan_date', { ascending: false });
         // Removed limit - get all for accurate counts
-    } else {
+    } else if (contractType === 'credits') {
+      // Use credits_by_store view for credits to get status_code
+      const selectWithStatus = selectString + ', status_code';
+      
       // Query for new contracts in date range
       newQuery = supabase
-        .from(contractType)
-        .select(selectString)
+        .from('credits_by_store')
+        .select(selectWithStatus)
         .eq('store_id', storeId)
         .gte('loan_date', startDateObj.toISOString())
         .lte('loan_date', endDateObj.toISOString())
@@ -178,8 +180,28 @@ export default function ProfitSummaryPage() {
         
       // Query for all contracts for status calculation
       allQuery = supabase
-        .from(contractType)
-        .select(selectString)
+        .from('credits_by_store')
+        .select(selectWithStatus)
+        .eq('store_id', storeId)
+        .order('loan_date', { ascending: false });
+        // Removed limit - get all for accurate counts
+    } else {
+      // For pawns, use pawns_by_store view to get status_code
+      const selectWithStatus = selectString + ', status_code';
+      
+      // Query for new contracts in date range
+      newQuery = supabase
+        .from('pawns_by_store')
+        .select(selectWithStatus)
+        .eq('store_id', storeId)
+        .gte('loan_date', startDateObj.toISOString())
+        .lte('loan_date', endDateObj.toISOString())
+        .order('loan_date', { ascending: false });
+        
+      // Query for all contracts for status calculation
+      allQuery = supabase
+        .from('pawns_by_store')
+        .select(selectWithStatus)
         .eq('store_id', storeId)
         .order('loan_date', { ascending: false });
         // Removed limit - get all for accurate counts
@@ -211,60 +233,52 @@ export default function ProfitSummaryPage() {
         .filter(id => id !== null);
       
       try {
-        let statusData: any[] = [];
-        
-        // Use appropriate RPC function based on contract type
         if (contractType === 'installments') {
-          const { data, error } = await supabase.rpc('get_installment_statuses', {
-            p_installment_ids: allIds
+          // For installments, use status_code from the view directly
+          (allContracts || []).forEach((contract: any) => {
+            if (contract && typeof contract === 'object') {
+              contractsWithStatus.push({
+                ...contract,
+                calculatedStatus: contract.status_code || 'ON_TIME',
+                statusDescription: contract.status_code || 'Không thể tính trạng thái'
+              });
+            }
           });
-          if (!error && data) statusData = data;
-        } else if (contractType === 'pawns') {
-          const { data, error } = await supabase.rpc('get_pawn_statuses', {
-            p_pawn_ids: allIds
+          
+          // Map new contracts with their statuses
+          (newContracts || []).forEach((contract: any) => {
+            if (contract && typeof contract === 'object') {
+              newContractsWithStatus.push({
+                ...contract,
+                calculatedStatus: contract.status_code || 'ON_TIME',
+                statusDescription: contract.status_code || 'Không thể tính trạng thái'
+              });
+            }
           });
-          if (!error && data) statusData = data;
-        } else if (contractType === 'credits') {
-          const { data, error } = await supabase.rpc('get_credit_statuses', {
-            p_credit_ids: allIds
+        } else {
+          // For pawns and credits, use status_code from the views directly (optimized)
+          // Map contracts with their statuses
+          (allContracts || []).forEach((contract: any) => {
+            if (contract && typeof contract === 'object') {
+              contractsWithStatus.push({
+                ...contract,
+                calculatedStatus: contract.status_code || 'ON_TIME',
+                statusDescription: contract.status_code || 'Không thể tính trạng thái'
+              });
+            }
           });
-          if (!error && data) statusData = data;
+          
+          // Map new contracts with their statuses
+          (newContracts || []).forEach((contract: any) => {
+            if (contract && typeof contract === 'object') {
+              newContractsWithStatus.push({
+                ...contract,
+                calculatedStatus: contract.status_code || 'ON_TIME',
+                statusDescription: contract.status_code || 'Không thể tính trạng thái'
+              });
+            }
+          });
         }
-        
-        // Create status map for quick lookup
-        const statusMap = new Map();
-        statusData.forEach((s: any) => {
-          const idKey = contractType === 'installments' ? s.installment_id : 
-                       contractType === 'pawns' ? s.pawn_id : s.credit_id;
-          statusMap.set(idKey, {
-            statusCode: s.status_code,
-            description: s.description
-          });
-        });
-        
-        // Map contracts with their statuses
-        (allContracts || []).forEach((contract: any) => {
-          if (contract && typeof contract === 'object') {
-            const status = statusMap.get(contract.id) || { statusCode: 'ON_TIME', description: 'Không thể tính trạng thái' };
-            contractsWithStatus.push({
-              ...contract,
-              calculatedStatus: status.statusCode,
-              statusDescription: status.description
-            });
-          }
-        });
-        
-        // Map new contracts with their statuses
-        (newContracts || []).forEach((contract: any) => {
-          if (contract && typeof contract === 'object') {
-            const status = statusMap.get(contract.id) || { statusCode: 'ON_TIME', description: 'Không thể tính trạng thái' };
-            newContractsWithStatus.push({
-              ...contract,
-              calculatedStatus: status.statusCode,
-              statusDescription: status.description
-            });
-          }
-        });
         
       } catch (error) {
         console.error(`Error getting ${contractType} statuses:`, error);
@@ -560,9 +574,9 @@ export default function ProfitSummaryPage() {
         installmentFinancials,
         transactionSummary
       ] = await Promise.all([
-        getContractsWithStatus('pawns', calculatePawnStatus),
-        getContractsWithStatus('credits', calculateCreditStatus),
-        getContractsWithStatus('installments', calculateInstallmentStatus),
+        getContractsWithStatus('pawns', () => Promise.resolve(null)),
+        getContractsWithStatus('credits', () => Promise.resolve(null)),
+        getContractsWithStatus('installments', () => Promise.resolve(null)),
         getPawnFinancialsForStore(currentStore.id),
         getCreditFinancialsForStore(currentStore.id),
         getInstallmentFinancialsForStore(currentStore.id),

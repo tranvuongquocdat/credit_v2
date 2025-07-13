@@ -40,3 +40,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 src/types/database.types.ts
+CLAUDE.md
+.claude/settings.local.json

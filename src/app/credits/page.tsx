@@ -24,7 +24,6 @@ import { useCredits } from '@/hooks/useCredits';
 import { useCreditsSummary } from '@/hooks/useCreditsSummary';
 import { useCreditCalculations } from '@/hooks/useCreditCalculation';
 import { useAutoUpdateCashFund } from '@/hooks/useCashFundUpdater';
-import { useCreditStatuses } from '@/hooks/useCreditStatuses';
 import { CreditStatus, CreditWithCustomer } from '@/models/credit';
 
 import { usePermissions } from '@/hooks/usePermissions';
@@ -34,19 +33,10 @@ import { getLatestPaymentPaidDate } from '@/lib/Credits/get_latest_payment_paid_
 import { supabase } from '@/lib/supabase';
 import { getInterestDisplayString } from '@/lib/interest-calculator';
 import { formatCurrencyExcel } from '@/lib/utils';
-import { isSameDay, addDays } from 'date-fns';
 import { useStore } from '@/contexts/StoreContext';
 
-// Map trạng thái thành nhãn và màu sắc
-const statusMap: Record<string, { label: string, color: string }> = {
-  [CreditStatus.ON_TIME]: { label: 'Đang vay', color: 'bg-green-100 text-green-800' },
-  [CreditStatus.OVERDUE]: { label: 'Quá hạn', color: 'bg-red-100 text-red-800' },
-  [CreditStatus.LATE_INTEREST]: { label: 'Chậm lãi', color: 'bg-yellow-100 text-yellow-800' },
-  [CreditStatus.BAD_DEBT]: { label: 'Nợ xấu', color: 'bg-purple-100 text-purple-800' },
-  [CreditStatus.CLOSED]: { label: 'Đã đóng', color: 'bg-blue-100 text-blue-800' },
-  [CreditStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
-  [CreditStatus.FINISHED]: { label: 'Hoàn thành', color: 'bg-green-100 text-green-800' },
-};
+// Import shared status utility
+import { getCreditStatusInfo } from '@/lib/credit-status-utils';
 
 // Type for totals
 interface CreditTotals {
@@ -106,8 +96,7 @@ export default function CreditsPage() {
   // Lấy chi tiết tài chính & summary qua hook chung
   const { details: creditDetails } = useCreditCalculations();
   
-  // Lấy trạng thái cho các hợp đồng trong trang hiện tại
-  const { statuses: creditStatuses } = useCreditStatuses(credits.map((c) => c.id));
+  // Status codes are now available directly in credits data from credits_by_store view
   // Use auto update cash fund hook
   const { triggerUpdate } = useAutoUpdateCashFund({
     onUpdate: (newCashFund) => {
@@ -139,9 +128,12 @@ export default function CreditsPage() {
   const fetchTotals = async (f = filters) => {
     if (!currentStore?.id) return;
     try {
+      // Use lowercase status codes directly - RPC now handles credits_by_store view
+      let rpcFilters = f;
+      
       const { data, error } = await (supabase as any).rpc('credit_get_totals', {
         p_store_id: currentStore.id,
-        p_filters : f ?? null,
+        p_filters : rpcFilters ?? null,
       });
       if (!error) {
         setTotals((data as any)?.[0] ?? null);
@@ -155,18 +147,9 @@ export default function CreditsPage() {
     fetchTotals(filters);
   }, [JSON.stringify(filters), currentStore?.id]);
   
-  // Client-side filter: Ngày mai đóng lãi
-  const displayCredits = useMemo(() => {
-    if (filters?.status !== 'due_tomorrow') return credits;
-    const tomorrow = addDays(new Date().setHours(0,0,0,0) as any, 1);
-    return credits.filter(c => {
-      const next = creditDetails[c.id]?.nextPayment;
-      if (!next) return false;
-      return isSameDay(new Date(next), tomorrow);
-    });
-  }, [credits, filters?.status, creditDetails]);
-
-  const effectiveTotalItems = filters?.status === 'due_tomorrow' ? displayCredits.length : totalItems;
+  // All filtering is now handled server-side via enhanced credits_by_store view
+  const displayCredits = credits;
+  const effectiveTotalItems = totalItems;
   const totalPages = Math.ceil(effectiveTotalItems / itemsPerPage);
   
   // Process initial filters only once
@@ -424,11 +407,12 @@ export default function CreditsPage() {
   const handleClosePaymentHistory = (hasDataChanged?: boolean) => {
     setIsPaymentHistoryModalOpen(false);
     setPaymentHistoryCredit(null);
-    // Only refresh data if there were actual changes
     if (hasDataChanged) {
-      handleRefresh();
-      // Trigger cash fund update when payment history changes
-      triggerUpdate();
+      setTimeout(() => {
+        handleRefresh();
+        fetchTotals(filters);
+        triggerUpdate();
+      }, 1000);
     }
   };
   
@@ -481,9 +465,9 @@ export default function CreditsPage() {
         {/* Bảng dữ liệu hợp đồng */}
         <CreditsTable
           credits={displayCredits}
-          statusMap={statusMap}
+          statusMap={undefined}
           calculatedDetails={creditDetails}
-          calculatedStatuses={creditStatuses}
+          calculatedStatuses={undefined}
           totals={totals ?? undefined}
           onView={handleViewCreditDetail}
           onEdit={handleEditCredit}

@@ -24,7 +24,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle 
 } from '@/components/ui/alert-dialog';
 import { toast } from '@/components/ui/use-toast';
-import { usePawnStatuses } from '@/hooks/usePawnStatuses';
+// Removed: import { usePawnStatuses } from '@/hooks/usePawnStatuses';
 import { usePermissions } from '@/hooks/usePermissions';
 import { updatePawnStatus } from '@/lib/pawn-payment';
 import { isSameDay, addDays } from 'date-fns';
@@ -79,7 +79,7 @@ export function PawnContractClient({ contractCode }: PawnContractClientProps) {
   
   // Lấy dữ liệu tài chính tổng hợp
   const { summary: financialSummary, details: pawnDetails, refresh: refreshFinancial } = usePawnCalculations();
-  const { statuses: pawnStatuses, loading: pawnStatusesLoading } = usePawnStatuses(pawns.map(pawn => pawn.id));
+  // Removed: Status calculation now handled by pawns_by_store view directly
   // State for dialogs
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedPawn, setSelectedPawn] = useState<PawnWithCustomer | null>(null);
@@ -217,8 +217,20 @@ export function PawnContractClient({ contractCode }: PawnContractClientProps) {
   
   // Handle opening payment history modal
   const handleOpenPaymentHistory = async (pawn: PawnWithCustomer) => {
-    const status = pawnStatuses[pawn.id];
-    pawn.status = status.statusCode as PawnStatus;
+    // Status now available directly from pawn.status_code (from view)
+    if (pawn.status_code) {
+      // Map status_code to PawnStatus enum
+      const statusMapping: Record<string, PawnStatus> = {
+        'ON_TIME': PawnStatus.ON_TIME,
+        'CLOSED': PawnStatus.CLOSED,
+        'DELETED': PawnStatus.DELETED,
+        'OVERDUE': PawnStatus.ON_TIME, // Map to ON_TIME for now
+        'LATE_INTEREST': PawnStatus.LATE_INTEREST,
+        'FINISHED': PawnStatus.CLOSED, // Map to CLOSED
+        'BAD_DEBT': PawnStatus.BAD_DEBT,
+      };
+      pawn.status = statusMapping[pawn.status_code] || PawnStatus.ON_TIME;
+    }
     setPaymentHistoryPawn(pawn);
     setIsPaymentHistoryModalOpen(true);
   };
@@ -291,7 +303,7 @@ export function PawnContractClient({ contractCode }: PawnContractClientProps) {
           onUpdateStatus={handleOpenStatusDialog}
           onShowPaymentHistory={handleOpenPaymentHistory}
           calculatedDetails={pawnDetails}
-          calculatedStatuses={pawnStatuses}
+          calculatedStatuses={undefined} // Status now in pawn.status_code from view
         />
         
         {/* Phân trang */}
