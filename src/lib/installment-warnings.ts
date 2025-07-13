@@ -58,10 +58,10 @@ export function calculateInstallmentReason(
   
   let reasons: string[] = [];
   
-  // SPECIAL CASE 1: Contract ends today (highest priority - masks all other conditions)
+  // SPECIAL CASE 1: Contract ends today (can combine with other conditions)
   // Show regardless of payment status as this is most critical info
   if (contractEndStr === today) {
-    return "Hôm nay là kỳ cuối";
+    reasons.push("Hôm nay là kỳ cuối");
   }
   
   // Check payment timing (tomorrow/today due) first

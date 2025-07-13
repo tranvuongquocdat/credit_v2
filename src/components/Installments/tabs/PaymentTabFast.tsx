@@ -229,7 +229,6 @@ export function PaymentTabFast({
         // ----- UNCHECK ----- only latest period
         // Validate first, if the unchecked period has end date before latest paid date, throw error
         const latestPaidDate = await getLatestPaymentPaidDate(installment.id);
-        debugger;
         if (latestPaidDate) {
           const latestPaidDateObj = new Date(latestPaidDate);
           const endDate = new Date(period.endDate?.split('T')[0] ?? period.dueDate.split('T')[0]);

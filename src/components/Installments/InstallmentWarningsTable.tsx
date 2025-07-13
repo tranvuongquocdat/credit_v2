@@ -334,10 +334,30 @@ export function InstallmentWarningsTable({
             const maxButtons = Math.min(10, warning.buttonValues.length);
             const quickPayButtons = [];
             
-            // Tính tổng số tiền cần thanh toán - lấy phần tử cuối cùng trong mảng buttonValues
-            const totalAmountToDisplay = warning.buttonValues.length > 0 
-              ? warning.buttonValues[warning.buttonValues.length - 1] 
-              : 0;
+            // Tính tổng số tiền cần thanh toán thực tế
+            const totalAmountToDisplay = (() => {
+              // If no late periods, show 0
+              if (warning.latePeriods === 0) return 0;
+              
+              // Calculate exact amount based on unpaid days from latest payment to today/contract end
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              
+              const loanStart = new Date(warning.start_date);
+              loanStart.setHours(0, 0, 0, 0);
+              
+              const contractEnd = new Date(loanStart);
+              contractEnd.setDate(contractEnd.getDate() + warning.duration - 1);
+              contractEnd.setHours(0, 0, 0, 0);
+              
+              const effectiveDate = today > contractEnd ? contractEnd : today;
+              
+              // Calculate unpaid days using late periods from RPC
+              const unpaidDays = warning.latePeriods * (warning.payment_period || 10);
+              const dailyAmount = (warning.installment_amount || 0) / warning.duration;
+              
+              return Math.round(unpaidDays * dailyAmount);
+            })();
             
             for (let i = 0; i < maxButtons; i++) {
               // Lấy giá trị từ mảng buttonValues đã được tính toán
