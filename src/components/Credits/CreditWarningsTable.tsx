@@ -163,6 +163,18 @@ export function CreditWarningsTable({
     );
   }
 
+  // Calculate totals
+  const totals = enhancedCredits.reduce((acc, credit) => {
+    acc.totalPrincipal += credit.loan_amount || 0;
+    acc.totalInterest += credit.totalInterest || 0;
+    acc.totalAmount += (credit.loan_amount || 0) + (credit.totalInterest || 0);
+    return acc;
+  }, {
+    totalPrincipal: 0,
+    totalInterest: 0,
+    totalAmount: 0
+  });
+
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200">
@@ -175,6 +187,7 @@ export function CreditWarningsTable({
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-48">Địa chỉ</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Tiền gốc</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Tổng tiền lãi</th>
+            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Tổng tiền</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-32">Lý do</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm">Thao tác</th>
           </tr>
@@ -207,6 +220,11 @@ export function CreditWarningsTable({
                 {formatCurrency(credit.totalInterest || 0)}
               </td>
               <td className="py-3 px-3 border-r border-gray-200 text-center">
+                <span className="font-medium text-red-600">
+                  {formatCurrency((credit.loan_amount || 0) + (credit.totalInterest || 0))}
+                </span>
+              </td>
+              <td className="py-3 px-3 border-r border-gray-200 text-center">
                 <span className="text-orange-600 font-medium">
                   {credit.reason}
                 </span>
@@ -228,6 +246,33 @@ export function CreditWarningsTable({
             </tr>
           ))}
         </tbody>
+        <tfoot className="bg-yellow-200 font-semibold">
+          <tr>
+            <td colSpan={5} className="py-2 px-3 text-center font-bold border-r border-t border-gray-200">
+              Tổng
+            </td>
+            <td className="py-2 px-3 text-center font-bold border-r border-t border-gray-200">
+              <span className="text-rose-600">
+                {formatCurrency(totals.totalPrincipal)}
+              </span>
+            </td>
+            <td className="py-2 px-3 text-center font-bold border-r border-t border-gray-200">
+              <span className="text-rose-600">
+                {formatCurrency(totals.totalInterest)}
+              </span>
+            </td>
+            <td className="py-2 px-3 text-center font-bold border-r border-t border-gray-200">
+              <span className="text-red-600 font-bold">
+                {formatCurrency(totals.totalAmount)}
+              </span>
+            </td>
+            <td colSpan={2} className="py-2 px-3 text-center border-t border-gray-200">
+              <span className="text-gray-600 font-medium">
+                {enhancedCredits.length} hợp đồng
+              </span>
+            </td>
+          </tr>
+        </tfoot>
       </table>
     </div>
   );

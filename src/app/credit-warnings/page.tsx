@@ -100,8 +100,20 @@ export default function CreditWarningPage() {
         })
       : allCredits.filter(credit => {
           const reasonCategories = categorizeCreditReason(credit.reason || '');
-          return reasonCategories.includes(reasonFilter);
+          const matches = reasonCategories.includes(reasonFilter);
+          
+          if (reasonFilter === "late") {
+            console.log(`[Credit Warnings Filter] Credit ${credit.id}:`, {
+              reason: credit.reason,
+              reasonCategories,
+              matches
+            });
+          }
+          
+          return matches;
         });
+    
+    console.log(`[Credit Warnings Filter] Filtered results: ${filteredResults.length}`);
     
     // Update totals
     setTotalItems(filteredResults.length);

@@ -47,13 +47,11 @@ import {
   calculateRemainingPeriods as calcRemainingPeriods,
   calculateRatio
 } from "@/lib/installmentCalculations";
-import { supabase } from "@/lib/supabase";
 import { getinstallmentPaymentHistory } from "@/lib/Installments/payment_history";
 import { getExpectedMoney } from "@/lib/Installments/get_expected_money";
 import { convertFromHistoryToTimeArrayWithStatus } from "@/lib/Installments/convert_from_history_to_time_array";
 import { fillRemainingPeriods } from "@/lib/Installments/fill_remaining_periods";
 import { getLatestPaymentPaidDate } from "@/lib/Installments/get_latest_payment_paid_date";
-import { getCurrentUser } from "@/lib/auth";
 import { usePermissions } from "@/hooks/usePermissions";
 // Define the tabs for this modal
 export type TabId =

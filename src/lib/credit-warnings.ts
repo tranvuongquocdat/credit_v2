@@ -11,7 +11,7 @@ export function categorizeCreditReason(reason: string): CreditReasonFilter[] {
   
   if (reason.includes("Hôm nay phải đóng")) categories.push("today_due");
   if (reason.includes("Ngày mai đóng")) categories.push("tomorrow_due");
-  if (reason.includes("Chậm") && reason.includes("VND")) categories.push("late");
+  if (reason.includes("Chậm") && (reason.includes("VND") || reason.includes("₫"))) categories.push("late");
   if (reason.includes("Quá hạn")) categories.push("overdue");
   if (reason.includes("kết thúc hôm nay")) categories.push("end_today");
   
@@ -22,20 +22,40 @@ export function categorizeCreditReason(reason: string): CreditReasonFilter[] {
  * Calculate unpaid interest amount from first unpaid date to today (inclusive)
  */
 export function calculateUnpaidInterestAmount(credit: any, latestPaidDate: string | null): number {
-  const today = new Date();
-  today.setHours(23, 59, 59, 999); // Include today
+  const today = new Date().toISOString().split('T')[0];
+  const statusCode = credit.status_code;
   
-  const loanDate = new Date(credit.loan_date);
+  // Contract end date calculation
+  const contractStart = new Date(credit.loan_date);
+  const contractEnd = new Date(contractStart);
+  contractEnd.setDate(contractEnd.getDate() + credit.loan_period - 1);
+  const contractEndStr = contractEnd.toISOString().split('T')[0];
   
   // First unpaid date
   const firstUnpaidDate = latestPaidDate 
     ? new Date(new Date(latestPaidDate).getTime() + 24 * 60 * 60 * 1000) // Day after last paid
-    : loanDate; // If no payments, start from loan date
+    : new Date(credit.loan_date); // If no payments, start from loan date
   
-  // Calculate days from first unpaid to today (inclusive)
-  const unpaidDays = Math.max(0, Math.floor(
-    (today.getTime() - firstUnpaidDate.getTime()) / (1000 * 60 * 60 * 24)
-  ) + 1); // +1 to include today
+  // Use same logic as "Lý do" column:
+  // For OVERDUE: calculate late period only until contract end
+  // For LATE_INTEREST: calculate until today
+  const effectiveEndDate = statusCode === 'OVERDUE' 
+    ? new Date(contractEndStr) 
+    : new Date(today);
+  effectiveEndDate.setHours(23, 59, 59, 999);
+  
+  // Only calculate if there are unpaid days
+  if (effectiveEndDate < firstUnpaidDate) {
+    return 0;
+  }
+  
+  const unpaidDays = Math.floor(
+    (effectiveEndDate.getTime() - firstUnpaidDate.getTime()) / (1000 * 60 * 60 * 24)
+  ) + 1; // +1 to include end date
+  
+  if (unpaidDays <= 0) {
+    return 0;
+  }
   
   // Use the existing interest calculator
   const dailyRate = calculateDailyRateForCredit(credit);
@@ -102,8 +122,6 @@ function calculateCreditReason(credit: any, latestPaidDate?: string | null): str
         // Use existing interest calculator for accurate calculation
         const dailyRate = calculateDailyRateForCredit(credit);
         const lateAmount = Math.round(credit.loan_amount * dailyRate * unpaidDays);
-        console.log(credit);
-        console.log(credit.loan_amount, dailyRate, unpaidDays, lateAmount);
         reasons.push(`Chậm ${formatCurrency(lateAmount)}`);
       }
     }
