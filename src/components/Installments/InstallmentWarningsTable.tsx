@@ -252,7 +252,10 @@ export function InstallmentWarningsTable({
         
         // Apply reason filtering
         const filteredResults = reasonFilter === "all" 
-          ? warningResults 
+          ? warningResults.filter(warning => {
+              const reasonCategories = categorizeReason(warning.reason);
+              return !reasonCategories.includes("tomorrow_due");
+            })
           : warningResults.filter(warning => {
               const reasonCategories = categorizeReason(warning.reason);
               return reasonCategories.includes(reasonFilter);
