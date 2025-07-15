@@ -546,6 +546,18 @@ export default function TransactionDetailsTable({
         <CardTitle className="text-base font-bold bg-blue-500 text-white p-2 rounded">Chi tiết giao dịch</CardTitle>
       </CardHeader>
       <CardContent>
+        {/* Mobile-friendly summary totals */}
+        <div className="lg:hidden mb-4 grid grid-cols-2 gap-2">
+          <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+            <div className="text-xs text-green-700 font-medium mb-1">TỔNG THU</div>
+            <div className="text-lg font-bold text-green-600">{totalIncome.toLocaleString()}</div>
+          </div>
+          <div className="bg-red-50 p-3 rounded-lg border border-red-200">
+            <div className="text-xs text-red-700 font-medium mb-1">TỔNG CHI</div>
+            <div className="text-lg font-bold text-red-600">{totalExpense.toLocaleString()}</div>
+          </div>
+        </div>
+        
         {isLoading ? (
           <div className="flex items-center justify-center p-4">
             <RefreshCw className="h-6 w-6 animate-spin mr-2" />
@@ -560,20 +572,22 @@ export default function TransactionDetailsTable({
             Không có giao dịch nào trong khoảng thời gian này
           </div>
         ) : (
-          <div className="rounded-md border border-gray-200 overflow-auto">
-            <Table className="border-collapse">
+          <>
+          {/* Desktop: Use normal table with sticky columns */}
+          <div className="hidden lg:block rounded-md border border-gray-200 overflow-x-auto relative">
+            <Table className="border-collapse min-w-full">
               <TableHeader className="bg-gray-50">
                 <TableRow>
                   <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200 w-12">#</TableHead>
-                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">Loại Hình</TableHead>
-                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200 hidden md:table-cell">Mã HĐ</TableHead>
-                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">Người Giao Dịch</TableHead>
-                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">Khách Hàng</TableHead>
-                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200 hidden md:table-cell">Tên Hàng</TableHead>
-                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">Ngày</TableHead>
-                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">Diễn Giải</TableHead>
-                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">Thu</TableHead>
-                  <TableHead className="py-2 px-3 text-center font-bold border-b border-gray-200">Chi</TableHead>
+                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200 min-w-[100px]">Loại Hình</TableHead>
+                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200 min-w-[120px]">Mã HĐ</TableHead>
+                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200 min-w-[130px]">Người Giao Dịch</TableHead>
+                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200 min-w-[130px]">Khách Hàng</TableHead>
+                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200 min-w-[120px]">Tên Hàng</TableHead>
+                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200 min-w-[100px]">Ngày</TableHead>
+                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200 min-w-[120px]">Diễn Giải</TableHead>
+                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200 w-24 text-green-600 sticky right-24 bg-gray-50 z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">Thu</TableHead>
+                  <TableHead className="py-2 px-3 text-center font-bold border-b border-gray-200 w-24 text-red-600 sticky right-0 bg-gray-50 z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">Chi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -583,9 +597,34 @@ export default function TransactionDetailsTable({
                       {index + 1}
                     </TableCell>
                     <TableCell className="py-2 px-3 border-r border-b border-gray-200">
-                      {item.source}
+                      <div className="text-sm font-medium">{item.source}</div>
+                      {/* Show contract code on mobile */}
+                      <div className="text-xs text-gray-500 lg:hidden">
+                        {item.contractCode && item.contractCode !== '-' ? (
+                          <Link
+                            href={
+                              item.source === 'Tín chấp'
+                                ? `/credits/${item.contractCode}`
+                                : item.source === 'Cầm đồ'
+                                  ? `/pawns/${item.contractCode}`
+                                  : item.source === 'Trả góp'
+                                    ? `/installments/${item.contractCode}`
+                                    : '#'
+                            }
+                            className={
+                              (item.source === 'Tín chấp' || item.source === 'Cầm đồ' || item.source === 'Trả góp')
+                                ? "text-blue-600 hover:underline"
+                                : ""
+                            }
+                          >
+                            {item.contractCode}
+                          </Link>
+                        ) : (
+                          '-'
+                        )}
+                      </div>
                     </TableCell>
-                    <TableCell className="py-2 px-3 border-r border-b border-gray-200 hidden md:table-cell">
+                    <TableCell className="py-2 px-3 border-r border-b border-gray-200 hidden lg:table-cell">
                       {item.contractCode && item.contractCode !== '-' ? (
                         <Link
                           href={
@@ -609,31 +648,39 @@ export default function TransactionDetailsTable({
                         '-'
                       )}
                     </TableCell>
-                    <TableCell className="py-2 px-3 border-r border-b border-gray-200">
-                      {item.employeeName || '-'}
-                    </TableCell>
-                    <TableCell className="py-2 px-3 border-r border-b border-gray-200">
-                      {item.customerName || '-'}
-                    </TableCell>
                     <TableCell className="py-2 px-3 border-r border-b border-gray-200 hidden md:table-cell">
+                      <div className="text-sm">{item.employeeName || '-'}</div>
+                    </TableCell>
+                    <TableCell className="py-2 px-3 border-r border-b border-gray-200 hidden sm:table-cell">
+                      <div className="text-sm">{item.customerName || '-'}</div>
+                      {/* Show employee name on mobile */}
+                      <div className="text-xs text-gray-500 md:hidden">
+                        {item.employeeName || '-'}
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-2 px-3 border-r border-b border-gray-200 hidden xl:table-cell">
                       {item.itemName || '-'}
                     </TableCell>
                     <TableCell className="py-2 px-3 border-r border-b border-gray-200">
-                      {new Date(item.date).toLocaleDateString('vi-VN')}
+                      <div className="text-sm">{new Date(item.date).toLocaleDateString('vi-VN')}</div>
+                      {/* Show customer name on mobile */}
+                      <div className="text-xs text-gray-500 sm:hidden">
+                        {item.customerName || '-'}
+                      </div>
                     </TableCell>
                     <TableCell className="py-2 px-3 border-r border-b border-gray-200">
-                      {item.description}
+                      <div className="text-sm">{item.description}</div>
                     </TableCell>
-                    <TableCell className="py-2 px-3 text-right border-r border-b border-gray-200">
+                    <TableCell className="py-2 px-3 text-right border-r border-b border-gray-200 sticky right-24 bg-white z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">
                       {item.income > 0 ? (
-                        <span className="text-green-600 font-medium">{item.income.toLocaleString()} VND</span>
+                        <span className="text-green-600 font-medium text-sm">{item.income.toLocaleString()}</span>
                       ) : (
                         ""
                       )}
                     </TableCell>
-                    <TableCell className="py-2 px-3 text-right border-b border-gray-200">
+                    <TableCell className="py-2 px-3 text-right border-b border-gray-200 sticky right-0 bg-white z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">
                       {item.expense > 0 ? (
-                        <span className="text-red-600 font-medium">{item.expense.toLocaleString()} VND</span>
+                        <span className="text-red-600 font-medium text-sm">{item.expense.toLocaleString()}</span>
                       ) : (
                         ""
                       )}
@@ -647,28 +694,87 @@ export default function TransactionDetailsTable({
                     <TableCell colSpan={8} className="py-2 px-3 text-right font-semibold border-r border-t border-gray-200">
                       {`Tổng ${source}`}
                     </TableCell>
-                    <TableCell className="py-2 px-3 text-right font-semibold border-r border-t border-gray-200">
-                      <span className="text-green-600">{values.income.toLocaleString()} VND</span>
+                    <TableCell className="py-2 px-3 text-right font-semibold border-r border-t border-gray-200 sticky right-24 bg-gray-50 z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">
+                      <span className="text-green-600">{values.income.toLocaleString()}</span>
                     </TableCell>
-                    <TableCell className="py-2 px-3 text-right font-semibold border-t border-gray-200">
-                      <span className="text-red-600">{values.expense.toLocaleString()} VND</span>
+                    <TableCell className="py-2 px-3 text-right font-semibold border-t border-gray-200 sticky right-0 bg-gray-50 z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">
+                      <span className="text-red-600">{values.expense.toLocaleString()}</span>
                     </TableCell>
                   </TableRow>
                 ))}
                 <TableRow className="bg-gray-50">
-                  <TableCell colSpan={8} className="py-2 px-3 text-right font-bold text-lg border-r border-t border-gray-200">
+                  <TableCell colSpan={8} className="py-3 px-3 text-right font-bold text-lg border-r border-t border-gray-200">
                     TỔNG BIẾN ĐỘNG
                   </TableCell>
-                  <TableCell className="py-2 px-3 text-right font-bold text-lg border-r border-t border-gray-200">
-                    <span className="text-green-600">{totalIncome.toLocaleString()} VND</span>
+                  <TableCell className="py-3 px-3 text-right font-bold text-lg border-r border-t border-gray-200 sticky right-24 bg-gray-50 z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">
+                    <span className="text-green-600">{totalIncome.toLocaleString()}</span>
                   </TableCell>
-                  <TableCell className="py-2 px-3 text-right font-bold text-lg border-t border-gray-200">
-                    <span className="text-red-600">{totalExpense.toLocaleString()} VND</span>
+                  <TableCell className="py-3 px-3 text-right font-bold text-lg border-t border-gray-200 sticky right-0 bg-gray-50 z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">
+                    <span className="text-red-600">{totalExpense.toLocaleString()}</span>
                   </TableCell>
                 </TableRow>
               </TableFooter>
             </Table>
           </div>
+          
+          <div className="lg:hidden">
+            <div className="rounded-md border border-gray-200 overflow-hidden">
+              {/* Header */}
+              <div className="bg-gray-50 grid grid-cols-[1fr_auto_auto] gap-2 p-2 border-b border-gray-200 font-bold text-sm">
+                <div className="text-center">Chi tiết</div>
+                <div className="text-center text-green-600 w-20">Thu</div>
+                <div className="text-center text-red-600 w-20">Chi</div>
+              </div>
+              
+              {/* Transaction rows */}
+              <div className="max-h-96 overflow-y-auto">
+                {transactions.map((item, index) => (
+                  <div key={item.id} className="grid grid-cols-[1fr_auto_auto] gap-2 p-2 border-b border-gray-200 text-sm hover:bg-gray-50">
+                    <div className="min-w-0">
+                      <div className="font-medium text-blue-600">{item.source}</div>
+                      <div className="text-gray-600">{item.description}</div>
+                      <div className="text-xs text-gray-500">
+                        {item.contractCode !== '-' && <span>{item.contractCode} • </span>}
+                        {item.customerName && <span>{item.customerName} • </span>}
+                        {new Date(item.date).toLocaleDateString('vi-VN')}
+                      </div>
+                    </div>
+                    <div className="text-right w-20">
+                      {item.income > 0 && (
+                        <span className="text-green-600 font-medium text-xs">
+                          {item.income.toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-right w-20">
+                      {item.expense > 0 && (
+                        <span className="text-red-600 font-medium text-xs">
+                          {item.expense.toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Totals */}
+              <div className="bg-gray-50 border-t border-gray-200">
+                {Object.entries(totalsBySource).map(([source, values]) => (
+                  <div key={source} className="grid grid-cols-[1fr_auto_auto] gap-2 p-2 border-b border-gray-200 font-semibold text-sm">
+                    <div className="text-right">Tổng {source}</div>
+                    <div className="text-right text-green-600 w-20">{values.income.toLocaleString()}</div>
+                    <div className="text-right text-red-600 w-20">{values.expense.toLocaleString()}</div>
+                  </div>
+                ))}
+                <div className="grid grid-cols-[1fr_auto_auto] gap-2 p-3 font-bold text-base bg-gray-100">
+                  <div className="text-right">TỔNG BIẾN ĐỘNG</div>
+                  <div className="text-right text-green-600 w-20">{totalIncome.toLocaleString()}</div>
+                  <div className="text-right text-red-600 w-20">{totalExpense.toLocaleString()}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          </>
         )}
       </CardContent>
     </Card>

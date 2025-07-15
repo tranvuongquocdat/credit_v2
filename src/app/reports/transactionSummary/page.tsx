@@ -563,10 +563,11 @@ export default function TransactionSummaryPage() {
         {/* Date range selector and filters */}
         <Card className="mb-4">
           <CardHeader className="py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center">
-                  <span className="mr-2 text-sm font-medium">Từ ngày</span>
+            <div className="space-y-4">
+              {/* Date range selectors */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium whitespace-nowrap">Từ ngày</span>
                   <DatePickerWithControls
                     value={startDate} 
                     onChange={handleStartDateChange}
@@ -574,8 +575,8 @@ export default function TransactionSummaryPage() {
                     className="w-40"
                   />
                 </div>
-                <div className="flex items-center">
-                  <span className="mx-2 text-sm font-medium">Đến ngày</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium whitespace-nowrap">Đến ngày</span>
                   <DatePickerWithControls
                     value={endDate} 
                     onChange={handleEndDateChange}
@@ -584,9 +585,11 @@ export default function TransactionSummaryPage() {
                   />
                 </div>
               </div>
-              <div className="flex items-center gap-4">
+              
+              {/* Filter controls */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Loại giao dịch:</span>
+                  <span className="text-sm font-medium whitespace-nowrap">Loại giao dịch:</span>
                   <Select value={selectedTransactionType} onValueChange={setSelectedTransactionType}>
                     <SelectTrigger className="w-40">
                       <SelectValue />
@@ -602,7 +605,7 @@ export default function TransactionSummaryPage() {
                   </Select>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Nhân viên:</span>
+                  <span className="text-sm font-medium whitespace-nowrap">Nhân viên:</span>
                   <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
                     <SelectTrigger className="w-40">
                       <SelectValue />
@@ -622,6 +625,7 @@ export default function TransactionSummaryPage() {
                   disabled={isLoading}
                   variant="outline"
                   size="sm"
+                  className="w-fit"
                 >
                   {isLoading ? (
                     <RefreshCw className="h-4 w-4 animate-spin" />
@@ -657,13 +661,13 @@ export default function TransactionSummaryPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="rounded-md border border-gray-200 overflow-hidden">
-              <Table className="border-collapse">
+            <div className="rounded-md border border-gray-200 overflow-x-auto">
+              <Table className="border-collapse min-w-full">
                 <TableHeader className="bg-gray-50">
                   <TableRow>
-                    <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200 w-2/5">Bảng Tổng Kết</TableHead>
-                    <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200 w-3/10">Thu</TableHead>
-                    <TableHead className="py-2 px-3 text-center font-bold border-b border-gray-200 w-3/10">Chi</TableHead>
+                    <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200 min-w-[200px]">Bảng Tổng Kết</TableHead>
+                    <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200 min-w-[150px]">Thu</TableHead>
+                    <TableHead className="py-2 px-3 text-center font-bold border-b border-gray-200 min-w-[150px]">Chi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
