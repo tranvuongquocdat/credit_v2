@@ -52,7 +52,11 @@ export async function getExpectedMoney(creditId: string, countUntilToday: boolea
 
     // sau khi đã có danh sách gốc, map lại để tính số tiền lãi phí trả trong 1 ngày
     result = result.map((amount, index) => {            
-        return calculateInterestForOneDay(amount, credit as Credit);
+        const interestForDay = calculateInterestForOneDay(amount, credit as Credit, index);
+        if (index < 5) {
+            console.log(`[getExpectedMoney] Day ${index + 1}: Principal ${amount} -> Interest ${interestForDay}`);
+        }
+        return interestForDay;
     });
 
     return result;
@@ -65,14 +69,38 @@ export async function getExpectedMoney(creditId: string, countUntilToday: boolea
  * @param credit - Thông tin hợp đồng credit chứa các thông số lãi suất
  * @returns Số tiền lãi phải trả trong 1 ngày
  */
-export function calculateInterestForOneDay(principalAmount: number, credit: Credit): number {
+export function calculateInterestForOneDay(principalAmount: number, credit: Credit, dayIndex: number = 0): number {
     // Tính lãi suất hàng ngày từ thông tin hợp đồng
     const dailyRate = calculateDailyRateForCredit(credit);
     
     // Tính số tiền lãi cho 1 ngày
-    const interestAmount = Math.round(principalAmount * dailyRate);
+    // Để tránh rounding error, ta sẽ tính monthly interest trước rồi chia cho 30
+    const interestUiType = credit.interest_ui_type || 'daily';
     
-    return interestAmount;
+    let result = 0;
+    
+    if (interestUiType === 'monthly_30' || interestUiType === 'monthly_custom') {
+        // Tính lãi tháng trước, sau đó chia đều cho 30 ngày
+        const monthlyRate = dailyRate * 30;
+        const monthlyInterest = Math.round(principalAmount * monthlyRate);
+        
+        // Để tránh rounding error, ta sẽ phân phối đều monthlyInterest cho 30 ngày
+        // Sử dụng Math.floor để đảm bảo tổng không vượt quá monthlyInterest
+        const baseDailyAmount = Math.floor(monthlyInterest / 30);
+        const remainder = monthlyInterest % 30;
+        
+        // Phân phối remainder cho những ngày đầu trong chu kỳ 30 ngày
+        const dayInMonth = dayIndex % 30;
+        // Những ngày đầu sẽ có thêm 1 đồng để bù cho remainder
+        result = baseDailyAmount + (dayInMonth < remainder ? 1 : 0);
+        
+        
+    } else {
+        // Các trường hợp khác tính bình thường
+        result = Math.round(principalAmount * dailyRate);
+    }
+    
+    return result;
 }
 
 

@@ -14,40 +14,49 @@ export interface InterestConfig {
 export function normalizeToStandardRate(config: InterestConfig): number {
   const { interestType, interestValue, interestNotation, loanAmount } = config;
   
+  let result = 0;
+  
   // For daily interest
   if (interestType === 'daily') {
     if (interestNotation === 'k_per_million') {
       // Convert k/million to a daily percentage rate
       // Example: 5k per million per day = 0.5% per day
-      return (interestValue * 1000) / (1000000); // result is daily decimal (0.005)
+      result = (interestValue * 1000) / (1000000); // result is daily decimal (0.005)
     } else if (interestNotation === 'k_per_day') {
       // Convert fixed k per day to a daily percentage rate
-      return (interestValue * 1000) / loanAmount;
+      result = (interestValue * 1000) / loanAmount;
     }
   }
   
   // For monthly interest
   else if (interestType === 'monthly_30' || interestType === 'monthly_custom') {
-    // Convert monthly percentage to daily percentage
-    // Example: 3% per month = 0.1% per day
-    return interestValue / 100 / 30; // result is daily decimal (0.001)
+    if (interestNotation === 'k_per_million') {
+      // Convert k/million per month to daily percentage rate
+      // Example: 1.25k per million per month = 0.00125 per month = 0.00125/30 per day
+      // Use more precise calculation to avoid floating point precision loss
+      result = (interestValue * 1000) / (1000000 * 30);
+    } else {
+      // Convert monthly percentage to daily percentage
+      // Example: 3% per month = 0.1% per day
+      result = interestValue / 100 / 30; // result is daily decimal (0.001)
+    }
   }
   
   // For weekly percentage
   else if (interestType === 'weekly_percent') {
     // Convert weekly percentage to daily percentage
     // Example: 2% per week = 0.285% per day
-    return interestValue / 100 / 7; // result is daily decimal (0.00285)
+    result = interestValue / 100 / 7; // result is daily decimal (0.00285)
   }
   
   // For weekly fixed amount
   else if (interestType === 'weekly_k') {
     // Convert fixed k per week to a daily percentage rate
     // Example: 100k per week on 10M loan = 1% per week = 0.143% per day
-    return (interestValue * 1000) / loanAmount / 7; // result is daily decimal
+    result = (interestValue * 1000) / loanAmount / 7; // result is daily decimal
   }
   
-  return 0;
+  return result;
 }
 
 /**

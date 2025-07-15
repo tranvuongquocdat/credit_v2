@@ -216,7 +216,7 @@ export function TopNavbar() {
     if (count > 0) {
       return (
         <span className="absolute -top-1 -right-1 bg-gradient-to-r from-red-500 to-red-600 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full shadow-lg border-2 border-white font-semibold">
-          {count > 99 ? '99+' : count}
+          {count}
         </span>
       );
     }

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useStore } from "@/contexts/StoreContext";
 import { CreditWithCustomer } from "@/models/credit";
-import { getCreditWarnings } from "@/lib/credit-warnings";
+import { getCreditWarnings, CreditReasonFilter, categorizeCreditReason, calculateUnpaidInterestAmount } from "@/lib/credit-warnings";
 import { CreditWarningsTable } from "@/components/Credits/CreditWarningsTable";
 import { Search } from "lucide-react";
 import { toast } from '@/components/ui/use-toast';
@@ -14,11 +14,26 @@ import { PaymentHistoryModal } from "@/components/Credits/PaymentHistoryModal";
 import { CreditWarningsPagination } from "@/components/Credits/CreditWarningsPagination";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useDebounce } from '@/hooks/useDebounce';
+import { useCreditCalculations } from "@/hooks/useCreditCalculation";
+import * as XLSX from 'xlsx';
+import { format } from 'date-fns';
+import { formatCurrencyExcel } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 
 export default function CreditWarningPage() {
-  const [credits, setCredits] = useState<CreditWithCustomer[]>([]);
+  const [allCredits, setAllCredits] = useState<CreditWithCustomer[]>([]);
+  const [filteredCredits, setFilteredCredits] = useState<CreditWithCustomer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [customerNameFilter, setCustomerNameFilter] = useState("");
+  const [reasonFilter, setReasonFilter] = useState<CreditReasonFilter>("all");
+  const [isExporting, setIsExporting] = useState(false);
+  
   const debouncedCustomerFilter = useDebounce(customerNameFilter, 500);
   const { currentStore } = useStore();
   
@@ -26,7 +41,7 @@ export default function CreditWarningPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
-  const itemsPerPage = 10;
+  const itemsPerPage = 30;
   
   // State for payment history modal
   const [isPaymentHistoryModalOpen, setIsPaymentHistoryModalOpen] = useState(false);
@@ -35,23 +50,27 @@ export default function CreditWarningPage() {
   const { hasPermission, loading: permissionsLoading } = usePermissions();
   // Kiểm tra quyền xem danh sách hợp đồng trả góp
   const canViewCreditWarnings = hasPermission('xem_danh_sach_hop_dong_tin_chap');
-  // Load credits when the page loads, store changes, or pagination/filter changes
+  
+  // Get credit calculations
+  const { details: creditCalculations, loading: calculationsLoading } = useCreditCalculations();
+  
+  // Load credits when the page loads, store changes, or filter changes
   useEffect(() => {
-    if (currentStore?.id) {
+    if (canViewCreditWarnings && currentStore?.id) {
       loadCredits();
     }
-  }, [currentStore, currentPage, debouncedCustomerFilter]);
+  }, [currentStore, debouncedCustomerFilter, canViewCreditWarnings]);
   
   async function loadCredits() {
     if (!currentStore?.id) return;
     
     setIsLoading(true);
     try {
-      const { data, error, totalItems: total, totalPages: pages } = await getCreditWarnings(
-        currentPage,
-        itemsPerPage,
+      const { data, error } = await getCreditWarnings(
+        1, // Always fetch from page 1
+        1000, // Fetch all records for client-side filtering
         currentStore.id,
-        debouncedCustomerFilter
+        debouncedCustomerFilter,
       );
       
       if (error) {
@@ -63,9 +82,7 @@ export default function CreditWarningPage() {
         return;
       }
       
-      setCredits(data || []);
-      setTotalItems(total || 0);
-      setTotalPages(pages || 1);
+      setAllCredits(data || []);
     } catch (err) {
       console.error("Error in loadCredits:", err);
       toast({
@@ -76,6 +93,43 @@ export default function CreditWarningPage() {
       setIsLoading(false);
     }
   }
+  
+  // Client-side filtering effect
+  useEffect(() => {
+    // Apply reason filtering
+    const filteredResults = reasonFilter === "all" 
+      ? allCredits.filter(credit => {
+          const reasonCategories = categorizeCreditReason(credit.reason || '');
+          return !reasonCategories.includes("tomorrow_due"); // Exclude tomorrow from "all"
+        })
+      : allCredits.filter(credit => {
+          const reasonCategories = categorizeCreditReason(credit.reason || '');
+          const matches = reasonCategories.includes(reasonFilter);
+          
+          if (reasonFilter === "late") {
+            console.log(`[Credit Warnings Filter] Credit ${credit.id}:`, {
+              reason: credit.reason,
+              reasonCategories,
+              matches
+            });
+          }
+          
+          return matches;
+        });
+    
+    console.log(`[Credit Warnings Filter] Filtered results: ${filteredResults.length}`);
+    
+    // Update totals
+    setTotalItems(filteredResults.length);
+    setTotalPages(Math.ceil(filteredResults.length / itemsPerPage));
+    
+    // Apply client-side pagination
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedResults = filteredResults.slice(startIndex, endIndex);
+    
+    setFilteredCredits(paginatedResults);
+  }, [allCredits, reasonFilter, currentPage, itemsPerPage]);
 
   // Handle opening payment history modal
   const handleShowPaymentHistory = (credit: CreditWithCustomer) => {
@@ -98,16 +152,138 @@ export default function CreditWarningPage() {
     setCurrentPage(page);
   };
   
-  // Handle filter change
-  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle filter changes
+  const handleCustomerFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCustomerNameFilter(e.target.value);
-    setCurrentPage(1); // Reset to first page when filter changes
+    setCurrentPage(1);
+  };
+  
+  const handleReasonFilterChange = (value: CreditReasonFilter) => {
+    setReasonFilter(value);
+    setCurrentPage(1);
   };
   
   // Handle filter clear
   const handleClearFilter = () => {
     setCustomerNameFilter("");
+    setReasonFilter("all");
     setCurrentPage(1);
+  };
+
+  // Handle Excel export
+  const handleExportExcel = async () => {
+    if (allCredits.length === 0) {
+      toast({
+        title: "Không có dữ liệu để xuất",
+        description: "Vui lòng thử lại sau khi có dữ liệu",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      // Get filtered credits for export
+      const exportCredits = reasonFilter === "all" 
+        ? allCredits.filter(credit => {
+            const reasonCategories = categorizeCreditReason(credit.reason || '');
+            return !reasonCategories.includes("tomorrow_due");
+          })
+        : allCredits.filter(credit => {
+            const reasonCategories = categorizeCreditReason(credit.reason || '');
+            return reasonCategories.includes(reasonFilter);
+          });
+
+      // Calculate enhanced data for export
+      const enhancedExportCredits = exportCredits.map(credit => {
+        const creditDetails = creditCalculations?.[credit.id];
+        const latestPaidDate = creditDetails?.latestPaidDate || null;
+        
+        // Calculate unpaid interest amount
+        const totalInterest = calculateUnpaidInterestAmount(credit, latestPaidDate);
+        
+        return {
+          ...credit,
+          totalInterest,
+          totalAmount: (credit.loan_amount || 0) + totalInterest
+        };
+      });
+
+      // Prepare data for Excel
+      const excelData = enhancedExportCredits.map((credit, index) => ({
+        'STT': index + 1,
+        'Mã hợp đồng': credit.contract_code || '',
+        'Tên khách hàng': credit.customer?.name || '',
+        'Số điện thoại': credit.customer?.phone || '',
+        'Địa chỉ': credit.address || '',
+        'Tiền gốc': formatCurrencyExcel(credit.loan_amount || 0),
+        'Tổng tiền lãi': formatCurrencyExcel(credit.totalInterest || 0),
+        'Tổng tiền': formatCurrencyExcel(credit.totalAmount || 0),
+        'Lý do': credit.reason || '',
+        'Ngày vay': credit.loan_date ? format(new Date(credit.loan_date), 'dd/MM/yyyy') : '',
+        'Ngày đóng tiếp': credit.next_payment_date ? format(new Date(credit.next_payment_date), 'dd/MM/yyyy') : ''
+      }));
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(excelData);
+
+      // Set column widths
+      const colWidths = [
+        { wch: 5 },   // STT
+        { wch: 15 },  // Mã hợp đồng
+        { wch: 25 },  // Tên khách hàng
+        { wch: 15 },  // Số điện thoại
+        { wch: 30 },  // Địa chỉ
+        { wch: 15 },  // Tiền gốc
+        { wch: 15 },  // Tổng tiền lãi
+        { wch: 15 },  // Tổng tiền
+        { wch: 25 },  // Lý do
+        { wch: 12 },  // Ngày vay
+        { wch: 12 }   // Ngày đóng tiếp
+      ];
+      ws['!cols'] = colWidths;
+
+      // Style the header row
+      const headerStyle = {
+        fill: { fgColor: { rgb: "4472C4" } },
+        font: { color: { rgb: "FFFFFF" }, bold: true },
+        alignment: { horizontal: "center", vertical: "center" }
+      };
+
+      // Apply header styling
+      const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+      for (let col = range.s.c; col <= range.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+        if (!ws[cellAddress]) continue;
+        ws[cellAddress].s = headerStyle;
+      }
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Cảnh báo tín chấp');
+
+      // Generate filename with timestamp
+      const timestamp = format(new Date(), 'dd-MM-yyyy_HH-mm-ss');
+      const filename = `CanhBaoTinChap_${timestamp}.xlsx`;
+
+      // Write and download file
+      XLSX.writeFile(wb, filename);
+
+      toast({
+        title: "Xuất Excel thành công",
+        description: `Đã xuất ${excelData.length} bản ghi ra file ${filename}`,
+      });
+
+    } catch (error) {
+      console.error('Excel export error:', error);
+      toast({
+        title: "Lỗi xuất Excel",
+        description: "Đã xảy ra lỗi khi xuất file Excel. Vui lòng thử lại.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
   };
   
   return (
@@ -133,6 +309,7 @@ export default function CreditWarningPage() {
         {/* Filter Section */}
         <div className="my-4">
           <div className="flex items-center gap-4">
+            {/* Customer Name Search */}
             <div className="relative flex-1 max-w-md">
               <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                 <Search className="h-4 w-4 text-gray-400" />
@@ -141,22 +318,52 @@ export default function CreditWarningPage() {
                 type="text"
                 placeholder="Tìm kiếm theo tên khách hàng..."
                 value={customerNameFilter}
-                onChange={handleFilterChange}
+                onChange={handleCustomerFilterChange}
                 className="pl-10"
               />
             </div>
+            
+            {/* Reason Filter */}
+            <div className="max-w-xs">
+              <Select value={reasonFilter} onValueChange={handleReasonFilterChange}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Lý do" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả trạng thái</SelectItem>
+                  <SelectItem value="today_due">Hôm nay đóng</SelectItem>
+                  <SelectItem value="tomorrow_due">Ngày mai đóng</SelectItem>
+                  <SelectItem value="late">Chậm trả lãi</SelectItem>
+                  <SelectItem value="overdue">Quá hạn hợp đồng</SelectItem>
+                  <SelectItem value="end_today">Kết thúc hôm nay</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Clear Filter Button */}
             <Button 
               variant="outline" 
               onClick={handleClearFilter}
-              disabled={!customerNameFilter}
+              disabled={!customerNameFilter && reasonFilter === "all"}
             >
               Xóa bộ lọc
             </Button>
+            
+            {/* Excel Export Button */}
+            <Button 
+              variant="outline" 
+              onClick={handleExportExcel}
+              disabled={isExporting || allCredits.length === 0}
+              className="bg-green-50 hover:bg-green-100 text-green-700 border-green-300"
+            >
+              {isExporting ? 'Đang xuất...' : 'Xuất Excel'}
+            </Button>
           </div>
-          {/* Show filter info if active */}
+          
+          {/* Filter Status Display */}
           {customerNameFilter && (
             <div className="mt-2 text-sm text-blue-600">
-              Đang lọc theo tên khách hàng: <span className="font-semibold">{customerNameFilter}</span>
+              Đang lọc theo KH: <span className="font-semibold">{customerNameFilter}</span>
               {totalItems > 0 ? 
                 ` (${totalItems} kết quả)` : 
                 " (Không có kết quả)"}
@@ -166,9 +373,10 @@ export default function CreditWarningPage() {
         
         <div className="mt-6">
           <CreditWarningsTable
-            credits={credits}
-            isLoading={isLoading}
+            credits={filteredCredits}
+            isLoading={isLoading || calculationsLoading}
             onShowPaymentHistory={handleShowPaymentHistory}
+            creditCalculations={creditCalculations}
           />
           
           {/* Pagination */}

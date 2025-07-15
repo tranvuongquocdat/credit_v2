@@ -4,7 +4,7 @@ import { formatCurrency } from "@/lib/utils";
 import Spinner from "@/components/ui/spinner";
 import { useEffect, useState } from "react";
 import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
-import { AlertTriangleIcon, DollarSignIcon } from "lucide-react";
+import { AlertTriangleIcon, DollarSignIcon, ArrowUpDownIcon, ChevronUpIcon, ChevronDownIcon } from "lucide-react";
 import { useStore } from "@/contexts/StoreContext";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -112,6 +112,9 @@ export function InstallmentWarningsTable({
   // State for storing processed warnings
   const [warnings, setWarnings] = useState<InstallmentWarning[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
+  
+  // State for sorting
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // ===== Totals across ALL filtered results (not just current page) =====
   const [totals, setTotals] = useState<{ totalOldDebt: number; totalAmount: number }>({
@@ -134,6 +137,11 @@ export function InstallmentWarningsTable({
       // Default behavior: redirect to installments page with contract filter
       router.push(`/installments/${warning.contract_code}`);
     }
+  };
+  
+  // Handle sort toggle
+  const handleSortToggle = () => {
+    setSortOrder(current => current === 'asc' ? 'desc' : 'asc');
   };
   
   // Process installments to identify warnings
@@ -252,7 +260,10 @@ export function InstallmentWarningsTable({
         
         // Apply reason filtering
         const filteredResults = reasonFilter === "all" 
-          ? warningResults 
+          ? warningResults.filter(warning => {
+              const reasonCategories = categorizeReason(warning.reason);
+              return !reasonCategories.includes("tomorrow_due");
+            })
           : warningResults.filter(warning => {
               const reasonCategories = categorizeReason(warning.reason);
               return reasonCategories.includes(reasonFilter);
@@ -272,16 +283,28 @@ export function InstallmentWarningsTable({
         }, 0);
         setTotals({ totalOldDebt, totalAmount });
 
+        // Sort filtered results by customer name
+        const sortedResults = [...filteredResults].sort((a, b) => {
+          const nameA = a.customer?.name || '';
+          const nameB = b.customer?.name || '';
+          
+          if (sortOrder === 'asc') {
+            return nameA.localeCompare(nameB, 'vi', { sensitivity: 'base' });
+          } else {
+            return nameB.localeCompare(nameA, 'vi', { sensitivity: 'base' });
+          }
+        });
+
         // Apply client-side pagination
         const startIndex = (currentPage - 1) * itemsPerPage;
         const endIndex = startIndex + itemsPerPage;
-        const paginatedResults = filteredResults.slice(startIndex, endIndex);
+        const paginatedResults = sortedResults.slice(startIndex, endIndex);
 
         setWarnings(paginatedResults);
 
         // Pass all filtered results back to parent for pagination calculation
         if (onFilteredResults) {
-          onFilteredResults(filteredResults);
+          onFilteredResults(sortedResults);
         }
       } catch (err) {
         console.error("Error processing installment warnings:", err);
@@ -291,7 +314,7 @@ export function InstallmentWarningsTable({
     }
     
     processWarnings();
-  }, [installments, currentStore, reasonFilter, currentPage, itemsPerPage]);
+  }, [installments, currentStore, reasonFilter, currentPage, itemsPerPage, sortOrder]);
 
   if (isLoading || loadingPayments) {
     return (
@@ -318,7 +341,22 @@ export function InstallmentWarningsTable({
           <tr>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-10">#</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28">Mã hợp đồng</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-36">Tên khách hàng</th>
+            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-36">
+              <div className="flex items-center justify-center gap-1">
+                <span>Tên khách hàng</span>
+                <button
+                  onClick={handleSortToggle}
+                  className="p-1 hover:bg-gray-200 rounded transition-colors"
+                  title={`Sắp xếp ${sortOrder === 'asc' ? 'giảm dần' : 'tăng dần'}`}
+                >
+                  {sortOrder === 'asc' ? (
+                    <ChevronUpIcon className="h-4 w-4" />
+                  ) : (
+                    <ChevronDownIcon className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            </th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28">Số điện thoại</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-48">Địa chỉ</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Nợ cũ</th>

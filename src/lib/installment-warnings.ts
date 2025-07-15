@@ -165,7 +165,6 @@ export async function getInstallmentWarnings(
       .eq('store_id', storeId)
       .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']) // Include all warning statuses
       .or(`payment_due_date.lte.${tomorrowStr},status_code.eq.OVERDUE,status_code.eq.LATE_INTEREST`)
-      .order('payment_due_date', { ascending: true });
     
     // Apply filters
     if (customerFilter) {
@@ -187,7 +186,8 @@ export async function getInstallmentWarnings(
     
     const allInstallments = installments || [];
     const totalCount = count || 0;
-    
+
+
     // Map database model to UI model
     const mappedInstallments = allInstallments?.map((item: any): InstallmentWithCustomer => ({
       id: item.id,
