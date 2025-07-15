@@ -187,12 +187,6 @@ export async function getInstallmentWarnings(
     const allInstallments = installments || [];
     const totalCount = count || 0;
 
-    // Sort by customer name (case-insensitive, Vietnamese locale)
-    allInstallments.sort((a: any, b: any) => {
-      const nameA = a.customer?.name || '';
-      const nameB = b.customer?.name || '';
-      return nameA.localeCompare(nameB, 'vi', { sensitivity: 'base' });
-    });
 
     // Map database model to UI model
     const mappedInstallments = allInstallments?.map((item: any): InstallmentWithCustomer => ({
