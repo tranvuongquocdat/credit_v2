@@ -566,10 +566,10 @@ export default function TransactionDetailsTable({
                 <TableRow>
                   <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200 w-12">#</TableHead>
                   <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">Loại Hình</TableHead>
-                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">Mã HĐ</TableHead>
+                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200 hidden md:table-cell">Mã HĐ</TableHead>
                   <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">Người Giao Dịch</TableHead>
                   <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">Khách Hàng</TableHead>
-                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">Tên Hàng</TableHead>
+                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200 hidden md:table-cell">Tên Hàng</TableHead>
                   <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">Ngày</TableHead>
                   <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">Diễn Giải</TableHead>
                   <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">Thu</TableHead>
@@ -585,7 +585,7 @@ export default function TransactionDetailsTable({
                     <TableCell className="py-2 px-3 border-r border-b border-gray-200">
                       {item.source}
                     </TableCell>
-                    <TableCell className="py-2 px-3 border-r border-b border-gray-200">
+                    <TableCell className="py-2 px-3 border-r border-b border-gray-200 hidden md:table-cell">
                       {item.contractCode && item.contractCode !== '-' ? (
                         <Link
                           href={
@@ -615,7 +615,7 @@ export default function TransactionDetailsTable({
                     <TableCell className="py-2 px-3 border-r border-b border-gray-200">
                       {item.customerName || '-'}
                     </TableCell>
-                    <TableCell className="py-2 px-3 border-r border-b border-gray-200">
+                    <TableCell className="py-2 px-3 border-r border-b border-gray-200 hidden md:table-cell">
                       {item.itemName || '-'}
                     </TableCell>
                     <TableCell className="py-2 px-3 border-r border-b border-gray-200">
