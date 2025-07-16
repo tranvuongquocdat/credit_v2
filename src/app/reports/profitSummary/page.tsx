@@ -770,24 +770,29 @@ export default function ProfitSummaryPage() {
           </div>
 
           {/* Date Filters and Action Buttons */}
-          <div className="flex items-center gap-4 w-full">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium">Từ ngày:</label>
-              <DatePickerWithControls
-                value={startDate}
-                onChange={handleStartDateChange}
-                className="w-40"
-              />
+          <div className="space-y-4">
+            {/* Date filters */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium whitespace-nowrap">Từ ngày:</label>
+                <DatePickerWithControls
+                  value={startDate}
+                  onChange={handleStartDateChange}
+                  className="w-40"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium whitespace-nowrap">Đến ngày:</label>
+                <DatePickerWithControls
+                  value={endDate}
+                  onChange={handleEndDateChange}
+                  className="w-40"
+                />
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium">Đến ngày:</label>
-              <DatePickerWithControls
-                value={endDate}
-                onChange={handleEndDateChange}
-                className="w-40"
-              />
-            </div>
-            <div className="flex items-center gap-2 ml-auto">
+            
+            {/* Action buttons */}
+            <div className="flex flex-wrap items-center gap-2">
               <Button onClick={handleRefresh} className="bg-blue-600 hover:bg-blue-700">
                 Tìm kiếm
               </Button>
@@ -825,9 +830,9 @@ export default function ProfitSummaryPage() {
           </div>
         )}
 
-        {/* Main Table */}
-        <div className="rounded-md border border-gray-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
+        {/* Desktop: Main Table with sticky columns */}
+        <div className="hidden lg:block rounded-md border border-gray-200 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto relative">
             <Table className="border-collapse min-w-full">
               <TableHeader className="bg-gray-50">
                 <TableRow>
@@ -853,10 +858,10 @@ export default function ProfitSummaryPage() {
                   <TableHead className="py-2 px-3 text-center font-bold border-b border-r border-gray-200">Nợ lãi</TableHead>
                   <TableHead className="py-2 px-3 text-center font-bold border-b border-r border-gray-200">Quá hạn</TableHead>
                   <TableHead className="py-2 px-3 text-center font-bold border-b border-r border-gray-200">T.Lý</TableHead>
-                  <TableHead className="py-2 px-3 text-center font-bold border-b border-r border-gray-200">Tổng tiền cho vay</TableHead>
-                  <TableHead className="py-2 px-3 text-center font-bold border-b border-r border-gray-200">Đang cho vay</TableHead>
-                  <TableHead className="py-2 px-3 text-center font-bold border-b border-r border-gray-200">Lợi nhuận</TableHead>
-                  <TableHead className="py-2 px-3 text-center font-bold border-b border-gray-200">Khách nợ</TableHead>
+                  <TableHead className="py-2 px-3 text-center font-bold border-b border-r border-gray-200 sticky right-72 bg-gray-50 z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)] text-blue-600">Tổng tiền cho vay</TableHead>
+                  <TableHead className="py-2 px-3 text-center font-bold border-b border-r border-gray-200 sticky right-48 bg-gray-50 z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)] text-blue-600">Đang cho vay</TableHead>
+                  <TableHead className="py-2 px-3 text-center font-bold border-b border-r border-gray-200 sticky right-24 bg-gray-50 z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)] text-green-600">Lợi nhuận</TableHead>
+                  <TableHead className="py-2 px-3 text-center font-bold border-b border-gray-200 sticky right-0 bg-gray-50 z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)] text-red-600">Khách nợ</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -889,18 +894,18 @@ export default function ProfitSummaryPage() {
                     <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-center">
                       {row.deleted}
                     </TableCell>
-                    <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-right text-blue-600">
+                    <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-right text-blue-600 sticky right-72 bg-white z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">
                       {formatCurrency(row.totalLoanAmount)}
                     </TableCell>
-                    <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-right text-blue-600">
+                    <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-right text-blue-600 sticky right-48 bg-white z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">
                       {formatCurrency(row.currentLoanAmount)}
                     </TableCell>
-                    <TableCell className={`py-3 px-3 border-b border-r border-gray-200 text-right ${
+                    <TableCell className={`py-3 px-3 border-b border-r border-gray-200 text-right sticky right-24 bg-white z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)] ${
                       row.profit > 0 ? 'text-green-600' : row.profit < 0 ? 'text-red-600' : ''
                     }`}>
                       {row.profit > 0 ? '+' : ''}{formatCurrency(row.profit)}
                     </TableCell>
-                    <TableCell className="py-3 px-3 border-b border-gray-200 text-right">
+                    <TableCell className="py-3 px-3 border-b border-gray-200 text-right sticky right-0 bg-white z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">
                       {formatCurrency(row.customerDebt)}
                     </TableCell>
                   </TableRow>
@@ -919,14 +924,14 @@ export default function ProfitSummaryPage() {
                   <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-center">0</TableCell>
                   <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-center">0</TableCell>
                   <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-center">0</TableCell>
-                  <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-right">0</TableCell>
-                  <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-right">0</TableCell>
-                  <TableCell className={`py-3 px-3 border-b border-r border-gray-200 text-right ${
+                  <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-right sticky right-72 bg-white z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">0</TableCell>
+                  <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-right sticky right-48 bg-white z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">0</TableCell>
+                  <TableCell className={`py-3 px-3 border-b border-r border-gray-200 text-right sticky right-24 bg-white z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)] ${
                     transactionData.income > 0 ? 'text-green-600' : ''
                   }`}>
                     {transactionData.income > 0 ? '+' : ''}{formatCurrency(transactionData.income)}
                   </TableCell>
-                  <TableCell className="py-3 px-3 border-b border-gray-200 text-right">0</TableCell>
+                  <TableCell className="py-3 px-3 border-b border-gray-200 text-right sticky right-0 bg-white z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">0</TableCell>
                 </TableRow>
 
                 <TableRow className="hover:bg-gray-50">
@@ -941,14 +946,14 @@ export default function ProfitSummaryPage() {
                   <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-center">0</TableCell>
                   <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-center">0</TableCell>
                   <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-center">0</TableCell>
-                  <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-right">0</TableCell>
-                  <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-right">0</TableCell>
-                  <TableCell className={`py-3 px-3 border-b border-r border-gray-200 text-right ${
+                  <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-right sticky right-72 bg-white z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">0</TableCell>
+                  <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-right sticky right-48 bg-white z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">0</TableCell>
+                  <TableCell className={`py-3 px-3 border-b border-r border-gray-200 text-right sticky right-24 bg-white z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)] ${
                     transactionData.expense > 0 ? 'text-red-600' : ''
                   }`}>
                     -{formatCurrency(transactionData.expense)}
                   </TableCell>
-                  <TableCell className="py-3 px-3 border-b border-gray-200 text-right">0</TableCell>
+                  <TableCell className="py-3 px-3 border-b border-gray-200 text-right sticky right-0 bg-white z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">0</TableCell>
                 </TableRow>
 
                 <TableRow className="hover:bg-gray-50">
@@ -963,60 +968,165 @@ export default function ProfitSummaryPage() {
                   <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-center">0</TableCell>
                   <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-center">0</TableCell>
                   <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-center">0</TableCell>
-                  <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-right">0</TableCell>
-                  <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-right">0</TableCell>
-                  <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-right">0</TableCell>
-                  <TableCell className="py-3 px-3 border-b border-gray-200 text-right">0</TableCell>
+                  <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-right sticky right-72 bg-white z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">0</TableCell>
+                  <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-right sticky right-48 bg-white z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">0</TableCell>
+                  <TableCell className="py-3 px-3 border-b border-r border-gray-200 text-right sticky right-24 bg-white z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">0</TableCell>
+                  <TableCell className="py-3 px-3 border-b border-gray-200 text-right sticky right-0 bg-white z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">0</TableCell>
                 </TableRow>
               </TableBody>
               <TableFooter className="bg-yellow-50">
                 <TableRow>
-                  <TableCell className="py-3 px-3 font-bold border-t-2 border-r border-gray-300">
-                    Tổng cộng
+                  <TableCell colSpan={9} className="py-3 px-3 font-bold border-t-2 border-r border-gray-300">
+                    <div className="flex justify-between items-center">
+                      <span>Tổng cộng</span>
+                      <div className="flex gap-4 text-sm">
+                        <span>Tổng: {totals.total}</span>
+                        <span>Mới: {totals.new}</span>
+                        <span>Đóng: {totals.closed}</span>
+                        <span>Hoạt động: {totals.active}</span>
+                      </div>
+                    </div>
                   </TableCell>
-                  <TableCell className="py-3 px-3 font-bold text-center border-t-2 border-r border-gray-300">
-                    {totals.total}
-                  </TableCell>
-                  <TableCell className="py-3 px-3 font-bold text-center border-t-2 border-r border-gray-300">
-                    {totals.new}
-                  </TableCell>
-                  <TableCell className="py-3 px-3 font-bold text-center border-t-2 border-r border-gray-300">
-                    {totals.old}
-                  </TableCell>
-                  <TableCell className="py-3 px-3 font-bold text-center border-t-2 border-r border-gray-300">
-                    {totals.closed}
-                  </TableCell>
-                  <TableCell className="py-3 px-3 font-bold text-center border-t-2 border-r border-gray-300">
-                    {totals.active}
-                  </TableCell>
-                  <TableCell className="py-3 px-3 font-bold text-center border-t-2 border-r border-gray-300">
-                    {totals.lateInterest}
-                  </TableCell>
-                  <TableCell className="py-3 px-3 font-bold text-center border-t-2 border-r border-gray-300">
-                    {totals.overdue}
-                  </TableCell>
-                  <TableCell className="py-3 px-3 font-bold text-center border-t-2 border-r border-gray-300">
-                    {totals.deleted}
-                  </TableCell>
-                  <TableCell className="py-3 px-3 font-bold text-right border-t-2 border-r border-gray-300 text-blue-600">
+                  <TableCell className="py-3 px-3 font-bold text-right border-t-2 border-r border-gray-300 text-blue-600 sticky right-72 bg-yellow-50 z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">
                     {formatCurrency(totals.totalLoanAmount)}
                   </TableCell>
-                  <TableCell className="py-3 px-3 font-bold text-right border-t-2 border-r border-gray-300 text-blue-600">
+                  <TableCell className="py-3 px-3 font-bold text-right border-t-2 border-r border-gray-300 text-blue-600 sticky right-48 bg-yellow-50 z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">
                     {formatCurrency(totals.currentLoanAmount)}
                   </TableCell>
-                  <TableCell className={`py-3 px-3 font-bold text-right border-t-2 border-r border-gray-300 ${
+                  <TableCell className={`py-3 px-3 font-bold text-right border-t-2 border-r border-gray-300 sticky right-24 bg-yellow-50 z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)] ${
                     (totals.profit + transactionData.income - transactionData.expense) > 0 ? 'text-green-600' : 
                     (totals.profit + transactionData.income - transactionData.expense) < 0 ? 'text-red-600' : ''
                   }`}>
                     {(totals.profit + transactionData.income - transactionData.expense) > 0 ? '+' : ''}
                     {formatCurrency(totals.profit + transactionData.income - transactionData.expense)}
                   </TableCell>
-                  <TableCell className="py-3 px-3 font-bold text-right border-t-2 border-gray-300">
+                  <TableCell className="py-3 px-3 font-bold text-right border-t-2 border-gray-300 sticky right-0 bg-yellow-50 z-10 shadow-[-2px_0_4px_rgba(0,0,0,0.1)]">
                     {formatCurrency(totals.customerDebt)}
                   </TableCell>
                 </TableRow>
               </TableFooter>
             </Table>
+          </div>
+        </div>
+
+        {/* Mobile/Tablet: CSS Grid Layout */}
+        <div className="lg:hidden">
+          {/* Mobile-friendly summary cards */}
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <Card className="p-3">
+              <div className="text-xs text-gray-600 mb-1">TỔNG HỢP ĐỒNG</div>
+              <div className="text-lg font-bold text-blue-600">{totals.total}</div>
+            </Card>
+            <Card className="p-3">
+              <div className="text-xs text-gray-600 mb-1">HỢP ĐỒNG MỚI</div>
+              <div className="text-lg font-bold text-red-600">{totals.new}</div>
+            </Card>
+            <Card className="p-3">
+              <div className="text-xs text-gray-600 mb-1">LỢI NHUẬN</div>
+              <div className="text-lg font-bold text-green-600">
+                {formatCurrency(totals.profit + transactionData.income - transactionData.expense)}
+              </div>
+            </Card>
+            <Card className="p-3">
+              <div className="text-xs text-gray-600 mb-1">KHÁCH NỢ</div>
+              <div className="text-lg font-bold text-red-600">{formatCurrency(totals.customerDebt)}</div>
+            </Card>
+          </div>
+
+          {/* Mobile table with wider money columns */}
+          <div className="rounded-md border border-gray-200 overflow-hidden">
+            {/* Header */}
+            <div className="bg-gray-50 grid grid-cols-[1fr_auto_auto_auto_auto] gap-1 p-2 border-b border-gray-200 font-bold text-xs">
+              <div className="text-center">Hợp đồng</div>
+              <div className="text-center text-blue-600 w-20">Tổng vay</div>
+              <div className="text-center text-blue-600 w-20">Đang vay</div>
+              <div className="text-center text-green-600 w-20">L.nhuận</div>
+              <div className="text-center text-red-600 w-20">Khách nợ</div>
+            </div>
+            
+            {/* Contract rows */}
+            <div className="max-h-96 overflow-y-auto">
+              {profitData.map((row) => (
+                <div key={row.categoryKey} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-1 p-2 border-b border-gray-200 text-xs hover:bg-gray-50">
+                  <div className="min-w-0">
+                    <div className="font-medium text-blue-600">{row.category}</div>
+                    <div className="text-gray-600 text-xs">
+                      Tổng: {row.total} • Mới: {row.new} • Đóng: {row.closed}
+                    </div>
+                    <div className="text-gray-500 text-xs">
+                      Trả lãi: {row.active} • Nợ lãi: {row.lateInterest} • Quá hạn: {row.overdue}
+                    </div>
+                  </div>
+                  <div className="text-right text-blue-600 w-20 text-xs">
+                    <div className="font-medium break-all">{formatCurrency(row.totalLoanAmount)}</div>
+                  </div>
+                  <div className="text-right text-blue-600 w-20 text-xs">
+                    <div className="font-medium break-all">{formatCurrency(row.currentLoanAmount)}</div>
+                  </div>
+                  <div className={`text-right w-20 font-medium text-xs break-all ${
+                    row.profit > 0 ? 'text-green-600' : row.profit < 0 ? 'text-red-600' : ''
+                  }`}>
+                    {row.profit > 0 ? '+' : ''}{formatCurrency(row.profit)}
+                  </div>
+                  <div className="text-right w-20 font-medium text-xs break-all">
+                    {formatCurrency(row.customerDebt)}
+                  </div>
+                </div>
+              ))}
+              
+              {/* Transaction rows */}
+              <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-1 p-2 border-b border-gray-200 text-xs hover:bg-gray-50">
+                <div className="min-w-0">
+                  <div className="font-medium text-green-600">Thu hoạt động</div>
+                  <div className="text-gray-600 text-xs">Giao dịch thu nhập</div>
+                </div>
+                <div className="text-right w-20 text-xs">0</div>
+                <div className="text-right w-20 text-xs">0</div>
+                <div className="text-right text-green-600 w-20 font-medium text-xs break-all">
+                  +{formatCurrency(transactionData.income)}
+                </div>
+                <div className="text-right w-20 text-xs">0</div>
+              </div>
+              
+              <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-1 p-2 border-b border-gray-200 text-xs hover:bg-gray-50">
+                <div className="min-w-0">
+                  <div className="font-medium text-red-600">Chi hoạt động</div>
+                  <div className="text-gray-600 text-xs">Giao dịch chi phí</div>
+                </div>
+                <div className="text-right w-20 text-xs">0</div>
+                <div className="text-right w-20 text-xs">0</div>
+                <div className="text-right text-red-600 w-20 font-medium text-xs break-all">
+                  -{formatCurrency(transactionData.expense)}
+                </div>
+                <div className="text-right w-20 text-xs">0</div>
+              </div>
+              
+              <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-1 p-2 border-b border-gray-200 text-xs hover:bg-gray-50">
+                <div className="min-w-0">
+                  <div className="font-medium text-gray-600">Trả lãi vốn vay</div>
+                  <div className="text-gray-600 text-xs">Lãi vốn vay</div>
+                </div>
+                <div className="text-right w-20 text-xs">0</div>
+                <div className="text-right w-20 text-xs">0</div>
+                <div className="text-right w-20 text-xs">0</div>
+                <div className="text-right w-20 text-xs">0</div>
+              </div>
+            </div>
+            
+            {/* Total row */}
+            <div className="bg-yellow-50 border-t border-gray-200 grid grid-cols-[1fr_auto_auto_auto_auto] gap-1 p-3 font-bold text-sm">
+              <div className="text-right">TỔNG CỘNG</div>
+              <div className="text-right text-blue-600 w-20 text-xs break-all">{formatCurrency(totals.totalLoanAmount)}</div>
+              <div className="text-right text-blue-600 w-20 text-xs break-all">{formatCurrency(totals.currentLoanAmount)}</div>
+              <div className={`text-right w-20 text-xs break-all ${
+                (totals.profit + transactionData.income - transactionData.expense) > 0 ? 'text-green-600' : 
+                (totals.profit + transactionData.income - transactionData.expense) < 0 ? 'text-red-600' : ''
+              }`}>
+                {(totals.profit + transactionData.income - transactionData.expense) > 0 ? '+' : ''}
+                {formatCurrency(totals.profit + transactionData.income - transactionData.expense)}
+              </div>
+              <div className="text-right w-20 text-xs break-all">{formatCurrency(totals.customerDebt)}</div>
+            </div>
           </div>
         </div>
       </div>
