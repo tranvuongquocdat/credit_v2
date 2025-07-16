@@ -727,15 +727,15 @@ export default function TransactionDetailsTable({
               </div>
               
               {/* Transaction rows */}
-              <div className="max-h-96 overflow-y-auto">
+              <div className="max-h-[70vh] overflow-y-auto">
                 {transactions.map((item, index) => (
-                  <div key={item.id} className="grid grid-cols-[1fr_auto_auto] gap-2 p-2 border-b border-gray-200 text-sm hover:bg-gray-50">
+                  <div key={item.id} className="grid grid-cols-[1fr_auto_auto] gap-2 p-1.5 border-b border-gray-200 text-sm hover:bg-gray-50">
                     <div className="min-w-0">
-                      <div className="font-medium text-blue-600">{item.source}</div>
-                      <div className="text-gray-600">{item.description}</div>
+                      <div className="font-medium text-blue-800">{item.customerName || '-'}</div>
+                      <div className="text-gray-600 text-xs">{item.description}</div>
                       <div className="text-xs text-gray-500">
                         {item.contractCode !== '-' && <span>{item.contractCode} • </span>}
-                        {item.customerName && <span>{item.customerName} • </span>}
+                        <span className="text-gray-600">{item.source} • </span>
                         {new Date(item.date).toLocaleDateString('vi-VN')}
                       </div>
                     </div>
