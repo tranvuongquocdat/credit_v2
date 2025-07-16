@@ -760,13 +760,13 @@ export default function TransactionDetailsTable({
               {/* Totals */}
               <div className="bg-gray-50 border-t border-gray-200">
                 {Object.entries(totalsBySource).map(([source, values]) => (
-                  <div key={source} className="grid grid-cols-[1fr_auto_auto] gap-2 p-2 border-b border-gray-200 font-semibold text-sm">
+                  <div key={source} className="grid grid-cols-[1fr_auto_auto] gap-6 p-2 border-b border-gray-200 font-semibold text-sm">
                     <div className="text-right">Tổng {source}</div>
                     <div className="text-right text-green-600 w-20">{values.income.toLocaleString()}</div>
                     <div className="text-right text-red-600 w-20">{values.expense.toLocaleString()}</div>
                   </div>
                 ))}
-                <div className="grid grid-cols-[1fr_auto_auto] gap-2 p-3 font-bold text-base bg-gray-100">
+                <div className="grid grid-cols-[1fr_auto_auto] gap-6 p-3 font-bold text-base bg-gray-100">
                   <div className="text-right">TỔNG BIẾN ĐỘNG</div>
                   <div className="text-right text-green-600 w-20">{totalIncome.toLocaleString()}</div>
                   <div className="text-right text-red-600 w-20">{totalExpense.toLocaleString()}</div>
