@@ -7,8 +7,8 @@ import { AuthProvider } from "@/contexts/AuthContext";
 // Không cần import font từ Google Fonts vì sẽ sử dụng Arial (system font)
 
 export const metadata: Metadata = {
-  title: "Hosodep",
-  description: "Hosodep",
+  title: "Nuvoras",
+  description: "Nuvoras",
 };
 
 export default function RootLayout({
