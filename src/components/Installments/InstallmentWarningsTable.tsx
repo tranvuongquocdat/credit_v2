@@ -339,8 +339,8 @@ export function InstallmentWarningsTable({
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-10">#</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28">Mã hợp đồng</th>
+            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-10 hidden lg:table-cell">#</th>
+            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28 hidden lg:table-cell">Mã hợp đồng</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-36">
               <div className="flex items-center justify-center gap-1">
                 <span>Tên khách hàng</span>
@@ -357,8 +357,8 @@ export function InstallmentWarningsTable({
                 </button>
               </div>
             </th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28">Số điện thoại</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-48">Địa chỉ</th>
+            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28 hidden lg:table-cell">Số điện thoại</th>
+            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-48 hidden lg:table-cell">Địa chỉ</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Nợ cũ</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Số tiền</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-32">Lý do</th>
@@ -421,8 +421,8 @@ export function InstallmentWarningsTable({
 
             return (
               <tr key={warning.id} className="hover:bg-gray-50 transition-colors text-sm">
-                <td className="py-3 px-3 border-r border-gray-200 text-center">{index + 1}</td>
-                <td className="py-3 px-3 border-r border-gray-200 font-medium text-center">
+                <td className="py-3 px-3 border-r border-gray-200 text-center hidden lg:table-cell">{index + 1}</td>
+                <td className="py-3 px-3 border-r border-gray-200 font-medium text-center hidden lg:table-cell">
                   {warning.contract_code}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
@@ -443,10 +443,10 @@ export function InstallmentWarningsTable({
                     )}
                   </div>
                 </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
+                <td className="py-3 px-3 border-r border-gray-200 text-center hidden lg:table-cell">
                   {warning.customer?.phone || ""}
                 </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
+                <td className="py-3 px-3 border-r border-gray-200 text-center hidden lg:table-cell">
                   {warning.customer?.address || ""}
                 </td>
                 <td className="py-3 px-3 border-r border-gray-200 text-center">
@@ -484,7 +484,8 @@ export function InstallmentWarningsTable({
         {warnings.length > 0 && (
           <tfoot className="bg-yellow-200 font-semibold">
             <tr>
-              <td colSpan={5} className="py-2 px-3 text-center font-bold">Tổng</td>
+              <td colSpan={5} className="py-2 px-3 text-center font-bold hidden lg:table-cell">Tổng</td>
+              <td className="py-2 px-3 text-center font-bold lg:hidden">Tổng</td>
               <td className="py-2 px-3 text-center text-rose-600 font-bold">
                 {formatCurrency(totals.totalOldDebt)}
               </td>
