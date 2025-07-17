@@ -259,9 +259,9 @@ export function SearchFilters({
 
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 mb-4">
         <div>
-          <label htmlFor="contractCode" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="contractCode" className="block text-xs font-medium text-gray-700 mb-1 truncate">
             Mã HD
           </label>
           <div className="relative">
@@ -281,7 +281,7 @@ export function SearchFilters({
         </div>
         
         <div>
-          <label htmlFor="customerName" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="customerName" className="block text-xs font-medium text-gray-700 mb-1 truncate">
             Tên khách hàng
           </label>
           <div className="relative">
@@ -325,7 +325,7 @@ export function SearchFilters({
         </div>
         
         <div>
-          <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="startDate" className="block text-xs font-medium text-gray-700 mb-1 truncate">
             Từ ngày
           </label>
           <DatePicker
@@ -339,7 +339,7 @@ export function SearchFilters({
         </div>
         
         <div>
-          <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="endDate" className="block text-xs font-medium text-gray-700 mb-1 truncate">
             Đến ngày
           </label>
           <DatePicker
@@ -353,7 +353,7 @@ export function SearchFilters({
         </div>
         
         <div>
-          <label htmlFor="duration" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="duration" className="block text-xs font-medium text-gray-700 mb-1 truncate">
             Thời gian vay
           </label>
           <div className="flex gap-2">
@@ -392,7 +392,7 @@ export function SearchFilters({
         </div>
 
         <div>
-          <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="status" className="block text-xs font-medium text-gray-700 mb-1 truncate">
             Trạng thái hợp đồng
           </label>
           <Select value={filters.status} onValueChange={handleStatusChange}>
@@ -410,7 +410,7 @@ export function SearchFilters({
       </div>
       
       <div className="flex flex-col sm:flex-row justify-between gap-2 mb-4">
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button 
             onClick={onCreateNew}
             size="sm"
@@ -419,7 +419,8 @@ export function SearchFilters({
             title={!canCreatePawn ? 'Bạn không có quyền tạo mới hợp đồng' : ''}
           >
             <PlusIcon className="mr-1 h-3.5 w-3.5" />
-            Thêm mới
+            <span className="hidden sm:inline">Thêm mới</span>
+            <span className="sm:hidden">Thêm</span>
           </Button>
           {onExportExcel && (
             <Button 
@@ -433,19 +434,21 @@ export function SearchFilters({
               <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              Xuất Excel
+              <span className="hidden sm:inline">Xuất Excel</span>
+              <span className="sm:hidden">Xuất</span>
             </Button>
           )}
         </div>
         
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button 
             variant="outline" 
             size="sm"
             className="bg-gray-100"
             onClick={handleReset}
           >
-            Đặt lại bộ lọc
+            <span className="hidden sm:inline">Đặt lại bộ lọc</span>
+            <span className="sm:hidden">Đặt lại</span>
           </Button>
           <Button 
             size="sm"
