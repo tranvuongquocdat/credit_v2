@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Layout } from '@/components/Layout';
 import { useRouter } from 'next/navigation';
 
@@ -39,11 +39,17 @@ export function CreditContractClient({ contractCode }: CreditContractClientProps
   // Kiểm tra quyền xem danh sách hợp đồng tín chấp
   const canViewCreditsList = hasPermission('xem_danh_sach_hop_dong_tin_chap');
   // Initialize with filter by contract code
-  const initialFilters = {
+  const initialFilters = useMemo(() => ({
     contract_code: contractCode || '',
-    customer_name: '',
-    status: 'all'
-  };
+    customer_name: '', 
+    status: 'all',
+    start_date: '',
+    end_date: '',
+    page: 1,
+    limit: 10,
+    sort: 'created_at',
+    order: 'desc'
+  }), [contractCode]);
   
   // Use our custom hook for credits data and operations
   const { 
@@ -59,6 +65,12 @@ export function CreditContractClient({ contractCode }: CreditContractClientProps
     handleUpdateStatus: updateCreditStatus,
     refetch
   } = useCredits(initialFilters);
+  
+  useEffect(() => {
+    if (contractCode) {
+      handleSearch(initialFilters);
+    }
+  }, [contractCode, handleSearch, initialFilters]);
   
   // Lấy dữ liệu tài chính tổng hợp
   const { summary: financialSummary, details: creditDetails, refresh: refreshFinancial } = useCreditCalculations();
@@ -78,7 +90,7 @@ export function CreditContractClient({ contractCode }: CreditContractClientProps
   const [isCreditEditModalOpen, setIsCreditEditModalOpen] = useState(false);
   const [editCreditId, setEditCreditId] = useState<string>('');
   
-// Client-side filter: Ngày mai đóng lãi
+  // Client-side filter: Ngày mai đóng lãi
   const displayCredits = useMemo(() => {
     if (filters?.status !== 'due_tomorrow') return credits;
     const tomorrow = addDays(new Date().setHours(0,0,0,0) as any, 1);
