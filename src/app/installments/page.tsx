@@ -430,24 +430,23 @@ export default function InstallmentsPage() {
         )}
         
         {/* Installments Table */}
-        <div className="rounded-md border mt-4 mb-1 border-gray-200 shadow-sm overflow-hidden">
-          <InstallmentsTable
-            installments={displayInstallments}
-            statusMap={statusMap}
-            isLoading={loading || calcLoading}
-            onEdit={handleEditInstallment}
-            onUpdateStatus={handleOpenStatusDialog}
-            onDelete={handleOpenDeleteDialog}
-            onShowPaymentActions={handleShowPaymentActions}
-            totals={totals ?? undefined}
-            onRefresh={() => {
-              refetch();
-              refreshFinancial();
-              triggerUpdate();
-              fetchTotals(filters);
-            }}
-          />
-        </div> 
+        <InstallmentsTable
+          installments={displayInstallments}
+          statusMap={statusMap}
+          isLoading={loading || calcLoading}
+          onEdit={handleEditInstallment}
+          onUpdateStatus={handleOpenStatusDialog}
+          onDelete={handleOpenDeleteDialog}
+          onShowPaymentActions={handleShowPaymentActions}
+          totals={totals ?? undefined}
+          onRefresh={() => {
+            refetch();
+            refreshFinancial();
+            triggerUpdate();
+            fetchTotals(filters);
+          }}
+        />
+        
         
         {/* Modal tạo hợp đồng mới */}
         <InstallmentCreateModal

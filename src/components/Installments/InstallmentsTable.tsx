@@ -40,6 +40,14 @@ import {
 import { supabase } from "@/lib/supabase";
 import { recordContractReopening } from "@/lib/installmentAmountHistory";
 import { usePermissions } from '@/hooks/usePermissions';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow
+} from '@/components/ui/table';
 // Define status info interface
 interface StatusInfo {
   label: string;
@@ -263,26 +271,26 @@ export function InstallmentsTable({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200 table-fixed">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-10">#</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Mã HĐ</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-36">Tên KH</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28">Tiền giao khách</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-16">Tỷ lệ</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-20">Thời gian</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28">Tiền đã đóng</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Nợ</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Tiền 1 ngày</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28">Còn phải đóng</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28">Tình trạng</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28">Ngày phải đóng</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm w-32">Thao tác</th>
-          </tr>
-        </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
+    <div className="rounded-md border overflow-hidden mb-4">
+      <Table className="border-collapse">
+        <TableHeader className="bg-gray-50">
+          <TableRow>
+            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-10 hidden lg:table-cell">#</TableHead>
+            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-24">Mã HĐ</TableHead>
+            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-36">Tên KH</TableHead>
+            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-28">Tiền giao khách</TableHead>
+            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-16 hidden lg:table-cell">Tỷ lệ</TableHead>
+            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-20">Thời gian</TableHead>
+            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-28">Tiền đã đóng</TableHead>
+            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-24 hidden lg:table-cell">Nợ</TableHead>
+            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-24 hidden lg:table-cell">Tiền 1 ngày</TableHead>
+            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-28">Còn phải đóng</TableHead>
+            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-28">Tình trạng</TableHead>
+            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-28">Ngày phải đóng</TableHead>
+            <TableHead className="py-3 px-3 text-center font-medium text-sm w-32">Thao tác</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody className="bg-white divide-y divide-gray-200">
           {installments.map((installment, index) => {
             const statusInfo = installment.statusInfo ?? {
               label: "Không xác định",
@@ -290,17 +298,17 @@ export function InstallmentsTable({
             };
 
             return (
-              <tr 
+              <TableRow 
                 key={installment.id} 
                 className="hover:bg-gray-50 transition-colors text-sm"
               >
-                <td className="py-3 px-3 border-r border-gray-200 text-center">{index + 1}</td>
-                <td className="py-3 px-3 border-r border-gray-200 font-medium text-center">
+                <TableCell className="py-3 px-3 border-r border-gray-200 text-center hidden lg:table-cell">{index + 1}</TableCell>
+                <TableCell className="py-3 px-3 border-r border-gray-200 font-medium text-center">
                   <span>
                     {installment.contract_code}
                   </span>
-                </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
+                </TableCell>
+                <TableCell className="py-3 px-3 border-r border-gray-200 text-center">
                   <div className="flex items-center justify-center gap-1">
                     <span 
                       className="text-blue-600 cursor-pointer hover:underline" 
@@ -318,14 +326,14 @@ export function InstallmentsTable({
                       </div>
                     )}
                   </div>
-                </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
+                </TableCell>
+                <TableCell className="py-3 px-3 border-r border-gray-200 text-center">
                   {formatCurrency(installment.amount_given)}
-                </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
+                </TableCell>
+                <TableCell className="py-3 px-3 border-r border-gray-200 text-center hidden lg:table-cell">
                   {calculateRatio(installment)}
-                </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
+                </TableCell>
+                <TableCell className="py-3 px-3 border-r border-gray-200 text-center">
                   {(() => {
                     // Calculate end date based on start date and duration
                     try {
@@ -354,8 +362,8 @@ export function InstallmentsTable({
                       return `${installment.duration} ngày`;
                     }
                   })()}
-                </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
+                </TableCell>
+                <TableCell className="py-3 px-3 border-r border-gray-200 text-center">
                   {(() => {
                     const paidAmount = installment.totalPaid ?? 0;
                     const paymentPeriod = installment.payment_period || 10; // Default 10 days per period
@@ -385,16 +393,16 @@ export function InstallmentsTable({
                       </div>
                     );
                   })()}
-                </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
+                </TableCell>
+                <TableCell className="py-3 px-3 border-r border-gray-200 text-center hidden lg:table-cell">
                   <span className={installment.debt_amount && installment.debt_amount > 0 ? 'text-red-600' : 'text-green-600'}>
                     {formatCurrency(installment.debt_amount || 0)}
                   </span>
-                </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
+                </TableCell>
+                <TableCell className="py-3 px-3 border-r border-gray-200 text-center hidden lg:table-cell">
                   {formatCurrency(calculateDailyAmount(installment))}
-                </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
+                </TableCell>
+                <TableCell className="py-3 px-3 border-r border-gray-200 text-center">
                   {(() => {
                     const remainingAmount = installment.remainingToPay ?? 0;
                     const paymentPeriod = installment.payment_period || 10; // Default 10 days per period
@@ -435,16 +443,16 @@ export function InstallmentsTable({
                       </div>
                     );
                   })()}
-                </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
+                </TableCell>
+                <TableCell className="py-3 px-3 border-r border-gray-200 text-center">
                   <Badge
                     variant="outline"
                     className={statusInfo.color}
                   >
                     {statusInfo.label}
                   </Badge>
-                </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
+                </TableCell>
+                <TableCell className="py-3 px-3 border-r border-gray-200 text-center">
                   {installment.status === InstallmentStatus.CLOSED || 
                    installment.nextPaymentDate == "Hoàn thành" || 
                    !installment.payment_due_date ? (
@@ -530,8 +538,8 @@ export function InstallmentsTable({
                       </PopoverContent>
                     </Popover>
                   )}
-                </td>
-                <td className="py-3 px-3 text-center">
+                </TableCell>
+                <TableCell className="py-3 px-3 text-center">
                   <div className="inline-flex items-center justify-center gap-1">
                     {/* Luôn hiển thị nút xem chi tiết thanh toán */}
                     {onShowPaymentHistory && (
@@ -598,27 +606,27 @@ export function InstallmentsTable({
                       </>
                     )}
                   </div>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             );
           })}
-        </tbody>
+        </TableBody>
         {totals && (
           <tfoot className="bg-yellow-200 font-semibold">
-            <tr>
-              <td className="py-2 px-3 text-center font-bold" colSpan={3}>Tổng</td>
-              <td className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_amount_given)}</td>
-              <td className="py-2 px-3" />
-              <td className="py-2 px-3" />
-              <td className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_paid)}</td>
-              <td className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_debt)}</td>
-              <td className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_daily_amount)}</td>
-              <td className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_remaining)}</td>
-              <td className="py-2 px-3" colSpan={3}></td>
-            </tr>
+            <TableRow>
+              <TableCell className="py-2 px-3 text-center font-bold" colSpan={3}>Tổng</TableCell>
+              <TableCell className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_amount_given)}</TableCell>
+              <TableCell className="py-2 px-3" />
+              <TableCell className="py-2 px-3" />
+              <TableCell className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_paid)}</TableCell>
+              <TableCell className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_debt)}</TableCell>
+              <TableCell className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_daily_amount)}</TableCell>
+              <TableCell className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_remaining)}</TableCell>
+              <TableCell className="py-2 px-3" colSpan={3}></TableCell>
+            </TableRow>
           </tfoot>
         )}
-      </table>
+      </Table>
       
       {/* Confirmation Dialog for Unlocking Contract */}
       <AlertDialog open={unlockConfirmOpen} onOpenChange={setUnlockConfirmOpen}>

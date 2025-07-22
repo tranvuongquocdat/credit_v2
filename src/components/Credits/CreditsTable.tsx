@@ -130,63 +130,63 @@ export function CreditsTable({
       <Table className="border-collapse">
         <TableHeader className="bg-gray-50">
           <TableRow>
-            <TableHead className="py-2 px-3 text-center font-medium w-12 border-b border-r border-gray-200">#</TableHead>
-            <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Mã HĐ</TableHead>
-            <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Tên KH</TableHead>
-            <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Tài sản</TableHead>
-            <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Số tiền</TableHead>
-            <TableHead className="py-2 px-3 text-center font-medium w-28 border-b border-r border-gray-200">Ngày vay</TableHead>
-            <TableHead className="py-2 px-3 text-center font-medium w-28 border-b border-r border-gray-200">Lãi phí đã đóng</TableHead>
-            <TableHead className="py-2 px-3 text-center font-medium w-28 border-b border-r border-gray-200">Nợ cũ</TableHead>
-            <TableHead className="py-2 px-3 text-center font-medium w-28 border-b border-r border-gray-200">Lãi phí đến hôm nay</TableHead>
-            <TableHead className="py-2 px-3 text-center font-medium w-28 border-b border-r border-gray-200">Ngày phải đóng lãi phí</TableHead>
-            <TableHead className="py-2 px-3 text-center font-medium w-28 border-b border-r border-gray-200">Tình trạng</TableHead>
-            <TableHead className="py-2 px-3 text-center font-medium w-24 border-b border-gray-200">Thao tác</TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium w-12 border-b border-r border-gray-200 hidden lg:table-cell">#</TableHead>
+            <TableHead className="py-2 px-1 lg:px-3 text-center font-medium border-b border-r border-gray-200 text-xs lg:text-sm">Mã HĐ</TableHead>
+            <TableHead className="py-2 px-1 lg:px-3 text-center font-medium border-b border-r border-gray-200 text-xs lg:text-sm">Tên KH</TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200 hidden lg:table-cell">Tài sản</TableHead>
+            <TableHead className="py-2 px-1 lg:px-3 text-center font-medium border-b border-r border-gray-200 text-xs lg:text-sm">Số tiền</TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200 hidden lg:table-cell">Ngày vay</TableHead>
+            <TableHead className="py-2 px-1 lg:px-3 text-center font-medium border-b border-r border-gray-200 text-xs lg:text-sm">Lãi phí đã đóng</TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200 hidden lg:table-cell">Nợ cũ</TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200 hidden lg:table-cell">Lãi phí đến hôm nay</TableHead>
+            <TableHead className="py-2 px-1 lg:px-3 text-center font-medium border-b border-r border-gray-200 text-xs lg:text-sm">Ngày phải đóng lãi phí</TableHead>
+            <TableHead className="py-2 px-1 lg:px-3 text-center font-medium border-b border-r border-gray-200 text-xs lg:text-sm">Trạng thái</TableHead>
+            <TableHead className="py-2 px-1 lg:px-3 text-center font-medium border-b border-gray-200 text-xs lg:text-sm">Thao tác</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody className="bg-white divide-y divide-gray-200">
           {credits.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={12} className="py-8 text-center text-gray-500 border-b border-gray-200">
+              <TableCell className="py-8 text-center text-gray-500 border-b border-gray-200" colSpan={8}>
                 Không tìm thấy hợp đồng nào
               </TableCell>
             </TableRow>
           ) : (
             credits.map((credit, index) => (
               <TableRow key={credit.id} className="hover:bg-gray-50 transition-colors">
-                <TableCell className="py-3 px-3 text-gray-500 text-center border-b border-r border-gray-200">{index + 1}</TableCell>
+                <TableCell className="py-3 px-3 text-gray-500 text-center border-b border-r border-gray-200 hidden lg:table-cell">{index + 1}</TableCell>
                 <TableCell 
-                  className="py-3 px-3 font-medium text-blue-600 cursor-pointer text-center border-b border-r border-gray-200" 
+                  className="py-3 px-1 lg:px-3 font-medium text-blue-600 cursor-pointer text-center border-b border-r border-gray-200 text-xs lg:text-sm" 
                   onClick={() => handleContractCodeClick(credit.id)}
                   title={canEditCredit ? 'Nhấn để chỉnh sửa hợp đồng' : 'Bạn không có quyền chỉnh sửa hợp đồng'}
                 >
                   {credit.contract_code || '-'}
                 </TableCell>
                 <TableCell 
-                  className="py-3 px-3 text-center border-b border-r border-gray-200"
+                  className="py-3 px-1 lg:px-3 text-center border-b border-r border-gray-200 text-xs lg:text-sm"
                   title={`Xem hợp đồng của ${credit.customer?.name}`}
                 >
-                  <div className="flex items-center justify-center gap-2">
-                    <span>{credit.customer?.name || '-'}</span>
+                  <div className="flex items-center justify-center gap-1">
+                    <span className="truncate max-w-20 lg:max-w-none">{credit.customer?.name || '-'}</span>
                     {(credit.customer as any)?.blacklist_reason && (
                       <div title="Khách hàng bị báo xấu">
-                        <AlertTriangle className="h-4 w-4 text-red-500" />
+                        <AlertTriangle className="h-3 w-3 lg:h-4 lg:w-4 text-red-500" />
                       </div>
                     )}
                   </div>
                 </TableCell>
-                <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
+                <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200 hidden lg:table-cell">
                   {credit.collateral || '-'}
                 </TableCell>
-                <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
+                <TableCell className="py-3 px-1 lg:px-3 text-center border-b border-r border-gray-200 text-xs lg:text-sm">
                   <div className="flex flex-col items-center">
-                    {formatCurrency(calculatedDetails?.[credit.id]?.actualLoanAmount ?? credit.loan_amount)}
+                    <span className="text-xs lg:text-sm">{formatCurrency(calculatedDetails?.[credit.id]?.actualLoanAmount ?? credit.loan_amount)}</span>
                     <div className="text-xs text-red-800 mt-1">
                       {getInterestDisplayString(credit)}
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className="py-3 px-3 text-gray-600 text-center border-b border-r border-gray-200">
+                <TableCell className="py-3 px-3 text-gray-600 text-center border-b border-r border-gray-200 hidden lg:table-cell">
                   <div className="flex flex-col items-center">
                     <span className="text-base">{formatDate(credit.loan_date)}</span>
                     <div className="text-xs text-gray-400 mt-1">
@@ -200,7 +200,7 @@ export function CreditsTable({
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
+                <TableCell className="py-3 px-1 lg:px-3 text-center border-b border-r border-gray-200 text-xs lg:text-sm">
                   {(() => {
                     const paidValue = calculatedDetails?.[credit.id]?.paidInterest ?? 0;
                     const latestPaid = calculatedDetails?.[credit.id]?.latestPaidDate;
@@ -215,7 +215,7 @@ export function CreditsTable({
                     }
                     return (
                       <div className="flex flex-col items-center">
-                        <span>{formatCurrency(paidValue)}</span>
+                        <span className="text-xs lg:text-sm">{formatCurrency(paidValue)}</span>
                         {daysPaid !== null && (
                           <span className="text-xs text-gray-400">{daysPaid} ngày</span>
                         )}
@@ -223,10 +223,10 @@ export function CreditsTable({
                     );
                   })()}
                 </TableCell>
-                <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
+                <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200 hidden lg:table-cell">
                   {formatCurrency(calculatedDetails?.[credit.id]?.oldDebt ?? 0)}
                 </TableCell>
-                <TableCell className="py-3 px-3 text-center text-rose-600 font-medium border-b border-r border-gray-200">
+                <TableCell className="py-3 px-3 text-center text-rose-600 font-medium border-b border-r border-gray-200 hidden lg:table-cell">
                   {(() => {
                     const todayValue = calculatedDetails?.[credit.id]?.interestToday ?? 0;
                     const latestPaid = calculatedDetails?.[credit.id]?.latestPaidDate;
@@ -251,33 +251,33 @@ export function CreditsTable({
                     );
                   })()}
                 </TableCell>
-                <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
+                <TableCell className="py-3 px-1 lg:px-3 text-center border-b border-r border-gray-200 text-xs lg:text-sm">
                   {/* Ngày phải đóng lãi phí */}
                   {(() => {
                     const det = calculatedDetails?.[credit.id];
                     if (!det) return '-';
-                    if (det.isCompleted) return <span className="text-green-600 font-medium">Hoàn thành</span>;
+                    if (det.isCompleted) return <span className="text-green-600 font-medium text-xs lg:text-sm">Hoàn thành</span>;
                     if (!det.nextPayment) return '-';
                     const nextDate = new Date(det.nextPayment);
                     const today = new Date();
                     today.setHours(0,0,0,0);
                     nextDate.setHours(0,0,0,0);
                     const diff = (nextDate.getTime()-today.getTime())/(24*3600*1000);
-                    const cls = diff<0 ? 'text-red-600 font-medium' : diff===0 ? 'text-amber-600 font-medium' : '';
+                    const cls = diff<0 ? 'text-red-600 font-medium text-xs lg:text-sm' : diff===0 ? 'text-amber-600 font-medium text-xs lg:text-sm' : 'text-xs lg:text-sm';
                     return <span className={cls}>{formatDate(det.nextPayment)}</span>;
                   })()}
                 </TableCell>
-                <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200">
+                <TableCell className="py-3 px-1 lg:px-3 text-center border-b border-r border-gray-200">
                   {/* ----- Status Cell ----- */}
                   {(() => {
                     // Use status_code from credits_by_store view
                     const statusCode = credit.status_code || 'ON_TIME';
                     const statusInfo = getCreditStatusInfo(statusCode);
                     
-                    return <Badge className={statusInfo.color}>{statusInfo.label}</Badge>;
+                    return <Badge className={`${statusInfo.color} text-xs lg:text-sm px-1 lg:px-2`}>{statusInfo.label}</Badge>;
                   })()}
                 </TableCell>
-                <TableCell className="py-3 px-3 border-b border-r border-gray-200">
+                <TableCell className="py-3 px-1 lg:px-3 border-b border-r border-gray-200">
                   <div className="flex justify-center">
                     {onShowPaymentHistory && (
                       credit.status === 'closed' && hasPermission('huy_dong_hop_dong_tin_chap') ? (
@@ -383,13 +383,25 @@ export function CreditsTable({
         {totals && (
           <tfoot className="bg-yellow-200 font-semibold">
             <TableRow>
-              <TableCell className="py-2 px-3 text-center font-bold" colSpan={4}>Tổng</TableCell>
-              <TableCell className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_loan_amount)}</TableCell>
-              <TableCell className="py-2 px-3" />
-              <TableCell className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_paid_interest)}</TableCell>
-              <TableCell className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_old_debt)}</TableCell>
-              <TableCell className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_interest_today)}</TableCell>
-              <TableCell className="py-2 px-3" colSpan={3} />
+              {/* # column - hidden on mobile */}
+              <TableCell className="py-2 px-3 text-center font-bold hidden lg:table-cell">Tổng</TableCell>
+              {/* Mã HĐ, Tên KH - visible on mobile */}
+              <TableCell className="py-2 px-1 lg:px-3 text-center font-bold lg:hidden" colSpan={2}>Tổng</TableCell>
+              <TableCell className="py-2 px-3 text-center font-bold hidden lg:table-cell" colSpan={2}></TableCell>
+              {/* Tài sản - hidden on mobile */}
+              <TableCell className="py-2 px-3 hidden lg:table-cell"></TableCell>
+              {/* Số tiền - visible on mobile */}
+              <TableCell className="py-2 px-1 lg:px-3 text-center text-rose-600 font-bold text-xs lg:text-sm">{formatCurrency(totals.total_loan_amount)}</TableCell>
+              {/* Ngày vay - hidden on mobile */}
+              <TableCell className="py-2 px-3 hidden lg:table-cell" />
+              {/* Lãi đã đóng - visible on mobile */}
+              <TableCell className="py-2 px-1 lg:px-3 text-center text-rose-600 font-bold text-xs lg:text-sm">{formatCurrency(totals.total_paid_interest)}</TableCell>
+              {/* Nợ cũ - hidden on mobile */}
+              <TableCell className="py-2 px-3 text-center text-rose-600 font-bold hidden lg:table-cell">{formatCurrency(totals.total_old_debt)}</TableCell>
+              {/* Lãi phí đến hôm nay - hidden on mobile */}
+              <TableCell className="py-2 px-3 text-center text-rose-600 font-bold hidden lg:table-cell">{formatCurrency(totals.total_interest_today)}</TableCell>
+              {/* Ngày đóng, Trạng thái, Thao tác - visible on mobile */}
+              <TableCell className="py-2 px-1 lg:px-3" colSpan={3} />
             </TableRow>
           </tfoot>
         )}
