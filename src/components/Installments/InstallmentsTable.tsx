@@ -7,7 +7,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { Edit2Icon, MoreVerticalIcon, TrashIcon, AlertTriangleIcon, CalendarIcon, ClockIcon, FileTextIcon, DollarSignIcon, UnlockIcon, CalendarDaysIcon } from "lucide-react";
+import { MoreVerticalIcon, TrashIcon, AlertTriangleIcon, CalendarIcon, DollarSignIcon, UnlockIcon, CalendarDaysIcon } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import Spinner from "@/components/ui/spinner";
 import { useEffect, useState, useCallback } from "react";
@@ -34,8 +34,7 @@ import { useStore } from "@/contexts/StoreContext";
 import { useToast } from "@/components/ui/use-toast";
 import { 
   calculateDailyAmount,
-  calculateRatio,
-  calculateRemainingToPay
+  calculateRatio
 } from "@/lib/installmentCalculations";
 import { supabase } from "@/lib/supabase";
 import { recordContractReopening } from "@/lib/installmentAmountHistory";
@@ -86,10 +85,8 @@ interface InstallmentsTableProps {
 
 export function InstallmentsTable({
   installments,
-  statusMap,
   isLoading,
   onEdit,
-  onUpdateStatus,
   onDelete,
   onShowPaymentHistory,
   onShowPaymentActions,
@@ -188,7 +185,7 @@ export function InstallmentsTable({
       }
       // Since updateInstallmentStatus doesn't support storeId parameter, we'll rely on the 
       // implementation to handle the store context if needed
-      const { data, error } = await updateInstallmentStatus(
+      const { error } = await updateInstallmentStatus(
         installment.id, 
         InstallmentStatus.ON_TIME
       );
@@ -220,7 +217,7 @@ export function InstallmentsTable({
       const formattedDate = format(date, 'yyyy-MM-dd');
       
       // Call API to update payment due date
-      const { data, error } = await updateInstallmentPaymentDueDate(installmentId, formattedDate);
+      const { error } = await updateInstallmentPaymentDueDate(installmentId, formattedDate);
       
       if (error) {
         throw error;
@@ -271,69 +268,72 @@ export function InstallmentsTable({
   }
 
   return (
-    <div className="rounded-md border overflow-hidden mb-4">
-      <Table className="border-collapse">
-        <TableHeader className="bg-gray-50">
-          <TableRow>
-            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-10 hidden lg:table-cell">#</TableHead>
-            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-24">Mã HĐ</TableHead>
-            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-36">Tên KH</TableHead>
-            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-28">Tiền giao khách</TableHead>
-            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-16 hidden lg:table-cell">Tỷ lệ</TableHead>
-            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-20">Thời gian</TableHead>
-            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-28">Tiền đã đóng</TableHead>
-            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-24 hidden lg:table-cell">Nợ</TableHead>
-            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-24 hidden lg:table-cell">Tiền 1 ngày</TableHead>
-            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-28">Còn phải đóng</TableHead>
-            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-28">Tình trạng</TableHead>
-            <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-28">Ngày phải đóng</TableHead>
-            <TableHead className="py-3 px-3 text-center font-medium text-sm w-32">Thao tác</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody className="bg-white divide-y divide-gray-200">
-          {installments.map((installment, index) => {
-            const statusInfo = installment.statusInfo ?? {
-              label: "Không xác định",
-              color: "bg-gray-100 text-gray-800",
-            };
+    <div className="mb-4">
+      {/* Desktop Table View (lg and above) */}
+      <div className="hidden lg:block rounded-md border overflow-hidden">
+        <div className="overflow-x-auto">
+          <Table className="border-collapse min-w-full">
+            <TableHeader className="bg-gray-50">
+              <TableRow>
+                <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-10">#</TableHead>
+                <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-24">Mã HĐ</TableHead>
+                <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-36">Tên KH</TableHead>
+                <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-28">Tiền giao khách</TableHead>
+                <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-16">Tỷ lệ</TableHead>
+                <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-20">Thời gian</TableHead>
+                <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-28">Tiền đã đóng</TableHead>
+                <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-24">Nợ</TableHead>
+                <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-24">Tiền 1 ngày</TableHead>
+                <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-28">Còn phải đóng</TableHead>
+                <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-28">Tình trạng</TableHead>
+                <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-28">Ngày phải đóng</TableHead>
+                <TableHead className="py-3 px-3 text-center font-medium text-sm w-32">Thao tác</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="bg-white divide-y divide-gray-200">
+              {installments.map((installment, index) => {
+                const statusInfo = installment.statusInfo ?? {
+                  label: "Không xác định",
+                  color: "bg-gray-100 text-gray-800",
+                };
 
-            return (
-              <TableRow 
-                key={installment.id} 
-                className="hover:bg-gray-50 transition-colors text-sm"
-              >
-                <TableCell className="py-3 px-3 border-r border-gray-200 text-center hidden lg:table-cell">{index + 1}</TableCell>
-                <TableCell className="py-3 px-3 border-r border-gray-200 font-medium text-center">
-                  <span>
-                    {installment.contract_code}
-                  </span>
-                </TableCell>
-                <TableCell className="py-3 px-3 border-r border-gray-200 text-center">
-                  <div className="flex items-center justify-center gap-1">
-                    <span 
-                      className="text-blue-600 cursor-pointer hover:underline" 
-                      onClick={() => handleContractCodeClick(installment.id)}
-                      title={canEditInstallment ? 'Nhấn để chỉnh sửa hợp đồng' : 'Bạn không có quyền chỉnh sửa hợp đồng'}
-                    >
-                      {installment.customer?.name || "N/A"}
-                    </span>
-                    {(installment.customer as any)?.blacklist_reason && (
-                      <div className="relative group">
-                        <AlertTriangleIcon className="h-4 w-4 text-red-500" />
-                        <div className="absolute left-1/2 transform -translate-x-1/2 bottom-full mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
-                          Khách hàng bị báo xấu
-                        </div>
+                return (
+                  <TableRow 
+                    key={installment.id} 
+                    className="hover:bg-gray-50 transition-colors text-sm"
+                  >
+                    <TableCell className="py-3 px-3 border-r border-gray-200 text-center">{index + 1}</TableCell>
+                    <TableCell className="py-3 px-3 border-r border-gray-200 font-medium text-center">
+                      <span>
+                        {installment.contract_code}
+                      </span>
+                    </TableCell>
+                    <TableCell className="py-3 px-3 border-r border-gray-200 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <span 
+                          className="text-blue-600 cursor-pointer hover:underline" 
+                          onClick={() => handleContractCodeClick(installment.id)}
+                          title={canEditInstallment ? 'Nhấn để chỉnh sửa hợp đồng' : 'Bạn không có quyền chỉnh sửa hợp đồng'}
+                        >
+                          {installment.customer?.name || "N/A"}
+                        </span>
+                        {(installment.customer as any)?.blacklist_reason && (
+                          <div className="relative group">
+                            <AlertTriangleIcon className="h-4 w-4 text-red-500" />
+                            <div className="absolute left-1/2 transform -translate-x-1/2 bottom-full mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
+                              Khách hàng bị báo xấu
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="py-3 px-3 border-r border-gray-200 text-center">
-                  {formatCurrency(installment.amount_given)}
-                </TableCell>
-                <TableCell className="py-3 px-3 border-r border-gray-200 text-center hidden lg:table-cell">
-                  {calculateRatio(installment)}
-                </TableCell>
-                <TableCell className="py-3 px-3 border-r border-gray-200 text-center">
+                    </TableCell>
+                    <TableCell className="py-3 px-3 border-r border-gray-200 text-center">
+                      {formatCurrency(installment.amount_given)}
+                    </TableCell>
+                    <TableCell className="py-3 px-3 border-r border-gray-200 text-center">
+                      {calculateRatio(installment)}
+                    </TableCell>
+                    <TableCell className="py-3 px-3 border-r border-gray-200 text-center">
                   {(() => {
                     // Calculate end date based on start date and duration
                     try {
@@ -394,15 +394,15 @@ export function InstallmentsTable({
                     );
                   })()}
                 </TableCell>
-                <TableCell className="py-3 px-3 border-r border-gray-200 text-center hidden lg:table-cell">
-                  <span className={installment.debt_amount && installment.debt_amount > 0 ? 'text-red-600' : 'text-green-600'}>
-                    {formatCurrency(installment.debt_amount || 0)}
-                  </span>
-                </TableCell>
-                <TableCell className="py-3 px-3 border-r border-gray-200 text-center hidden lg:table-cell">
-                  {formatCurrency(calculateDailyAmount(installment))}
-                </TableCell>
-                <TableCell className="py-3 px-3 border-r border-gray-200 text-center">
+                    <TableCell className="py-3 px-3 border-r border-gray-200 text-center">
+                      <span className={installment.debt_amount && installment.debt_amount > 0 ? 'text-red-600' : 'text-green-600'}>
+                        {formatCurrency(installment.debt_amount || 0)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="py-3 px-3 border-r border-gray-200 text-center">
+                      {formatCurrency(calculateDailyAmount(installment))}
+                    </TableCell>
+                    <TableCell className="py-3 px-3 border-r border-gray-200 text-center">
                   {(() => {
                     const remainingAmount = installment.remainingToPay ?? 0;
                     const paymentPeriod = installment.payment_period || 10; // Default 10 days per period
@@ -452,7 +452,7 @@ export function InstallmentsTable({
                     {statusInfo.label}
                   </Badge>
                 </TableCell>
-                <TableCell className="py-3 px-3 border-r border-gray-200 text-center">
+                <TableCell className="py-3 px-3 border-r border-gray-200 text-center hidden md:table-cell">
                   {installment.status === InstallmentStatus.CLOSED || 
                    installment.nextPaymentDate == "Hoàn thành" || 
                    !installment.payment_due_date ? (
@@ -614,7 +614,8 @@ export function InstallmentsTable({
         {totals && (
           <tfoot className="bg-yellow-200 font-semibold">
             <TableRow>
-              <TableCell className="py-2 px-3 text-center font-bold" colSpan={3}>Tổng</TableCell>
+              <TableCell className="py-2 px-3 text-center font-bold"></TableCell>
+              <TableCell className="py-2 px-3 text-center font-bold" colSpan={2}>Tổng</TableCell>
               <TableCell className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_amount_given)}</TableCell>
               <TableCell className="py-2 px-3" />
               <TableCell className="py-2 px-3" />
@@ -622,12 +623,207 @@ export function InstallmentsTable({
               <TableCell className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_debt)}</TableCell>
               <TableCell className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_daily_amount)}</TableCell>
               <TableCell className="py-2 px-3 text-center text-rose-600 font-bold">{formatCurrency(totals.total_remaining)}</TableCell>
-              <TableCell className="py-2 px-3" colSpan={3}></TableCell>
+              <TableCell className="py-2 px-3"></TableCell>
+              <TableCell className="py-2 px-3"></TableCell>
+              <TableCell className="py-2 px-3"></TableCell>
             </TableRow>
           </tfoot>
         )}
-      </Table>
-      
+        </Table>
+      </div>
+      </div>
+
+      {/* Mobile/Tablet Card View (below lg) */}
+      <div className="lg:hidden space-y-3">
+        {installments.map((installment, index) => {
+          const statusInfo = installment.statusInfo ?? {
+            label: "Không xác định",
+            color: "bg-gray-100 text-gray-800",
+          };
+
+          return (
+            <div key={installment.id} className="bg-white border rounded-lg p-4 shadow-sm">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-sm text-gray-600">#{index + 1}</span>
+                  <span className="font-bold text-blue-600">{installment.contract_code}</span>
+                </div>
+                <Badge variant="outline" className={statusInfo.color}>
+                  {statusInfo.label}
+                </Badge>
+              </div>
+
+              {/* Customer Info */}
+              <div className="mb-3">
+                <div className="flex items-center gap-1 mb-1">
+                  <span 
+                    className="font-medium text-blue-600 cursor-pointer hover:underline" 
+                    onClick={() => handleContractCodeClick(installment.id)}
+                    title={canEditInstallment ? 'Nhấn để chỉnh sửa hợp đồng' : 'Bạn không có quyền chỉnh sửa hợp đồng'}
+                  >
+                    {installment.customer?.name || "N/A"}
+                  </span>
+                  {(installment.customer as any)?.blacklist_reason && (
+                    <AlertTriangleIcon className="h-4 w-4 text-red-500" />
+                  )}
+                </div>
+              </div>
+
+              {/* Financial Info Grid */}
+              <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
+                <div>
+                  <span className="text-gray-600">Tiền giao:</span>
+                  <div className="font-medium">{formatCurrency(installment.amount_given)}</div>
+                </div>
+                <div>
+                  <span className="text-gray-600">Đã đóng:</span>
+                  <div className="font-medium text-green-600">{formatCurrency(installment.totalPaid ?? 0)}</div>
+                </div>
+                <div>
+                  <span className="text-gray-600">Tỷ lệ:</span>
+                  <div className="font-medium">{calculateRatio(installment)}</div>
+                </div>
+                <div>
+                  <span className="text-gray-600">Nợ:</span>
+                  <div className={`font-medium ${installment.debt_amount && installment.debt_amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {formatCurrency(installment.debt_amount || 0)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Due Date */}
+              <div className="mb-3 text-sm">
+                <span className="text-gray-600">Ngày phải đóng: </span>
+                {installment.status === InstallmentStatus.CLOSED || 
+                 installment.nextPaymentDate == "Hoàn thành" || 
+                 !installment.payment_due_date ? (
+                  <span className="text-green-600 font-medium">Hoàn thành</span>
+                ) : (
+                  <span className={`font-medium ${
+                    installment.overdueDays ? 'text-red-500' : 
+                    installment.isDueToday ? 'text-amber-500' : 
+                    installment.nextPaymentDate === "Ngày mai" ? 'text-blue-500' : ''
+                  }`}>
+                    {(() => {
+                      if (!installment.payment_due_date) return "Hoàn thành";
+                      
+                      const dueDateObj = new Date(installment.payment_due_date);
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      
+                      const isSameDay = (date1: Date, date2: Date) => {
+                        return date1.getDate() === date2.getDate() &&
+                               date1.getMonth() === date2.getMonth() &&
+                               date1.getFullYear() === date2.getFullYear();
+                      };
+                      
+                      if (isSameDay(today, dueDateObj)) return "Hôm nay";
+                      
+                      const tomorrow = new Date(today);
+                      tomorrow.setDate(today.getDate() + 1);
+                      
+                      if (isSameDay(tomorrow, dueDateObj)) return "Ngày mai";
+                      
+                      const day = dueDateObj.getDate().toString().padStart(2, '0');
+                      const month = (dueDateObj.getMonth() + 1).toString().padStart(2, '0');
+                      return `${day}/${month}`;
+                    })()}
+                  </span>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between pt-3 border-t">
+                <div className="flex items-center gap-2">
+                  {/* Payment History Button */}
+                  {onShowPaymentHistory && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => onShowPaymentHistory(installment)}
+                      className="flex items-center gap-1"
+                    >
+                      <CalendarIcon className="h-4 w-4" />
+                      <span className="hidden sm:inline">Lịch sử</span>
+                    </Button>
+                  )}
+                  
+                  {/* Payment Actions Button */}
+                  {onShowPaymentActions && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => onShowPaymentActions(installment)}
+                      className="flex items-center gap-1"
+                    >
+                      <DollarSignIcon className="h-4 w-4" />
+                      <span className="hidden sm:inline">Thanh toán</span>
+                    </Button>
+                  )}
+                </div>
+
+                {installment.status !== InstallmentStatus.DELETED && (
+                  <div className="flex items-center gap-2">
+                    {/* Unlock Button */}
+                    {installment.status === InstallmentStatus.CLOSED && canUnlockInstallment && (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => confirmUnlockInstallment(installment)}
+                        className="flex items-center gap-1"
+                      >
+                        <UnlockIcon className="h-4 w-4" />
+                        <span className="hidden sm:inline">Mở lại</span>
+                      </Button>
+                    )}
+                    
+                    {/* Delete Button */}
+                    {(installment.status === InstallmentStatus.CLOSED || !hasPaidPaymentPeriods[installment.id]) && 
+                     installment.status !== InstallmentStatus.CLOSED && canDeleteInstallment && (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => onDelete(installment)}
+                        className="flex items-center gap-1 text-red-600 hover:text-red-700"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                        <span className="hidden sm:inline">Xóa</span>
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Totals Card for Mobile */}
+        {totals && (
+          <div className="bg-yellow-100 border border-yellow-300 rounded-lg p-4">
+            <h3 className="font-bold text-center mb-3">Tổng kết</h3>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="text-center">
+                <div className="text-gray-600">Tiền giao khách</div>
+                <div className="font-bold text-rose-600">{formatCurrency(totals.total_amount_given)}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-gray-600">Đã đóng</div>
+                <div className="font-bold text-rose-600">{formatCurrency(totals.total_paid)}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-gray-600">Nợ</div>
+                <div className="font-bold text-rose-600">{formatCurrency(totals.total_debt)}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-gray-600">Còn phải đóng</div>
+                <div className="font-bold text-rose-600">{formatCurrency(totals.total_remaining)}</div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Confirmation Dialog for Unlocking Contract */}
       <AlertDialog open={unlockConfirmOpen} onOpenChange={setUnlockConfirmOpen}>
         <AlertDialogContent>

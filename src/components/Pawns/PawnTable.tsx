@@ -75,6 +75,9 @@ export function PawnsTable({
   // Kiểm tra quyền xóa hợp đồng tín chấp
   const canDeletePawn = hasPermission('xoa_hop_dong_cam_do');
   
+  // Kiểm tra quyền mở lại hợp đồng cầm đồ
+  const canUnlockPawn = hasPermission('huy_dong_hop_dong_cam_do');
+  
   // Format tiền tệ
   const formatCurrency = (amount: number): string => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
@@ -98,25 +101,52 @@ export function PawnsTable({
     }
   };
 
+  // Hàm xử lý mở lại hợp đồng cầm đồ
+  const handleUnlockPawn = async (pawn: PawnWithCustomer) => {
+    try {
+      // Call the reopen contract function
+      await reopenContract(pawn.id);
+      
+      // Show success message
+      toast({
+        title: "Thành công",
+        description: "Đã mở lại hợp đồng cầm đồ",
+      });
+      
+      // Refresh the data
+      onRefresh?.();
+    } catch (error) {
+      console.error('Error reopening pawn contract:', error);
+      toast({
+        title: "Lỗi",
+        description: "Không thể mở lại hợp đồng cầm đồ",
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
-    <div className="rounded-md border overflow-hidden mb-4">
-      <Table className="border-collapse">
-        <TableHeader className="bg-gray-50">
-          <TableRow>
-          <TableHead className="py-2 px-3 text-center font-medium w-12 border-b border-r border-gray-200 hidden lg:table-cell">#</TableHead>
-          <TableHead className="py-2 px-1 lg:px-3 text-center font-medium border-b border-r border-gray-200 text-xs lg:text-sm">Mã HĐ</TableHead>
-            <TableHead className="py-2 px-1 lg:px-3 text-center font-medium border-b border-r border-gray-200 text-xs lg:text-sm">Tên KH</TableHead>
-            <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200 hidden lg:table-cell">Tài sản</TableHead>
-            <TableHead className="py-2 px-1 lg:px-3 text-center font-medium border-b border-r border-gray-200 text-xs lg:text-sm">Số tiền</TableHead>
-            <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200 hidden lg:table-cell">Ngày vay</TableHead>
-            <TableHead className="py-2 px-1 lg:px-3 text-center font-medium border-b border-r border-gray-200 text-xs lg:text-sm">Lãi đã đóng</TableHead>
-            <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200 hidden lg:table-cell">Nợ cũ</TableHead>
-            <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200 hidden lg:table-cell">Lãi phí đến hôm nay</TableHead>
-            <TableHead className="py-2 px-1 lg:px-3 text-center font-medium border-b border-r border-gray-200 text-xs lg:text-sm">Ngày đóng</TableHead>
-            <TableHead className="py-2 px-1 lg:px-3 text-center font-medium border-b border-r border-gray-200 text-xs lg:text-sm">Trạng thái</TableHead>
-            <TableHead className="py-2 px-1 lg:px-3 text-center font-medium border-b border-gray-200 text-xs lg:text-sm">Thao tác</TableHead>
-          </TableRow>
-        </TableHeader>
+    <div className="mb-4">
+      {/* Desktop Table View (lg and above) */}
+      <div className="hidden lg:block rounded-md border overflow-hidden">
+        <div className="overflow-x-auto">
+          <Table className="border-collapse min-w-full">
+            <TableHeader className="bg-gray-50">
+              <TableRow>
+                <TableHead className="py-2 px-3 text-center font-medium w-12 border-b border-r border-gray-200">#</TableHead>
+                <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Mã HĐ</TableHead>
+                <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Tên KH</TableHead>
+                <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Tài sản</TableHead>
+                <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Số tiền</TableHead>
+                <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Ngày vay</TableHead>
+                <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Lãi đã đóng</TableHead>
+                <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Nợ cũ</TableHead>
+                <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Lãi phí đến hôm nay</TableHead>
+                <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Ngày đóng</TableHead>
+                <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Trạng thái</TableHead>
+                <TableHead className="py-2 px-3 text-center font-medium border-b border-gray-200">Thao tác</TableHead>
+              </TableRow>
+            </TableHeader>
         <TableBody className="bg-white divide-y divide-gray-200">
           {pawns.length === 0 ? (
             <TableRow>
@@ -337,7 +367,191 @@ export function PawnsTable({
             </TableRow>
           </tfoot>
         )}
-      </Table>
+        </Table>
+      </div>
+      </div>
+
+      {/* Mobile/Tablet Card View (below lg) */}
+      <div className="lg:hidden space-y-3">
+        {pawns.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            Không có hợp đồng cầm đồ nào
+          </div>
+        ) : (
+          pawns.map((pawn, index) => {
+            const statusInfo = getPawnStatusInfo(pawn.status_code || 'ON_TIME');
+            const financialDetail = calculatedDetails?.[pawn.id];
+
+            return (
+              <div key={pawn.id} className="bg-white border rounded-lg p-4 shadow-sm">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm text-gray-600">#{index + 1}</span>
+                    <span className="font-bold text-blue-600">{pawn.contract_code}</span>
+                  </div>
+                  <Badge variant="outline" className={statusInfo.color}>
+                    {statusInfo.label}
+                  </Badge>
+                </div>
+
+                {/* Customer Info */}
+                <div className="mb-3">
+                  <div className="flex items-center gap-1 mb-1">
+                    <span 
+                      className="font-medium text-blue-600 cursor-pointer hover:underline" 
+                      onClick={() => handleContractCodeClick(pawn.id)}
+                      title={canEditPawn ? 'Nhấn để chỉnh sửa hợp đồng' : 'Bạn không có quyền chỉnh sửa hợp đồng'}
+                    >
+                      {pawn.customer?.name || "N/A"}
+                    </span>
+                    {(pawn.customer as any)?.blacklist_reason && (
+                      <AlertTriangle className="h-4 w-4 text-red-500" />
+                    )}
+                  </div>
+                  {pawn.collateral_detail?.name && (
+                    <div className="text-sm text-gray-600">
+                      Tài sản: {pawn.collateral_detail?.name}
+                    </div>
+                  )}
+                </div>
+
+                {/* Financial Info Grid */}
+                <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
+                  <div>
+                    <span className="text-gray-600">Số tiền:</span>
+                    <div className="font-medium">{formatCurrency(pawn.loan_amount)}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Đã đóng:</span>
+                    <div className="font-medium text-green-600">
+                      {formatCurrency(financialDetail?.paidInterest || 0)}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Lãi phí:</span>
+                    <div className="font-medium">{getPawnInterestDisplayString(pawn)}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Nợ cũ:</span>
+                    <div className={`font-medium ${(financialDetail?.oldDebt || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {formatCurrency(financialDetail?.oldDebt || 0)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Due Date and Interest Today */}
+                <div className="mb-3 text-sm grid grid-cols-2 gap-3">
+                  <div>
+                    <span className="text-gray-600">Ngày vay: </span>
+                    <span className="font-medium">
+                      {pawn.loan_date ? format(new Date(pawn.loan_date), 'dd/MM/yyyy', { locale: vi }) : 'N/A'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Lãi hôm nay: </span>
+                    <span className="font-medium text-rose-600">
+                      {formatCurrency(financialDetail?.interestToday || 0)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Next Payment Date */}
+                <div className="mb-3 text-sm">
+                  <span className="text-gray-600">Ngày phải đóng: </span>
+                  <span className={`font-medium ${
+                    financialDetail?.nextPayment === 'Hôm nay' ? 'text-amber-500' :
+                    financialDetail?.nextPayment === 'Quá hạn' ? 'text-red-500' : 
+                    'text-gray-900'
+                  }`}>
+                    {formatDate(financialDetail?.nextPayment) || 'N/A'}
+                  </span>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-between pt-3 border-t">
+                  <div className="flex items-center gap-2">
+                    {/* Payment History Button */}
+                    {onShowPaymentHistory && (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => onShowPaymentHistory(pawn)}
+                        className="flex items-center gap-1"
+                      >
+                        <DollarSignIcon className="h-4 w-4" />
+                        <span className="hidden sm:inline">Thanh toán</span>
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {/* Unlock Button */}
+                    {pawn.status === PawnStatus.CLOSED && canUnlockPawn && (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleUnlockPawn(pawn)}
+                        className="flex items-center gap-1"
+                      >
+                        <UnlockIcon className="h-4 w-4" />
+                        <span className="hidden sm:inline">Mở lại</span>
+                      </Button>
+                    )}
+                    
+                    {/* More Actions Menu */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="flex items-center gap-1">
+                          <MoreVertical className="h-4 w-4" />
+                          <span className="hidden sm:inline">Khác</span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {canEditPawn && (
+                          <DropdownMenuItem onClick={() => onEdit(pawn.id)}>
+                            Chỉnh sửa
+                          </DropdownMenuItem>
+                        )}
+                        {canDeletePawn && pawn.status !== PawnStatus.CLOSED && (
+                          <DropdownMenuItem onClick={() => onDelete(pawn)} className="text-red-600">
+                            Xóa hợp đồng
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+
+        {/* Totals Card for Mobile */}
+        {totals && (
+          <div className="bg-yellow-100 border border-yellow-300 rounded-lg p-4">
+            <h3 className="font-bold text-center mb-3">Tổng kết</h3>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="text-center">
+                <div className="text-gray-600">Tổng tiền vay</div>
+                <div className="font-bold text-rose-600">{formatCurrency(totals.total_loan_amount)}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-gray-600">Lãi đã đóng</div>
+                <div className="font-bold text-rose-600">{formatCurrency(totals.total_paid_interest)}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-gray-600">Nợ cũ</div>
+                <div className="font-bold text-rose-600">{formatCurrency(totals.total_old_debt)}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-gray-600">Lãi hôm nay</div>
+                <div className="font-bold text-rose-600">{formatCurrency(totals.total_interest_today)}</div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
