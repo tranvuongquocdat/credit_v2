@@ -491,6 +491,10 @@ export default function TransactionDetailsTable({
       
       let filteredTransactions = aggregatedTransactions.filter(item => {
         const itemDate = new Date(item.date);
+        // Ẩn các giao dịch 'Đóng HĐ', 'Đảo HĐ' của loại hình 'Trả góp'
+        if (item.source === 'Trả góp' && (item.description === 'Đóng HĐ' || item.description === 'Đảo HĐ')) {
+          return false;
+        }
         return itemDate >= start && itemDate <= end;
       });
 

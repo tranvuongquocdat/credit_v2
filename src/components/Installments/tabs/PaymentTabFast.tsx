@@ -394,7 +394,9 @@ export function PaymentTabFast({
                             value={formatNumberInput(paymentAmount)}
                             onChange={(e) => setPaymentAmount(parseFormattedNumber(e.target.value))}
                             autoFocus
-                            onFocus={(e) => e.target.select()}
+                            onFocus={e => {
+                              if (!paymentAmount || paymentAmount === 0) e.target.select();
+                            }}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') handleCheckboxChange(period, true);
                               else if (e.key === 'Escape') cancelEditing();
