@@ -386,6 +386,7 @@ export default function TransactionDetailsTable({
             profiles:created_by (username)
           `)
           .eq('installments.employees.store_id', storeId)
+          .not('transaction_type', 'in', '(contract_close,contract_rotate)')
       );
       
       if (installmentHistoryData) {
@@ -491,10 +492,6 @@ export default function TransactionDetailsTable({
       
       let filteredTransactions = aggregatedTransactions.filter(item => {
         const itemDate = new Date(item.date);
-        // Ẩn các giao dịch 'Đóng HĐ', 'Đảo HĐ' của loại hình 'Trả góp'
-        if (item.source === 'Trả góp' && (item.description === 'Đóng HĐ' || item.description === 'Đảo HĐ')) {
-          return false;
-        }
         return itemDate >= start && itemDate <= end;
       });
 
