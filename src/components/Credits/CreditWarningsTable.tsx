@@ -176,8 +176,9 @@ export function CreditWarningsTable({
   });
 
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
+    <div className="rounded-md border overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="border-collapse min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-10 hidden lg:table-cell">#</th>
@@ -188,8 +189,8 @@ export function CreditWarningsTable({
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Tiền gốc</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Tổng tiền lãi</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Tổng tiền</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-32">Lý do</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm">Thao tác</th>
+            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-64">Lý do</th>
+            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm w-16">Thao tác</th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
@@ -276,7 +277,8 @@ export function CreditWarningsTable({
             </td>
           </tr>
         </tfoot>
-      </table>
+        </table>
+      </div>
     </div>
   );
 } 

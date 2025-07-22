@@ -21,7 +21,6 @@ export const ActivityTracker: React.FC<ActivityTrackerProps> = ({
     // Update last activity timestamp
     const updateActivity = () => {
       lastActivityRef.current = Date.now();
-      console.log('User activity detected, session refreshed');
       
       // Clear existing timeout
       if (timeoutRef.current) {
@@ -30,7 +29,6 @@ export const ActivityTracker: React.FC<ActivityTrackerProps> = ({
 
       // Set new timeout for inactivity logout
       timeoutRef.current = setTimeout(() => {
-        console.log('No activity detected for 5 minutes, logging out...');
         // Use signOut function from auth.ts to ensure consistency
         signOut();
       }, inactivityTimeoutMs);

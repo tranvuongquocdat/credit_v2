@@ -145,13 +145,13 @@ export default function PawnWarningsPage() {
     setCustomerNameFilter(e.target.value);
   };
   
-  const handleContractFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setContractCodeFilter(e.target.value);
-  };
+  // const handleContractFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  //   setContractCodeFilter(e.target.value);
+  // };
   
-  const handleEmployeeFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setEmployeeFilter(e.target.value);
-  };
+  // const handleEmployeeFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  //   setEmployeeFilter(e.target.value);
+  // };
   
   const handleReasonFilterChange = (value: string) => {
     setReasonFilter(value as PawnReasonFilter | "all");
@@ -269,7 +269,7 @@ export default function PawnWarningsPage() {
         </div>
         
         {/* Search Filters */}
-        <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+        <div className="mb-4 py-4 bg-gray-50 rounded-lg">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
             <div>
               <label className="block text-sm font-medium mb-1">Tên khách hàng</label>
@@ -287,7 +287,7 @@ export default function PawnWarningsPage() {
               </div>
             </div>
 
-            <div>
+            {/* <div>
               <label className="block text-sm font-medium mb-1">Mã hợp đồng</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
@@ -301,9 +301,9 @@ export default function PawnWarningsPage() {
                   className="pl-10 w-full"
                 />
               </div>
-            </div>
+            </div> */}
 
-            <div>
+            {/* <div>
               <label className="block text-sm font-medium mb-1">Nhân viên</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
@@ -317,7 +317,7 @@ export default function PawnWarningsPage() {
                   className="pl-10 w-full"
                 />
               </div>
-            </div>
+            </div> */}
 
             <div>
               <label className="block text-sm font-medium mb-1">Lý do</label>

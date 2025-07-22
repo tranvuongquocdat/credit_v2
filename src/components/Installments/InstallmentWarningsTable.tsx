@@ -107,8 +107,7 @@ export function InstallmentWarningsTable({
   onShowPaymentHistory,
 }: InstallmentWarningsTableProps) {
   
-  // Debug: Log installments received
-  console.log('InstallmentWarningsTable received installments:', installments.length, installments.map(i => i.contract_code));
+  
   // State for storing processed warnings
   const [warnings, setWarnings] = useState<InstallmentWarning[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
@@ -335,8 +334,9 @@ export function InstallmentWarningsTable({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
+    <div className="rounded-md border overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="border-collapse min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-10 hidden lg:table-cell">#</th>
@@ -496,7 +496,8 @@ export function InstallmentWarningsTable({
             </tr>
           </tfoot>
         )}
-      </table>
+        </table>
+      </div>
     </div>
   );
 } 

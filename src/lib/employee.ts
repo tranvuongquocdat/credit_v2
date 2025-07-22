@@ -48,7 +48,6 @@ export async function getEmployees(
     if (error) {
       throw error;
     }
-    console.log(data);
     // Transform data to include auth user info
     const employees: EmployeeWithProfile[] = (data as any[])?.map((employee) => {
       const userData = Array.isArray(employee.profiles) ? employee.profiles[0] : employee.profiles;
