@@ -386,6 +386,7 @@ export default function TransactionDetailsTable({
             profiles:created_by (username)
           `)
           .eq('installments.employees.store_id', storeId)
+          .not('transaction_type', 'in', '(contract_close,contract_rotate)')
       );
       
       if (installmentHistoryData) {
