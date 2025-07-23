@@ -382,7 +382,7 @@ export function PawnEditModal({
   
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[800px] md:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-[400px] sm:max-w-[500px] md:max-w-[600px] lg:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-center">Chỉnh sửa hợp đồng cầm đồ</DialogTitle>
         </DialogHeader>
@@ -397,8 +397,8 @@ export function PawnEditModal({
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 py-4">
             {/* Customer information - read only */}
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="customerName" className="text-right">
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <Label htmlFor="customerName" className="text-left sm:text-right font-medium">
                 Tên khách hàng
               </Label>
               <select 
@@ -425,8 +425,8 @@ export function PawnEditModal({
               </select>
             </div>
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="contractCode" className="text-right">Mã HĐ</Label>
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <Label htmlFor="contractCode" className="text-left sm:text-right font-medium">Mã HĐ</Label>
               <Input 
                 id="contractCode"
                 value={contractCode}
@@ -436,8 +436,8 @@ export function PawnEditModal({
               />
             </div>
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="idNumber" className="text-right">Số CCCD/Hộ chiếu</Label>
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <Label htmlFor="idNumber" className="text-left sm:text-right font-medium">Số CCCD/Hộ chiếu</Label>
               <Input 
                 id="idNumber"
                 value={idNumber}
@@ -447,8 +447,8 @@ export function PawnEditModal({
               />
             </div>
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="phone" className="text-right">SĐT</Label>
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <Label htmlFor="phone" className="text-left sm:text-right font-medium">SĐT</Label>
               <Input 
                 id="phone"
                 value={phone}
@@ -458,8 +458,8 @@ export function PawnEditModal({
               />
             </div>
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-start">
-              <Label htmlFor="address" className="text-right mt-2">Địa chỉ</Label>
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-start">
+              <Label htmlFor="address" className="text-left sm:text-right font-medium sm:mt-2">Địa chỉ</Label>
               <Textarea 
                 id="address"
                 value={address}
@@ -470,8 +470,8 @@ export function PawnEditModal({
               />
             </div>
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="collateralId" className="text-right">
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <Label htmlFor="collateralId" className="text-left sm:text-right font-medium">
                 Tài sản thế chấp <span className="text-red-500">*</span>
               </Label>
               <select 
@@ -490,8 +490,8 @@ export function PawnEditModal({
             </div>
             
             {/* Collateral Name */}
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="collateralName" className="text-right">
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <Label htmlFor="collateralName" className="text-left sm:text-right font-medium">
                 Tên tài sản <span className="text-red-500">*</span>
               </Label>
               <Input 
@@ -504,8 +504,8 @@ export function PawnEditModal({
             </div>
             
             {selectedCollateral && (
-              <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-start">
-                <div className="text-right text-sm text-gray-500">Thông tin tài sản:</div>
+              <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-start">
+                <div className="text-left sm:text-right text-sm text-gray-500">Thông tin tài sản:</div>
                 <div className="text-sm bg-gray-50 p-2 rounded">
                   <div><span className="font-medium">Loại:</span> {selectedCollateral.category}</div>
                   <div><span className="font-medium">Mã:</span> {selectedCollateral.code}</div>
@@ -528,8 +528,8 @@ export function PawnEditModal({
                   if (!label) return null;
                   
                   return (
-                    <div key={key} className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-                      <Label htmlFor={key} className="text-right">{label}</Label>
+                    <div key={key} className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+                      <Label htmlFor={key} className="text-left sm:text-right font-medium">{label}</Label>
                       <Input 
                         id={key}
                         value={collateralAttributes[key] || ''}
@@ -542,8 +542,8 @@ export function PawnEditModal({
               </div>
             )}
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="loanAmount" className="text-right">
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <Label htmlFor="loanAmount" className="text-left sm:text-right font-medium">
                 Tổng số tiền vay <span className="text-red-500">*</span>
               </Label>
               <MoneyInput 
@@ -555,12 +555,12 @@ export function PawnEditModal({
               />
             </div>
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="interestValue" className="text-right">
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <Label htmlFor="interestValue" className="text-left sm:text-right font-medium">
                 Lãi suất <span className="text-red-500">*</span>
               </Label>
               <div>
-                <div className="flex gap-2 items-center">
+                <div className="space-y-3 sm:space-y-0 sm:flex sm:gap-2 sm:items-center">
                   <Input 
                     id="interestValue"
                     type="text"
@@ -570,7 +570,7 @@ export function PawnEditModal({
                       validateInterestRate(e.target.value, interestType, interestNotation);
                     }}
                     required
-                    className="w-24"
+                    className="w-full sm:w-24"
                     placeholder="0"
                     min={0}
                     step="any"
@@ -578,7 +578,7 @@ export function PawnEditModal({
                   />
                   
                   {interestType === 'daily' && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 sm:items-center">
                       <div className="flex items-center">
                         <input 
                           type="radio" 
@@ -593,7 +593,7 @@ export function PawnEditModal({
                           className="mr-1"
                           disabled={hasPayments}
                         />
-                        <label htmlFor="k_per_million">k/1 triệu</label>
+                        <label htmlFor="k_per_million" className="text-xs sm:text-sm">k/1 triệu</label>
                       </div>
                       <div className="flex items-center">
                         <input 
@@ -609,7 +609,7 @@ export function PawnEditModal({
                           className="mr-1"
                           disabled={hasPayments}
                         />
-                        <label htmlFor="k_per_day">k/ngày</label>
+                        <label htmlFor="k_per_day" className="text-xs sm:text-sm">k/ngày</label>
                       </div>
                     </div>
                   )}
@@ -667,33 +667,33 @@ export function PawnEditModal({
             </div>
             
             {interestRateWarning && (
-              <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-                <div></div>
+              <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+                <div className="hidden sm:block"></div>
                 <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm" role="alert">
                   <span className="flex items-center">
-                    <AlertCircle className="h-4 w-4 mr-2" />
-                    {interestRateWarning}
+                    <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0" />
+                    <span className="break-words">{interestRateWarning}</span>
                   </span>
                 </div>
               </div>
             )}
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="interestPeriod" className="text-right">
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <Label htmlFor="interestPeriod" className="text-left sm:text-right font-medium">
                 Kỳ lãi phí <span className="text-red-500">*</span>
               </Label>
-              <div className="flex items-center gap-2">
+              <div className="space-y-2 sm:space-y-0 sm:flex sm:items-center sm:gap-2">
                 <Input 
                   id="interestPeriod"
                   type="number"
                   value={interestPeriod}
                   onChange={(e) => setInterestPeriod(e.target.value)}
-                  className="w-24"
+                  className="w-full sm:w-24"
                   min="1"
                   placeholder="30"
                   required
                 />
-                <span>
+                <span className="text-xs sm:text-sm break-words">
                   {interestType === 'daily' && 'ngày (mỗi kỳ lãi)'}
                   {interestType === 'monthly_30' && 'tháng (mỗi kỳ lãi)'}
                   {interestType === 'monthly_custom' && 'ngày (mỗi kỳ lãi)'}
@@ -703,8 +703,8 @@ export function PawnEditModal({
               </div>
             </div>
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="loanDate" className="text-right">Ngày vay</Label>
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <Label htmlFor="loanDate" className="text-left sm:text-right font-medium">Ngày vay</Label>
               <DatePicker
                 value={loanDate}
                 onChange={(value) => setLoanDate(value)}
@@ -712,8 +712,8 @@ export function PawnEditModal({
               />
             </div>
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-start">
-              <Label htmlFor="notes" className="text-right mt-2">Ghi chú</Label>
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-start">
+              <Label htmlFor="notes" className="text-left sm:text-right font-medium sm:mt-2">Ghi chú</Label>
               <Textarea 
                 id="notes"
                 value={notes}
@@ -732,21 +732,21 @@ export function PawnEditModal({
               </div>
             )}
             
-            <div className="text-center text-red-500 text-sm mt-2">
-              *Chú ý : Khách hàng phải đảm bảo lãi suất và chi phí khi cho vay (gọi chung là "chi phí vay") tuân thủ quy định pháp luật tại từng thời điểm.
+            <div className="text-center text-red-500 text-xs sm:text-sm mt-2 px-2">
+              *Chú ý : Khách hàng phải đảm bảo lãi suất và chi phí khi cho vay tuân thủ quy định pháp luật.
             </div>
             
-            <div className="flex justify-center space-x-4 mt-6">
+            <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 mt-6">
               <Button 
                 type="submit" 
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto px-6"
                 disabled={isLoading || pawn?.status === PawnStatus.CLOSED || pawn?.status === PawnStatus.DELETED}
               >
                 {isLoading ? 'Đang xử lý...' : 'Cập nhật'}
               </Button>
               <Button 
                 type="button" 
-                className="bg-gray-200 hover:bg-gray-300 text-gray-800"
+                className="bg-gray-200 hover:bg-gray-300 text-gray-800 w-full sm:w-auto px-6"
                 onClick={onClose}
                 disabled={isLoading}
               >

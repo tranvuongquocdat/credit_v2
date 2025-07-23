@@ -373,7 +373,7 @@ export function InstallmentCreateModal({
         onClose();
       }
     }}>
-      <DialogContent className="sm:max-w-[800px] md:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-[400px] sm:max-w-[500px] md:max-w-[600px] lg:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-center">Hợp đồng trả góp</DialogTitle>
         </DialogHeader>
@@ -410,8 +410,8 @@ export function InstallmentCreateModal({
           </div>
           
           {/* Customer information */}
-          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="customerName" className="text-right">
+          <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+            <Label htmlFor="customerName" className="text-left sm:text-right font-medium">
               Tên khách hàng <span className="text-red-500">*</span>
             </Label>
             {customerType === 'new' ? (
@@ -457,8 +457,8 @@ export function InstallmentCreateModal({
             )}
           </div>
           
-          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="contractCode" className="text-right">Mã HĐ</Label>
+          <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+            <Label htmlFor="contractCode" className="text-left sm:text-right font-medium">Mã HĐ</Label>
             <div className="flex items-center gap-2">
               <Input 
                 id="contractCode"
@@ -485,8 +485,8 @@ export function InstallmentCreateModal({
             </div>
           </div>
           
-          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="idNumber" className="text-right">Số CCCD/Hộ chiếu</Label>
+          <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+            <Label htmlFor="idNumber" className="text-left sm:text-right font-medium">Số CCCD/Hộ chiếu</Label>
             <Input 
               id="idNumber"
               value={idNumber}
@@ -495,8 +495,8 @@ export function InstallmentCreateModal({
             />
           </div>
           
-          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="phone" className="text-right">SĐT</Label>
+          <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+            <Label htmlFor="phone" className="text-left sm:text-right font-medium">SĐT</Label>
             <Input 
               id="phone"
               value={phone}
@@ -505,8 +505,8 @@ export function InstallmentCreateModal({
             />
           </div>
           
-          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-start">
-            <Label htmlFor="address" className="text-right mt-2">Địa chỉ</Label>
+          <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-start">
+            <Label htmlFor="address" className="text-left sm:text-right font-medium sm:mt-2">Địa chỉ</Label>
             <Textarea 
               id="address"
               value={address}
@@ -516,11 +516,11 @@ export function InstallmentCreateModal({
             />
           </div>
           
-          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="amountGiven" className="text-right">
+          <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+            <Label htmlFor="amountGiven" className="text-left sm:text-right font-medium">
               Tiền trả góp <span className="text-red-500">*</span>
             </Label>
-            <div className="flex items-center gap-3">
+            <div className="space-y-2 sm:space-y-0 sm:flex sm:items-center sm:gap-3">
               <MoneyInput 
                 id="amountGiven"
                 value={amountGiven}
@@ -529,18 +529,18 @@ export function InstallmentCreateModal({
                   if (!amountGiven || amountGiven === "0") e.target.select();
                 }}
                 required
-                className="w-48"
+                className="w-full sm:w-48"
                 placeholder="0"
               />
-              <span className="text-sm text-gray-500">(Tổng tiền vay khách phải thanh toán)</span>
+              <span className="text-xs sm:text-sm text-gray-500 break-words">(Tổng tiền vay khách phải thanh toán)</span>
             </div>
           </div>
           
-          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="tiendua" className="text-right">
+          <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+            <Label htmlFor="tiendua" className="text-left sm:text-right font-medium">
               Tiền đưa khách <span className="text-red-500">*</span>
             </Label>
-            <div className="flex items-center gap-3">
+            <div className="space-y-2 sm:space-y-0 sm:flex sm:items-center sm:gap-3">
               <MoneyInput 
                 id="tiendua"
                 value={customerAmount}
@@ -549,18 +549,18 @@ export function InstallmentCreateModal({
                   if (!customerAmount || customerAmount === "0") e.target.select();
                 }}
                 required
-                className="w-48"
+                className="w-full sm:w-48"
                 placeholder="0"
               />
-              <span className="text-sm text-gray-500">(Tổng tiền khách nhận được)</span>
+              <span className="text-xs sm:text-sm text-gray-500 break-words">(Tổng tiền khách nhận được)</span>
             </div>
           </div>
           
-          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="duration" className="text-right">
+          <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+            <Label htmlFor="duration" className="text-left sm:text-right font-medium">
               Thời gian vay <span className="text-red-500">*</span>
             </Label>
-            <div className="flex items-center gap-3">
+            <div className="space-y-2 sm:space-y-0 sm:flex sm:items-center sm:gap-3">
               <div className="flex items-center gap-2">
                 <Input 
                   id="duration"
@@ -568,23 +568,23 @@ export function InstallmentCreateModal({
                   value={duration}
                   onChange={(e) => setDuration(e.target.value)}
                   required
-                  className="w-24"
+                  className="w-full sm:w-24"
                   placeholder="0"
                   min={0}
                 />
-                <span>ngày</span>
+                <span className="text-sm">ngày</span>
               </div>
-              <span className="text-sm text-gray-500">
+              <span className="text-xs sm:text-sm text-gray-500 break-words">
                 {`(Thanh toán ${formatNumber(Math.round(parseInt(amountGiven || '0') / (parseInt(duration || '50') || 1)))} / 1 ngày)`}
               </span>
             </div>
           </div>
           
-          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="paymentPeriod" className="text-right">
+          <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+            <Label htmlFor="paymentPeriod" className="text-left sm:text-right font-medium">
               Số ngày đóng tiền <span className="text-red-500">*</span>
             </Label>
-            <div className="flex items-center gap-3">
+            <div className="space-y-2 sm:space-y-0 sm:flex sm:items-center sm:gap-3">
               <div className="flex items-center gap-2">
                 <Input 
                   id="paymentPeriod"
@@ -592,17 +592,17 @@ export function InstallmentCreateModal({
                   value={paymentPeriod}
                   onChange={(e) => setPaymentPeriod(e.target.value)}
                   required
-                  className="w-24"
+                  className="w-full sm:w-24"
                   placeholder="0"
                   min={0}
                 />
-                <span>ngày</span>
+                <span className="text-sm">ngày</span>
               </div>
-              <span className="text-sm text-gray-500">(10 ngày đóng 1 lần thì điền số 10)</span>
+              <span className="text-xs sm:text-sm text-gray-500 break-words">(10 ngày đóng 1 lần thì điền số 10)</span>
             </div>
           </div>
-          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="startDate" className="text-right">Ngày vay</Label>
+          <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+            <Label htmlFor="startDate" className="text-left sm:text-right font-medium">Ngày vay</Label>
             <DatePicker 
               id="startDate"
               value={startDate}
@@ -611,8 +611,8 @@ export function InstallmentCreateModal({
             />
           </div>
           
-          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-            <Label htmlFor="employeeId" className="text-right">
+          <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+            <Label htmlFor="employeeId" className="text-left sm:text-right font-medium">
               Nhân viên đảm nhiệm <span className="text-red-500">*</span>
             </Label>
             <select 
@@ -632,8 +632,8 @@ export function InstallmentCreateModal({
           </div>
           
           
-          <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-start">
-            <Label htmlFor="notes" className="text-right mt-2">Ghi chú</Label>
+          <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-start">
+            <Label htmlFor="notes" className="text-left sm:text-right font-medium sm:mt-2">Ghi chú</Label>
             <Textarea 
               id="notes"
               value={notes}
@@ -651,14 +651,22 @@ export function InstallmentCreateModal({
             </div>
           )}
           
-          <div className="flex justify-center pt-4">
+          <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 pt-4">
             <Button
               type="submit"
               disabled={isLoading}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto px-6"
             >
               {isLoading ? <Spinner className="mr-2" /> : null}
               Thêm mới
+            </Button>
+            <Button 
+              type="button" 
+              className="bg-gray-200 hover:bg-gray-300 text-gray-800 w-full sm:w-auto px-6"
+              onClick={onClose}
+              disabled={isLoading}
+            >
+              Thoát
             </Button>
           </div>
         </form>
