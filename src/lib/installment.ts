@@ -5,6 +5,165 @@ import { formatCurrency } from '@/lib/utils';
 import { getCurrentUser } from './auth';
 import { calculateDebtToLatestPaidPeriod } from './Installments/calculate_remaining_debt';
 
+// Helper function for Vietnamese unaccented search using RPC
+async function getInstallmentsWithUnaccentedSearch(
+  page: number,
+  pageSize: number,
+  filters: InstallmentFilters,
+  signal?: AbortSignal
+) {
+  try {
+    // Calculate pagination
+    const from = (page - 1) * pageSize;
+    
+    // Map status filter to the expected format
+    let statusFilter = null;
+    if (filters.status) {
+      switch (filters.status) {
+        case InstallmentStatus.OVERDUE:
+          statusFilter = 'OVERDUE';
+          break;
+        case InstallmentStatus.LATE_INTEREST:
+          statusFilter = 'LATE_INTEREST';
+          break;
+        case InstallmentStatus.ON_TIME:
+          statusFilter = 'ON_TIME';
+          break;
+        case InstallmentStatus.CLOSED:
+          statusFilter = 'CLOSED';
+          break;
+        case InstallmentStatus.DELETED:
+          statusFilter = 'DELETED';
+          break;
+        case InstallmentStatus.BAD_DEBT:
+          statusFilter = 'BAD_DEBT';
+          break;
+        case InstallmentStatus.FINISHED:
+          statusFilter = 'FINISHED';
+          break;
+        default:
+          statusFilter = null;
+      }
+    }
+    
+    // Use RPC function for unaccented search
+    const { data, error } = await (supabase.rpc as any)('search_installments_unaccent', {
+      p_customer_name: filters.customer_name || '',
+      p_contract_code: filters.contract_code || '',
+      p_start_date: filters.start_date || null,
+      p_end_date: filters.end_date || null,
+      p_duration: filters.duration || null,
+      p_status: statusFilter,
+      p_store_id: filters.store_id || null,
+      p_limit: pageSize,
+      p_offset: from
+    });
+    
+    if (error) throw error;
+    
+    // Check if request was cancelled
+    if (signal?.aborted) {
+      throw new Error('Request was cancelled');
+    }
+    
+    // Process the results
+    const installmentData = data || [];
+    const ids = installmentData.map((item: any) => item.id);
+    
+    // Get debt information if we have results
+    let debtMap = new Map<string, number>();
+    let latestPaymentMap = new Map<string, string>();
+    
+    if (ids.length > 0) {
+      // Get debt information
+      const { data: debtRows, error: debtErr } = await (supabase.rpc as any)(
+        'get_installment_old_debt',
+        { p_installment_ids: ids }
+      );
+      if (debtErr) throw debtErr;
+      
+      (debtRows ?? []).forEach(
+        (r: { installment_id: string; old_debt: number }) =>
+          debtMap.set(r.installment_id, Number(r.old_debt || 0))
+      );
+      
+      // Get latest payment dates
+      const { data: latestPaymentRows, error: latestPaymentErr } = await (supabase.rpc as any)(
+        'get_latest_installment_payment_paid_dates',
+        { p_installment_ids: ids }
+      );
+      if (latestPaymentErr) throw latestPaymentErr;
+      
+      (latestPaymentRows ?? []).forEach(
+        (r: { installment_id: string; latest_paid_date: string }) =>
+          latestPaymentMap.set(r.installment_id, r.latest_paid_date)
+      );
+    }
+    
+    // Transform data
+    const installments = installmentData.map((item: any) => {
+      const downPayment = item.down_payment || 0;
+      const installmentAmount = item.installment_amount || 0;
+      const loanPeriod = item.loan_period || 0;
+      const paymentPeriod = item.payment_period || 30;
+      const loanDate = item.loan_date || new Date().toISOString();
+      
+      const customerData = item.customer_name ? {
+        id: item.customer_id || '',
+        name: item.customer_name || '',
+        phone: item.customer_phone || undefined,
+        address: item.customer_address || undefined,
+        blacklist_reason: undefined, // Not returned by RPC
+        id_number: item.customer_id_number || undefined,
+      } as Customer : undefined;
+      
+      return {
+        id: item.id || '',
+        contract_code: item.contract_code || '',
+        customer_id: item.customer_id || '',
+        employee_id: item.employee_id || '',
+        amount_given: downPayment,
+        duration: loanPeriod,
+        payment_period: paymentPeriod,
+        amount_paid: 0,
+        old_debt: debtMap.get(item.id) ?? 0,
+        daily_amount: installmentAmount / loanPeriod,
+        installment_amount: installmentAmount,
+        remaining_amount: downPayment,
+        status: item.status_code as InstallmentStatus,
+        due_date: calculateDueDate(loanDate, loanPeriod),
+        start_date: new Date(loanDate).toISOString().split('T')[0],
+        payment_due_date: item.payment_due_date || null,
+        store_id: item.store_id || '',
+        created_at: item.created_at || undefined,
+        updated_at: item.updated_at || undefined,
+        notes: item.notes || '',
+        debt_amount: debtMap.get(item.id) ?? 0,
+        latest_payment_date: latestPaymentMap.get(item.id) ?? null,
+        customer: customerData
+      };
+    });
+    
+    // For RPC, we get exact page results, so estimate total pages
+    const totalPages = installments.length === pageSize ? page + 1 : page;
+    
+    return { 
+      data: installments, 
+      error: null, 
+      count: installments.length, 
+      totalPages 
+    };
+  } catch (error: any) {
+    console.error('Error in unaccented search:', error);
+    return { 
+      data: [], 
+      error, 
+      count: 0, 
+      totalPages: 0 
+    };
+  }
+}
+
 // Get all installments with pagination and filters
 export async function getInstallments(
   page = 1,
@@ -12,9 +171,13 @@ export async function getInstallments(
   filters?: InstallmentFilters,
   signal?: AbortSignal
 ) {
-  // Debug logging removed - race condition fixed with AbortController
   try {
-    // Use the installments_by_store view to include store_id and status_code
+    // If customer name filter is provided, use RPC for unaccented search
+    if (filters?.customer_name) {
+      return await getInstallmentsWithUnaccentedSearch(page, pageSize, filters, signal);
+    }
+
+    // Use the installments_by_store view for regular searches
     let query = supabase
       .from('installments_by_store')
       .select(`
@@ -27,11 +190,6 @@ export async function getInstallments(
     // Apply filters if provided
     if (filters?.contract_code) {
       query = query.ilike('contract_code', `%${filters.contract_code}%`);
-    }
-    
-    if (filters?.customer_name) {
-      // Lọc trực tiếp trên cột name của bảng customers thông qua INNER JOIN
-      query = query.ilike('customers.name', `%${filters.customer_name}%`);
     }
     
     if (filters?.start_date) {
