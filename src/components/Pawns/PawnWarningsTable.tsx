@@ -109,6 +109,8 @@ interface PawnWarningsTableProps {
   onViewDetail: (pawn: PawnWithCustomerAndCollateral) => void;
   onCustomerClick?: (pawn: PawnWithCustomerAndCollateral) => void;
   pawnCalculations?: Record<string, any>; // From usePawnCalculations
+  currentPage?: number; // Add pagination props
+  itemsPerPage?: number;
 }
 
 export function PawnWarningsTable({
@@ -117,6 +119,8 @@ export function PawnWarningsTable({
   onViewDetail,
   onCustomerClick,
   pawnCalculations,
+  currentPage = 1,
+  itemsPerPage = 30,
 }: PawnWarningsTableProps) {
   const { currentStore } = useStore();
   const router = useRouter();
@@ -179,34 +183,34 @@ export function PawnWarningsTable({
 
   return (
     <div className="rounded-md border overflow-hidden">
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto max-w-full">
         <table className="border-collapse min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-10 hidden lg:table-cell">#</th>
+            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-6 sm:w-8">#</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28 hidden lg:table-cell">Mã hợp đồng</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-36">Tên khách hàng</th>
+            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-24 sm:w-28">Tên KH</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28 hidden lg:table-cell">Số điện thoại</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-48 hidden lg:table-cell">Địa chỉ</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-32">Mã tài sản</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-32">Tên tài sản</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Tiền gốc</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Tổng tiền lãi</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Tổng tiền</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-64">Lý do</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm w-16">Thao tác</th>
+            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-18 sm:w-24">Mã TS</th>
+            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-20 sm:w-24">Tên TS</th>
+            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-14 sm:w-16">Tiền gốc</th>
+            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-14 sm:w-16">Tổng lãi</th>
+            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-16 sm:w-20">Tổng tiền</th>
+            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-24 sm:w-32">Lý do</th>
+            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm w-12 sm:w-16">Thao tác</th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
           {enhancedPawns.map((pawn, index) => (
             <tr key={pawn.id} className="hover:bg-gray-50 transition-colors text-sm">
-              <td className="py-3 px-3 border-r border-gray-200 text-center hidden lg:table-cell">{index + 1}</td>
+              <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center text-xs">{(currentPage - 1) * itemsPerPage + index + 1}</td>
               <td className="py-3 px-3 border-r border-gray-200 font-medium text-center hidden lg:table-cell">
                 {pawn.contract_code}
               </td>
-              <td className="py-3 px-3 border-r border-gray-200 text-center">
+              <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center">
                 <span 
-                  className="text-blue-600 cursor-pointer hover:underline"
+                  className="text-blue-600 cursor-pointer hover:underline text-xs sm:text-sm"
                   onClick={() => handleCustomerClick(pawn)}
                 >
                   {pawn.customer?.name || "N/A"}
@@ -218,40 +222,40 @@ export function PawnWarningsTable({
               <td className="py-3 px-3 border-r border-gray-200 text-center hidden lg:table-cell">
                 {pawn.address || ""}
               </td>
-              <td className="py-3 px-3 border-r border-gray-200 text-center">
+              <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center text-xs sm:text-sm">
                 {pawn.collateral_asset?.code || 'N/A'}
               </td>
-              <td className="py-3 px-3 border-r border-gray-200 text-center">
+              <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center text-xs sm:text-sm">
                 {pawn.collateral_asset?.name || 
                  (pawn.collateral_detail && typeof pawn.collateral_detail === 'object' 
                    ? pawn.collateral_detail.name 
                    : pawn.collateral_detail) || 'N/A'}
               </td>
-              <td className="py-3 px-3 border-r border-gray-200 text-center">
+              <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center text-xs sm:text-sm">
                 {formatCurrency(pawn.loan_amount || 0)}
               </td>
-              <td className="py-3 px-3 border-r border-gray-200 text-center">
+              <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center text-xs sm:text-sm">
                 {formatCurrency(pawn.totalInterest || 0)}
               </td>
-              <td className="py-3 px-3 border-r border-gray-200 text-center">
-                <span className="font-medium text-red-600">
+              <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center">
+                <span className="font-medium text-red-600 text-xs sm:text-sm">
                   {formatCurrency((pawn.loan_amount || 0) + (pawn.totalInterest || 0))}
                 </span>
               </td>
-              <td className="py-3 px-3 border-r border-gray-200 text-center">
-                <span className="text-orange-600 font-medium">
+              <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center">
+                <span className="text-orange-600 font-medium text-xs sm:text-sm">
                   {pawn.reason}
                 </span>
               </td>
-              <td className="py-3 px-3 text-center">
+              <td className="py-2 px-1 sm:px-3 text-center">
                 <div className="flex flex-wrap justify-center gap-1">
                   <Button 
                     variant="ghost" 
-                    className="h-8 w-8 p-0" 
+                    className="h-6 w-6 sm:h-8 sm:w-8 p-0" 
                     onClick={() => onViewDetail(pawn)}
                     title="Xem chi tiết"
                   >
-                    <DollarSign className="h-4 w-4 text-gray-500" />
+                    <DollarSign className="h-3 w-3 sm:h-4 sm:w-4 text-gray-500" />
                   </Button>
                 </div>
               </td>
@@ -260,28 +264,28 @@ export function PawnWarningsTable({
         </tbody>
         <tfoot className="bg-yellow-200 font-semibold">
           <tr>
-            <td colSpan={7} className="py-2 px-3 text-center font-bold border-r border-t border-gray-200 hidden lg:table-cell">
+            <td colSpan={8} className="py-2 px-1 sm:px-3 text-center font-bold border-r border-t border-gray-200 hidden lg:table-cell text-xs sm:text-sm">
               Tổng
             </td>
-            <td className="py-2 px-3 text-center font-bold border-r border-t border-gray-200 lg:hidden">
+            <td colSpan={4} className="py-2 px-1 sm:px-3 text-center font-bold border-r border-t border-gray-200 lg:hidden text-xs sm:text-sm">
               Tổng
             </td>
-            <td className="py-2 px-3 text-center font-bold border-r border-t border-gray-200">
+            <td className="py-2 px-1 sm:px-3 text-center font-bold border-r border-t border-gray-200 text-xs sm:text-sm">
               <span className="text-rose-600">
                 {formatCurrency(totals.totalPrincipal)}
               </span>
             </td>
-            <td className="py-2 px-3 text-center font-bold border-r border-t border-gray-200">
+            <td className="py-2 px-1 sm:px-3 text-center font-bold border-r border-t border-gray-200 text-xs sm:text-sm">
               <span className="text-rose-600">
                 {formatCurrency(totals.totalInterest)}
               </span>
             </td>
-            <td className="py-2 px-3 text-center font-bold border-r border-t border-gray-200">
+            <td className="py-2 px-1 sm:px-3 text-center font-bold border-r border-t border-gray-200 text-xs sm:text-sm">
               <span className="text-red-600 font-bold">
                 {formatCurrency(totals.totalAmount)}
               </span>
             </td>
-            <td colSpan={2} className="py-2 px-3 text-center border-t border-gray-200">
+            <td colSpan={2} className="py-2 px-1 sm:px-3 text-center border-t border-gray-200">
               <span className="text-gray-600 font-medium">
                 {enhancedPawns.length} hợp đồng
               </span>

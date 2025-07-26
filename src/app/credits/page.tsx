@@ -468,6 +468,8 @@ export default function CreditsPage() {
           statusMap={undefined}
           calculatedDetails={creditDetails}
           calculatedStatuses={undefined}
+          currentPage={currentPage}
+          itemsPerPage={itemsPerPage}
           totals={totals ?? undefined}
           onView={handleViewCreditDetail}
           onEdit={handleEditCredit}

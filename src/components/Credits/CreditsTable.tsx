@@ -45,6 +45,8 @@ interface CreditsTableProps {
   onUpdateStatus: (credit: CreditWithCustomer) => void;
   onShowPaymentHistory?: (credit: CreditWithCustomer) => void;
   onRefresh?: () => void;
+  currentPage?: number; // Add pagination props
+  itemsPerPage?: number;
   totals?: {
     total_loan_amount: number;
     total_paid_interest: number;
@@ -88,6 +90,8 @@ export function CreditsTable({
   onDelete, 
   onShowPaymentHistory,
   onRefresh,
+  currentPage = 1,
+  itemsPerPage = 30,
   totals,
 }: CreditsTableProps) {
   // Toast hook
@@ -184,7 +188,7 @@ export function CreditsTable({
           ) : (
             credits.map((credit, index) => (
               <TableRow key={credit.id} className="hover:bg-gray-50 transition-colors">
-                <TableCell className="py-3 px-3 text-gray-500 text-center border-b border-r border-gray-200 hidden lg:table-cell">{index + 1}</TableCell>
+                <TableCell className="py-3 px-3 text-gray-500 text-center border-b border-r border-gray-200 hidden lg:table-cell">{(currentPage - 1) * itemsPerPage + index + 1}</TableCell>
                 <TableCell 
                   className="py-3 px-1 lg:px-3 font-medium text-blue-600 cursor-pointer text-center border-b border-r border-gray-200 text-xs lg:text-sm" 
                   onClick={() => handleContractCodeClick(credit.id)}
@@ -452,27 +456,28 @@ export function CreditsTable({
 
             return (
               <div key={credit.id} className="bg-white border rounded-lg p-4 shadow-sm">
-                {/* Header */}
+                {/* Header - Prioritize Customer Name */}
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm text-gray-600">#{index + 1}</span>
-                    <span className="font-bold text-blue-600">{credit.contract_code}</span>
+                    <span className="font-medium text-sm text-gray-600">#{(currentPage - 1) * itemsPerPage + index + 1}</span>
+                    <span 
+                      className="font-bold text-lg text-blue-600 cursor-pointer hover:underline" 
+                      onClick={() => handleContractCodeClick(credit.id)}
+                      title={canEditCredit ? 'Nhấn để chỉnh sửa hợp đồng' : 'Bạn không có quyền chỉnh sửa hợp đồng'}
+                    >
+                      {credit.customer?.name || "N/A"}
+                    </span>
                   </div>
                   <Badge variant="outline" className={statusInfo.color}>
                     {statusInfo.label}
                   </Badge>
                 </div>
 
-                {/* Customer Info */}
+                {/* Contract Info */}
                 <div className="mb-3">
                   <div className="flex items-center gap-1 mb-1">
-                    <span 
-                      className="font-medium text-blue-600 cursor-pointer hover:underline" 
-                      onClick={() => handleContractCodeClick(credit.id)}
-                      title={canEditCredit ? 'Nhấn để chỉnh sửa hợp đồng' : 'Bạn không có quyền chỉnh sửa hợp đồng'}
-                    >
-                      {credit.customer?.name || "N/A"}
-                    </span>
+                    <span className="text-sm text-gray-500">Mã HĐ:</span>
+                    <span className="font-medium text-gray-700">{credit.contract_code}</span>
                     {(credit.customer as any)?.blacklist_reason && (
                       <AlertTriangle className="h-4 w-4 text-red-500" />
                     )}

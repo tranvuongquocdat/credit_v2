@@ -74,6 +74,8 @@ interface InstallmentsTableProps {
   onShowPaymentHistory?: (installment: InstallmentWithStatusInfo) => void;
   onShowPaymentActions?: (installment: InstallmentWithStatusInfo) => void;
   onRefresh?: () => void;
+  currentPage?: number; // Add pagination props
+  itemsPerPage?: number;
   totals?: {
     total_amount_given: number;
     total_paid: number;
@@ -91,6 +93,8 @@ export function InstallmentsTable({
   onShowPaymentHistory,
   onShowPaymentActions,
   onRefresh,
+  currentPage = 1,
+  itemsPerPage = 30,
   totals,
 }: InstallmentsTableProps) {
   // State để lưu trữ thông tin có kỳ thanh toán đã được thanh toán hay không cho mỗi installment
@@ -302,7 +306,7 @@ export function InstallmentsTable({
                     key={installment.id} 
                     className="hover:bg-gray-50 transition-colors text-sm"
                   >
-                    <TableCell className="py-3 px-3 border-r border-gray-200 text-center">{index + 1}</TableCell>
+                    <TableCell className="py-3 px-3 border-r border-gray-200 text-center">{(currentPage - 1) * itemsPerPage + index + 1}</TableCell>
                     <TableCell className="py-3 px-3 border-r border-gray-200 font-medium text-center">
                       <span>
                         {installment.contract_code}
@@ -643,22 +647,12 @@ export function InstallmentsTable({
 
           return (
             <div key={installment.id} className="bg-white border rounded-lg p-4 shadow-sm">
-              {/* Header */}
+              {/* Header - Prioritize Customer Name */}
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm text-gray-600">#{index + 1}</span>
-                  <span className="font-bold text-blue-600">{installment.contract_code}</span>
-                </div>
-                <Badge variant="outline" className={statusInfo.color}>
-                  {statusInfo.label}
-                </Badge>
-              </div>
-
-              {/* Customer Info */}
-              <div className="mb-3">
-                <div className="flex items-center gap-1 mb-1">
+                  <span className="font-medium text-sm text-gray-600">#{(currentPage - 1) * itemsPerPage + index + 1}</span>
                   <span 
-                    className="font-medium text-blue-600 cursor-pointer hover:underline" 
+                    className="font-bold text-lg text-blue-600 cursor-pointer hover:underline" 
                     onClick={() => handleContractCodeClick(installment.id)}
                     title={canEditInstallment ? 'Nhấn để chỉnh sửa hợp đồng' : 'Bạn không có quyền chỉnh sửa hợp đồng'}
                   >
@@ -667,6 +661,17 @@ export function InstallmentsTable({
                   {(installment.customer as any)?.blacklist_reason && (
                     <AlertTriangleIcon className="h-4 w-4 text-red-500" />
                   )}
+                </div>
+                <Badge variant="outline" className={statusInfo.color}>
+                  {statusInfo.label}
+                </Badge>
+              </div>
+
+              {/* Contract Info */}
+              <div className="mb-3">
+                <div className="flex items-center gap-1 mb-1">
+                  <span className="text-sm text-gray-500">Mã HĐ:</span>
+                  <span className="font-medium text-gray-700">{installment.contract_code}</span>
                 </div>
               </div>
 

@@ -391,6 +391,8 @@ export default function PawnWarningsPage() {
           onViewDetail={handleViewDetail}
           onCustomerClick={handleCustomerClick}
           pawnCalculations={pawnCalculations}
+          currentPage={currentPage}
+          itemsPerPage={itemsPerPage}
         />
         
         {/* Pagination */}

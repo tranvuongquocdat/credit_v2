@@ -335,13 +335,13 @@ export function InstallmentWarningsTable({
 
   return (
     <div className="rounded-md border overflow-hidden">
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto max-w-full">
         <table className="border-collapse min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-10 hidden lg:table-cell">#</th>
+            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-6 sm:w-8">#</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28 hidden lg:table-cell">Mã hợp đồng</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-36">
+            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-28 sm:w-32">
               <div className="flex items-center justify-center gap-1">
                 <span>Tên khách hàng</span>
                 <button
@@ -359,16 +359,16 @@ export function InstallmentWarningsTable({
             </th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28 hidden lg:table-cell">Số điện thoại</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-48 hidden lg:table-cell">Địa chỉ</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Nợ cũ</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24">Số tiền</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-32">Lý do</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-52">
+            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-14 sm:w-16">Nợ cũ</th>
+            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-14 sm:w-16">Số tiền</th>
+            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-24 sm:w-28">Lý do</th>
+            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-40 sm:w-52">
               <div className="flex flex-col">
                 <span>Đóng tiền nhanh</span>
                 <span className="text-xs text-gray-400">(đơn vị ngàn VND)</span>
               </div>
             </th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm w-20">Thao tác</th>
+            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm w-16 sm:w-20">Thao tác</th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
@@ -411,7 +411,7 @@ export function InstallmentWarningsTable({
                   key={i}
                   variant="outline" 
                   size="sm"
-                  className="mx-1 bg-green-100 hover:bg-green-200 text-green-800 border-green-300"
+                  className="mx-0.5 sm:mx-1 px-1 sm:px-3 py-1 bg-green-100 hover:bg-green-200 text-green-800 border-green-300 text-xs sm:text-sm"
                   onClick={() => onPayment && onPayment(warning, warning.buttonValues[i])}
                 >
                   {buttonAmount}
@@ -421,11 +421,11 @@ export function InstallmentWarningsTable({
 
             return (
               <tr key={warning.id} className="hover:bg-gray-50 transition-colors text-sm">
-                <td className="py-3 px-3 border-r border-gray-200 text-center hidden lg:table-cell">{index + 1}</td>
+                <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center text-xs">{(currentPage - 1) * itemsPerPage + index + 1}</td>
                 <td className="py-3 px-3 border-r border-gray-200 font-medium text-center hidden lg:table-cell">
                   {warning.contract_code}
                 </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
+                <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center">
                   <div className="flex items-center justify-center gap-1">
                     <span 
                       className="text-blue-600 cursor-pointer hover:underline"
@@ -449,23 +449,23 @@ export function InstallmentWarningsTable({
                 <td className="py-3 px-3 border-r border-gray-200 text-center hidden lg:table-cell">
                   {warning.customer?.address || ""}
                 </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
+                <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center text-xs sm:text-sm">
                   {formatCurrency(warning.totalDueAmount)}
                 </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
+                <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center text-xs sm:text-sm">
                   {formatCurrency(totalAmountToDisplay)}
                 </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
-                  <span className="text-orange-600 font-medium">
+                <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center">
+                  <span className="text-orange-600 font-medium text-xs sm:text-sm">
                     {warning.reason}
                   </span>
                 </td>
-                <td className="py-3 px-3 border-r border-gray-200 text-center">
+                <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center">
                   <div className="flex flex-wrap justify-center gap-1">
                     {quickPayButtons}
                   </div>
                 </td>
-                <td className="py-3 px-3 text-center">
+                <td className="py-2 px-1 sm:px-3 text-center">
                   {onShowPaymentHistory && (
                     <Button 
                       variant="ghost" 
@@ -484,15 +484,15 @@ export function InstallmentWarningsTable({
         {warnings.length > 0 && (
           <tfoot className="bg-yellow-200 font-semibold">
             <tr>
-              <td colSpan={5} className="py-2 px-3 text-center font-bold hidden lg:table-cell">Tổng</td>
-              <td className="py-2 px-3 text-center font-bold lg:hidden">Tổng</td>
-              <td className="py-2 px-3 text-center text-rose-600 font-bold">
+              <td colSpan={6} className="py-2 px-1 sm:px-3 text-center font-bold hidden lg:table-cell text-xs sm:text-sm">Tổng</td>
+              <td colSpan={2} className="py-2 px-1 sm:px-3 text-center font-bold lg:hidden text-xs sm:text-sm">Tổng</td>
+              <td className="py-2 px-1 sm:px-3 text-center text-rose-600 font-bold text-xs sm:text-sm">
                 {formatCurrency(totals.totalOldDebt)}
               </td>
-              <td className="py-2 px-3 text-center text-rose-600 font-bold">
+              <td className="py-2 px-1 sm:px-3 text-center text-rose-600 font-bold text-xs sm:text-sm">
                 {formatCurrency(totals.totalAmount)}
               </td>
-              <td colSpan={3} className="py-2 px-3" />
+              <td colSpan={3} className="py-2 px-1 sm:px-3" />
             </tr>
           </tfoot>
         )}

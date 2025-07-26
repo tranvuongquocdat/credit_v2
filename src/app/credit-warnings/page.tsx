@@ -384,6 +384,8 @@ export default function CreditWarningPage() {
             isLoading={isLoading || calculationsLoading}
             onShowPaymentHistory={handleShowPaymentHistory}
             creditCalculations={creditCalculations}
+            currentPage={currentPage}
+            itemsPerPage={itemsPerPage}
         />
         
         {/* Pagination */}

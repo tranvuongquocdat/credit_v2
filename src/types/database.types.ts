@@ -1240,6 +1240,13 @@ export type Database = {
           description: string
         }[]
       }
+      get_latest_installment_payment_paid_dates: {
+        Args: { p_installment_ids: string[] }
+        Returns: {
+          installment_id: string
+          latest_paid_date: string
+        }[]
+      }
       get_latest_payment_paid_dates: {
         Args: { p_credit_ids: string[] }
         Returns: {
@@ -1381,6 +1388,50 @@ export type Database = {
           total_old_debt: number
           total_interest_today: number
         }[]
+      }
+      search_installments_unaccent: {
+        Args: {
+          p_customer_name?: string
+          p_contract_code?: string
+          p_start_date?: string
+          p_end_date?: string
+          p_duration?: number
+          p_status?: string
+          p_store_id?: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          id: string
+          customer_id: string
+          employee_id: string
+          contract_code: string
+          installment_amount: number
+          down_payment: number
+          loan_date: string
+          loan_period: number
+          payment_period: number
+          status: Database["public"]["Enums"]["installment_status"]
+          document: string
+          notes: string
+          created_at: string
+          updated_at: string
+          store_id: string
+          status_code: string
+          payment_due_date: string
+          customer_name: string
+          customer_phone: string
+          customer_address: string
+          customer_id_number: string
+        }[]
+      }
+      unaccent: {
+        Args: { "": string }
+        Returns: string
+      }
+      unaccent_init: {
+        Args: { "": unknown }
+        Returns: unknown
       }
     }
     Enums: {
