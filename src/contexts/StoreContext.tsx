@@ -53,7 +53,6 @@ export const StoreProvider = ({ children }: StoreProviderProps) => {
   // Function to fetch stores
   const fetchStores = async () => {
     try {
-      console.log('🔄 Fetching stores...');
       const { data, error } = await getAllActiveStores();
       
       if (error) {
@@ -61,34 +60,28 @@ export const StoreProvider = ({ children }: StoreProviderProps) => {
         throw new Error(typeof error === 'object' && error && 'message' in error ? error.message as string : 'Failed to fetch stores');
       }
       
-      console.log('✅ Stores fetched successfully:', data?.length || 0, 'stores');
       
       if (data && data.length > 0) {
         setStores(data);
         
         // Lấy store đã chọn từ localStorage nếu có
         const savedStoreId = localStorage.getItem('currentStoreId');
-        console.log('💾 Saved store ID from localStorage:', savedStoreId);
         
         if (savedStoreId) {
           const savedStore = data.find(store => store.id === savedStoreId);
           if (savedStore) {
-            console.log('✅ Found saved store:', savedStore.name);
             setCurrentStoreState(savedStore);
           } else {
-            console.log('⚠️ Saved store not found, using first store');
             // Nếu không tìm thấy store đã lưu, mặc định chọn store đầu tiên
             setCurrentStoreState(data[0]);
             localStorage.setItem('currentStoreId', data[0].id);
           }
         } else {
-          console.log('📝 No saved store, using first store');
           // Nếu không có store nào được lưu, mặc định chọn store đầu tiên
           setCurrentStoreState(data[0]);
           localStorage.setItem('currentStoreId', data[0].id);
         }
       } else {
-        console.log('⚠️ No stores available - user may not have access to any stores');
         setStores([]);
         setCurrentStoreState(null);
         // Xóa store đã lưu trong localStorage vì không còn hợp lệ
@@ -138,7 +131,6 @@ export const StoreProvider = ({ children }: StoreProviderProps) => {
 
   // Hàm để cập nhật currentStore
   const setCurrentStore = (store: Store) => {
-    console.log('🔄 Setting current store:', store.name);
     
     // Lưu vào state (quan trọng để trigger re-render)
     setCurrentStoreState(store);
@@ -146,7 +138,6 @@ export const StoreProvider = ({ children }: StoreProviderProps) => {
     // Lưu vào localStorage
     localStorage.setItem('currentStoreId', store.id);
     
-    console.log('✅ Store context updated:', store.name);
   };
 
   const resetStores = () => {

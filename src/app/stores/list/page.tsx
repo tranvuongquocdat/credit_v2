@@ -547,38 +547,13 @@ export default function StoresPage() {
                             >
                               <Pencil className="h-4 w-4 text-gray-500" />
                             </Button>
-                            <Button 
+                            {/* <Button 
                               variant="ghost" 
                               className="h-8 w-8 p-0" 
                               onClick={() => openDeleteModal(store)}
                             >
                               <Trash2 className="h-4 w-4 text-gray-500" />
-                            </Button>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="h-8 w-8 p-0">
-                                  <span className="sr-only">Mở menu</span>
-                                  <MoreVertical className="h-4 w-4 text-gray-500" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-44">
-                                <DropdownMenuItem onClick={() => openEditModal(store)}>
-                                  <Pencil className="mr-2 h-4 w-4" />
-                                  Sửa thông tin
-                                </DropdownMenuItem>
-                                {store.phone && (
-                                  <DropdownMenuItem onClick={() => window.open(`tel:${store.phone}`)}>
-                                    <PhoneIcon className="mr-2 h-4 w-4" />
-                                    Gọi điện
-                                  </DropdownMenuItem>
-                                )}
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => openDeleteModal(store)} className="text-red-600">
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Xóa cửa hàng
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            </Button> */}
                           </div>
                         </TableCell>
                       </TableRow>

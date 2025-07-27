@@ -33,8 +33,6 @@ let _cachedUser: any = null;
 export async function getCurrentUser(forceRefresh = false) {
   if (_cachedUser && !forceRefresh) return _cachedUser;
 
-  // Chỉ log khi thật sự cần fetch (lần đầu hoặc forceRefresh)
-  console.log('getCurrentUser: fetching from Supabase');
   const { data: { user } } = await supabase.auth.getUser();
 
   let profile = { username: "", role: "user", is_banned: false } as any;

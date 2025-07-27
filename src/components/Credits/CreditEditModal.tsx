@@ -501,7 +501,7 @@ export function CreditEditModal({
   
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[800px] md:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-[400px] sm:max-w-[500px] md:max-w-[600px] lg:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-center">Chỉnh sửa hợp đồng vay tiền</DialogTitle>
         </DialogHeader>
@@ -516,8 +516,8 @@ export function CreditEditModal({
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 py-4">
             {/* Customer information - read only */}
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="customerName" className="text-right">
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <Label htmlFor="customerName" className="text-left sm:text-right font-medium">
                 Tên khách hàng
               </Label>
               <select 
@@ -544,8 +544,8 @@ export function CreditEditModal({
               </select>
             </div>
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="contractCode" className="text-right">Mã HĐ</Label>
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <Label htmlFor="contractCode" className="text-left sm:text-right font-medium">Mã HĐ</Label>
               <Input 
                 id="contractCode"
                 value={contractCode}
@@ -555,8 +555,8 @@ export function CreditEditModal({
               />
             </div>
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="idNumber" className="text-right">Số CCCD/Hộ chiếu</Label>
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <Label htmlFor="idNumber" className="text-left sm:text-right font-medium">Số CCCD/Hộ chiếu</Label>
               <Input 
                 id="idNumber"
                 value={idNumber}
@@ -565,8 +565,8 @@ export function CreditEditModal({
               />
             </div>
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="phone" className="text-right">SĐT</Label>
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <Label htmlFor="phone" className="text-left sm:text-right font-medium">SĐT</Label>
               <Input 
                 id="phone"
                 value={phone}
@@ -575,8 +575,8 @@ export function CreditEditModal({
               />
             </div>
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-start">
-              <Label htmlFor="address" className="text-right mt-2">Địa chỉ</Label>
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-start">
+              <Label htmlFor="address" className="text-left sm:text-right font-medium sm:mt-2">Địa chỉ</Label>
               <Textarea 
                 id="address"
                 value={address}
@@ -586,8 +586,8 @@ export function CreditEditModal({
               />
             </div>
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-start">
-              <Label htmlFor="collateral" className="text-right mt-2">Tài sản thế chấp</Label>
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-start">
+              <Label htmlFor="collateral" className="text-left sm:text-right font-medium sm:mt-2">Tài sản thế chấp</Label>
               <Textarea 
                 id="collateral"
                 value={collateral}
@@ -597,8 +597,8 @@ export function CreditEditModal({
               />
             </div>
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="loanAmount" className="text-right">
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <Label htmlFor="loanAmount" className="text-left sm:text-right font-medium">
                 Tổng số tiền vay <span className="text-red-500">*</span>
               </Label>
               <div>
@@ -610,7 +610,7 @@ export function CreditEditModal({
                   placeholder="0"
                   disabled={hasPayments}
                 />
-                <div className="flex flex-wrap gap-2 mt-2">
+                <div className="grid grid-cols-3 sm:flex sm:flex-wrap gap-2 mt-2">
                   {loanAmountPresets.map(amount => (
                     <Button 
                       key={amount}
@@ -618,7 +618,7 @@ export function CreditEditModal({
                       variant="outline"
                       size="sm"
                       onClick={() => adjustLoanAmount(amount * 1000000)}
-                      className="px-2 py-1 h-auto"
+                      className="px-2 py-1 h-auto text-xs sm:text-sm"
                       disabled={hasPayments}
                     >
                       {amount > 0 ? '+' : ''}{amount}
@@ -628,8 +628,8 @@ export function CreditEditModal({
               </div>
             </div>
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label className="text-right">Hình thức lãi</Label>
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <Label className="text-left sm:text-right font-medium">Hình thức lãi</Label>
               <select 
                 className="border rounded-md p-2 w-full"
                 value={interestType}
@@ -644,11 +644,11 @@ export function CreditEditModal({
               </select>
             </div>
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="interestValue" className="text-right">
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <Label htmlFor="interestValue" className="text-left sm:text-right font-medium">
                 Lãi phí <span className="text-red-500">*</span>
               </Label>
-              <div className="flex items-center space-x-4">
+              <div className="space-y-3 sm:space-y-0 sm:flex sm:items-center sm:space-x-4">
                 <Input 
                   id="interestValue"
                   type="number"
@@ -658,13 +658,13 @@ export function CreditEditModal({
                     validateInterestRate(e.target.value, interestType);
                   }}
                   required
-                  className="w-32"
+                  className="w-full sm:w-32"
                   placeholder="0"
                   min={0}
                   step="any"
                   disabled={hasPayments}
                 />
-                <div className="flex flex-wrap gap-4 items-center">
+                <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:gap-4 sm:items-center">
                   {interestType === 'daily' && (
                     <>
                       <div className="flex items-center">
@@ -680,7 +680,7 @@ export function CreditEditModal({
                           className="mr-2"
                           disabled={hasPayments}
                         />
-                        <label htmlFor="interestDaily1" className="text-sm">k/1 triệu</label>
+                        <label htmlFor="interestDaily1" className="text-xs sm:text-sm">k/1 triệu</label>
                       </div>
                       <div className="flex items-center">
                         <input 
@@ -695,7 +695,7 @@ export function CreditEditModal({
                           className="mr-2"
                           disabled={hasPayments}
                         />
-                        <label htmlFor="interestDaily2" className="text-sm">k/1 ngày</label>
+                        <label htmlFor="interestDaily2" className="text-xs sm:text-sm">k/1 ngày</label>
                       </div>
                     </>
                   )}
@@ -715,7 +715,7 @@ export function CreditEditModal({
                           className="mr-2"
                           disabled={hasPayments}
                         />
-                        <label htmlFor="interestMonthly1" className="text-sm">%/1 tháng</label>
+                        <label htmlFor="interestMonthly1" className="text-xs sm:text-sm">%/1 tháng</label>
                       </div>
                     </>
                   )}
@@ -735,7 +735,7 @@ export function CreditEditModal({
                           className="mr-2"
                           disabled={hasPayments}
                         />
-                        <label htmlFor="interestWeeklyPercent1" className="text-sm">% /1 tuần (VD : 2% / 1 tuần)</label>
+                        <label htmlFor="interestWeeklyPercent1" className="text-xs sm:text-sm break-words">% /1 tuần</label>
                       </div>
                     </>
                   )}
@@ -751,7 +751,7 @@ export function CreditEditModal({
                           className="mr-2"
                           disabled={hasPayments}
                         />
-                        <label htmlFor="interestWeeklyK1" className="text-sm">k/1 tuần (VD: 100k/1 tuần)</label>
+                        <label htmlFor="interestWeeklyK1" className="text-xs sm:text-sm break-words">k/1 tuần</label>
                       </div>
                     </>
                   )}
@@ -760,19 +760,19 @@ export function CreditEditModal({
             </div>
             
             {interestRateWarning && (
-              <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-                <div></div>
+              <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+                <div className="hidden sm:block"></div>
                 <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm" role="alert">
                   <span className="flex items-center">
-                    <AlertCircle className="h-4 w-4 mr-2" />
-                    {interestRateWarning}
+                    <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0" />
+                    <span className="break-words">{interestRateWarning}</span>
                   </span>
                 </div>
               </div>
             )}
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="loanPeriod" className="text-right">
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <Label htmlFor="loanPeriod" className="text-left sm:text-right font-medium">
                 {interestType.startsWith('weekly') ? 'Số tuần vay' : 
                  interestType.startsWith('monthly') ? 'Số tháng vay' : 
                  'Số ngày vay'} <span className="text-red-500">*</span>
@@ -789,36 +789,36 @@ export function CreditEditModal({
               />
             </div>
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="interestPeriod" className="text-right">
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <Label htmlFor="interestPeriod" className="text-left sm:text-right font-medium">
                 {interestType.startsWith('weekly') ? 'Kỳ lãi (tuần)' : 
                  interestType.startsWith('monthly') ? 'Kỳ lãi (tháng)' : 
                  'Kỳ lãi (ngày)'} <span className="text-red-500">*</span>
               </Label>
-              <div className="flex items-center space-x-2">
+              <div className="space-y-2 sm:space-y-0 sm:flex sm:items-center sm:space-x-2">
                 <Input 
                   id="interestPeriod"
                   type="number"
                   value={interestPeriod}
                   onChange={(e) => setInterestPeriod(e.target.value)}
                   required
-                  className="w-32"
+                  className="w-full sm:w-32"
                   placeholder="0"
                   min={0}
                 />
-                <div className="text-sm text-gray-600">
+                <div className="text-xs sm:text-sm text-gray-600 break-words">
                   {(interestType === 'daily') && 
-                    '(VD: 10 ngày đóng lãi phí 1 lần thì điền số 10)'}
+                    'VD: 10 ngày thì nhập 10'}
                   {(interestType === 'monthly_30' || interestType === 'monthly_custom') && 
-                    '(VD: 1 tháng đóng lãi phí 1 lần thì điền số 1)'}
+                    'VD: 1 tháng thì nhập 1'}
                   {(interestType === 'weekly_percent' || interestType === 'weekly_k') && 
-                    '(VD: 1 tuần đóng lãi phí 1 lần thì điền số 1)'}
+                    'VD: 1 tuần thì nhập 1'}
                 </div>
               </div>
             </div>
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-center">
-              <Label htmlFor="loanDate" className="text-right">
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <Label htmlFor="loanDate" className="text-left sm:text-right font-medium">
                 Ngày vay <span className="text-red-500">*</span>
               </Label>
               <DatePicker 
@@ -830,8 +830,8 @@ export function CreditEditModal({
               />
             </div>
             
-            <div className="grid grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-4 items-start">
-              <Label htmlFor="notes" className="text-right mt-2">Ghi chú</Label>
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-start">
+              <Label htmlFor="notes" className="text-left sm:text-right font-medium sm:mt-2">Ghi chú</Label>
               <Textarea 
                 id="notes"
                 value={notes}
@@ -844,17 +844,17 @@ export function CreditEditModal({
               <div className="text-red-500 text-center">{error}</div>
             )}
             
-            <div className="flex justify-center space-x-4 mt-6">
+            <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 mt-6">
               <Button 
                 type="submit" 
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto px-6"
                 disabled={isLoading || status === CreditStatus.CLOSED || status === CreditStatus.DELETED}
               >
                 {isLoading ? 'Đang xử lý...' : 'Cập nhật'}
               </Button>
               <Button 
                 type="button" 
-                className="bg-gray-200 hover:bg-gray-300 text-gray-800"
+                className="bg-gray-200 hover:bg-gray-300 text-gray-800 w-full sm:w-auto px-6"
                 onClick={onClose}
                 disabled={isLoading}
               >

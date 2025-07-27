@@ -5,7 +5,7 @@ import { useStore } from "@/contexts/StoreContext";
 import { CreditWithCustomer } from "@/models/credit";
 import { getCreditWarnings, CreditReasonFilter, categorizeCreditReason, calculateUnpaidInterestAmount } from "@/lib/credit-warnings";
 import { CreditWarningsTable } from "@/components/Credits/CreditWarningsTable";
-import { Search } from "lucide-react";
+import { Search, Download } from "lucide-react";
 import { toast } from '@/components/ui/use-toast';
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
@@ -298,7 +298,7 @@ export default function CreditWarningPage() {
         </div>
       ) : (
       <>
-      <div className="container mx-auto">
+      <div className="max-w-full">
         {/* Title */}
         <div className="flex items-center justify-between border-b pb-2 mb-2">
           <div className="flex items-center gap-2">
@@ -306,31 +306,33 @@ export default function CreditWarningPage() {
           </div>
         </div>
         
-        {/* Filter Section */}
-        <div className="my-4">
-          <div className="flex items-center gap-4">
-            {/* Customer Name Search */}
-            <div className="relative flex-1 max-w-md">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                <Search className="h-4 w-4 text-gray-400" />
+        {/* Search Filters */}
+        <div className="mb-4 py-4 bg-gray-50 rounded-lg">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 px-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Tên khách hàng</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                  <Search className="h-4 w-4 text-gray-400" />
+                </div>
+                <Input
+                  type="text"
+                  placeholder="Tên khách hàng, VD: Tuấn"
+                  value={customerNameFilter}
+                  onChange={handleCustomerFilterChange}
+                  className="pl-10 w-full"
+                />
               </div>
-              <Input
-                type="text"
-                placeholder="Tìm kiếm theo tên khách hàng..."
-                value={customerNameFilter}
-                onChange={handleCustomerFilterChange}
-                className="pl-10"
-              />
             </div>
-            
-            {/* Reason Filter */}
-            <div className="max-w-xs">
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Lý do</label>
               <Select value={reasonFilter} onValueChange={handleReasonFilterChange}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Lý do" />
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn lý do" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tất cả trạng thái</SelectItem>
+                  <SelectItem value="all">Tất cả</SelectItem>
                   <SelectItem value="today_due">Hôm nay đóng</SelectItem>
                   <SelectItem value="tomorrow_due">Ngày mai đóng</SelectItem>
                   <SelectItem value="late">Chậm trả lãi</SelectItem>
@@ -339,8 +341,9 @@ export default function CreditWarningPage() {
                 </SelectContent>
               </Select>
             </div>
-            
-            {/* Clear Filter Button */}
+          </div>
+          
+          <div className="flex items-end gap-2 px-4">
             <Button 
               variant="outline" 
               onClick={handleClearFilter}
@@ -349,21 +352,26 @@ export default function CreditWarningPage() {
               Xóa bộ lọc
             </Button>
             
-            {/* Excel Export Button */}
             <Button 
               variant="outline" 
               onClick={handleExportExcel}
               disabled={isExporting || allCredits.length === 0}
-              className="bg-green-50 hover:bg-green-100 text-green-700 border-green-300"
+              className="flex items-center gap-2"
             >
-              {isExporting ? 'Đang xuất...' : 'Xuất Excel'}
+              <Download className="h-4 w-4" />
+              Xuất Excel
             </Button>
           </div>
           
-          {/* Filter Status Display */}
-          {customerNameFilter && (
+          {/* Show filter info if active */}
+          {(customerNameFilter || reasonFilter !== "all") && (
             <div className="mt-2 text-sm text-blue-600">
-              Đang lọc theo KH: <span className="font-semibold">{customerNameFilter}</span>
+              {customerNameFilter && (
+                <span>Đang lọc theo tên khách hàng: <span className="font-semibold">{customerNameFilter}</span> </span>
+              )}
+              {reasonFilter !== "all" && (
+                <span>Đang lọc theo lý do: <span className="font-semibold">{reasonFilter}</span> </span>
+              )}
               {totalItems > 0 ? 
                 ` (${totalItems} kết quả)` : 
                 " (Không có kết quả)"}
@@ -371,27 +379,27 @@ export default function CreditWarningPage() {
           )}
         </div>
         
-        <div className="mt-6">
-          <CreditWarningsTable
+        <CreditWarningsTable
             credits={filteredCredits}
             isLoading={isLoading || calculationsLoading}
             onShowPaymentHistory={handleShowPaymentHistory}
             creditCalculations={creditCalculations}
-          />
-          
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="mt-4 flex justify-center">
-              <CreditWarningsPagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                totalItems={totalItems}
-                itemsPerPage={itemsPerPage}
-                onPageChange={handlePageChange}
-              />
-            </div>
-          )}
-        </div>
+            currentPage={currentPage}
+            itemsPerPage={itemsPerPage}
+        />
+        
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="mt-4 flex justify-center">
+            <CreditWarningsPagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              itemsPerPage={itemsPerPage}
+              onPageChange={handlePageChange}
+            />
+          </div>
+        )}
       </div>
       
       {/* Payment History Modal */}

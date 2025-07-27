@@ -136,7 +136,6 @@ export function TopNavbar() {
   
   // Handler for store selection - memoized to prevent recreating on every render
   const handleStoreChange = useCallback((store: any) => {
-    console.log('handleStoreChange', store);
     setCurrentStore(store);
     
     // Tăng phiên bản cửa hàng để buộc component re-render
@@ -165,7 +164,6 @@ export function TopNavbar() {
               console.error('Error fetching overdue installments count:', error);
             } else {
               overdueInstallments = count;
-              console.log('overdueInstallments', overdueInstallments);
             }
           }
           
@@ -176,7 +174,6 @@ export function TopNavbar() {
               console.error('Error fetching pawn warnings count:', error);
             } else {
               pawnWarningsCount = count;
-              console.log('pawnWarningsCount', pawnWarningsCount);
             }
           }
           
@@ -187,7 +184,6 @@ export function TopNavbar() {
               console.error('Error fetching credit warnings count:', error);
             } else {
               creditWarningsCount = count;
-              console.log('creditWarningsCount', creditWarningsCount);
             }
           }
           

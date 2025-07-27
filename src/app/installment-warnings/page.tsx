@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useStore } from "@/contexts/StoreContext";
 import { InstallmentStatus, InstallmentWithCustomer } from "@/models/installment";
-import { Search } from "lucide-react";
+import { Search, Download } from "lucide-react";
 import { toast } from '@/components/ui/use-toast';
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
@@ -105,7 +105,6 @@ export default function InstallmentWarningsPage() {
       setInstallments(data || []);
       setFilteredInstallments(data || []); // This will be updated by the table component
       
-      console.log(`Loaded ${data.length} installments out of ${totalItems} total (page ${currentPage}/${totalPages})`);
     } catch (err) {
       console.error("Error in loadInstallments:", err);
       toast({
@@ -482,7 +481,7 @@ export default function InstallmentWarningsPage() {
           <p className="text-center text-gray-500">Bạn không có quyền xem cảnh báo trả góp</p>
         </div>
       ) : (
-        <div className="container mx-auto">
+        <div className="max-w-full">
           {/* Title */}
           <div className="flex items-center justify-between border-b pb-2 mb-2">
             <div className="flex items-center gap-2">
@@ -490,79 +489,83 @@ export default function InstallmentWarningsPage() {
             </div>
           </div>
           
-          {/* Filter Section */}
-          <div className="my-4">
-            <div className="flex items-center gap-4">
-              <div className="relative flex-1 max-w-md">
-                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                  <Search className="h-4 w-4 text-gray-400" />
+          {/* Search Filters */}
+          <div className="mb-4 py-4 bg-gray-50 rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 px-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Tên khách hàng</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                    <Search className="h-4 w-4 text-gray-400" />
+                  </div>
+                  <Input
+                    type="text"
+                    placeholder="Tên khách hàng, VD: Tuấn"
+                    value={customerNameFilter}
+                    onChange={(e) => setCustomerNameFilter(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                    className="pl-10 w-full"
+                  />
                 </div>
-                <Input
-                  type="text"
-                  placeholder="Tìm kiếm theo tên khách hàng..."
-                  value={customerNameFilter}
-                  onChange={(e) => setCustomerNameFilter(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                  className="pl-10"
-                />
               </div>
-              {/* Contract code input */}
-              {/* <div className="relative flex-1 max-w-md">
-                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                  <Search className="h-4 w-4 text-gray-400" />
+
+              <div className="flex gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Nhân viên</label>
+                  <Select
+                    value={employeeFilter}
+                    onValueChange={(v) => {
+                      setEmployeeFilter(v);
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Chọn nhân viên" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tất cả</SelectItem>
+                      {employees.map((e) => (
+                        <SelectItem key={e.uid} value={e.uid}>{e.full_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Input
-                  type="text"
-                  placeholder="Tìm kiếm mã hợp đồng..."
-                  value={contractCodeFilter}
-                  onChange={(e) => setContractCodeFilter(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                  className="pl-10"
-                />
-              </div> */}
-              {/* Employee Select */}
-              <div className="max-w-xs">
-                <Select
-                  value={employeeFilter}
-                  onValueChange={(v) => {
-                    setEmployeeFilter(v);
-                    setCurrentPage(1);
-                  }}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Nhân viên" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tất cả NV</SelectItem>
-                    {employees.map((e) => (
-                      <SelectItem key={e.uid} value={e.uid}>{e.full_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Lý do</label>
+                  <Select
+                    value={reasonFilter}
+                    onValueChange={(v: ReasonFilter) => {
+                      setReasonFilter(v);
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Chọn lý do" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tất cả</SelectItem>
+                      <SelectItem value="today_due">Hôm nay phải đóng</SelectItem>
+                      <SelectItem value="tomorrow_due">Ngày mai đóng</SelectItem>
+                      <SelectItem value="late">Chậm kỳ</SelectItem>
+                      <SelectItem value="overdue">Quá hạn</SelectItem>
+                      <SelectItem value="end_today">Kết thúc hôm nay</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              
-              {/* Reason Filter */}
-              <div className="max-w-xs">
-                <Select
-                  value={reasonFilter}
-                  onValueChange={(v: ReasonFilter) => {
-                    setReasonFilter(v);
-                    setCurrentPage(1);
-                  }}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Lý do" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                    <SelectItem value="today_due">Hôm nay đóng</SelectItem>
-                    <SelectItem value="tomorrow_due">Ngày mai đóng</SelectItem>
-                    <SelectItem value="late_periods">Chậm kỳ</SelectItem>
-                    <SelectItem value="overdue">Quá hạn</SelectItem>
-                    <SelectItem value="ending_today">Hôm nay là kỳ cuối</SelectItem>
-                  </SelectContent>
-                </Select>
+
+              <div>
+                {/* Empty third column */}
               </div>
+
+              <div>
+                {/* Empty fourth column */}
+              </div>
+
+            </div>
+            
+            <div className="flex items-end gap-2 px-4">
               <Button 
                 variant="outline" 
                 onClick={clearFilter}
@@ -574,19 +577,27 @@ export default function InstallmentWarningsPage() {
                 variant="outline" 
                 onClick={handleExportExcel}
                 disabled={isExporting || allFilteredWarnings.length === 0}
-                className="bg-green-50 hover:bg-green-100 text-green-700 border-green-300"
+                className="flex items-center gap-2"
               >
-                {isExporting ? 'Đang xuất...' : 'Xuất Excel'}
+                <Download className="h-4 w-4" />
+                Xuất Excel
               </Button>
             </div>
+            
             {/* Show filter info if active */}
-            {(customerNameFilter || contractCodeFilter) && (
+            {(customerNameFilter || contractCodeFilter || employeeFilter !== "all" || reasonFilter !== "all") && (
               <div className="mt-2 text-sm text-blue-600">
                 {customerNameFilter && (
-                  <>Đang lọc theo KH: <span className="font-semibold">{customerNameFilter}</span></>
+                  <span>Đang lọc theo tên khách hàng: <span className="font-semibold">{customerNameFilter}</span> </span>
                 )}
                 {contractCodeFilter && (
-                  <> {customerNameFilter && ' • '}Mã HĐ: <span className="font-semibold">{contractCodeFilter}</span></>
+                  <span>Đang lọc theo mã hợp đồng: <span className="font-semibold">{contractCodeFilter}</span> </span>
+                )}
+                {employeeFilter !== "all" && (
+                  <span>Đang lọc theo nhân viên: <span className="font-semibold">{employees.find(e => e.uid === employeeFilter)?.full_name}</span> </span>
+                )}
+                {reasonFilter !== "all" && (
+                  <span>Đang lọc theo lý do: <span className="font-semibold">{reasonFilter}</span> </span>
                 )}
                 {totalItems > 0 ? 
                   ` (${totalItems} kết quả)` : 
@@ -595,8 +606,7 @@ export default function InstallmentWarningsPage() {
             )}
           </div>
           
-          <div className="mt-6">
-            <InstallmentWarningsTable
+          <InstallmentWarningsTable
               installments={filteredInstallments}
               isLoading={isLoading}
               reasonFilter={reasonFilter}
@@ -606,21 +616,20 @@ export default function InstallmentWarningsPage() {
               onPayment={handlePayment}
               onCustomerClick={handleCustomerClick}
               onShowPaymentHistory={handleShowPaymentHistory}
-            />
-            
-            {/* Pagination Component */}
-            {totalPages > 1 && (
-              <div className="mt-4 flex justify-center">
-                <InstallmentWarningsPagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  totalItems={totalItems}
-                  itemsPerPage={itemsPerPage}
-                  onPageChange={handlePageChange}
-                />
-              </div>
-            )}
-          </div>
+          />
+          
+          {/* Pagination Component */}
+          {totalPages > 1 && (
+            <div className="mt-4 flex justify-center">
+              <InstallmentWarningsPagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                itemsPerPage={itemsPerPage}
+                onPageChange={handlePageChange}
+              />
+            </div>
+          )}
         </div>
       )}
 

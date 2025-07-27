@@ -438,6 +438,8 @@ export default function InstallmentsPage() {
           onUpdateStatus={handleOpenStatusDialog}
           onDelete={handleOpenDeleteDialog}
           onShowPaymentActions={handleShowPaymentActions}
+          currentPage={currentPage}
+          itemsPerPage={itemsPerPage}
           totals={totals ?? undefined}
           onRefresh={() => {
             refetch();

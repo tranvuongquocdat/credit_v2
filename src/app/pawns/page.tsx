@@ -459,6 +459,8 @@ export default function PawnsPage() {
               onShowPaymentHistory={handleOpenPaymentHistory}
               calculatedDetails={pawnDetails}
               calculatedStatuses={undefined} // Status now in pawn.status_code from view
+              currentPage={currentPage}
+              itemsPerPage={itemsPerPage}
               totals={totals ?? undefined}
             />
             
