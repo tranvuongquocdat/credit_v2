@@ -155,32 +155,83 @@ export async function getInstallmentWarnings(
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString().split('T')[0];
     
-    // Single hybrid query: Use status-based filtering + payment timing
-    let query = supabase
-      .from('installments_by_store')
-      .select(`
-        *,
-        customer:customers!inner(*)
-      `, { count: 'exact' })
-      .eq('store_id', storeId)
-      .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']) // Include all warning statuses
-      .or(`payment_due_date.lte.${tomorrowStr},status_code.eq.OVERDUE,status_code.eq.LATE_INTEREST`)
-    
-    // Apply filters
-    if (customerFilter) {
-      query = query.ilike('customers.name', `%${customerFilter}%`);
+    let installments: any[] = [];
+    let error: any = null;
+    let count: number = 0;
+
+    // Use RPC for Vietnamese unaccented search when customer filter is provided
+    if (customerFilter.trim()) {
+      const { data: rpcData, error: rpcError, count: rpcCount } = await supabase
+        .rpc('search_installments_unaccent', {
+          p_customer_name: customerFilter,
+          p_contract_code: contractCodeFilter || '',
+          p_start_date: null,
+          p_end_date: null,
+          p_duration: null,
+          p_status: null, // Get all statuses, filter on client side
+          p_store_id: storeId,
+          p_limit: limit,
+          p_offset: 0
+        }, { count: 'exact' });
+
+      if (rpcError) {
+        error = rpcError;
+      } else {
+        // Transform RPC data to match expected format
+        installments = (rpcData || []).map((item: any) => ({
+          ...item,
+          customer: {
+            name: item.customer_name,
+            phone: item.customer_phone,
+            address: item.customer_address,
+            id_number: item.customer_id_number
+          },
+          debt_amount: item.down_payment || 0 // Map debt_amount from down_payment for consistency
+        }));
+
+        // Filter to only warning installments (same logic as original query)
+        installments = installments.filter((installment: any) => 
+          (installment.status_code === 'ON_TIME' || 
+           installment.status_code === 'OVERDUE' || 
+           installment.status_code === 'LATE_INTEREST') &&
+          (installment.payment_due_date && installment.payment_due_date.split('T')[0] <= tomorrowStr ||
+           installment.status_code === 'OVERDUE' ||
+           installment.status_code === 'LATE_INTEREST')
+        );
+
+        // Apply additional filters if provided
+        if (employeeId) {
+          installments = installments.filter((inst: any) => inst.employee_id === employeeId);
+        }
+
+        count = installments.length;
+      }
+    } else {
+      // Use regular query when no customer filter
+      let query = supabase
+        .from('installments_by_store')
+        .select(`
+          *,
+          customer:customers!inner(*)
+        `, { count: 'exact' })
+        .eq('store_id', storeId)
+        .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']) // Include all warning statuses
+        .or(`payment_due_date.lte.${tomorrowStr},status_code.eq.OVERDUE,status_code.eq.LATE_INTEREST`)
+      
+      if (contractCodeFilter) {
+        query = query.eq('contract_code', contractCodeFilter);
+      }
+      
+      if (employeeId) {
+        query = query.eq('employee_id', employeeId);
+      }
+      
+      // Execute query
+      const { data: queryInstallments, error: queryError, count: queryCount } = await query;
+      installments = queryInstallments || [];
+      error = queryError;
+      count = queryCount || 0;
     }
-    
-    if (contractCodeFilter) {
-      query = query.eq('contract_code', contractCodeFilter);
-    }
-    
-    if (employeeId) {
-      query = query.eq('employee_id', employeeId);
-    }
-    
-    // Execute single query
-    const { data: installments, error, count } = await query;
     
     if (error) throw error;
     

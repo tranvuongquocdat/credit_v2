@@ -14,7 +14,7 @@ export function useInstallments() {
   const [error, setError] = useState<string | null>(null);
   const [totalItems, setTotalItems] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(30);
+  const [itemsPerPage, setItemsPerPage] = useState(30);
   
   // Get current store from context
   const { currentStore } = useStore();
@@ -134,6 +134,12 @@ export function useInstallments() {
     setCurrentPage(page);
   };
 
+  // Handle page size change
+  const handlePageSizeChange = (newPageSize: number) => {
+    setItemsPerPage(newPageSize);
+    setCurrentPage(1); // Reset to first page when changing page size
+  };
+
   // Handle updating status
   const handleUpdateStatus = async (installmentId: string, status: InstallmentStatus) => {
     try {
@@ -216,6 +222,7 @@ export function useInstallments() {
     handleSearch,
     handleReset,
     handlePageChange,
+    handlePageSizeChange,
     handleUpdateStatus,
     handleDelete,
     refetch,

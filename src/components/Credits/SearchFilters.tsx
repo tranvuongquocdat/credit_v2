@@ -24,6 +24,8 @@ interface SearchFiltersProps {
   onExportExcel: () => void;
   exporting?: boolean;
   initialFilters?: Partial<SearchFilters>;
+  itemsPerPage: number;
+  onPageSizeChange: (pageSize: number) => void;
 }
 
 export interface SearchFilters {
@@ -42,7 +44,9 @@ export function SearchFilters({
   onCreateNew, 
   onExportExcel,
   exporting,
-  initialFilters 
+  initialFilters,
+  itemsPerPage,
+  onPageSizeChange 
 }: SearchFiltersProps) {
   const statusMap = {
     // Map filter values to display labels
@@ -236,7 +240,7 @@ export function SearchFilters({
 
   return (
     <>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 mb-4">
         <div>
           <label htmlFor="contract_code" className="block text-xs font-medium text-gray-700 mb-1 truncate">
             Mã HD
@@ -366,6 +370,24 @@ export function SearchFilters({
             </div>
           </div>
         </div>
+
+        <div>
+          <label htmlFor="pageSize" className="block text-xs font-medium text-gray-700 mb-1 truncate">
+            Số mục/trang
+          </label>
+          <Select value={itemsPerPage.toString()} onValueChange={(value) => onPageSizeChange(parseInt(value))}>
+            <SelectTrigger id="pageSize" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="30">30</SelectItem>
+              <SelectItem value="50">50</SelectItem>
+              <SelectItem value="80">80</SelectItem>
+              <SelectItem value="100">100</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         <div>
           <label htmlFor="status" className="block text-xs font-medium text-gray-700 mb-1 truncate">
             Trạng thái hợp đồng

@@ -21,6 +21,149 @@ export interface CreditFilters {
   duration?: number;
 }
 
+// Helper function for Vietnamese unaccented search using RPC
+async function getCreditsWithUnaccentedSearch(
+  page: number,
+  limit: number,
+  filters: CreditFilters,
+  signal?: AbortSignal
+) {
+  try {
+    // Calculate pagination
+    const from = (page - 1) * limit;
+    
+    // Map status filter to the expected format
+    let statusFilter = null;
+    if (filters.status) {
+      switch (filters.status) {
+        case 'overdue':
+          statusFilter = 'OVERDUE';
+          break;
+        case 'late_interest':
+          statusFilter = 'LATE_INTEREST';
+          break;
+        case 'on_time':
+          statusFilter = 'ON_TIME';
+          break;
+        case 'closed':
+          statusFilter = 'CLOSED';
+          break;
+        case 'deleted':
+          statusFilter = 'DELETED';
+          break;
+        case 'bad_debt':
+          statusFilter = 'BAD_DEBT';
+          break;
+        case 'finished':
+          statusFilter = 'FINISHED';
+          break;
+        default:
+          statusFilter = null;
+      }
+    }
+    
+    // Use RPC function for unaccented search
+    const { data, error } = await (supabase.rpc as any)('search_credits_unaccent', {
+      p_customer_name: filters.customer_name || '',
+      p_contract_code: filters.contract_code || '',
+      p_start_date: filters.start_date || null,
+      p_end_date: filters.end_date || null,
+      p_duration: filters.duration || null,
+      p_status: statusFilter,
+      p_store_id: filters.store_id || null,
+      p_limit: limit,
+      p_offset: from
+    });
+    
+    if (error) throw error;
+    
+    // Check if request was cancelled
+    if (signal?.aborted) {
+      throw new Error('Request was cancelled');
+    }
+    
+    // Transform data to match expected format
+    const creditData = (data || []).map((item: any) => {
+      const customerData = item.customer_name ? {
+        id: item.customer_id || '',
+        name: item.customer_name || '',
+        phone: item.customer_phone || undefined,
+        id_number: item.customer_id_number || undefined,
+        blacklist_reason: undefined, // Not returned by RPC
+      } : undefined;
+      
+      return {
+        id: item.id,
+        store_id: item.store_id,
+        customer_id: item.customer_id,
+        contract_code: item.contract_code,
+        id_number: item.id_number,
+        phone: item.phone,
+        address: item.address,
+        collateral: item.collateral,
+        loan_amount: item.loan_amount,
+        interest_type: item.interest_type,
+        interest_value: item.interest_value,
+        interest_ui_type: item.interest_ui_type,
+        interest_notation: item.interest_notation,
+        loan_period: item.loan_period,
+        interest_period: item.interest_period,
+        debt_amount: item.debt_amount,
+        loan_date: item.loan_date,
+        notes: item.notes,
+        status: item.status,
+        status_code: item.status_code,
+        next_payment_date: item.next_payment_date,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+        customer: customerData
+      };
+    });
+    
+    // Handle special client-side filtering for due_tomorrow
+    let filteredData = creditData;
+    if (filters.status === 'due_tomorrow') {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+      filteredData = creditData.filter((credit: any) => 
+        credit.next_payment_date === tomorrowStr
+      );
+    }
+    
+    // For RPC, we get exact page results, so estimate total count
+    const totalCount = filteredData.length === limit ? (page * limit) + 1 : (page - 1) * limit + filteredData.length;
+    
+    return {
+      data: filteredData as CreditWithCustomer[],
+      total: totalCount,
+      page,
+      limit,
+      error: null
+    };
+  } catch (error: any) {
+    // Don't log cancelled requests
+    if (error instanceof Error && error.name === 'AbortError') {
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit,
+        error: null
+      };
+    }
+    
+    console.error('Error in unaccented search:', error);
+    return {
+      data: [],
+      total: 0,
+      page,
+      limit,
+      error
+    };
+  }
+}
+
 // Legacy code removed - now using status_code from credits_by_store view
 
 /**
@@ -33,6 +176,10 @@ export async function getCredits(
   signal?: AbortSignal
 ) {
   try {
+    // If customer name filter is provided, use RPC for unaccented search
+    if (filters?.customer_name) {
+      return await getCreditsWithUnaccentedSearch(page, limit, filters, signal);
+    }
     
     // Use the credits_by_store view to include status_code and join customers
     let query = supabase
@@ -54,10 +201,7 @@ export async function getCredits(
         query = query.ilike('contract_code', `%${filters.contract_code}%`);
       }
       
-      if (filters?.customer_name) {
-        // Lọc trực tiếp trên cột name của bảng customers thông qua INNER JOIN
-        query = query.ilike('customers.name', `%${filters.customer_name}%`);
-      }
+      // Note: customer_name filtering is now handled by RPC function above
       
       if (filters.start_date) {
         query = query.gte('loan_date', filters.start_date);

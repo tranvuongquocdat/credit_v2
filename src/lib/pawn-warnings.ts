@@ -205,27 +205,62 @@ export async function getPawnWarnings(
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString().split('T')[0];
 
-    // Expanded query to include:
-    // 1. Currently overdue or late
-    // 2. Due today or tomorrow  
-    // 3. Ending today
-    let pawnsQuery = supabase
-      .from('pawns_by_store')
-      .select(`
-        *,
-        customer:customers!inner(*),
-        collateral_asset:collaterals(*)
-      `)
-      .eq('store_id', storeId)
-      .or(`status_code.in.(OVERDUE,LATE_INTEREST),and(status_code.eq.ON_TIME,next_payment_date.lte.${tomorrowStr})`)
-      .order('created_at', { ascending: false });
+    let pawns: any[] = [];
+    let pawnsError: any = null;
 
-    // Apply filters
-    if (customerFilter) {
-      pawnsQuery = pawnsQuery.ilike('customers.name', `%${customerFilter}%`);
+    // Use RPC for Vietnamese unaccented search when customer filter is provided
+    if (customerFilter.trim()) {
+      const { data: rpcData, error: rpcError } = await supabase.rpc('search_pawns_unaccent', {
+        p_customer_name: customerFilter,
+        p_contract_code: '',
+        p_start_date: null,
+        p_end_date: null,
+        p_duration: null,
+        p_status: null, // Get all statuses, filter on client side
+        p_store_id: storeId,
+        p_limit: limit,
+        p_offset: 0
+      });
+
+      if (rpcError) {
+        pawnsError = rpcError;
+      } else {
+        // Transform RPC data to match expected format
+        pawns = (rpcData || []).map((item: any) => ({
+          ...item,
+          customer: {
+            name: item.customer_name,
+            phone: item.customer_phone,
+            address: item.customer_address,
+            id_number: item.customer_id_number
+          },
+          collateral_asset: null // RPC doesn't include collateral, but warnings might not need it
+        }));
+
+        // Filter to only warning pawns (same logic as original query)
+        pawns = pawns.filter((pawn: any) => 
+          pawn.status_code === 'OVERDUE' || 
+          pawn.status_code === 'LATE_INTEREST' ||
+          (pawn.status_code === 'ON_TIME' && pawn.next_payment_date && pawn.next_payment_date <= tomorrowStr)
+        );
+      }
+    } else {
+      // Use regular query when no customer filter
+      const pawnsQuery = supabase
+        .from('pawns_by_store')
+        .select(`
+          *,
+          customer:customers!inner(*),
+          collateral_asset:collaterals(*)
+        `)
+        .eq('store_id', storeId)
+        .or(`status_code.in.(OVERDUE,LATE_INTEREST),and(status_code.eq.ON_TIME,next_payment_date.lte.${tomorrowStr})`)
+        .order('created_at', { ascending: false });
+      
+      const { data: queryPawns, error: queryError } = await pawnsQuery;
+      pawns = queryPawns || [];
+      pawnsError = queryError;
     }
-    
-    const { data: pawns, error: pawnsError } = await pawnsQuery;
 
     if (pawnsError) {
       console.error('Error fetching pawns:', pawnsError);

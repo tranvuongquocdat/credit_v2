@@ -44,7 +44,7 @@ export default function InstallmentWarningsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
-  const [itemsPerPage] = useState(30);
+  const [itemsPerPage, setItemsPerPage] = useState(30);
   const { currentStore } = useStore();
   const [processingPayment, setProcessingPayment] = useState(false);
   const { hasPermission, loading: permissionsLoading } = usePermissions();
@@ -171,6 +171,12 @@ export default function InstallmentWarningsPage() {
   // Handle page change
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
+  };
+
+  // Handle page size change
+  const handlePageSizeChange = (newPageSize: number) => {
+    setItemsPerPage(newPageSize);
+    setCurrentPage(1); // Reset to first page when changing page size
   };
   
   // Handle export to Excel
@@ -553,16 +559,21 @@ export default function InstallmentWarningsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Số mục/trang</label>
+                  <Select value={itemsPerPage.toString()} onValueChange={(value) => handlePageSizeChange(parseInt(value))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="30">30</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="80">80</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-
-              <div>
-                {/* Empty third column */}
-              </div>
-
-              <div>
-                {/* Empty fourth column */}
-              </div>
-
             </div>
             
             <div className="flex items-end gap-2 px-4">
@@ -583,27 +594,6 @@ export default function InstallmentWarningsPage() {
                 Xuất Excel
               </Button>
             </div>
-            
-            {/* Show filter info if active */}
-            {(customerNameFilter || contractCodeFilter || employeeFilter !== "all" || reasonFilter !== "all") && (
-              <div className="mt-2 text-sm text-blue-600">
-                {customerNameFilter && (
-                  <span>Đang lọc theo tên khách hàng: <span className="font-semibold">{customerNameFilter}</span> </span>
-                )}
-                {contractCodeFilter && (
-                  <span>Đang lọc theo mã hợp đồng: <span className="font-semibold">{contractCodeFilter}</span> </span>
-                )}
-                {employeeFilter !== "all" && (
-                  <span>Đang lọc theo nhân viên: <span className="font-semibold">{employees.find(e => e.uid === employeeFilter)?.full_name}</span> </span>
-                )}
-                {reasonFilter !== "all" && (
-                  <span>Đang lọc theo lý do: <span className="font-semibold">{reasonFilter}</span> </span>
-                )}
-                {totalItems > 0 ? 
-                  ` (${totalItems} kết quả)` : 
-                  " (Không có kết quả)"}
-              </div>
-            )}
           </div>
           
           <InstallmentWarningsTable

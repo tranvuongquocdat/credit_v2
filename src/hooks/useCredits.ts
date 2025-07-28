@@ -10,7 +10,7 @@ export function useCredits(initialFilters?: Partial<SearchFilters>) {
   const [error, setError] = useState<any>(null);
   const [totalItems, setTotalItems] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(30);
+  const [itemsPerPage, setItemsPerPage] = useState(30);
   const [filters, setFilters] = useState<SearchFilters>({
     contract_code: initialFilters?.contract_code || '',
     customer_name: initialFilters?.customer_name || '',
@@ -136,6 +136,12 @@ export function useCredits(initialFilters?: Partial<SearchFilters>) {
     setCurrentPage(page);
   };
 
+  // Handle page size change
+  const handlePageSizeChange = (newPageSize: number) => {
+    setItemsPerPage(newPageSize);
+    setCurrentPage(1); // Reset to first page when changing page size
+  };
+
   // Handle delete
   const handleDelete = async (id: string) => {
     setLoading(true);
@@ -204,6 +210,7 @@ export function useCredits(initialFilters?: Partial<SearchFilters>) {
     handleSearch,
     handleReset,
     handlePageChange,
+    handlePageSizeChange,
     handleDelete,
     handleUpdateStatus,
     refetch: fetchCredits

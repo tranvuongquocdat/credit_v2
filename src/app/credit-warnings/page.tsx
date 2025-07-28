@@ -41,7 +41,7 @@ export default function CreditWarningPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
-  const itemsPerPage = 30;
+  const [itemsPerPage, setItemsPerPage] = useState(30);
   
   // State for payment history modal
   const [isPaymentHistoryModalOpen, setIsPaymentHistoryModalOpen] = useState(false);
@@ -150,6 +150,12 @@ export default function CreditWarningPage() {
   // Handle page change
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
+  };
+
+  // Handle page size change
+  const handlePageSizeChange = (newPageSize: number) => {
+    setItemsPerPage(newPageSize);
+    setCurrentPage(1); // Reset to first page when changing page size
   };
   
   // Handle filter changes
@@ -325,21 +331,37 @@ export default function CreditWarningPage() {
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Lý do</label>
-              <Select value={reasonFilter} onValueChange={handleReasonFilterChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Chọn lý do" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tất cả</SelectItem>
-                  <SelectItem value="today_due">Hôm nay đóng</SelectItem>
-                  <SelectItem value="tomorrow_due">Ngày mai đóng</SelectItem>
-                  <SelectItem value="late">Chậm trả lãi</SelectItem>
-                  <SelectItem value="overdue">Quá hạn hợp đồng</SelectItem>
-                  <SelectItem value="end_today">Kết thúc hôm nay</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Số mục/trang</label>
+                <Select value={itemsPerPage.toString()} onValueChange={(value) => handlePageSizeChange(parseInt(value))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="30">30</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="80">80</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Lý do</label>
+                <Select value={reasonFilter} onValueChange={handleReasonFilterChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn lý do" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả</SelectItem>
+                    <SelectItem value="today_due">Hôm nay đóng</SelectItem>
+                    <SelectItem value="tomorrow_due">Ngày mai đóng</SelectItem>
+                    <SelectItem value="late">Chậm trả lãi</SelectItem>
+                    <SelectItem value="overdue">Quá hạn hợp đồng</SelectItem>
+                    <SelectItem value="end_today">Kết thúc hôm nay</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
           
@@ -362,21 +384,6 @@ export default function CreditWarningPage() {
               Xuất Excel
             </Button>
           </div>
-          
-          {/* Show filter info if active */}
-          {(customerNameFilter || reasonFilter !== "all") && (
-            <div className="mt-2 text-sm text-blue-600">
-              {customerNameFilter && (
-                <span>Đang lọc theo tên khách hàng: <span className="font-semibold">{customerNameFilter}</span> </span>
-              )}
-              {reasonFilter !== "all" && (
-                <span>Đang lọc theo lý do: <span className="font-semibold">{reasonFilter}</span> </span>
-              )}
-              {totalItems > 0 ? 
-                ` (${totalItems} kết quả)` : 
-                " (Không có kết quả)"}
-            </div>
-          )}
         </div>
         
         <CreditWarningsTable
