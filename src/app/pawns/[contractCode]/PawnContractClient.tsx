@@ -66,6 +66,7 @@ export function PawnContractClient({ contractCode }: PawnContractClientProps) {
     handleSearch,
     handleReset,
     handlePageChange,
+    handlePageSizeChange,
     handleDelete,
     refetch
   } = usePawns();
@@ -292,6 +293,8 @@ export function PawnContractClient({ contractCode }: PawnContractClientProps) {
           onCreateNew={handleCreatePawn}
           onExportExcel={handleExportExcel}
           initialFilters={initialFilters}
+          itemsPerPage={itemsPerPage}
+          onPageSizeChange={handlePageSizeChange}
         />
 
         {/* Bảng dữ liệu hợp đồng */}

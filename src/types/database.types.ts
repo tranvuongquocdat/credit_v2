@@ -1389,6 +1389,47 @@ export type Database = {
           total_interest_today: number
         }[]
       }
+      search_credits_unaccent: {
+        Args: {
+          p_customer_name?: string
+          p_contract_code?: string
+          p_start_date?: string
+          p_end_date?: string
+          p_duration?: number
+          p_status?: string
+          p_store_id?: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          id: string
+          customer_id: string
+          contract_code: string
+          collateral: string
+          loan_amount: number
+          debt_amount: number
+          loan_date: string
+          loan_period: number
+          interest_type: string
+          interest_value: number
+          interest_period: number
+          interest_notation: string
+          interest_ui_type: string
+          status: Database["public"]["Enums"]["credit_status"]
+          has_paid: boolean
+          is_completed: boolean
+          notes: string
+          created_at: string
+          updated_at: string
+          store_id: string
+          status_code: string
+          next_payment_date: string
+          customer_name: string
+          customer_phone: string
+          customer_address: string
+          customer_id_number: string
+        }[]
+      }
       search_installments_unaccent: {
         Args: {
           p_customer_name?: string
@@ -1419,6 +1460,46 @@ export type Database = {
           store_id: string
           status_code: string
           payment_due_date: string
+          customer_name: string
+          customer_phone: string
+          customer_address: string
+          customer_id_number: string
+        }[]
+      }
+      search_pawns_unaccent: {
+        Args: {
+          p_customer_name?: string
+          p_contract_code?: string
+          p_start_date?: string
+          p_end_date?: string
+          p_duration?: number
+          p_status?: string
+          p_store_id?: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          id: string
+          customer_id: string
+          contract_code: string
+          loan_amount: number
+          debt_amount: number
+          loan_date: string
+          loan_period: number
+          interest_type: string
+          interest_value: number
+          interest_period: number
+          interest_notation: string
+          interest_ui_type: string
+          status: Database["public"]["Enums"]["pawn_status"]
+          has_paid: boolean
+          is_completed: boolean
+          notes: string
+          created_at: string
+          updated_at: string
+          store_id: string
+          status_code: string
+          next_payment_date: string
           customer_name: string
           customer_phone: string
           customer_address: string

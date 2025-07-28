@@ -165,10 +165,10 @@ export async function getInstallmentWarnings(
         .rpc('search_installments_unaccent', {
           p_customer_name: customerFilter,
           p_contract_code: contractCodeFilter || '',
-          p_start_date: null,
-          p_end_date: null,
-          p_duration: null,
-          p_status: null, // Get all statuses, filter on client side
+          p_start_date: undefined,
+          p_end_date: undefined,
+          p_duration: undefined,
+          p_status: undefined, // Get all statuses, filter on client side
           p_store_id: storeId,
           p_limit: limit,
           p_offset: 0

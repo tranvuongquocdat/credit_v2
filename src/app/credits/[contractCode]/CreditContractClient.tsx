@@ -61,6 +61,7 @@ export function CreditContractClient({ contractCode }: CreditContractClientProps
     handleSearch,
     handleReset,
     handlePageChange,
+    handlePageSizeChange,
     handleDelete,
     handleUpdateStatus: updateCreditStatus,
     refetch
@@ -274,6 +275,8 @@ export function CreditContractClient({ contractCode }: CreditContractClientProps
           onCreateNew={handleCreateCredit}
           onExportExcel={handleExportExcel}
           initialFilters={initialFilters}
+          itemsPerPage={itemsPerPage}
+          onPageSizeChange={handlePageSizeChange}
         />
 
         {/* Bảng dữ liệu hợp đồng */}
