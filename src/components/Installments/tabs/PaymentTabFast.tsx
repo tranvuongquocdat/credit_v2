@@ -302,7 +302,7 @@ export function PaymentTabFast({
   return (
     <div className="relative">
       {isBackgroundSyncing && (
-        <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full shadow-lg z-20 flex items-center">
+        <div className="absolute top-2 right-2 bg-blue-500 text-white text-[8px] md:text-xs px-2 py-1 rounded-full shadow-lg z-20 flex items-center">
           <div className="h-3 w-3 rounded-full border border-white border-t-transparent animate-spin mr-1" />
           Đang đồng bộ...
         </div>
@@ -328,13 +328,13 @@ export function PaymentTabFast({
           <table className="w-full border-collapse">
             <thead className="bg-gray-50 sticky top-0">
               <tr>
-                <th className="px-2 py-2 text-center text-sm font-medium text-gray-500 border">STT</th>
-                <th className="px-2 py-2 text-center text-sm font-medium text-gray-500 border">Ngày</th>
-                <th className="px-2 py-2 text-center text-sm font-medium text-gray-500 border">Ngày giao dịch</th>
-                <th className="px-2 py-2 text-center text-sm font-medium text-gray-500 border">Tiền lãi phí</th>
-                <th className="px-2 py-2 text-center text-sm font-medium text-gray-500 border">Tổng</th>
-                <th className="px-2 py-2 text-center text-sm font-medium text-gray-500 border">Khách trả</th>
-                <th className="px-2 py-2 text-center text-sm font-medium text-gray-500 border w-10" />
+                <th className="px-0.5 py-0.5 md:px-2 md:py-2 text-center text-[8px] md:text-sm font-medium text-gray-500 border w-6 md:w-auto">STT</th>
+                <th className="px-0.5 py-0.5 md:px-2 md:py-2 text-center text-[8px] md:text-sm font-medium text-gray-500 border">Ngày</th>
+                <th className="px-0.5 py-0.5 md:px-2 md:py-2 text-center text-[8px] md:text-sm font-medium text-gray-500 border"><span className="md:hidden">Ngày GD</span><span className="hidden md:inline">Ngày giao dịch</span></th>
+                <th className="px-0.5 py-0.5 md:px-2 md:py-2 text-center text-[8px] md:text-sm font-medium text-gray-500 border"><span className="md:hidden">Lãi phí</span><span className="hidden md:inline">Tiền lãi phí</span></th>
+                <th className="px-0.5 py-0.5 md:px-2 md:py-2 text-center text-[8px] md:text-sm font-medium text-gray-500 border">Tổng</th>
+                <th className="px-0.5 py-0.5 md:px-2 md:py-2 text-center text-[8px] md:text-sm font-medium text-gray-500 border"><span className="md:hidden">Trả</span><span className="hidden md:inline">Khách trả</span></th>
+                <th className="px-0.5 py-0.5 md:px-2 md:py-2 text-center text-[8px] md:text-sm font-medium text-gray-500 border w-4 md:w-10" />
               </tr>
             </thead>
             <tbody>
@@ -354,11 +354,11 @@ export function PaymentTabFast({
 
                 return (
                   <tr key={period.id} className="hover:bg-gray-50">
-                    <td className="px-2 py-2 text-center border">{period.periodNumber}</td>
-                    <td className="px-2 py-2 text-center border">
+                    <td className="px-0.5 py-0.5 md:px-2 md:py-2 text-center border text-[8px] md:text-sm">{period.periodNumber}</td>
+                    <td className="px-0.5 py-0.5 md:px-2 md:py-2 text-center border text-[8px] md:text-sm">
                       {formatDate(period.dueDate)} → {formatDate(period.endDate)}
                     </td>
-                    <td className="px-2 py-2 text-center border">
+                    <td className="px-0.5 py-0.5 md:px-2 md:py-2 text-center border">
                       {editingDatePeriodId === period.id ? (
                         <DatePicker
                           value={selectedDate}
@@ -367,13 +367,13 @@ export function PaymentTabFast({
                             setPeriodTransactionDates((prev) => ({ ...prev, [period.id]: date }));
                             setEditingDatePeriodId(null);
                           }}
-                          className="w-32 text-center mx-auto"
+                          className="w-16 md:w-32 text-[8px] md:text-sm text-center mx-auto"
                           maxDate={format(new Date(), 'yyyy-MM-dd')}
                           disabled={isDisabled}
                         />
                       ) : (
                         <span
-                          className={`${!hasPayments && !isDisabled && !isProcessingCheckbox && isEarliestUnpaid ? 'text-blue-500 cursor-pointer' : 'text-gray-600'}`}
+                          className={`text-[8px] md:text-sm ${!hasPayments && !isDisabled && !isProcessingCheckbox && isEarliestUnpaid ? 'text-blue-500 cursor-pointer' : 'text-gray-600'}`}
                           onClick={!hasPayments && !isDisabled && !isProcessingCheckbox && isEarliestUnpaid ? () => startDateEditing(period) : undefined}
                         >
                           {(() => {
@@ -383,14 +383,14 @@ export function PaymentTabFast({
                         </span>
                       )}
                     </td>
-                    <td className="px-2 py-2 text-right border">{formatCurrency(expected)}</td>
-                    <td className="px-2 py-2 text-right border">{formatCurrency(expected)}</td>
-                    <td className="px-2 py-2 text-right border">
+                    <td className="px-0.5 py-0.5 md:px-2 md:py-2 text-right border text-[8px] md:text-sm">{formatCurrency(expected)}</td>
+                    <td className="px-0.5 py-0.5 md:px-2 md:py-2 text-right border text-[8px] md:text-sm">{formatCurrency(expected)}</td>
+                    <td className="px-0.5 py-0.5 md:px-2 md:py-2 text-right border">
                       {isEditing ? (
                         <div className="flex items-center justify-end space-x-1">
                           <input
                             type="text"
-                            className="border rounded w-24 px-1 py-0.5 text-right text-sm"
+                            className="border rounded w-16 md:w-24 px-1 py-0.5 text-right text-[8px] md:text-sm"
                             value={formatNumberInput(paymentAmount)}
                             onChange={(e) => setPaymentAmount(parseFormattedNumber(e.target.value))}
                             autoFocus
@@ -402,20 +402,20 @@ export function PaymentTabFast({
                               else if (e.key === 'Escape') cancelEditing();
                             }}
                           />
-                          <button className="text-xs bg-blue-500 text-white px-1 rounded" onClick={() => handleCheckboxChange(period, true)}>
+                          <button className="text-[8px] md:text-xs bg-blue-500 text-white px-1 py-0.5 rounded" onClick={() => handleCheckboxChange(period, true)}>
                             OK
                           </button>
                         </div>
                       ) : (
                         <span
-                          className={`${!hasPayments && !isDisabled && !isProcessingCheckbox && isEarliestUnpaid ? 'text-blue-500 cursor-pointer' : 'text-gray-600'}`}
+                          className={`text-[8px] md:text-sm ${!hasPayments && !isDisabled && !isProcessingCheckbox && isEarliestUnpaid ? 'text-blue-500 cursor-pointer' : 'text-gray-600'}`}
                           onClick={!hasPayments && !isDisabled && !isProcessingCheckbox && isEarliestUnpaid ? () => startEditing(period) : undefined}
                         >
                           {formatCurrency(actual)}
                         </span>
                       )}
                     </td>
-                    <td className="px-2 py-2 text-center border">
+                    <td className="px-0.5 py-0.5 md:px-2 md:py-2 text-center border">
                       {isLoading ? (
                         <div className="h-4 w-4 rounded-full border-2 border-t-transparent border-blue-600 animate-spin mx-auto" />
                       ) : (

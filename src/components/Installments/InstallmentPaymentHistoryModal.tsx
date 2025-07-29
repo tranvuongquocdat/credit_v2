@@ -69,7 +69,7 @@ export const DEFAULT_INSTALLMENT_TABS = [
   { id: "rotate" as TabId, label: "Đảo HĐ" },
   { id: "documents" as TabId, label: "Chứng từ" },
   { id: "history" as TabId, label: "Lịch sử" },
-  { id: "bad-debt" as TabId, label: "Báo xấu khách hàng" },
+  { id: "bad-debt" as TabId, label: "Báo xấu KH" },
 ];
 
 interface CreditActionTabsProps {
@@ -95,15 +95,15 @@ export function CreditActionTabs({
       className={`border-b ${isScrollable ? "overflow-x-auto" : ""} ${className}`}
     >
       <div
-        className={`flex ${isScrollable ? "flex-wrap" : ""}`}
-        style={{ minWidth: isScrollable ? "650px" : "auto" }}
+        className={`flex flex-wrap gap-1 ${isScrollable ? "justify-start" : "justify-center"}`}
+        style={{ minWidth: isScrollable ? "100%" : "auto" }}
       >
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => !tab.disabled && onChangeTab(tab.id as TabId)}
             disabled={tab.disabled}
-            className={`px-4 py-2 transition-all ${
+            className={`px-1.5 py-1.5 text-[10px] sm:text-xs md:text-sm transition-all whitespace-nowrap ${
               activeTab === tab.id
                 ? "border-b-2 border-blue-500 text-blue-600 font-medium"
                 : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
@@ -740,7 +740,7 @@ export function InstallmentPaymentHistoryModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(hasDataChanged)}>
-      <DialogContent className="sm:max-w-[800px] md:max-w-[900px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-[800px] md:max-w-[900px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Hợp đồng trả góp</DialogTitle>
         </DialogHeader>
@@ -754,38 +754,38 @@ export function InstallmentPaymentHistoryModal({
           </div>
 
           {/* Tổng hợp chi tiết */}
-          <div className="grid grid-cols-2 gap-8 my-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 my-4">
             <div>
               <table className="w-full border-collapse">
                 <tbody>
                   <tr>
-                    <td className="py-1 px-2 border font-bold">
+                    <td className="py-2 px-2 border font-bold text-xs sm:text-sm">
                       Tiền đưa khách
                     </td>
-                    <td className="py-1 px-2 text-right border" colSpan={2}>
+                    <td className="py-2 px-2 text-right border text-xs sm:text-sm" colSpan={2}>
                       {formatCurrency(installment?.amount_given || 0)}
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-1 px-2 border font-bold">Trả góp</td>
-                    <td className="py-1 px-2 text-right border" colSpan={2}>
+                    <td className="py-2 px-2 border font-bold text-xs sm:text-sm">Trả góp</td>
+                    <td className="py-2 px-2 text-right border text-xs sm:text-sm" colSpan={2}>
                       {formatCurrency(installment?.installment_amount || 0)}
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-1 px-2 border font-bold">Tỷ lệ</td>
-                    <td className="py-1 px-2 text-right border" colSpan={2}>
+                    <td className="py-2 px-2 border font-bold text-xs sm:text-sm">Tỷ lệ</td>
+                    <td className="py-2 px-2 text-right border text-xs sm:text-sm" colSpan={2}>
                       {calculateRatio(installment)}
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-1 px-2 border font-bold">
+                    <td className="py-2 px-2 border font-bold text-xs sm:text-sm">
                       Thời gian vay
                     </td>
-                    <td className="py-1 px-2 text-right border">
+                    <td className="py-2 px-2 text-right border text-xs sm:text-sm">
                       {formatDate(installment?.start_date)}
                     </td>
-                    <td className="py-1 px-2 text-right border">
+                    <td className="py-2 px-2 text-right border text-xs sm:text-sm">
                       {installment?.start_date && installment?.duration
                         ? formatDate(
                             new Date(
@@ -801,8 +801,8 @@ export function InstallmentPaymentHistoryModal({
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-1 px-2 border font-bold">{debtAmount && debtAmount < 0 ? "Tiền thừa" : "Nợ cũ"}</td>
-                    <td className="py-1 px-2 text-right border text-red-600" colSpan={2}>
+                    <td className="py-2 px-2 border font-bold text-xs sm:text-sm">{debtAmount && debtAmount < 0 ? "Tiền thừa" : "Nợ cũ"}</td>
+                    <td className="py-2 px-2 text-right border text-red-600 text-xs sm:text-sm" colSpan={2}>
                       {formatCurrency(
                         Math.abs(debtAmount || 0),
                       )}
@@ -815,40 +815,40 @@ export function InstallmentPaymentHistoryModal({
               <table className="w-full border-collapse">
                 <tbody>
                   <tr>
-                    <td className="py-1 px-2 border font-bold">
+                    <td className="py-2 px-2 border font-bold text-xs sm:text-sm">
                       Số tiền giao khách
                     </td>
-                    <td className="py-1 px-2 text-right border">
+                    <td className="py-2 px-2 text-right border text-xs sm:text-sm">
                       {formatCurrency(installment?.amount_given || 0)}
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-1 px-2 border font-bold">
+                    <td className="py-2 px-2 border font-bold text-xs sm:text-sm">
                       Tổng tiền phải đóng
                     </td>
-                    <td className="py-1 px-2 text-right border text-red-600">
+                    <td className="py-2 px-2 text-right border text-red-600 text-xs sm:text-sm">
                       {formatCurrency(installment?.installment_amount || 0)}
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-1 px-2 border font-bold">Đã đóng được</td>
-                    <td className="py-1 px-2 text-right border">
+                    <td className="py-2 px-2 border font-bold text-xs sm:text-sm">Đã đóng được</td>
+                    <td className="py-2 px-2 text-right border text-xs sm:text-sm">
                       {formatCurrency(totalPaidAmount)}
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-1 px-2 border font-bold">
+                    <td className="py-2 px-2 border font-bold text-xs sm:text-sm">
                       Còn lại phải đóng
                     </td>
-                    <td className="py-1 px-2 text-right border text-red-600">
+                    <td className="py-2 px-2 text-right border text-red-600 text-xs sm:text-sm">
                       {formatCurrency(
                         calculateRemainingToPay(installment, totalPaidAmount)
                       )}
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-1 px-2 border font-bold">Tổng lãi phí</td>
-                    <td className="py-1 px-2 text-right border">
+                    <td className="py-2 px-2 border font-bold text-xs sm:text-sm">Tổng lãi phí</td>
+                    <td className="py-2 px-2 text-right border text-xs sm:text-sm">
                       {formatCurrency(
                         (installment?.installment_amount || 0) - (installment?.amount_given || 0),
                       )}
@@ -899,13 +899,15 @@ export function InstallmentPaymentHistoryModal({
                 </div>
               )}
 
-            <PaymentTabFast
-              installment={installment}
-              onDataChange={reloadInstallmentInfo}
-              onOptimisticStateChange={(hasUpdates) => {
-                if (hasUpdates) setHasDataChanged(true);
-              }}
-            />
+            <div className="overflow-x-auto">
+              <PaymentTabFast
+                installment={installment}
+                onDataChange={reloadInstallmentInfo}
+                onOptimisticStateChange={(hasUpdates) => {
+                  if (hasUpdates) setHasDataChanged(true);
+                }}
+              />
+            </div>
             </div>
           )}
 
@@ -1294,24 +1296,24 @@ export function InstallmentPaymentHistoryModal({
           {activeTab === "rotate" && hasPermission('dong_hop_dong_tra_gop') && (
             <div className="p-4 border rounded-md">
               <div>
-                <p className="mb-4">
+                <p className="mb-4 text-sm">
                   - Đảo Hợp Đồng là chức năng cho phép bạn đóng HĐ hiện tại và
                   tạo nhanh 1 hợp đồng mới
                   <br />- Hệ thống sẽ tự tính số tiền khách thực nhận về
                 </p>
 
-                <div className="font-medium text-lg mb-2">
+                <div className="font-medium text-sm md:text-lg mb-2">
                   Vui lòng nhập thông tin cho HĐ Trả Góp Mới:
                 </div>
 
                 <div className="space-y-4">
-                  <div className="flex items-center">
-                    <div className="w-36 text-right mr-3">
-                      <label className="text-sm font-medium">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
+                    <div className="md:text-right">
+                      <label className="text-xs md:text-sm font-medium">
                         Ngày vay <span className="text-red-500">*</span>
                       </label>
                     </div>
-                    <div className="flex-1 max-w-xs">
+                    <div>
                       <DatePicker
                         value={rotationLoanDate}
                         onChange={(date) => setRotationLoanDate(date)}
@@ -1319,110 +1321,112 @@ export function InstallmentPaymentHistoryModal({
                         disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
                       />
                     </div>
-                    <div className="ml-3 text-sm text-gray-500">
-                      - Ngày vay của hợp đồng mới
+                    <div className="text-xs text-gray-500">
+                      Ngày vay của hợp đồng mới
                     </div>
                   </div>
 
-                  <div className="flex items-center">
-                    <div className="w-36 text-right mr-3">
-                      <label className="text-sm font-medium">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
+                    <div className="md:text-right">
+                      <label className="text-xs md:text-sm font-medium">
                         Số tiền vay <span className="text-red-500">*</span>
                       </label>
                     </div>
-                    <div className="flex-1 max-w-xs">
+                    <div>
                       <MoneyInput 
                         value={rotationLoanAmount}
                         onChange={(e) => setRotationLoanAmount(e.target.value)}
                         disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
                       />
                     </div>
-                    <div className="ml-3 text-sm text-gray-500">
-                      - Tổng tiền vay của hợp đồng mới
+                    <div className="text-xs text-gray-500">
+                      Tổng tiền vay của hợp đồng mới
                     </div>
                   </div>
 
-                  <div className="flex items-center">
-                    <div className="w-36 text-right mr-3">
-                      <label className="text-sm font-medium">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
+                    <div className="md:text-right">
+                      <label className="text-xs md:text-sm font-medium">
                         Tiền đưa khách <span className="text-red-500">*</span>
                       </label>
                     </div>
-                    <div className="flex-1 max-w-xs">
+                    <div>
                       <MoneyInput 
                         value={rotationDownPayment}
                         onChange={(e) => setRotationDownPayment(e.target.value)}
                         disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
                       />
                     </div>
-                    <div className="ml-3 text-sm text-gray-500">
-                      - Tiền đưa khách cho hợp đồng mới
-                      <br />- Tiền này sẽ trừ đi số nợ còn lại của hợp đồng hiện
-                      tại
+                    <div className="text-xs text-gray-500">
+                      Tiền đưa khách cho hợp đồng mới. Sẽ trừ nợ còn lại của HD hiện tại
                     </div>
                   </div>
 
-                  <div className="flex items-center">
-                    <div className="w-36 text-right mr-3">
-                      <label className="text-sm font-medium">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
+                    <div className="md:text-right">
+                      <label className="text-xs md:text-sm font-medium">
                         Thời gian vay <span className="text-red-500">*</span>
                       </label>
                     </div>
-                    <div className="flex-1 max-w-xs">
+                    <div>
                       <input
                         type="text"
-                        className="border rounded p-2 w-full"
+                        className="border rounded p-2 w-full text-sm"
                         value={rotationDuration}
                         onChange={(e) => setRotationDuration(e.target.value)}
                         disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
                       />
                     </div>
-                    <div className="ml-3 text-sm text-gray-500">
-                      Ngày =&gt; ( {(parseFloat(rotationLoanAmount) || 0) /
+                    <div className="text-xs text-gray-500">
+                      {(parseFloat(rotationLoanAmount) || 0) /
                         parseInt(rotationDuration, 10) || 0
                         ? formatCurrency(
                             (parseFloat(rotationLoanAmount) || 0) /
                               parseInt(rotationDuration, 10),
                           )
                         : formatCurrency(0)}
-                      /1 ngày )
+                      /ngày
                     </div>
                   </div>
 
-                  <div className="flex items-center">
-                    <div className="w-36 text-right mr-3">
-                      <label className="text-sm font-medium">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
+                    <div className="md:text-right">
+                      <label className="text-xs md:text-sm font-medium">
                         Số ngày đóng tiền{" "}
                         <span className="text-red-500">*</span>
                       </label>
                     </div>
-                    <div className="flex-1 max-w-xs">
+                    <div>
                       <input
                         type="text"
-                        className="border rounded p-2 w-full"
+                        className="border rounded p-2 w-full text-sm"
                         value={rotationPaymentPeriod}
                         onChange={(e) => setRotationPaymentPeriod(e.target.value)}
                         disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
                       />
                     </div>
-                    <div className="ml-3 text-sm text-gray-500">
-                      (VD : 3 ngày đóng 1 lần thì điền số 3 )
+                    <div className="text-xs text-gray-500">
+                      VD: 3 ngày đóng 1 lần thì điền số 3
                     </div>
                   </div>
 
-                  <div className="flex items-center font-medium text-lg text-red-600">
-                    <div className="w-36 text-right mr-3">
-                      Tiền khách thực nhận
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
+                    <div className="md:text-right">
+                      <label className="text-xs md:text-sm font-medium text-red-600">
+                        Tiền khách thực nhận
+                      </label>
                     </div>
-                    <div className="flex-1 max-w-xs">
-                      {formatCurrency(
-                        parseFormattedNumber(rotationDownPayment),
-                      )} {" "}
-                      - {formatCurrency(
-                        Math.max(0, calculateRemainingToPay(installment, totalPaidAmount)),
+                    <div className="md:col-span-2">
+                      <div className="text-sm md:text-lg font-medium text-red-600">
+                        {formatCurrency(
+                          parseFormattedNumber(rotationDownPayment),
                         )} {" "}
-                      - {formatCurrency(0 - (debtAmount || 0))}
-                      = {formatCurrency(calculateCustomerReceiveAmount())}
+                        - {formatCurrency(
+                          Math.max(0, calculateRemainingToPay(installment, totalPaidAmount)),
+                          )} {" "}
+                        - {formatCurrency(0 - (debtAmount || 0))}
+                        = {formatCurrency(calculateCustomerReceiveAmount())}
+                      </div>
                     </div>
                   </div>
                 </div>
