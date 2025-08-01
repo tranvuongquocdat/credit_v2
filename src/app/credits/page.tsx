@@ -79,6 +79,7 @@ export default function CreditsPage() {
     handleSearch,
     handleReset,
     handlePageChange,
+    handlePageSizeChange,
     handleDelete,
     handleUpdateStatus: updateCreditStatus,
     refetch
@@ -460,6 +461,8 @@ export default function CreditsPage() {
           onExportExcel={handleExportExcel}
           exporting={isExporting}
           initialFilters={initialFilters}
+          itemsPerPage={itemsPerPage}
+          onPageSizeChange={handlePageSizeChange}
         />
 
         {/* Bảng dữ liệu hợp đồng */}

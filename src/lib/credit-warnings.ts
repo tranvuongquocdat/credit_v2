@@ -204,26 +204,60 @@ export async function getCreditWarnings(
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString().split('T')[0];
 
-    // Expanded query to include:
-    // 1. Currently overdue or late
-    // 2. Due today or tomorrow  
-    // 3. Ending today
-    let creditsQuery = supabase
-      .from('credits_by_store')
-      .select(`
-        *,
-        customer:customers!inner(*)
-      `)
-      .eq('store_id', storeId)
-      .or(`status_code.in.(OVERDUE,LATE_INTEREST),and(status_code.eq.ON_TIME,next_payment_date.lte.${tomorrowStr})`)
-      .order('created_at', { ascending: false });
+    let credits: any[] = [];
+    let creditsError: any = null;
 
-    // Apply filters
-    if (customerFilter) {
-      creditsQuery = creditsQuery.ilike('customers.name', `%${customerFilter}%`);
+    // Use RPC for Vietnamese unaccented search when customer filter is provided
+    if (customerFilter.trim()) {
+      const { data: rpcData, error: rpcError } = await supabase.rpc('search_credits_unaccent', {
+        p_customer_name: customerFilter,
+        p_contract_code: '',
+        p_start_date: undefined,
+        p_end_date: undefined,
+        p_duration: undefined,
+        p_status: undefined, // Get all statuses, filter on client side
+        p_store_id: storeId,
+        p_limit: limit,
+        p_offset: 0
+      });
+
+      if (rpcError) {
+        creditsError = rpcError;
+      } else {
+        // Transform RPC data to match expected format
+        credits = (rpcData || []).map((item: any) => ({
+          ...item,
+          customer: {
+            name: item.customer_name,
+            phone: item.customer_phone,
+            address: item.customer_address,
+            id_number: item.customer_id_number
+          }
+        }));
+
+        // Filter to only warning credits (same logic as original query)
+        credits = credits.filter((credit: any) => 
+          credit.status_code === 'OVERDUE' || 
+          credit.status_code === 'LATE_INTEREST' ||
+          (credit.status_code === 'ON_TIME' && credit.next_payment_date && credit.next_payment_date <= tomorrowStr)
+        );
+      }
+    } else {
+      // Use regular query when no customer filter
+      const creditsQuery = supabase
+        .from('credits_by_store')
+        .select(`
+          *,
+          customer:customers!inner(*)
+        `)
+        .eq('store_id', storeId)
+        .or(`status_code.in.(OVERDUE,LATE_INTEREST),and(status_code.eq.ON_TIME,next_payment_date.lte.${tomorrowStr})`)
+        .order('created_at', { ascending: false });
+      
+      const { data: queryCredits, error: queryError } = await creditsQuery;
+      credits = queryCredits || [];
+      creditsError = queryError;
     }
-    
-    const { data: credits, error: creditsError } = await creditsQuery;
 
     if (creditsError) {
       console.error('Error fetching credits:', creditsError);

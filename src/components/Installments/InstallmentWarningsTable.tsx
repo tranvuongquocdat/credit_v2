@@ -484,7 +484,7 @@ export function InstallmentWarningsTable({
         {warnings.length > 0 && (
           <tfoot className="bg-yellow-200 font-semibold">
             <tr>
-              <td colSpan={6} className="py-2 px-1 sm:px-3 text-center font-bold hidden lg:table-cell text-xs sm:text-sm">Tổng</td>
+              <td colSpan={5} className="py-2 px-1 sm:px-3 text-center font-bold hidden lg:table-cell text-xs sm:text-sm">Tổng</td>
               <td colSpan={2} className="py-2 px-1 sm:px-3 text-center font-bold lg:hidden text-xs sm:text-sm">Tổng</td>
               <td className="py-2 px-1 sm:px-3 text-center text-rose-600 font-bold text-xs sm:text-sm">
                 {formatCurrency(totals.totalOldDebt)}

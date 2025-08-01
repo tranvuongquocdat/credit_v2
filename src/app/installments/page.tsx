@@ -108,6 +108,7 @@ export default function InstallmentsPage() {
     handleSearch,
     handleReset,
     handlePageChange,
+    handlePageSizeChange,
     handleDelete,
     handleUpdateStatus,
     refetch,
@@ -420,6 +421,8 @@ export default function InstallmentsPage() {
           onExportExcel={handleExportExcel}
           exporting={isExporting}
           initialFilters={initialFilters}
+          itemsPerPage={itemsPerPage}
+          onPageSizeChange={handlePageSizeChange}
         />
         
         {/* Error message */}

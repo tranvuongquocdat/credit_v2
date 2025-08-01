@@ -65,6 +65,7 @@ export default function PawnsPage() {
     handleSearch,
     handleReset,
     handlePageChange,
+    handlePageSizeChange,
     handleDelete,
     refetch
   } = usePawns();
@@ -445,8 +446,9 @@ export default function PawnsPage() {
               onCreateNew={handleCreatePawn}
               onExportExcel={handleExportExcel}
               exporting={isExporting}
-
               initialFilters={initialFilters}
+              itemsPerPage={itemsPerPage}
+              onPageSizeChange={handlePageSizeChange}
             />
 
             {/* Bảng dữ liệu hợp đồng */}

@@ -81,6 +81,7 @@ export function InstallmentContractClient({ contractCode }: InstallmentContractC
     handleSearch,
     handleReset,
     handlePageChange,
+    handlePageSizeChange,
     handleDelete,
     handleUpdateStatus,
     refetch
@@ -321,6 +322,8 @@ export function InstallmentContractClient({ contractCode }: InstallmentContractC
           onCreateNew={handleCreateInstallment}
           onExportExcel={handleExportExcel}
           initialFilters={initialFilters}
+          itemsPerPage={itemsPerPage}
+          onPageSizeChange={handlePageSizeChange}
         />
 
         {/* Bảng dữ liệu hợp đồng */}

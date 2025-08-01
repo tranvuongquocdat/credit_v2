@@ -28,7 +28,7 @@ export function usePawns() {
   // State for pagination
   const [totalItems, setTotalItems] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(DEFAULT_PAGE);
-  const [itemsPerPage] = useState<number>(DEFAULT_ITEMS_PER_PAGE);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(DEFAULT_ITEMS_PER_PAGE);
   
   // State for search filters
   const [filters, setFilters] = useState<SearchFilters>({
@@ -128,6 +128,12 @@ export function usePawns() {
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
+
+  // Handle page size change
+  const handlePageSizeChange = (newPageSize: number) => {
+    setItemsPerPage(newPageSize);
+    setCurrentPage(1); // Reset to first page when changing page size
+  };
   
   // Handle search with filters
   const handleSearch = (searchFilters: SearchFilters) => {
@@ -219,6 +225,7 @@ export function usePawns() {
     itemsPerPage,
     filters,
     handlePageChange,
+    handlePageSizeChange,
     handleSearch,
     handleReset,
     handleDelete,

@@ -34,7 +34,7 @@ export default function PawnWarningsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(30);
   
   // State for filters
   const [customerNameFilter, setCustomerNameFilter] = useState("");
@@ -108,11 +108,17 @@ export default function PawnWarningsPage() {
       });
   
   const finalFiltered = filteredResults.filter(pawn => {
+    // Skip customer filtering if we used RPC search (which already handled it)
     const customerMatch = !debouncedCustomerFilter || 
       pawn.customer?.name?.toLowerCase().includes(debouncedCustomerFilter.toLowerCase());
     
     const contractMatch = !debouncedContractFilter || 
       pawn.contract_code?.toLowerCase().includes(debouncedContractFilter.toLowerCase());
+    
+    // If we used RPC search, don't apply additional customer filtering
+    if (debouncedCustomerFilter.trim()) {
+      return contractMatch; // Only apply contract filter, customer filter was handled by RPC
+    }
     
     return customerMatch && contractMatch;
   });
@@ -138,6 +144,12 @@ export default function PawnWarningsPage() {
   // Handle page change
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
+  };
+
+  // Handle page size change
+  const handlePageSizeChange = (newPageSize: number) => {
+    setItemsPerPage(newPageSize);
+    setCurrentPage(1); // Reset to first page when changing page size
   };
   
   // Handle filter changes
@@ -270,7 +282,7 @@ export default function PawnWarningsPage() {
         
         {/* Search Filters */}
         <div className="mb-4 py-4 bg-gray-50 rounded-lg">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 px-4">
             <div>
               <label className="block text-sm font-medium mb-1">Tên khách hàng</label>
               <div className="relative">
@@ -319,25 +331,42 @@ export default function PawnWarningsPage() {
               </div>
             </div> */}
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Lý do</label>
-              <Select value={reasonFilter} onValueChange={handleReasonFilterChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Chọn lý do" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tất cả</SelectItem>
-                  <SelectItem value="today_due">Hôm nay phải đóng</SelectItem>
-                  <SelectItem value="tomorrow_due">Ngày mai đóng</SelectItem>
-                  <SelectItem value="late">Chậm lãi</SelectItem>
-                  <SelectItem value="overdue">Quá hạn</SelectItem>
-                  <SelectItem value="end_today">Kết thúc hôm nay</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Số mục/trang</label>
+                <Select value={itemsPerPage.toString()} onValueChange={(value) => handlePageSizeChange(parseInt(value))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="30">30</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="80">80</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Lý do</label>
+                <Select value={reasonFilter} onValueChange={handleReasonFilterChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn lý do" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả</SelectItem>
+                    <SelectItem value="today_due">Hôm nay phải đóng</SelectItem>
+                    <SelectItem value="tomorrow_due">Ngày mai đóng</SelectItem>
+                    <SelectItem value="late">Chậm lãi</SelectItem>
+                    <SelectItem value="overdue">Quá hạn</SelectItem>
+                    <SelectItem value="end_today">Kết thúc hôm nay</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
           
-          <div className="flex items-end gap-2">
+          <div className="flex items-end gap-2 px-4">
             <Button 
               onClick={handleClearFilters}
               variant="outline"
@@ -354,27 +383,6 @@ export default function PawnWarningsPage() {
               Xuất Excel
             </Button>
           </div>
-          
-          {/* Show filter info if active */}
-          {(customerNameFilter || contractCodeFilter || employeeFilter || reasonFilter !== "all") && (
-            <div className="mt-2 text-sm text-blue-600">
-              {customerNameFilter && (
-                <span>Đang lọc theo tên khách hàng: <span className="font-semibold">{customerNameFilter}</span> </span>
-              )}
-              {contractCodeFilter && (
-                <span>Đang lọc theo mã hợp đồng: <span className="font-semibold">{contractCodeFilter}</span> </span>
-              )}
-              {employeeFilter && (
-                <span>Đang lọc theo nhân viên: <span className="font-semibold">{employeeFilter}</span> </span>
-              )}
-              {reasonFilter !== "all" && (
-                <span>Đang lọc theo lý do: <span className="font-semibold">{reasonFilter}</span> </span>
-              )}
-              {totalItems > 0 ? 
-                ` (${totalItems} kết quả)` : 
-                " (Không có kết quả)"}
-            </div>
-          )}
         </div>
         
         {/* Error Display */}
