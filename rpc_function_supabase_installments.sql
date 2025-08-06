@@ -372,7 +372,7 @@ begin
           )
       and (
             coalesce(p_filters->>'end_date','') = ''
-            or i.loan_date <= (p_filters->>'end_date')::date
+            or (i.loan_date - INTERVAL '1 day' + INTERVAL '1 day' * i.loan_period)::date <= (p_filters->>'end_date')::date
           )
 
       /* ---- tên khách hàng ---- */
@@ -382,7 +382,8 @@ begin
                   select 1
                   from   customers c
                   where  c.id   = i.customer_id
-                    and  c.name ilike '%' || (p_filters->>'customer_name') || '%'
+                    and  (c.name ilike '%' || (p_filters->>'customer_name') || '%'
+                          or unaccent(c.name) ilike unaccent('%' || (p_filters->>'customer_name') || '%'))
             )
           )
   )
@@ -452,7 +453,7 @@ begin
           )
       and (
             coalesce(p_filters->>'end_date','') = ''
-            or i.loan_date <= (p_filters->>'end_date')::date
+            or (i.loan_date - INTERVAL '1 day' + INTERVAL '1 day' * i.loan_period)::date <= (p_filters->>'end_date')::date
           )
 
       /* ---- tên khách hàng ---- */
@@ -462,7 +463,8 @@ begin
                   select 1
                   from   customers c
                   where  c.id   = i.customer_id
-                    and  c.name ilike '%' || (p_filters->>'customer_name') || '%'
+                    and  (c.name ilike '%' || (p_filters->>'customer_name') || '%'
+                          or unaccent(c.name) ilike unaccent('%' || (p_filters->>'customer_name') || '%'))
             )
           )
   ),

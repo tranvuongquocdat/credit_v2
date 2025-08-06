@@ -80,7 +80,7 @@ BEGIN
      unaccent(cust.name) ILIKE unaccent('%' || p_customer_name || '%'))
     AND (p_contract_code = '' OR p.contract_code ILIKE '%' || p_contract_code || '%')
     AND (p_start_date IS NULL OR p.loan_date::DATE >= p_start_date)
-    AND (p_end_date IS NULL OR p.loan_date::DATE <= p_end_date)
+    AND (p_end_date IS NULL OR (p.loan_date - INTERVAL '1 DAY' + INTERVAL '1 DAY' * p.loan_period)::DATE <= p_end_date)
     AND (p_duration IS NULL OR p.loan_period = p_duration)
     AND (p_store_id IS NULL OR p.store_id = p_store_id)
     AND (p_status IS NULL OR 

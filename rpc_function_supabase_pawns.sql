@@ -464,7 +464,7 @@ with base as (
         )
     and (
           coalesce(p_filters->>'end_date','') = ''
-          or p.loan_date <= (p_filters->>'end_date')::date
+          or (p.loan_date - INTERVAL '1 day' + INTERVAL '1 day' * p.loan_period)::date <= (p_filters->>'end_date')::date
         )
 
     /* ----- customer_name LIKE ----- */
@@ -474,7 +474,8 @@ with base as (
                select 1
                from   customers cu
                where  cu.id = p.customer_id
-                 and  cu.name ilike '%' || (p_filters->>'customer_name') || '%'
+                 and  (cu.name ilike '%' || (p_filters->>'customer_name') || '%'
+                       or unaccent(cu.name) ilike unaccent('%' || (p_filters->>'customer_name') || '%'))
           )
         )
 ),

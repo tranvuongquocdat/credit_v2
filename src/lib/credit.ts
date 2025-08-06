@@ -177,7 +177,7 @@ export async function getCredits(
 ) {
   try {
     // If customer name filter is provided, use RPC for unaccented search
-    if (filters?.customer_name) {
+    if (filters?.customer_name || filters?.end_date) {
       return await getCreditsWithUnaccentedSearch(page, limit, filters, signal);
     }
     
@@ -205,10 +205,6 @@ export async function getCredits(
       
       if (filters.start_date) {
         query = query.gte('loan_date', filters.start_date);
-      }
-      
-      if (filters.end_date) {
-        query = query.lte('loan_date', filters.end_date);
       }
       
       // Filter by status using enhanced credits_by_store view

@@ -42,3 +42,6 @@ next-env.d.ts
 src/types/database.types.ts
 CLAUDE.md
 .claude/settings.local.json
+
+# serena
+.serena

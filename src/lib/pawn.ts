@@ -166,7 +166,7 @@ export async function getPawns(
 ) {
   try {
     // If customer name filter is provided, use RPC for unaccented search
-    if (filters?.customer_name) {
+    if (filters?.customer_name || filters?.end_date) {
       return await getPawnsWithUnaccentedSearch(page, pageSize, filters, signal);
     }
     
@@ -196,10 +196,6 @@ export async function getPawns(
     
     if (filters?.start_date) {
       query = query.gte('loan_date', filters.start_date);
-    }
-    
-    if (filters?.end_date) {
-      query = query.lte('loan_date', filters.end_date);
     }
     
     if (filters?.loan_period) {

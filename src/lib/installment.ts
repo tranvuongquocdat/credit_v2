@@ -172,8 +172,8 @@ export async function getInstallments(
   signal?: AbortSignal
 ) {
   try {
-    // If customer name filter is provided, use RPC for unaccented search
-    if (filters?.customer_name) {
+    // If customer name or end_date filter is provided, use RPC for proper search logic
+    if (filters?.customer_name || filters?.end_date) {
       return await getInstallmentsWithUnaccentedSearch(page, pageSize, filters, signal);
     }
 
@@ -194,10 +194,6 @@ export async function getInstallments(
     
     if (filters?.start_date) {
       query = query.gte('loan_date', filters.start_date);
-    }
-    
-    if (filters?.end_date) {
-      query = query.lte('loan_date', filters.end_date);
     }
     
     if (filters?.duration) {
