@@ -507,11 +507,10 @@ export function InstallmentPaymentHistoryModal({
   // Calculate customer receive amount
   const calculateCustomerReceiveAmount = (): number => {
     const downPayment = parseFloat(rotationDownPayment) || 0;
-    const amountToPay = Math.max(0, calculateRemainingToPay(installment, totalPaidAmount));
-    const remainingDebt = 0 - (debtAmount || 0);
+    const amountToPay = calculateRemainingToPay(installment, totalPaidAmount);
 
-    // Customer receives: downPayment - remainingDebt
-    return downPayment - amountToPay - remainingDebt;
+    // Customer receives: downPayment
+    return downPayment - amountToPay;
   };
 
   // Handler for rotating the contract (creating a new one and closing the current)
@@ -939,7 +938,7 @@ export function InstallmentPaymentHistoryModal({
                       </td>
                     </tr>
                     <tr>
-                      <td className="px-4 py-2 border font-bold">Nợ cũ</td>
+                      <td className="px-4 py-2 border font-bold">{debtAmount && debtAmount < 0 ? "Tiền thừa" : "Nợ cũ"}</td>
                       <td className="px-4 py-2 text-right border text-red-600" colSpan={2}>
                         {formatCurrency(
                           (0 - (debtAmount || 0)),
@@ -953,7 +952,7 @@ export function InstallmentPaymentHistoryModal({
                       </td>
                       <td className="px-4 py-3 text-right border font-bold text-red-700 text-lg">
                         {formatCurrency(
-                          (installment?.installment_amount || 0)   - totalPaidAmountByPeriod - (debtAmount || 0)
+                          (installment?.installment_amount || 0)   - totalPaidAmountByPeriod + (debtAmount || 0)
                         )}
                       </td>
                     </tr>
@@ -1459,9 +1458,8 @@ export function InstallmentPaymentHistoryModal({
                           parseFormattedNumber(rotationDownPayment),
                         )} {" "}
                         - {formatCurrency(
-                          Math.max(0, calculateRemainingToPay(installment, totalPaidAmount)),
+                          calculateRemainingToPay(installment, totalPaidAmount),
                           )} {" "}
-                        - {formatCurrency(0 - (debtAmount || 0))}
                         = {formatCurrency(calculateCustomerReceiveAmount())}
                       </div>
                     </div>

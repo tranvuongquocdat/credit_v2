@@ -626,6 +626,10 @@ export function InstallmentsTable({
                     {formatCurrency(installment.debt_amount || 0)}
                   </div>
                 </div>
+                <div>
+                  <span className="text-gray-600">Còn phải đóng:</span>
+                  <div className="font-medium text-red-600">{formatCurrency(installment.remainingToPay || 0)}</div>
+                </div>
               </div>
 
               {/* Time Period Info */}
