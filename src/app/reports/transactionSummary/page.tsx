@@ -205,222 +205,388 @@ export default function TransactionSummaryPage() {
     }
   };
 
-  // Fetch transaction data with income/expense details
+  // Fetch transaction data using the exact same aggregation logic as TransactionDetailsTable
   const fetchTransactionData = async (): Promise<TransactionData> => {
-    if (!currentStore?.id) return {
-      pawn: { income: 0, expense: 0 },
-      credit: { income: 0, expense: 0 },
-      installment: { income: 0, expense: 0 },
-      incomeExpense: { income: 0, expense: 0 },
-      capital: { income: 0, expense: 0 }
-    };
-    
+    if (!currentStore?.id) {
+      return {
+        pawn: { income: 0, expense: 0 },
+        credit: { income: 0, expense: 0 },
+        installment: { income: 0, expense: 0 },
+        incomeExpense: { income: 0, expense: 0 },
+        capital: { income: 0, expense: 0 }
+      };
+    }
+
     try {
       const storeId = currentStore.id;
-      const startDateObj = startOfDay(parse(startDate, 'yyyy-MM-dd', new Date()));
-      const endDateObj = endOfDay(parse(endDate, 'yyyy-MM-dd', new Date()));
-      
-      // Format dates for query
-      const startDateISO = startDateObj.toISOString();
-      const endDateISO = endDateObj.toISOString();
-      
-      // Fetch pawn transactions
-      const pawnHistoryData = await fetchAllData(
-        supabase
-          .from('pawn_history')
-          .select(`
-            *,
-            pawns!inner (contract_code, store_id)
-          `)
-          .eq('pawns.store_id', storeId)
-          .or('is_deleted.is.null,is_deleted.eq.false')
-          .gte('created_at', startDateISO)
-          .lte('created_at', endDateISO)
-      );
-      
-      // Fetch credit transactions
+
+      // Helper similar to TransactionDetailsTable
+      const translateTransactionType = (transactionType: string, isDeleted: boolean = false): string => {
+        const translations: { [key: string]: string } = {
+          payment: isDeleted ? 'Huỷ đóng lãi' : 'Đóng lãi',
+          loan: 'Cho vay',
+          additional_loan: 'Vay thêm',
+          principal_repayment: 'Trả gốc',
+          contract_close: 'Đóng HĐ',
+          contract_reopen: 'Mở lại HĐ',
+          debt_payment: 'Trả nợ',
+          extension: 'Gia hạn',
+          deposit: 'Nộp tiền',
+          withdrawal: 'Rút tiền',
+          income: 'Thu nhập',
+          expense: 'Chi phí',
+          penalty: 'Phạt',
+          interest: 'Lãi',
+          fee: 'Phí',
+          refund: 'Hoàn tiền',
+          initial_loan: 'Khoản vay ban đầu',
+          update_contract: 'Cập nhật HĐ',
+          contract_delete: 'Xóa HĐ',
+          contract_extension: 'Gia hạn HĐ',
+          contract_rotate: 'Đảo HĐ',
+          thu_khac: 'Thu khác',
+          thu_tra_quy: 'Thu trả quỹ',
+          thu_tien_no: 'Thu tiền nợ',
+          thu_tien_ung: 'Thu tiền ứng',
+          thu_tien_phat: 'Thu tiền phạt',
+          hoa_hong_thu: 'Hoa hồng thu',
+          thu_ve: 'Thu vé',
+          tra_luong: 'Trả lương',
+          tra_lai_phi: 'Trả lãi phí',
+          chi_tieu_dung: 'Chi tiêu dùng',
+          chi_tra_quy: 'Chi trả quỹ',
+          tam_ung: 'Tạm ứng',
+          hoa_hong_chi: 'Hoa hồng chi',
+          chi_ve: 'Chi vé',
+          chi_van_phong: 'Chi văn phòng',
+          chi_khac: 'Chi khác',
+        };
+        return translations[transactionType] || transactionType;
+      };
+
+      type FundHistoryItem = {
+        id: string;
+        date: string;
+        description: string;
+        transactionType: string;
+        source: string;
+        income: number;
+        expense: number;
+        contractCode?: string;
+        employeeName?: string;
+        customerName?: string;
+        itemName?: string;
+      };
+
+      const allHistoryItems: FundHistoryItem[] = [];
+
+      const processItems = (data: any[], source: string) => {
+        if (!data || data.length === 0) return;
+
+        data.forEach((item) => {
+          if (!item.created_at) return;
+
+          const getCommonData = () => {
+            let employeeName = '';
+            if (source === 'Thu chi') {
+              employeeName = item.employee_name || '';
+            } else if (source === 'Cầm đồ' || source === 'Tín chấp' || source === 'Trả góp') {
+              employeeName = item.profiles?.username || '';
+            }
+
+            let customerName = '';
+            if (source === 'Cầm đồ') {
+              customerName = item.pawns?.customers?.name || '';
+            } else if (source === 'Tín chấp') {
+              customerName = item.credits?.customers?.name || '';
+            } else if (source === 'Trả góp') {
+              customerName = item.installments?.customers?.name || '';
+            } else if (source === 'Nguồn vốn') {
+              customerName = (item as any).name || '';
+            } else if (source === 'Thu chi') {
+              customerName = (item as any).customers?.name || '';
+            }
+
+            let itemName = '';
+            if (source === 'Cầm đồ') {
+              try {
+                if (item.pawns?.collateral_detail) {
+                  const detail = typeof item.pawns.collateral_detail === 'string'
+                    ? JSON.parse(item.pawns.collateral_detail)
+                    : item.pawns.collateral_detail;
+                  itemName = detail?.name || '';
+                }
+              } catch {}
+            }
+            return { employeeName, customerName, itemName };
+          };
+
+          if ((source === 'Cầm đồ' || source === 'Tín chấp' || source === 'Trả góp') && item.transaction_type === 'payment') {
+            const { employeeName, customerName, itemName } = getCommonData();
+            const amount = (item.credit_amount || 0) - (item.debit_amount || 0);
+
+            allHistoryItems.push({
+              id: `${source.toLowerCase()}-${item.id}`,
+              date: item.created_at,
+              description: translateTransactionType(item.transaction_type, false),
+              transactionType: item.transaction_type,
+              source,
+              income: amount > 0 ? amount : 0,
+              expense: amount < 0 ? -amount : 0,
+              contractCode: item.contract_code || '-',
+              employeeName,
+              customerName,
+              itemName,
+            });
+
+            if (item.is_deleted && item.updated_at) {
+              allHistoryItems.push({
+                id: `${source.toLowerCase()}-${item.id}-cancel`,
+                date: item.updated_at,
+                description: translateTransactionType(item.transaction_type, true),
+                transactionType: item.transaction_type,
+                source,
+                income: amount < 0 ? -amount : 0,
+                expense: amount > 0 ? amount : 0,
+                contractCode: item.contract_code || '-',
+                employeeName,
+                customerName,
+                itemName,
+              });
+            }
+          } else {
+            let amount = 0;
+            if (source === 'Nguồn vốn') {
+              amount = item.transaction_type === 'withdrawal' ? -Number(item.fund_amount || 0) : Number(item.fund_amount || 0);
+            } else if (source === 'Thu chi') {
+              amount = (item.credit_amount || 0) - (item.debit_amount || 0);
+              if (amount === 0) {
+                amount = item.transaction_type === 'expense' ? -Number(item.amount || 0) : Number(item.amount || 0);
+              }
+            } else {
+              amount = (item.credit_amount || 0) - (item.debit_amount || 0);
+            }
+
+            const { employeeName, customerName, itemName } = getCommonData();
+            allHistoryItems.push({
+              id: `${source.toLowerCase()}-${item.id}`,
+              date: item.created_at,
+              description: translateTransactionType(item.transaction_type || ''),
+              transactionType: item.transaction_type || '',
+              source,
+              income: amount > 0 ? amount : 0,
+              expense: amount < 0 ? -amount : 0,
+              contractCode: item.contract_code || '-',
+              employeeName,
+              customerName,
+              itemName,
+            });
+          }
+        });
+      };
+
+      // Fetch all relevant data (no date filter here; we filter after aggregation)
       const creditHistoryData = await fetchAllData(
         supabase
           .from('credit_history')
           .select(`
-            *,
-            credits!inner (contract_code, store_id)
+            id,
+            created_at,
+            updated_at,
+            is_deleted,
+            transaction_type,
+            credit_amount,
+            debit_amount,
+            created_by,
+            credits!inner (
+              contract_code,
+              store_id,
+              customers (name)
+            ),
+            profiles:created_by (username)
           `)
           .eq('credits.store_id', storeId)
-          .or('is_deleted.is.null,is_deleted.eq.false')
-          .gte('created_at', startDateISO)
-          .lte('created_at', endDateISO)
       );
-      
-      // Fetch installment transactions
+
+      if (creditHistoryData) {
+        const processedCreditData = creditHistoryData.map((item: any) => ({
+          ...item,
+          contract_code: item.credits?.contract_code || null,
+        }));
+        processItems(processedCreditData, 'Tín chấp');
+      }
+
+      const pawnHistoryData = await fetchAllData(
+        supabase
+          .from('pawn_history')
+          .select(`
+            id,
+            created_at,
+            updated_at,
+            is_deleted,
+            transaction_type,
+            credit_amount,
+            debit_amount,
+            created_by,
+            pawns!inner (
+              contract_code,
+              store_id,
+              customers (name),
+              collateral_detail
+            ),
+            profiles:created_by (username)
+          `)
+          .eq('pawns.store_id', storeId)
+      );
+
+      if (pawnHistoryData) {
+        const processedPawnData = pawnHistoryData.map((item: any) => ({
+          ...item,
+          contract_code: item.pawns?.contract_code || null,
+        }));
+        processItems(processedPawnData, 'Cầm đồ');
+      }
+
       const installmentHistoryData = await fetchAllData(
         supabase
           .from('installment_history')
           .select(`
-            *,
+            id,
+            created_at,
+            updated_at,
+            is_deleted,
+            transaction_type,
+            credit_amount,
+            debit_amount,
+            created_by,
             installments!inner (
               contract_code,
               employee_id,
-              employees!inner (store_id)
-            )
+              employees!inner (store_id),
+              customers (name)
+            ),
+            profiles:created_by (username)
           `)
           .eq('installments.employees.store_id', storeId)
-          .or('is_deleted.is.null,is_deleted.eq.false')
-          .gte('created_at', startDateISO)
-          .lte('created_at', endDateISO)
+          .not('transaction_type', 'in', '(contract_close,contract_rotate)')
       );
-      
-      // Fetch income/expense transactions - Remove is_deleted filter and apply transform logic
+
+      if (installmentHistoryData) {
+        const processedInstallmentData = installmentHistoryData.map((item: any) => ({
+          ...item,
+          contract_code: item.installments?.contract_code || null,
+        }));
+        processItems(processedInstallmentData, 'Trả góp');
+      }
+
+      const { data: storeFundData } = await supabase
+        .from('store_fund_history')
+        .select('*')
+        .eq('store_id', storeId)
+        .limit(10000);
+      if (storeFundData) processItems(storeFundData as any[], 'Nguồn vốn');
+
       const allTransactionsData = await fetchAllData(
         supabase
           .from('transactions')
-          .select('*')
+          .select('*, customers:customer_id(name)')
           .eq('store_id', storeId)
       );
-      
-      // Transform transactions to display format (same as income/outgoing pages)
+
       const transformTransactionsForDisplay = (rawTransactions: any[]) => {
         const displayTransactions: any[] = [];
-        
-        rawTransactions.forEach(transaction => {
+        rawTransactions.forEach((transaction) => {
           if (transaction.is_deleted) {
-            // Add original transaction record
             displayTransactions.push({
               ...transaction,
               is_cancellation: false,
             });
-            
-            // Add cancellation record
             displayTransactions.push({
               ...transaction,
               id: `${transaction.id}_cancel`,
               is_cancellation: true,
               created_at: transaction.update_at || transaction.created_at,
-              // Reverse amounts for cancellation
               credit_amount: transaction.credit_amount ? -transaction.credit_amount : null,
               debit_amount: transaction.debit_amount ? -transaction.debit_amount : null,
+              description: transaction.credit_amount > 0 ? 'Huỷ thu' : 'Huỷ chi',
             });
           } else {
-            // Add normal transaction record
             displayTransactions.push({
               ...transaction,
               is_cancellation: false,
             });
           }
         });
-        
         return displayTransactions;
       };
-      
-      const displayTransactions = transformTransactionsForDisplay(allTransactionsData);
-      
-      // Filter by date range after transformation
-      const transactionsData = displayTransactions.filter(transaction => {
-        const transactionDate = new Date(transaction.created_at);
-        return transactionDate >= startDateObj && transactionDate <= endDateObj;
+      const displayTransactionsData = transformTransactionsForDisplay(allTransactionsData);
+      if (displayTransactionsData) processItems(displayTransactionsData, 'Thu chi');
+
+      // Group by contract/date/type/source/description to aggregate as in details
+      const groupedData = new Map<string, FundHistoryItem>();
+      allHistoryItems.forEach((item) => {
+        const transactionDate = new Date(item.date).toDateString();
+        const groupKey = `${item.contractCode}-${transactionDate}-${item.transactionType}-${item.source}-${item.description}`;
+        if (groupedData.has(groupKey)) {
+          const existing = groupedData.get(groupKey)!;
+          existing.income += item.income;
+          existing.expense += item.expense;
+          if (new Date(item.date) > new Date(existing.date)) {
+            existing.date = item.date;
+          }
+        } else {
+          groupedData.set(groupKey, { ...item });
+        }
       });
-      
-      // Fetch capital transactions
-      const capitalData = await fetchAllData(
-        supabase
-          .from('store_fund_history')
-          .select('*')
-          .eq('store_id', storeId)
-          .gte('created_at', startDateISO)
-          .lte('created_at', endDateISO)
+
+      // Convert to array, sort by date desc
+      const aggregatedTransactions = Array.from(groupedData.values()).sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
       );
-      
-      // Calculate totals for each transaction type
-      let pawnIncome = 0, pawnExpense = 0;
-      let creditIncome = 0, creditExpense = 0;
-      let installmentIncome = 0, installmentExpense = 0;
-      let incomeExpenseIncome = 0, incomeExpenseExpense = 0;
-      let capitalIncome = 0, capitalExpense = 0;
-      
-      // Process pawn transactions
-      if (pawnHistoryData) {
-        pawnHistoryData.forEach((item: any) => {
-          const creditAmount = Number(item.credit_amount || 0);
-          const debitAmount = Number(item.debit_amount || 0);
-          pawnIncome += creditAmount;
-          pawnExpense += debitAmount;
-        });
+
+      // Filter by date range
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      let filteredTransactions = aggregatedTransactions.filter((item) => {
+        const itemDate = new Date(item.date);
+        return itemDate >= start && itemDate <= end;
+      });
+
+      // Apply filters consistent with details table
+      if (selectedTransactionType !== 'all') {
+        filteredTransactions = filteredTransactions.filter(
+          (item) => item.source === selectedTransactionType
+        );
       }
-      
-      // Process credit transactions
-      if (creditHistoryData) {
-        creditHistoryData.forEach((item: any) => {
-          const creditAmount = Number(item.credit_amount || 0);
-          const debitAmount = Number(item.debit_amount || 0);
-          creditIncome += creditAmount;
-          creditExpense += debitAmount;
-        });
+      if (selectedEmployee !== 'all') {
+        filteredTransactions = filteredTransactions.filter(
+          (item) => item.employeeName === selectedEmployee
+        );
       }
-      
-      // Process installment transactions
-      if (installmentHistoryData) {
-        installmentHistoryData.forEach((item: any) => {
-          const creditAmount = Number(item.credit_amount || 0);
-          const debitAmount = Number(item.debit_amount || 0);
-          installmentIncome += creditAmount;
-          installmentExpense += debitAmount;
-        });
-      }
-      
-      // Process income/expense transactions
-      if (transactionsData) {
-        transactionsData.forEach((item: any) => {
-          if (item.transaction_type === 'income') {
-            const amount = Number(item.amount || 0);
-            if (amount >= 0) {
-              incomeExpenseIncome += amount;
-            } else {
-              incomeExpenseExpense += Math.abs(amount);
-            }
-          } else if (item.transaction_type === 'expense') {
-            const amount = Number(item.amount || 0);
-            if (amount >= 0) {
-              incomeExpenseExpense += amount;
-            } else {
-              incomeExpenseIncome += Math.abs(amount);
-            }
-          } else {
-            // Handle credit/debit amounts
-            const creditAmount = Number(item.credit_amount || 0);
-            const debitAmount = Number(item.debit_amount || 0);
-            
-            if (creditAmount >= 0) {
-              incomeExpenseIncome += creditAmount;
-            } else {
-              incomeExpenseExpense += Math.abs(creditAmount);
-            }
-            
-            if (debitAmount >= 0) {
-              incomeExpenseExpense += debitAmount;
-            } else {
-              incomeExpenseIncome += Math.abs(debitAmount);
-            }
-          }
-        });
-      }
-      
-      // Process capital transactions
-      if (capitalData) {
-        capitalData.forEach((item: any) => {
-          if (item.transaction_type === 'deposit') {
-            capitalIncome += Number(item.fund_amount || 0);
-          } else if (item.transaction_type === 'withdrawal') {
-            capitalExpense += Number(item.fund_amount || 0);
-          }
-        });
-      }
-      
+
+      // Totals by source
+      const totalsBySource: { [key: string]: { income: number; expense: number } } = {
+        'Tín chấp': { income: 0, expense: 0 },
+        'Cầm đồ': { income: 0, expense: 0 },
+        'Trả góp': { income: 0, expense: 0 },
+        'Nguồn vốn': { income: 0, expense: 0 },
+        'Thu chi': { income: 0, expense: 0 },
+      };
+      filteredTransactions.forEach((item) => {
+        if (item.source in totalsBySource) {
+          totalsBySource[item.source].income += item.income;
+          totalsBySource[item.source].expense += item.expense;
+        }
+      });
+
       return {
-        pawn: { income: pawnIncome, expense: pawnExpense },
-        credit: { income: creditIncome, expense: creditExpense },
-        installment: { income: installmentIncome, expense: installmentExpense },
-        incomeExpense: { income: incomeExpenseIncome, expense: incomeExpenseExpense },
-        capital: { income: capitalIncome, expense: capitalExpense }
+        pawn: { income: totalsBySource['Cầm đồ'].income, expense: totalsBySource['Cầm đồ'].expense },
+        credit: { income: totalsBySource['Tín chấp'].income, expense: totalsBySource['Tín chấp'].expense },
+        installment: { income: totalsBySource['Trả góp'].income, expense: totalsBySource['Trả góp'].expense },
+        incomeExpense: { income: totalsBySource['Thu chi'].income, expense: totalsBySource['Thu chi'].expense },
+        capital: { income: totalsBySource['Nguồn vốn'].income, expense: totalsBySource['Nguồn vốn'].expense },
       };
     } catch (err) {
       console.error('Error fetching transaction data:', err);
@@ -429,7 +595,7 @@ export default function TransactionSummaryPage() {
         credit: { income: 0, expense: 0 },
         installment: { income: 0, expense: 0 },
         incomeExpense: { income: 0, expense: 0 },
-        capital: { income: 0, expense: 0 }
+        capital: { income: 0, expense: 0 },
       };
     }
   };
@@ -502,7 +668,7 @@ export default function TransactionSummaryPage() {
       fetchTransactionSummaryData();
       fetchEmployees();
     }
-  }, [currentStore?.id, startDate, endDate, canAccessReport, permissionsLoading]);
+  }, [currentStore?.id, startDate, endDate, canAccessReport, permissionsLoading, selectedTransactionType, selectedEmployee]);
 
   // Loading state for permissions
   if (permissionsLoading) {
