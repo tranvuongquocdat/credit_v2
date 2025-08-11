@@ -833,7 +833,7 @@ export default function InterestDetailPage() {
               .or('is_deleted.is.null,is_deleted.eq.false')
           ).then((installmentHistoryData) => {
             if (installmentHistoryData && installmentHistoryData.length > 0) {
-              // Group by contract to calculate interest per contract
+              // Group by contract to calculate interest per contract (as-of selected end date)
               const contractsMap = new Map<string, {
                 contract: any;
                 payments: Array<{
@@ -842,18 +842,18 @@ export default function InterestDetailPage() {
                   transaction_date: string | null;
                 }>;
               }>();
-              
+
               installmentHistoryData.forEach((item: any) => {
                 const contractId = item.installments?.id;
                 if (!contractId) return;
-                
+
                 if (!contractsMap.has(contractId)) {
                   contractsMap.set(contractId, {
                     contract: item.installments,
                     payments: []
                   });
                 }
-                
+
                 contractsMap.get(contractId)!.payments.push({
                   id: item.id,
                   credit_amount: item.credit_amount || 0,
@@ -861,62 +861,40 @@ export default function InterestDetailPage() {
                 });
               });
 
-              // Process each contract
+              // For each contract, compute cumulative interest up to the selected end date and output a single row
               for (const [contractId, contractData] of contractsMap) {
                 const contract = contractData.contract;
                 const payments = contractData.payments;
-                
-                if (!contract || !payments.length) continue;
+                if (!contract || payments.length === 0) continue;
 
-                // Calculate total credit amount for this contract
-                const totalCreditAmount = payments.reduce((sum, payment) => sum + payment.credit_amount, 0);
                 const downPayment = contract.down_payment || 0;
 
-                // Only include if total credit amount > down payment (means there's interest)
-                if (totalCreditAmount > downPayment) {
-                  // Group by transaction_date to show only one row per date
-                  const transactionDates = [...new Set(payments.map(p => p.transaction_date?.split('T')[0]))].filter(Boolean) as string[];
-                  
-                  for (const transactionDateStr of transactionDates) {
-                    const dateTransactionTime = new Date(transactionDateStr + 'T00:00:00');
-                    
-                    // Only include transactions within our date range
-                    if (dateTransactionTime >= startDateObj && dateTransactionTime <= endDateObj) {
-                      // Calculate cumulative credit amount up to and including this date
-                      const cumulativeCreditAmount = payments
-                        .filter(p => p.transaction_date && new Date(p.transaction_date).toDateString() <= dateTransactionTime.toDateString())
-                        .reduce((sum: number, payment: any) => sum + payment.credit_amount, 0);
-                        
-                      // Only show interest if cumulative amount > down payment
-                      if (cumulativeCreditAmount > downPayment) {
-                        // For each date, show the total interest amount earned so far
-                        const totalInterestAmount = cumulativeCreditAmount - downPayment;
-                        
-                        // Get the actual transaction time from payments on this date
-                        const datePayments = payments.filter((p: any) => 
-                          p.transaction_date && new Date(p.transaction_date).toDateString() === dateTransactionTime.toDateString()
-                        );
-                        const actualTransactionTime = datePayments.length > 0 && datePayments[0].transaction_date ? 
-                          new Date(datePayments[0].transaction_date) : dateTransactionTime;
-                        
-                        allInterestDetails.push({
-                          id: `installment-interest-${contractId}-${transactionDateStr}`,
-                          contractId: contractId,
-                          contractCode: contract.contract_code || '',
-                          customerName: contract.customers?.name || '',
-                          itemName: 'Trả góp',
-                          loanAmount: contract.installment_amount || 0,
-                          transactionDate: actualTransactionTime.toLocaleString('vi-VN'),
-                          transactionDateTime: actualTransactionTime.toLocaleString('vi-VN'),
-                          interestAmount: totalInterestAmount,
-                          otherAmount: 0,
-                          totalAmount: totalInterestAmount,
-                          transactionType: 'Lãi họ',
-                          type: 'Trả góp'
-                        });
-                      }
-                    }
-                  }
+                // Sum all credits up to endDate (inclusive)
+                const cumulativeCreditAmount = payments
+                  .filter(p => p.transaction_date && new Date(p.transaction_date) <= endDateObj)
+                  .reduce((sum: number, p: any) => sum + (p.credit_amount || 0), 0);
+
+                const totalInterestAmount = Math.max(0, cumulativeCreditAmount - downPayment);
+
+                // Only include if there is some interest collected
+                if (totalInterestAmount > 0) {
+                  const asOfTime = new Date(endDateObj);
+
+                  allInterestDetails.push({
+                    id: `installment-interest-${contractId}-${format(asOfTime, 'yyyy-MM-dd')}`,
+                    contractId: contractId,
+                    contractCode: contract.contract_code || '',
+                    customerName: contract.customers?.name || '',
+                    itemName: 'Trả góp',
+                    loanAmount: contract.installment_amount || 0,
+                    transactionDate: asOfTime.toLocaleString('vi-VN'),
+                    transactionDateTime: asOfTime.toLocaleString('vi-VN'),
+                    interestAmount: totalInterestAmount,
+                    otherAmount: 0,
+                    totalAmount: totalInterestAmount,
+                    transactionType: 'Lãi họ',
+                    type: 'Trả góp'
+                  });
                 }
               }
             }
