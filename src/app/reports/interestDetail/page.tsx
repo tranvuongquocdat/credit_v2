@@ -861,7 +861,7 @@ export default function InterestDetailPage() {
                 });
               });
 
-              // For each contract, compute cumulative interest up to the selected end date and output a single row
+              // For each contract, compute cumulative interest at range start and end, include only if changed
               for (const [contractId, contractData] of contractsMap) {
                 const contract = contractData.contract;
                 const payments = contractData.payments;
@@ -869,15 +869,20 @@ export default function InterestDetailPage() {
 
                 const downPayment = contract.down_payment || 0;
 
-                // Sum all credits up to endDate (inclusive)
-                const cumulativeCreditAmount = payments
+                // Sum credits before startDate (exclusive) and up to endDate (inclusive)
+                const cumulativeCreditBeforeStart = payments
+                  .filter(p => p.transaction_date && new Date(p.transaction_date) < startDateObj)
+                  .reduce((sum: number, p: any) => sum + (p.credit_amount || 0), 0);
+
+                const cumulativeCreditThroughEnd = payments
                   .filter(p => p.transaction_date && new Date(p.transaction_date) <= endDateObj)
                   .reduce((sum: number, p: any) => sum + (p.credit_amount || 0), 0);
 
-                const totalInterestAmount = Math.max(0, cumulativeCreditAmount - downPayment);
+                const interestAtStart = Math.max(0, cumulativeCreditBeforeStart - downPayment);
+                const interestAtEnd = Math.max(0, cumulativeCreditThroughEnd - downPayment);
 
-                // Only include if there is some interest collected
-                if (totalInterestAmount > 0) {
+                // Only include if there is a change in cumulative interest in the selected range
+                if (interestAtEnd !== interestAtStart) {
                   const asOfTime = new Date(endDateObj);
 
                   allInterestDetails.push({
@@ -889,9 +894,9 @@ export default function InterestDetailPage() {
                     loanAmount: contract.installment_amount || 0,
                     transactionDate: asOfTime.toLocaleString('vi-VN'),
                     transactionDateTime: asOfTime.toLocaleString('vi-VN'),
-                    interestAmount: totalInterestAmount,
+                    interestAmount: interestAtEnd,
                     otherAmount: 0,
-                    totalAmount: totalInterestAmount,
+                    totalAmount: interestAtEnd,
                     transactionType: 'Lãi họ',
                     type: 'Trả góp'
                   });
