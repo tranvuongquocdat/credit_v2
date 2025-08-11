@@ -267,67 +267,53 @@ export default function InstallmentTable({ storeId, startDate, endDate }: Instal
                   <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">Ngày GD</TableHead>
                   <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">Mã HĐ</TableHead>
                   <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">Loại GD</TableHead>
-                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">Cho vay</TableHead>
-                  <TableHead className="py-2 px-3 text-center font-bold border-b border-gray-200">Thu về</TableHead>
+                  <TableHead className="py-2 px-3 text-center font-bold border-b border-gray-200">Biến động</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {transactions.map((item, index) => (
-                  <TableRow key={item.id} className="hover:bg-gray-50 transition-colors">
-                    <TableCell className="py-2 px-3 text-center border-r border-b border-gray-200">
-                      {index + 1}
-                    </TableCell>
-                    <TableCell className="py-2 px-3 text-center border-r border-b border-gray-200">
-                      {item.date}
-                    </TableCell>
-                    <TableCell className="py-2 px-3 text-center border-r border-b border-gray-200">
-                      {item.contractCode !== 'N/A' ? (
-                        <Link href={`/installments/${item.contractCode}`} className="text-blue-600 hover:underline">
-                          {item.contractCode}
-                        </Link>
-                      ) : (
-                        'N/A'
-                      )}
-                    </TableCell>
-                    <TableCell className="py-2 px-3 text-center border-r border-b border-gray-200">
-                      {item.description}
-                    </TableCell>
-                    <TableCell className="py-2 px-3 text-right border-r border-b border-gray-200">
-                      {item.loanAmount > 0 ? (
-                        <span className="text-red-600">-{formatCurrency(item.loanAmount)}</span>
-                      ) : (
-                        "0"
-                      )}
-                    </TableCell>
-                    <TableCell className="py-2 px-3 text-right border-b border-gray-200">
-                      {item.interestAmount > 0 ? (
-                        <span className="text-green-600">+{formatCurrency(item.interestAmount)}</span>
-                      ) : item.interestAmount < 0 ? (
-                        <span className="text-red-600">{formatCurrency(item.interestAmount)}</span>
-                      ) : (
-                        "0"
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {transactions.map((item, index) => {
+                  // Calculate net amount for this transaction (same logic as TransactionDetailsTable)
+                  const netAmount = item.interestAmount - item.loanAmount;
+                  
+                  return (
+                    <TableRow key={item.id} className="hover:bg-gray-50 transition-colors">
+                      <TableCell className="py-2 px-3 text-center border-r border-b border-gray-200">
+                        {index + 1}
+                      </TableCell>
+                      <TableCell className="py-2 px-3 text-center border-r border-b border-gray-200">
+                        {item.date}
+                      </TableCell>
+                      <TableCell className="py-2 px-3 text-center border-r border-b border-gray-200">
+                        {item.contractCode !== 'N/A' ? (
+                          <Link href={`/installments/${item.contractCode}`} className="text-blue-600 hover:underline">
+                            {item.contractCode}
+                          </Link>
+                        ) : (
+                          'N/A'
+                        )}
+                      </TableCell>
+                      <TableCell className="py-2 px-3 text-center border-r border-b border-gray-200">
+                        {item.description}
+                      </TableCell>
+                      <TableCell className="py-2 px-3 text-right border-b border-gray-200">
+                        {netAmount > 0 ? (
+                          <span className="text-green-600">+{formatCurrency(netAmount)}</span>
+                        ) : netAmount < 0 ? (
+                          <span className="text-red-600">{formatCurrency(netAmount)}</span>
+                        ) : (
+                          "0"
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
               <TableFooter className="bg-gray-50">
                 <TableRow>
                   <TableCell colSpan={4} className="py-2 px-3 text-right font-bold border-r border-t border-gray-200">
-                    Tổng
-                  </TableCell>
-                  <TableCell className="py-2 px-3 text-right font-bold border-r border-t border-gray-200">
-                    <span className="text-red-600">-{formatCurrency(totalLoan)}</span>
-                  </TableCell>
-                  <TableCell className="py-2 px-3 text-right font-bold border-t border-gray-200">
-                    <span className="text-green-600">+{formatCurrency(totalInterest)}</span>
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell colSpan={4} className="py-2 px-3 text-right font-bold border-r border-t border-gray-200">
                     Tổng giao dịch trả góp
                   </TableCell>
-                  <TableCell colSpan={2} className="py-2 px-3 text-right font-bold border-t border-gray-200">
+                  <TableCell className="py-2 px-3 text-right font-bold border-t border-gray-200">
                     <span className={netAmount >= 0 ? "text-green-600" : "text-red-600"}>
                       {netAmount >= 0 ? "+" : ""}{formatCurrency(netAmount)}
                     </span>

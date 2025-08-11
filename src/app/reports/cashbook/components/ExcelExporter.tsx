@@ -77,18 +77,18 @@ export default function ExcelExporter({
     // Format pawn data for Excel
     const pawnRows: (string | number)[][] = [
       ['GIAO DỊCH CẦM ĐỒ'],
-      ['STT', 'Ngày GD', 'Mã HĐ', 'Khách hàng', 'Loại GD', 'Tiền cầm', 'Tiền lãi phí']
+      ['STT', 'Ngày GD', 'Mã HĐ', 'Khách hàng', 'Loại GD', 'Biến động']
     ];
     
     pawnData.forEach((item, index) => {
+      const netAmount = item.interestAmount - item.loanAmount;
       pawnRows.push([
         index + 1,
         item.date,
         item.contractCode,
         item.customerName,
         item.description,
-        item.loanAmount > 0 ? -item.loanAmount : 0,
-        item.interestAmount > 0 ? item.interestAmount : 0
+        netAmount
       ]);
     });
     
@@ -98,11 +98,7 @@ export default function ExcelExporter({
     const pawnNetAmount = pawnTotalInterest - pawnTotalLoan;
     
     pawnRows.push([
-      '', '', '', '', 'Tổng', -pawnTotalLoan, pawnTotalInterest
-    ]);
-    
-    pawnRows.push([
-      '', '', '', '', 'Tổng giao dịch cầm đồ', pawnNetAmount, ''
+      '', '', '', '', 'Tổng giao dịch cầm đồ', pawnNetAmount
     ]);
     
     const pawnWorksheet = XLSX.utils.aoa_to_sheet(pawnRows);
@@ -110,18 +106,18 @@ export default function ExcelExporter({
     // Format credit data for Excel
     const creditRows: (string | number)[][] = [
       ['GIAO DỊCH TÍN CHẤP'],
-      ['STT', 'Ngày GD', 'Mã HĐ', 'Khách hàng', 'Loại GD', 'Cho vay', 'Tiền lãi phí']
+      ['STT', 'Ngày GD', 'Mã HĐ', 'Khách hàng', 'Loại GD', 'Biến động']
     ];
     
     creditData.forEach((item, index) => {
+      const netAmount = item.interestAmount - item.loanAmount;
       creditRows.push([
         index + 1,
         item.date,
         item.contractCode,
         item.customerName,
         item.description,
-        item.loanAmount > 0 ? -item.loanAmount : 0,
-        item.interestAmount > 0 ? item.interestAmount : 0
+        netAmount
       ]);
     });
     
@@ -131,11 +127,7 @@ export default function ExcelExporter({
     const creditNetAmount = creditTotalInterest - creditTotalLoan;
     
     creditRows.push([
-      '', '', '', '', 'Tổng', -creditTotalLoan, creditTotalInterest
-    ]);
-    
-    creditRows.push([
-      '', '', '', '', 'Tổng giao dịch tín chấp', creditNetAmount, ''
+      '', '', '', '', 'Tổng giao dịch tín chấp', creditNetAmount
     ]);
     
     const creditWorksheet = XLSX.utils.aoa_to_sheet(creditRows);
@@ -143,18 +135,18 @@ export default function ExcelExporter({
     // Format installment data for Excel
     const installmentRows: (string | number)[][] = [
       ['GIAO DỊCH TRẢ GÓP'],
-      ['STT', 'Ngày GD', 'Mã HĐ', 'Khách hàng', 'Loại GD', 'Cho vay', 'Thu về']
+      ['STT', 'Ngày GD', 'Mã HĐ', 'Khách hàng', 'Loại GD', 'Biến động']
     ];
     
     installmentData.forEach((item, index) => {
+      const netAmount = item.interestAmount - item.loanAmount;
       installmentRows.push([
         index + 1,
         item.date,
         item.contractCode,
         item.customerName,
         item.description,
-        item.loanAmount > 0 ? -item.loanAmount : 0,
-        item.interestAmount > 0 ? item.interestAmount : 0
+        netAmount
       ]);
     });
     
@@ -164,11 +156,7 @@ export default function ExcelExporter({
     const installmentNetAmount = installmentTotalInterest - installmentTotalLoan;
     
     installmentRows.push([
-      '', '', '', '', 'Tổng', -installmentTotalLoan, installmentTotalInterest
-    ]);
-    
-    installmentRows.push([
-      '', '', '', '', 'Tổng giao dịch trả góp', installmentNetAmount, ''
+      '', '', '', '', 'Tổng giao dịch trả góp', installmentNetAmount
     ]);
     
     const installmentWorksheet = XLSX.utils.aoa_to_sheet(installmentRows);
