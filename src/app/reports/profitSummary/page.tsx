@@ -22,6 +22,32 @@ import {
   getInstallmentFinancialsForStore
 } from '@/lib/overview';
 
+// Helper function to fetch all data from a query with pagination (borrowed from interestDetail)
+const fetchAllData = async (query: any, pageSize: number = 1000) => {
+  let allData: any[] = [];
+  let from = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error } = await query.range(from, from + pageSize - 1);
+    
+    if (error) {
+      console.error('Error fetching data:', error);
+      break;
+    }
+
+    if (data && data.length > 0) {
+      allData = [...allData, ...data];
+      from += pageSize;
+      hasMore = data.length === pageSize;
+    } else {
+      hasMore = false;
+    }
+  }
+
+  return allData;
+};
+
 // Shadcn UI components
 import {
   Table,
@@ -302,10 +328,9 @@ export default function ProfitSummaryPage() {
     };
   };
 
-  // Get interest/profit data for date range by contract type - updated to get ALL contracts like interestDetail
-  // Optimized interest calculation using RPC functions for better performance
-  // Previous version: query all history records and calculate each contract individually (~several seconds)
-  // New version: use database RPC functions to calculate in bulk (~few milliseconds)
+  // Get interest/profit data for date range by contract type - updated to match interestDetail logic
+  // For pawns/credits: use RPC functions for performance
+  // For installments: use detailed calculation logic from interestDetail for accurate date-range filtering
   const getInterestDataForDateRange = async (contractType: 'pawns' | 'credits' | 'installments') => {
     if (!currentStore?.id) return 0;
 
@@ -376,33 +401,82 @@ export default function ProfitSummaryPage() {
           }
         }
 
-      } else if (contractType === 'installments') {
-        // Optimized: Get all installment IDs for this store and use RPC like in overview.ts
-        const { data: installmentContracts } = await supabase
-          .from('installments_by_store')
-          .select('id')
-          .eq('store_id', storeId);
+            } else if (contractType === 'installments') {
+        // Use same detailed logic as interestDetail for accurate date-range calculation
+        const installmentHistoryData = await fetchAllData(
+          supabase
+            .from('installment_history')
+            .select(`
+              *,
+              installments!inner (
+                id,
+                contract_code,
+                down_payment,
+                installment_amount,
+                employee_id,
+                employees!inner (store_id),
+                customers (name)
+              )
+            `)
+            .eq('installments.employees.store_id', storeId)
+            .eq('transaction_type', 'payment')
+            .or('is_deleted.is.null,is_deleted.eq.false')
+        );
 
-                 if (installmentContracts && installmentContracts.length > 0) {
-           const installmentIds = installmentContracts.map(i => i.id).filter((id): id is string => id !== null);
-          
-          // Use RPC function to get collected profit for date range - much faster!
-          const { data, error } = await supabase.rpc('installment_get_collected_profit', {
-            p_installment_ids: installmentIds
+        if (installmentHistoryData && installmentHistoryData.length > 0) {
+          // Group by contract to calculate interest per contract (same logic as interestDetail)
+          const contractsMap = new Map<string, {
+            contract: any;
+            payments: Array<{
+              id: string;
+              credit_amount: number;
+              transaction_date: string | null;
+            }>;
+          }>();
+
+          installmentHistoryData.forEach((item: any) => {
+            const contractId = item.installments?.id;
+            if (!contractId) return;
+
+            if (!contractsMap.has(contractId)) {
+              contractsMap.set(contractId, {
+                contract: item.installments,
+                payments: []
+              });
+            }
+
+            contractsMap.get(contractId)!.payments.push({
+              id: item.id,
+              credit_amount: item.credit_amount || 0,
+              transaction_date: item.transaction_date
+            });
           });
 
-          if (error) {
-            console.error('installment_get_collected_profit RPC error:', error);
-            return 0;
-          }
+          // For each contract, compute cumulative interest at range start and end
+          for (const [contractId, contractData] of contractsMap) {
+            const contract = contractData.contract;
+            const payments = contractData.payments;
+            if (!contract || payments.length === 0) continue;
 
-          // Sum all collected profit from RPC function result for date range
-          if (Array.isArray(data)) {
-            // Since the RPC returns profit collected (current month), we need to filter by date range
-            // For now, we'll use the total collected profit as the RPC is optimized
-            totalInterest = data.reduce((sum, item) => {
-              return sum + Number(item.profit_collected || 0);
-            }, 0);
+            const downPayment = contract.down_payment || 0;
+
+            // Sum credits before startDate (exclusive) and up to endDate (inclusive)
+            const cumulativeCreditBeforeStart = payments
+              .filter(p => p.transaction_date && new Date(p.transaction_date) < startDateObj)
+              .reduce((sum: number, p: any) => sum + (p.credit_amount || 0), 0);
+
+            const cumulativeCreditThroughEnd = payments
+              .filter(p => p.transaction_date && new Date(p.transaction_date) <= endDateObj)
+              .reduce((sum: number, p: any) => sum + (p.credit_amount || 0), 0);
+
+            const interestAtStart = Math.max(0, cumulativeCreditBeforeStart - downPayment);
+            const interestAtEnd = Math.max(0, cumulativeCreditThroughEnd - downPayment);
+
+            // Only include the difference in interest for the selected date range
+            const interestGained = interestAtEnd - interestAtStart;
+            if (interestGained > 0) {
+              totalInterest += interestGained;
+            }
           }
         }
       }
