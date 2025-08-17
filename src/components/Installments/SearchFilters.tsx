@@ -362,6 +362,7 @@ export function SearchFilters({
               target: { id: 'start_date', value }
             } as React.ChangeEvent<HTMLInputElement>)}
             className="w-full"
+            maxDate={new Date().toISOString()}
           />
         </div>
         
@@ -376,6 +377,7 @@ export function SearchFilters({
               target: { id: 'end_date', value }
             } as React.ChangeEvent<HTMLInputElement>)}
             className="w-full"
+            maxDate={new Date().toISOString()}
           />
         </div>
         
