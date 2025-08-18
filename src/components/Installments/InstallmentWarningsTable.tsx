@@ -1,4 +1,4 @@
-import { InstallmentWithCustomer, InstallmentStatus } from "@/models/installment";
+import { InstallmentWithCustomer } from "@/models/installment";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 import Spinner from "@/components/ui/spinner";

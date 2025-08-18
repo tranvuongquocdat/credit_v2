@@ -18,7 +18,7 @@ import { getInstallmentById, updateInstallment } from '@/lib/installment';
 import { getCustomers } from '@/lib/customer';
 import { getEmployees } from '@/lib/employee';
 import { hasInstallmentAnyPayments } from '@/lib/installmentPayment';
-import { Installment, InstallmentStatus } from '@/models/installment';
+import { Installment } from '@/models/installment';
 import { Customer } from '@/models/customer';
 import { Employee } from '@/models/employee';
 import Spinner from '@/components/ui/spinner';
@@ -483,7 +483,7 @@ export function InstallmentEditModal({
           <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 pt-4">
             <Button
               type="submit"
-              disabled={isLoading || status === InstallmentStatus.CLOSED || status === InstallmentStatus.DELETED}
+              disabled={isLoading || status === "CLOSED" || status === "DELETED"}
               className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto px-6"
             >
               {isLoading ? <Spinner className="mr-2" /> : null}

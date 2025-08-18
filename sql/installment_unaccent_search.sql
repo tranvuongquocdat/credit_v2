@@ -71,8 +71,16 @@ BEGIN
      c.name ILIKE '%' || p_customer_name || '%' OR
      unaccent(c.name) ILIKE unaccent('%' || p_customer_name || '%'))
     AND (p_contract_code = '' OR i.contract_code ILIKE '%' || p_contract_code || '%')
-    AND (p_start_date IS NULL OR i.loan_date::DATE >= p_start_date)
-    AND (p_end_date IS NULL OR i.loan_date::DATE <= p_end_date)
+    AND (p_start_date IS NULL OR 
+         CASE 
+           WHEN p_status IN ('DELETED', 'CLOSED') THEN i.updated_at::DATE >= p_start_date
+           ELSE i.loan_date::DATE >= p_start_date
+         END)
+    AND (p_end_date IS NULL OR 
+         CASE 
+           WHEN p_status IN ('DELETED', 'CLOSED') THEN i.updated_at::DATE <= p_end_date
+           ELSE i.loan_date::DATE <= p_end_date
+         END)
     AND (p_duration IS NULL OR i.loan_period = p_duration)
     AND (p_store_id IS NULL OR i.store_id = p_store_id)
     AND (p_status IS NULL OR 

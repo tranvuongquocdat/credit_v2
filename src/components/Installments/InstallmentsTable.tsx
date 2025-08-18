@@ -450,7 +450,7 @@ export function InstallmentsTable({
                   </Badge>
                 </TableCell>
                 <TableCell className="py-3 px-3 border-r border-gray-200 text-center hidden md:table-cell">
-                  {installment.status === InstallmentStatus.CLOSED || 
+                  {installment.status === "CLOSED" || 
                    installment.nextPaymentDate == "Hoàn thành" || 
                    !installment.payment_due_date ? (
                     <div className="flex items-center justify-center gap-1">
@@ -469,7 +469,7 @@ export function InstallmentsTable({
                         }}
                         placeholder="Chọn ngày"
                         className="text-sm h-8 w-32"
-                        disabled={isUpdatingDueDate || !canEditInstallment}
+                        disabled={isUpdatingDueDate || !canEditInstallment || installment.status === "CLOSED" || installment.status === "DELETED"}
                       />
                     </div>
                   )}
@@ -494,16 +494,16 @@ export function InstallmentsTable({
                         variant="ghost" 
                         className="h-8 w-8 p-0" 
                         onClick={() => onShowPaymentActions(installment)}
-                        title={installment.status === InstallmentStatus.DELETED ? "Xem chi tiết tài chính" : "Thao tác thanh toán"}
+                        title={installment.status === "DELETED" ? "Xem chi tiết tài chính" : "Thao tác thanh toán"}
                       >
-                        <DollarSignIcon className={`h-4 w-4 ${installment.status === InstallmentStatus.DELETED ? 'text-gray-400' : 'text-gray-500'}`} />
+                        <DollarSignIcon className={`h-4 w-4 ${installment.status === "DELETED" ? 'text-gray-400' : 'text-gray-500'}`} />
                       </Button>
                     )}
                     
                     {/* Chỉ hiển thị các nút khác nếu hợp đồng chưa bị xóa */}
-                    {installment.status !== InstallmentStatus.DELETED && (
+                    {installment.status !== "DELETED" && (
                       <>
-                        {installment.status === InstallmentStatus.CLOSED && canUnlockInstallment && (
+                        {installment.status === "CLOSED" && canUnlockInstallment && (
                           <Button 
                             variant="ghost" 
                             className="h-8 w-8 p-0" 
@@ -514,7 +514,7 @@ export function InstallmentsTable({
                           </Button>
                         )}
                         {/* Hiển thị dropdown menu nếu: hợp đồng đã đóng HOẶC chưa có kỳ thanh toán đã được thanh toán */}
-                        {(installment.status === InstallmentStatus.CLOSED || !hasPaidPaymentPeriods[installment.id]) && (
+                        {(installment.status === "CLOSED" || !hasPaidPaymentPeriods[installment.id]) && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" className="h-8 w-8 p-0">
@@ -524,13 +524,13 @@ export function InstallmentsTable({
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-44">
                               {/* Hiển thị "Lịch sử thanh toán" cho hợp đồng đã đóng */}
-                              {installment.status === InstallmentStatus.CLOSED && onShowPaymentHistory && (
+                              {installment.status === "CLOSED" && onShowPaymentHistory && (
                                 <DropdownMenuItem onClick={() => onShowPaymentHistory(installment)}>
                                   Lịch sử thanh toán
                                 </DropdownMenuItem>
                               )}
                               {/* Hiển thị "Xóa hợp đồng" cho hợp đồng chưa có kỳ thanh toán đã được thanh toán */}
-                              {installment.status !== InstallmentStatus.CLOSED && canDeleteInstallment && (
+                              {installment.status !== "CLOSED" && canDeleteInstallment && (
                                 <DropdownMenuItem onClick={() => onDelete(installment)} className="text-red-600">
                                   Xóa hợp đồng
                                 </DropdownMenuItem>
@@ -661,7 +661,7 @@ export function InstallmentsTable({
               {/* Due Date */}
               <div className="mb-3 text-sm">
                 <span className="text-gray-600">Ngày phải đóng: </span>
-                {installment.status === InstallmentStatus.CLOSED || 
+                {installment.status === "CLOSED" || 
                  installment.nextPaymentDate == "Hoàn thành" || 
                  !installment.payment_due_date ? (
                   <span className="text-green-600 font-medium">Hoàn thành</span>
@@ -676,7 +676,7 @@ export function InstallmentsTable({
                       }}
                       placeholder="Chọn ngày"
                       className="text-sm w-36 h-8"
-                      disabled={isUpdatingDueDate || !canEditInstallment}
+                      disabled={isUpdatingDueDate || !canEditInstallment || installment.status === "CLOSED" || installment.status === "DELETED"}
                     />
                   </div>
                 )}
@@ -712,10 +712,10 @@ export function InstallmentsTable({
                   )}
                 </div>
 
-                {installment.status !== InstallmentStatus.DELETED && (
+                {installment.status !== "DELETED" && (
                   <div className="flex items-center gap-2">
                     {/* Unlock Button */}
-                    {installment.status === InstallmentStatus.CLOSED && canUnlockInstallment && (
+                    {installment.status === "CLOSED" && canUnlockInstallment && (
                       <Button 
                         variant="outline" 
                         size="sm"
@@ -728,8 +728,8 @@ export function InstallmentsTable({
                     )}
                     
                     {/* Delete Button */}
-                    {(installment.status === InstallmentStatus.CLOSED || !hasPaidPaymentPeriods[installment.id]) && 
-                     installment.status !== InstallmentStatus.CLOSED && canDeleteInstallment && (
+                    {(installment.status === "CLOSED" || !hasPaidPaymentPeriods[installment.id]) && 
+                     installment.status !== "CLOSED" && canDeleteInstallment && (
                       <Button 
                         variant="outline" 
                         size="sm"

@@ -49,7 +49,7 @@ export interface Installment {
   daily_amount: number;       // Tiền 1 ngày (installment_amount/payment_period)
   remaining_amount: number;   // Còn phải đóng (calculated)
   
-  status: InstallmentStatus;  // Tình trạng
+  status: any;  // Tình trạng
   due_date: string;           // Ngày phải đóng tiền (calculated)
   start_date: string;         // loan_date (Ngày bắt đầu)
   payment_due_date?: string | null;  // Ngày phải đóng tiền từ DB

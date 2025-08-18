@@ -962,14 +962,14 @@ export function InstallmentPaymentHistoryModal({
 
               <div className="mt-6 flex justify-center">
                 {/* Show single button if no old debt or contract is already closed */}
-                {(debtAmount === 0 || installment?.status === InstallmentStatus.CLOSED || installment?.status === InstallmentStatus.DELETED) ? (
+                {(debtAmount === 0 || installment?.status === "CLOSED" || installment?.status === "DELETED") ? (
                   <Button
                     className="bg-blue-600 hover:bg-blue-700 text-white px-8"
                     onClick={() => showCloseInstallmentConfirmation(true)}
-                    disabled={installment?.status === InstallmentStatus.CLOSED || installment?.status === InstallmentStatus.DELETED}
+                    disabled={installment?.status === "CLOSED" || installment?.status === "DELETED"}
                   >
-                    {installment?.status === InstallmentStatus.CLOSED ? "Hợp đồng đã đóng" : 
-                     installment?.status === InstallmentStatus.DELETED ? "Hợp đồng đã xóa" : "Đóng HĐ"}
+                    {installment?.status === "CLOSED" ? "Hợp đồng đã đóng" : 
+                     installment?.status === "DELETED" ? "Hợp đồng đã xóa" : "Đóng HĐ"}
                   </Button>
                 ) : (
                   /* Show two buttons if there's old debt */
@@ -1039,7 +1039,7 @@ export function InstallmentPaymentHistoryModal({
               <div className="flex flex-wrap gap-4 mb-6">
                 <Button 
                   className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
-                  disabled={installment?.status === InstallmentStatus.DELETED}
+                  disabled={installment?.status === "DELETED"}
                 >
                   <Icon name="upload" size={16} />
                   Upload Ảnh
@@ -1047,7 +1047,7 @@ export function InstallmentPaymentHistoryModal({
 
                 <Button 
                   className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
-                  disabled={installment?.status === InstallmentStatus.DELETED}
+                  disabled={installment?.status === "DELETED"}
                 >
                   <Icon name="document" size={16} />
                   In Chứng Từ
@@ -1056,7 +1056,7 @@ export function InstallmentPaymentHistoryModal({
 
               {/* Document upload area */}
               <div className="mb-6">
-                <div className={`border-2 border-dashed border-gray-300 rounded-md p-6 text-center ${installment?.status === InstallmentStatus.DELETED ? 'opacity-50 pointer-events-none' : ''}`}>
+                <div className={`border-2 border-dashed border-gray-300 rounded-md p-6 text-center ${installment?.status === "DELETED" ? 'opacity-50 pointer-events-none' : ''}`}>
                   <Icon
                     name="upload"
                     size={40}
@@ -1067,7 +1067,7 @@ export function InstallmentPaymentHistoryModal({
                   </p>
                   <Button 
                     className="bg-blue-600 hover:bg-blue-700 text-white"
-                    disabled={installment?.status === InstallmentStatus.DELETED}
+                    disabled={installment?.status === "DELETED"}
                   >
                     Chọn từ máy tính
                   </Button>
@@ -1354,7 +1354,7 @@ export function InstallmentPaymentHistoryModal({
                         value={rotationLoanDate}
                         onChange={(date) => setRotationLoanDate(date)}
                         className="w-full"
-                        disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
+                        disabled={installment.status === "CLOSED" || installment.status === "DELETED"}
                       />
                     </div>
                     <div className="text-xs text-gray-500">
@@ -1372,7 +1372,7 @@ export function InstallmentPaymentHistoryModal({
                       <MoneyInput 
                         value={rotationLoanAmount}
                         onChange={(e) => setRotationLoanAmount(e.target.value)}
-                        disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
+                        disabled={installment.status === "CLOSED" || installment.status === "DELETED"}
                       />
                     </div>
                     <div className="text-xs text-gray-500">
@@ -1390,7 +1390,7 @@ export function InstallmentPaymentHistoryModal({
                       <MoneyInput 
                         value={rotationDownPayment}
                         onChange={(e) => setRotationDownPayment(e.target.value)}
-                        disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
+                        disabled={installment.status === "CLOSED" || installment.status === "DELETED"}
                       />
                     </div>
                     <div className="text-xs text-gray-500">
@@ -1410,7 +1410,7 @@ export function InstallmentPaymentHistoryModal({
                         className="border rounded p-2 w-full text-sm"
                         value={rotationDuration}
                         onChange={(e) => setRotationDuration(e.target.value)}
-                        disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
+                        disabled={installment.status === "CLOSED" || installment.status === "DELETED"}
                       />
                     </div>
                     <div className="text-xs text-gray-500">
@@ -1438,7 +1438,7 @@ export function InstallmentPaymentHistoryModal({
                         className="border rounded p-2 w-full text-sm"
                         value={rotationPaymentPeriod}
                         onChange={(e) => setRotationPaymentPeriod(e.target.value)}
-                        disabled={installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
+                        disabled={installment.status === "CLOSED" || installment.status === "DELETED"}
                       />
                     </div>
                     <div className="text-xs text-gray-500">
@@ -1470,7 +1470,7 @@ export function InstallmentPaymentHistoryModal({
                   <Button
                     className="bg-blue-600 hover:bg-blue-700 text-white px-8"
                     onClick={handleRotateContract}
-                    disabled={isRotating || installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED}
+                    disabled={isRotating || installment.status === "CLOSED" || installment.status === "DELETED"}
                   >
                     {isRotating ? (
                       <>

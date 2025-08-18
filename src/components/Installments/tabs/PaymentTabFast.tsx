@@ -344,7 +344,7 @@ export function PaymentTabFast({
                 const hasPayments = getEffectiveCheckedState(period);
                 const isEditing = editingPeriodId === period.id;
                 const isLoading = loadingPeriods[period.id];
-                const isDisabled = installment.status === InstallmentStatus.CLOSED || installment.status === InstallmentStatus.DELETED;
+                const isDisabled = installment.status === "CLOSED" || installment.status === "DELETED";
                 const isEarliestUnpaid = idx === earliestUnpaidIdx;
 
                 // Determine latest checked period to decide lock UI

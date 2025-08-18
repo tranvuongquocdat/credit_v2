@@ -368,11 +368,17 @@ begin
       /* ---- khoảng ngày vay ---- */
       and (
             coalesce(p_filters->>'start_date','') = ''
-            or i.loan_date >= (p_filters->>'start_date')::date
+            or CASE 
+                 WHEN (p_filters->>'status') IN ('deleted', 'closed') THEN i.updated_at::DATE >= (p_filters->>'start_date')::date
+                 ELSE i.loan_date >= (p_filters->>'start_date')::date
+               END
           )
       and (
             coalesce(p_filters->>'end_date','') = ''
-            or i.loan_date <= (p_filters->>'end_date')::date
+            or CASE 
+                 WHEN (p_filters->>'status') IN ('deleted', 'closed') THEN i.updated_at::DATE <= (p_filters->>'end_date')::date
+                 ELSE i.loan_date <= (p_filters->>'end_date')::date
+               END
           )
 
       /* ---- tên khách hàng ---- */
@@ -449,11 +455,17 @@ begin
       /* ---- khoảng ngày vay ---- */
       and (
             coalesce(p_filters->>'start_date','') = ''
-            or i.loan_date >= (p_filters->>'start_date')::date
+            or CASE 
+                 WHEN (p_filters->>'status') IN ('deleted', 'closed') THEN i.updated_at::DATE >= (p_filters->>'start_date')::date
+                 ELSE i.loan_date >= (p_filters->>'start_date')::date
+               END
           )
       and (
             coalesce(p_filters->>'end_date','') = ''
-            or i.loan_date <= (p_filters->>'end_date')::date
+            or CASE 
+                 WHEN (p_filters->>'status') IN ('deleted', 'closed') THEN i.updated_at::DATE <= (p_filters->>'end_date')::date
+                 ELSE i.loan_date <= (p_filters->>'end_date')::date
+               END
           )
 
       /* ---- tên khách hàng ---- */

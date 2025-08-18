@@ -18,7 +18,7 @@ import { useInstallments } from '@/hooks/useInstallments';
 import { useInstallmentsSummary } from '@/hooks/useInstallmentsSummary';
 
 // Import types and API functions
-import { InstallmentStatus, InstallmentWithCustomer, InstallmentFilters } from '@/models/installment';
+import { InstallmentWithCustomer, InstallmentFilters } from '@/models/installment';
 import { 
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle 

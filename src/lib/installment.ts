@@ -172,8 +172,8 @@ export async function getInstallments(
   signal?: AbortSignal
 ) {
   try {
-    // If customer name or end_date filter is provided, use RPC for proper search logic
-    if (filters?.customer_name || filters?.end_date) {
+    // Use RPC function for Vietnamese unaccented search OR any date filtering
+    if (filters?.customer_name || filters?.end_date || filters?.start_date) {
       return await getInstallmentsWithUnaccentedSearch(page, pageSize, filters, signal);
     }
 
@@ -193,7 +193,21 @@ export async function getInstallments(
     }
     
     if (filters?.start_date) {
-      query = query.gte('loan_date', filters.start_date);
+      // Use updated_at for DELETED/CLOSED statuses, loan_date for others
+      if (filters.status === InstallmentStatus.DELETED || filters.status === InstallmentStatus.CLOSED) {
+        query = query.gte('updated_at', filters.start_date);
+      } else {
+        query = query.gte('loan_date', filters.start_date);
+      }
+    }
+    
+    if (filters?.end_date) {
+      // Use updated_at for DELETED/CLOSED statuses, loan_date for others
+      if (filters.status === InstallmentStatus.DELETED || filters.status === InstallmentStatus.CLOSED) {
+        query = query.lte('updated_at', filters.end_date);
+      } else {
+        query = query.lte('loan_date', filters.end_date);
+      }
     }
     
     if (filters?.duration) {

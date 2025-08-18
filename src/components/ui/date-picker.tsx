@@ -217,6 +217,7 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
           className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer hover:bg-gray-50 rounded-r-md transition-colors"
           onClick={() => setIsOpen(!isOpen)}
           tabIndex={-1}
+          disabled={props.disabled}
         >
           <svg 
             className="w-4 h-4 text-gray-400 hover:text-gray-600" 
