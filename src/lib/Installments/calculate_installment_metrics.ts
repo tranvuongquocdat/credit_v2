@@ -60,10 +60,7 @@ export async function calculateInstallmentMetrics(
       ));
     
     // Calculate loan amount (amount given to customer)
-    const loanAmount = Math.max(
-      0,
-      (installment.down_payment || 0) - totalPaid,
-    );
+    const loanAmount = (installment.installment_amount || 0) - totalPaid;
     
     // Calculate expected profit
     const expectedProfitAmount = installment.status === "on_time" 
