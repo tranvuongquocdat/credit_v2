@@ -131,6 +131,7 @@ export async function updateAdmin(adminId: string, adminData: UpdateAdminParams)
     };
 
     if (adminData.username !== undefined) updateData.username = adminData.username;
+    if (adminData.email !== undefined) updateData.email = adminData.email;
     if (adminData.password !== undefined) {
       const response = await fetch(`/api/users/${profileData.id}/changePassword`, {
         method: 'PUT',

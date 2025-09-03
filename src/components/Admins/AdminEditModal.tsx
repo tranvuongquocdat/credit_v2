@@ -140,6 +140,16 @@ export function AdminEditModal({ isOpen, onClose, onSuccess, admin }: AdminEditM
             />
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="email">Tên</Label>
+            <Input
+              id="email"
+              value={formData.email}
+              onChange={(e) => handleInputChange('email', e.target.value)}
+              placeholder="Nhập email"
+            />
+          </div>
+
           <DialogFooter>
             <Button
               type="button"

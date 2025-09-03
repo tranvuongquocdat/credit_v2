@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode, useCallback, useRef } from "react";
 import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
@@ -34,12 +34,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const router = useRouter();
+  const lastUserIdRef = useRef<string | null>(null);
 
   const fetchAuthData = useCallback(async (forceRefresh = false) => {
     try {
       setLoading(true);
       const currentUser = await getCurrentUser(forceRefresh);
       setUser(currentUser);
+      // Update ref with current user ID
+      lastUserIdRef.current = currentUser?.id || null;
 
       // Nếu không có user hợp lệ ⇒ reset quyền & isAdmin
       if (!currentUser || !currentUser.id) {
@@ -105,8 +108,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         
         switch (event) {
           case 'SIGNED_IN':
-            console.log('User signed in, refreshing auth data');
-            fetchAuthData(true);
+            // Check if this is the same user as before using ref
+            const isSameUser = session?.user?.id && session.user.id === lastUserIdRef.current;
+            
+            if (!isSameUser) {
+              fetchAuthData(true);
+            }
             break;
 
           case 'SIGNED_OUT':
