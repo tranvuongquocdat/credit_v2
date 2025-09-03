@@ -145,13 +145,12 @@ export function AdminCreateModal({ isOpen, onClose, onSuccess }: AdminCreateModa
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">Tên</Label>
             <Input
               id="email"
-              type="email"
               value={formData.email}
               onChange={(e) => handleInputChange('email', e.target.value)}
-              placeholder="Nhập email"
+              placeholder="Nhập tên"
               disabled={isLoading}
             />
           </div>

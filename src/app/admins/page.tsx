@@ -223,7 +223,7 @@ export default function AdminsPage() {
                   <TableRow>
                     <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Họ tên</TableHead>
                     <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Tên đăng nhập</TableHead>
-                    <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Email</TableHead>
+                    <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Tên</TableHead>
                     <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Vai trò</TableHead>
                     <TableHead className="py-2 px-3 text-left font-medium border-b border-r border-gray-200">Trạng thái</TableHead>
                     <TableHead className="py-2 px-3 text-center font-medium border-b border-gray-200">Thao tác</TableHead>

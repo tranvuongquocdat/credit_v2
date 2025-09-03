@@ -24,7 +24,7 @@ export async function POST(request: Request) {
 
     // 1. Tạo tài khoản auth user
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: email || `${username}@creditapp.local`,
+      email: `${username}@creditapp.local`,
       password,
       email_confirm: true,
     });
