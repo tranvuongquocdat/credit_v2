@@ -432,10 +432,10 @@ export function InstallmentsTable({
                     }
                     
                     return (
-                      <div className="flex flex-col items-center">
+                      <div className="flex flex-col items-center text-rose-600">
                         <span>{formatCurrency(remainingAmount)}</span>
                         {remainingPeriods !== null && remainingPeriods > 0 && (
-                          <span className="text-xs text-gray-400">{remainingPeriods} kỳ</span>
+                          <span className="text-xs text-rose-400">{remainingPeriods} kỳ</span>
                         )}
                       </div>
                     );
