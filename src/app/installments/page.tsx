@@ -35,18 +35,7 @@ import { InstallmentStatus, InstallmentWithCustomer } from '@/models/installment
 import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/lib/supabase';
 import { useInstallmentCalculation } from '@/hooks/useInstallmentCalculation';
-
-// Map trạng thái thành nhãn và màu sắc
-const statusMap: Record<string, { label: string, color: string }> = {
-  [InstallmentStatus.ON_TIME]: { label: 'Đang vay', color: 'bg-green-100 text-green-800 border-green-200' },
-  [InstallmentStatus.OVERDUE]: { label: 'Quá hạn', color: 'bg-red-100 text-red-800 border-red-200' },
-  [InstallmentStatus.LATE_INTEREST]: { label: 'Chậm trả', color: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
-  [InstallmentStatus.BAD_DEBT]: { label: 'Nợ xấu', color: 'bg-purple-100 text-purple-800 border-purple-200' },
-  [InstallmentStatus.CLOSED]: { label: 'Đã đóng', color: 'bg-blue-100 text-blue-800 border-blue-200' },
-  [InstallmentStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800 border-gray-200' },
-  [InstallmentStatus.DUE_TOMORROW]: { label: 'Ngày mai đóng', color: 'bg-amber-100 text-amber-800 border-amber-200' },
-  [InstallmentStatus.FINISHED]: { label: 'Hoàn thành', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
-};
+import { INSTALLMENT_STATUS_MAP } from '@/lib/installment-status-utils';
 
 // Skeleton displayed while loading FinancialSummary lazily
 function SkeletonFinancialSummary() {
@@ -435,7 +424,7 @@ export default function InstallmentsPage() {
         {/* Installments Table */}
         <InstallmentsTable
           installments={displayInstallments}
-          statusMap={statusMap}
+          statusMap={INSTALLMENT_STATUS_MAP}
           isLoading={loading || calcLoading}
           onEdit={handleEditInstallment}
           onUpdateStatus={handleOpenStatusDialog}

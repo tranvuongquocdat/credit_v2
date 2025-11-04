@@ -3,6 +3,8 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { StoreProvider } from "@/contexts/StoreContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { ReactQueryProvider } from '@/components/ReactQueryProvider';
+import { CacheDebugger } from '@/components/CacheDebugger';
 
 // Không cần import font từ Google Fonts vì sẽ sử dụng Arial (system font)
 
@@ -26,12 +28,15 @@ export default function RootLayout({
           fontFamily: 'Arial, sans-serif' 
         }}
       >
-        <AuthProvider>
-          <StoreProvider>
-            {children}
-            <Toaster />
-          </StoreProvider>
-        </AuthProvider>
+        <ReactQueryProvider>
+          <AuthProvider>
+            <StoreProvider>
+              {children}
+              <Toaster />
+              <CacheDebugger />
+            </StoreProvider>
+          </AuthProvider>
+        </ReactQueryProvider>
       </body>
     </html>
   );

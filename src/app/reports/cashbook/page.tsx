@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { Layout } from '@/components/Layout';
-import { supabase } from '@/lib/supabase';
 import { useStore } from '@/contexts/StoreContext';
-import { format, startOfDay, endOfDay, parse, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { RefreshCw } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useRouter } from 'next/navigation';
+import { useCashbookSummary } from '@/hooks/useCashbook';
 
 // Shadcn UI components
 import {
@@ -43,9 +43,9 @@ import {
 // Function to format currency
 const formatCurrency = (value: number | null | undefined) => {
   if (value === null || value === undefined) return '0';
-  
+
   const formattedValue = new Intl.NumberFormat('vi-VN').format(value);
-  
+
   // Add color formatting based on value
   if (value > 0) {
     return `+${formattedValue}`;
@@ -56,60 +56,23 @@ const formatCurrency = (value: number | null | undefined) => {
   }
 };
 
-// Function to fetch all data from a query with pagination
-const fetchAllData = async (query: any, pageSize: number = 1000) => {
-  let allData: any[] = [];
-  let from = 0;
-  let hasMore = true;
-
-  while (hasMore) {
-    const { data, error } = await query.range(from, from + pageSize - 1);
-    
-    if (error) {
-      console.error('Error fetching data:', error);
-      break;
-    }
-
-    if (data && data.length > 0) {
-      allData = [...allData, ...data];
-      from += pageSize;
-      hasMore = data.length === pageSize;
-    } else {
-      hasMore = false;
-    }
-  }
-
-  return allData;
-};
-
 export default function CashbookPage() {
   const { currentStore } = useStore();
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [summary, setSummary] = useState<CashbookSummary>({
-    openingBalance: 0,
-    pawnActivity: 0,
-    creditActivity: 0,
-    installmentActivity: 0,
-    incomeExpense: 0,
-    capital: 0,
-    closingBalance: 0
-  });
-  
+
   // Use permissions hook
   const { hasPermission, loading: permissionsLoading } = usePermissions();
   const router = useRouter();
-  
+
   // Check access permission
   const canAccessReport = hasPermission('so_quy_tien_mat');
-  
+
   // Redirect if user doesn't have permission
   useEffect(() => {
     if (!permissionsLoading && !canAccessReport) {
       router.push('/');
     }
   }, [permissionsLoading, canAccessReport, router]);
-  
+
   // Date range for filtering
   const today = new Date();
   const [startDate, setStartDate] = useState<string>(
@@ -119,373 +82,29 @@ export default function CashbookPage() {
     format(today, 'yyyy-MM-dd')
   );
 
-  // Transaction data for Excel export
-  const [pawnTransactions, setPawnTransactions] = useState<PawnTransaction[]>([]);
-  const [creditTransactions, setCreditTransactions] = useState<CreditTransaction[]>([]);
-  const [installmentTransactions, setInstallmentTransactions] = useState<InstallmentTransaction[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [capitalTransactions, setCapitalTransactions] = useState<CapitalTransaction[]>([]);
+  // Use React Query hook for cached cashbook data
+  const {
+    openingBalance,
+    closingBalance,
+    transactions,
+    isLoading,
+    error,
+    refetch
+  } = useCashbookSummary(
+    currentStore?.id || '',
+    startDate,
+    endDate
+  );
 
-  // Fetch opening balance from store_total_fund for the start date
-  const fetchOpeningBalance = async () => {
-    if (!currentStore?.id) return 0;
-    
-    try {
-      // Get the date at 00:00 of the start date in UTC+7
-      const startDateObj = parse(startDate, 'yyyy-MM-dd', new Date());
-      const utcDate = format(startDateObj, 'yyyy-MM-dd');
-      
-      // Fetch store creation date to check if this is the first day
-      const { data: storeData, error: storeError } = await supabase
-        .from('stores')
-        .select('created_at')
-        .eq('id', currentStore.id)
-        .single();
-      
-      if (storeError) throw storeError;
-      
-      // Check if the date being viewed is the store creation date
-      if (storeData && storeData.created_at) {
-        const storeCreationDate = format(new Date(storeData.created_at), 'yyyy-MM-dd');
-        // If the date we're checking is the store creation date, opening balance should be 0
-        if (storeCreationDate === utcDate) {
-          return 0;
-        }
-      }
-      
-      // Fetch the closest record before or on the start date
-      const { data, error } = await supabase
-        .from('store_total_fund')
-        .select('total_fund, created_at')
-        .eq('store_id', currentStore.id)
-        .lte('created_at', `${utcDate}T17:00:00Z`) // 00:00 UTC+7 is 17:00 UTC of the previous day
-        .order('created_at', { ascending: false })
-        .limit(1);
-      
-      if (error) throw error;
-      
-      return data && data.length > 0 ? data[0].total_fund : 0;
-    } catch (err) {
-      console.error('Error fetching opening balance:', err);
-      return 0;
-    }
-  };
-
-  // Calculate transaction sums using the same approach as total-fund page
-  const fetchTransactionData = async () => {
-    if (!currentStore?.id) return { pawn: 0, credit: 0, installment: 0, incomeExpense: 0, capital: 0 };
-    
-    try {
-      const storeId = currentStore.id;
-      const startDateObj = startOfDay(parse(startDate, 'yyyy-MM-dd', new Date()));
-      const endDateObj = endOfDay(parse(endDate, 'yyyy-MM-dd', new Date()));
-      
-      // Format dates for query
-      const startDateISO = startDateObj.toISOString();
-      const endDateISO = endDateObj.toISOString();
-      
-      // Fetch pawn transactions
-      const pawnHistoryData = await fetchAllData(
-        supabase
-          .from('pawn_history')
-          .select(`
-            *,
-            pawns!inner (contract_code, store_id)
-          `)
-          .eq('pawns.store_id', storeId)
-          .or('is_deleted.is.null,is_deleted.eq.false')
-          .gte('created_at', startDateISO)
-          .lte('created_at', endDateISO)
-      );
-      
-      // Format pawn data for transaction list
-      const formattedPawnData: PawnTransaction[] = pawnHistoryData.map((item: any) => ({
-        id: item.id,
-        date: format(parseISO(item.created_at), 'dd/MM/yyyy HH:mm'),
-        contractCode: item.pawns?.contract_code || 'N/A',
-        customerName: 'N/A',
-        description: item.description || 'Giao dịch cầm đồ',
-        loanAmount: item.debit_amount || 0,
-        interestAmount: item.credit_amount || 0,
-        transactionType: item.transaction_type || '',
-        createdAt: item.created_at || ''
-      }));
-      setPawnTransactions(formattedPawnData);
-      
-      // Fetch credit transactions
-      const creditHistoryData = await fetchAllData(
-        supabase
-          .from('credit_history')
-          .select(`
-            *,
-            credits!inner (contract_code, store_id)
-          `)
-          .eq('credits.store_id', storeId)
-          .or('is_deleted.is.null,is_deleted.eq.false')
-          .gte('created_at', startDateISO)
-          .lte('created_at', endDateISO)
-      );
-      
-      // Format credit data for transaction list
-      const formattedCreditData: CreditTransaction[] = creditHistoryData.map((item: any) => ({
-        id: item.id,
-        date: format(parseISO(item.created_at), 'dd/MM/yyyy HH:mm'),
-        contractCode: item.credits?.contract_code || 'N/A',
-        customerName: 'N/A',
-        description: item.description || 'Giao dịch tín chấp',
-        loanAmount: item.debit_amount || 0,
-        interestAmount: item.credit_amount || 0,
-        transactionType: item.transaction_type || '',
-        createdAt: item.created_at || ''
-      }));
-      setCreditTransactions(formattedCreditData);
-      
-      // Fetch installment transactions
-      const installmentHistoryData = await fetchAllData(
-        supabase
-          .from('installment_history')
-          .select(`
-            *,
-            installments!inner (
-              contract_code,
-              employee_id,
-              employees!inner (store_id)
-            )
-          `)
-          .eq('installments.employees.store_id', storeId)
-          .or('is_deleted.is.null,is_deleted.eq.false')
-          .gte('created_at', startDateISO)
-          .lte('created_at', endDateISO)
-      );
-      
-      // Format installment data for transaction list
-      const formattedInstallmentData: InstallmentTransaction[] = installmentHistoryData.map((item: any) => ({
-        id: item.id,
-        date: format(parseISO(item.created_at), 'dd/MM/yyyy HH:mm'),
-        contractCode: item.installments?.contract_code || 'N/A',
-        customerName: 'N/A',
-        description: item.description || 'Giao dịch trả góp',
-        loanAmount: item.debit_amount || 0,
-        interestAmount: item.credit_amount || 0,
-        transactionType: item.transaction_type || '',
-        createdAt: item.created_at || ''
-      }));
-      setInstallmentTransactions(formattedInstallmentData);
-      
-      // Fetch transactions (income/expense) - Remove is_deleted filter and apply transform logic
-      const allTransactionsData = await fetchAllData(
-        supabase
-          .from('transactions')
-          .select('*')
-          .eq('store_id', storeId)
-      );
-      
-      // Transform transactions to display format (same as income/outgoing pages)
-      const transformTransactionsForDisplay = (rawTransactions: any[]) => {
-        const displayTransactions: any[] = [];
-        
-        rawTransactions.forEach(transaction => {
-          if (transaction.is_deleted) {
-            // Add original transaction record
-            displayTransactions.push({
-              ...transaction,
-              is_cancellation: false,
-            });
-            
-            // Add cancellation record
-            displayTransactions.push({
-              ...transaction,
-              id: `${transaction.id}_cancel`,
-              is_cancellation: true,
-              created_at: transaction.update_at || transaction.created_at,
-              // Reverse amounts for cancellation
-              credit_amount: transaction.credit_amount ? -transaction.credit_amount : null,
-              debit_amount: transaction.debit_amount ? -transaction.debit_amount : null,
-            });
-          } else {
-            // Add normal transaction record
-            displayTransactions.push({
-              ...transaction,
-              is_cancellation: false,
-            });
-          }
-        });
-        
-        return displayTransactions;
-      };
-      
-      const displayTransactions = transformTransactionsForDisplay(allTransactionsData);
-      
-      // Filter by date range after transformation
-      const transactionsData = displayTransactions.filter(transaction => {
-        const transactionDate = new Date(transaction.created_at);
-        return transactionDate >= startDateObj && transactionDate <= endDateObj;
-      });
-      
-      // Format transaction data
-      const formattedTransactionData: Transaction[] = transactionsData.map((item: any) => {
-        let income = 0;
-        let expense = 0;
-        
-        if (item.transaction_type === 'income') {
-          income = Number(item.amount || 0);
-        } else if (item.transaction_type === 'expense') {
-          expense = Number(item.amount || 0);
-        } else {
-          income = Number(item.credit_amount || 0);
-          expense = Number(item.debit_amount || 0);
-        }
-        
-        return {
-          id: item.id,
-          date: format(parseISO(item.created_at), 'dd/MM/yyyy HH:mm'),
-          description: item.description || 'Giao dịch thu chi',
-          income,
-          expense,
-          transactionType: item.transaction_type || ''
-        };
-      });
-      setTransactions(formattedTransactionData);
-      
-      // Fetch capital/fund transactions
-      const storeFundData = await fetchAllData(
-        supabase
-          .from('store_fund_history')
-          .select('*')
-          .eq('store_id', storeId)
-          .gte('created_at', startDateISO)
-          .lte('created_at', endDateISO)
-      );
-      
-      // Format capital data
-      const formattedCapitalData: CapitalTransaction[] = storeFundData.map((item: any) => {
-        // Calculate amount based on transaction type like in the total-fund page
-        const amount = item.transaction_type === 'withdrawal' 
-          ? -Number(item.fund_amount || 0) 
-          : Number(item.fund_amount || 0);
-        
-        const createdAt = item.created_at ? parseISO(item.created_at) : new Date();
-        
-        return {
-          id: item.id,
-          date: format(createdAt, 'dd/MM/yyyy HH:mm'),
-          description: item.note || 'Giao dịch nguồn vốn',
-          amount,
-          transactionType: item.transaction_type || ''
-        };
-      });
-      setCapitalTransactions(formattedCapitalData);
-      
-      // Process data the same way as in total-fund page
-      // Calculate pawn activity
-      let pawnNet = 0;
-      if (pawnHistoryData) {
-        pawnHistoryData.forEach((item: any) => {
-          pawnNet += (item.credit_amount || 0) - (item.debit_amount || 0);
-        });
-      }
-      
-      // Calculate credit activity
-      let creditNet = 0;
-      if (creditHistoryData) {
-        creditHistoryData.forEach((item: any) => {
-          creditNet += (item.credit_amount || 0) - (item.debit_amount || 0);
-        });
-      }
-      
-      // Calculate installment activity
-      let installmentNet = 0;
-      installmentHistoryData.forEach((item: any) => {
-        installmentNet += (item.credit_amount || 0) - (item.debit_amount || 0);
-      });
-      
-      // Calculate income/expense (Thu chi)
-      let incomeExpenseNet = 0;
-      transactionsData.forEach((item: any) => {
-        let amount = (item.credit_amount || 0) - (item.debit_amount || 0);
-        if (amount === 0) {
-          amount = item.transaction_type === 'expense' ? -Number(item.amount || 0) : Number(item.amount || 0);
-        }
-        incomeExpenseNet += amount;
-      });
-      
-      // Calculate capital changes - use the exact same logic as in total-fund page
-      let capitalNet = 0;
-      storeFundData.forEach((item: any) => {
-        const amount = item.transaction_type === 'withdrawal' ? 
-          -Number(item.fund_amount || 0) : 
-          Number(item.fund_amount || 0);
-        capitalNet += amount;
-      });
-      
-      return {
-        pawn: pawnNet,
-        credit: creditNet,
-        installment: installmentNet,
-        incomeExpense: incomeExpenseNet,
-        capital: capitalNet
-      };
-    } catch (err) {
-      console.error('Error fetching transaction data:', err);
-      return { pawn: 0, credit: 0, installment: 0, incomeExpense: 0, capital: 0 };
-    }
-  };
-
-  // Fetch current cash_fund from stores table (closing balance)
-  const fetchClosingBalance = async () => {
-    if (!currentStore?.id) return 0;
-    
-    try {
-      const { data, error } = await supabase
-        .from('stores')
-        .select('cash_fund')
-        .eq('id', currentStore.id)
-        .single();
-      
-      if (error) throw error;
-      
-      return data?.cash_fund || 0;
-    } catch (err) {
-      console.error('Error fetching closing balance:', err);
-      return 0;
-    }
-  };
-
-  // Fetch all data and update summary
-  const fetchCashbookData = async () => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      if (!currentStore?.id) {
-        setError("Không có cửa hàng nào được chọn");
-        setIsLoading(false);
-        return;
-      }
-      
-      // Fetch data in parallel
-      const [openingBalance, transactions, closingBalance] = await Promise.all([
-        fetchOpeningBalance(),
-        fetchTransactionData(),
-        fetchClosingBalance()
-      ]);
-      
-      // Update summary
-      setSummary({
-        openingBalance,
-        pawnActivity: transactions.pawn,
-        creditActivity: transactions.credit,
-        installmentActivity: transactions.installment,
-        incomeExpense: transactions.incomeExpense,
-        capital: transactions.capital,
-        closingBalance
-      });
-    } catch (err) {
-      console.error('Error fetching cashbook data:', err);
-      setError('Đã xảy ra lỗi khi tải dữ liệu');
-    } finally {
-      setIsLoading(false);
-    }
+  // Create summary object from cached data
+  const summary: CashbookSummary = {
+    openingBalance,
+    pawnActivity: transactions.summary.pawn,
+    creditActivity: transactions.summary.credit,
+    installmentActivity: transactions.summary.installment,
+    incomeExpense: transactions.summary.incomeExpense,
+    capital: transactions.summary.capital,
+    closingBalance
   };
 
   const handleStartDateChange = (value: string) => {
@@ -495,13 +114,6 @@ export default function CashbookPage() {
   const handleEndDateChange = (value: string) => {
     setEndDate(value);
   };
-
-  // Fetch cashbook data when component mounts or filters change
-  useEffect(() => {
-    if (currentStore?.id && canAccessReport && !permissionsLoading) {
-      fetchCashbookData();
-    }
-  }, [currentStore?.id, startDate, endDate, canAccessReport, permissionsLoading]);
   
   // Loading state for permissions
   if (permissionsLoading) {
@@ -536,13 +148,13 @@ export default function CashbookPage() {
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-bold">Sổ quỹ tiền mặt</h1>
           </div>
-          <ExcelExporter 
+          <ExcelExporter
             summaryData={summary}
-            pawnData={pawnTransactions}
-            creditData={creditTransactions}
-            installmentData={installmentTransactions}
-            transactionData={transactions}
-            capitalData={capitalTransactions}
+            pawnData={transactions.pawn}
+            creditData={transactions.credit}
+            installmentData={transactions.installment}
+            transactionData={transactions.incomeExpense}
+            capitalData={transactions.capital}
             startDate={startDate}
             endDate={endDate}
             storeName={currentStore?.name || 'Unknown'}
@@ -583,7 +195,7 @@ export default function CashbookPage() {
         {/* Error message */}
         {error && (
           <div className="text-red-700 py-2" role="alert">
-            <p>{error}</p>
+            <p>{error instanceof Error ? error.message : 'Đã xảy ra lỗi khi tải dữ liệu'}</p>
           </div>
         )}
         
@@ -655,34 +267,29 @@ export default function CashbookPage() {
         </Card>
         
         {/* Individual Transaction Tables */}
-        <PawnTable 
-          storeId={currentStore?.id} 
-          startDate={startDate} 
-          endDate={endDate}
+        <PawnTable
+          transactions={transactions.pawn}
+          isLoading={isLoading}
         />
-        
-        <CreditTable 
-          storeId={currentStore?.id} 
-          startDate={startDate} 
-          endDate={endDate}
+
+        <CreditTable
+          transactions={transactions.credit}
+          isLoading={isLoading}
         />
-        
-        <InstallmentTable 
-          storeId={currentStore?.id} 
-          startDate={startDate} 
-          endDate={endDate}
+
+        <InstallmentTable
+          transactions={transactions.installment}
+          isLoading={isLoading}
         />
-        
-        <TransactionTable 
-          storeId={currentStore?.id} 
-          startDate={startDate} 
-          endDate={endDate}
+
+        <TransactionTable
+          transactions={transactions.incomeExpense}
+          isLoading={isLoading}
         />
-        
-        <CapitalTable 
-          storeId={currentStore?.id} 
-          startDate={startDate} 
-          endDate={endDate}
+
+        <CapitalTable
+          transactions={transactions.capital}
+          isLoading={isLoading}
         />
         
       </div>

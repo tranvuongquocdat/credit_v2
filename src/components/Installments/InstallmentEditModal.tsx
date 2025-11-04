@@ -237,7 +237,6 @@ export function InstallmentEditModal({
         paymentDueDate.setDate(startDateObj.getDate() + parseInt(paymentPeriod || '10') - 1);
         installmentData.payment_due_date = format(paymentDueDate, 'yyyy-MM-dd');
       }
-      debugger;
       // Call API to update installment
       const { error } = await updateInstallment(installmentId, installmentData);
       

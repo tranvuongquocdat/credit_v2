@@ -16,6 +16,7 @@ import { InstallmentEditModal } from '@/components/Installments/InstallmentEditM
 // Import custom hooks
 import { useInstallments } from '@/hooks/useInstallments';
 import { useInstallmentsSummary } from '@/hooks/useInstallmentsSummary';
+import { useInstallmentCalculation } from '@/hooks/useInstallmentCalculation';
 
 // Import types and API functions
 import { InstallmentWithCustomer, InstallmentFilters } from '@/models/installment';
@@ -111,16 +112,16 @@ export function InstallmentContractClient({ contractCode }: InstallmentContractC
   // State cho modal thanh toán (InstallmentPaymentHistoryModal)
   const [isPaymentActionsModalOpen, setIsPaymentActionsModalOpen] = useState(false);
   const [selectedInstallmentForPayment, setSelectedInstallmentForPayment] = useState<InstallmentWithCustomer | null>(null);
-  
-    // NEW: state for enriched data & calc loading
-    const [processedInstallments, setProcessedInstallments] = useState<InstallmentWithCustomer[]>([]);
-    const [calcLoading, setCalcLoading] = useState(false);
+
+  // Use the calculation hook to avoid code duplication
+  const { processedInstallments, loading: calcLoading } = useInstallmentCalculation(installments);
+
   // Calculate total pages
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   
   // Memoize search handler to prevent re-creation on every render
-  const handleSearchFilters = useCallback((filters: any) => {
-    handleSearch(filters);
+  const handleSearchFilters = useCallback((filters: SearchFilters) => {
+    handleSearch(filters as InstallmentFilters);
   }, [handleSearch]);
   
   // Handle create new installment
@@ -154,7 +155,7 @@ export function InstallmentContractClient({ contractCode }: InstallmentContractC
   // Handle deleting installment
   const handleDeleteInstallment = async (installmentId: string) => {
     try {
-      const installment = installments.find(i => i.id === installmentId);
+      const installment = installments.find((i: InstallmentWithCustomer) => i.id === installmentId);
       if (!installment) return;
       
       const result = await handleDelete(installment);
@@ -203,77 +204,7 @@ export function InstallmentContractClient({ contractCode }: InstallmentContractC
       refreshFinancial();
     }
   };
-    // ------------------------------------------------------------
-  // Calculate paid amount + remaining + status once installments list changes
-  // ------------------------------------------------------------
-  useEffect(() => {
-    const compute = async () => {
-      if (installments.length === 0) {
-        setProcessedInstallments([]);
-        return;
-      }
-      setCalcLoading(true);
-      try {
-        const ids = installments.map((i) => i.id);
-        // RPC: tổng tiền đã đóng
-        const { data: paidRows, error: paidError } = await supabase.rpc('installment_get_paid_amount', {
-          p_installment_ids: ids,
-        });
-        if (paidError) {
-          console.error('installment_get_paid_amount error:', paidError);
-        }
-        const paidMap = new Map<string, number>(
-          (paidRows ?? []).map((r: any) => [r.installment_id, Number(r.total_paid ?? r.paid_amount ?? 0)])
-        );
-
-        // No need for complex status calculation - use status_code directly from view
-
-        const enriched = installments.map((it) => {
-          const totalPaid = paidMap.get(it.id) ?? 0;
-          const remaining = calculateRemainingToPay(it, totalPaid);
-
-          // Tính nhãn ngày phải đóng tiếp theo
-          let nextPaymentDateLabel: string;
-          if (!it.payment_due_date) {
-            nextPaymentDateLabel = 'Hoàn thành';
-          } else {
-            const due = new Date(it.payment_due_date);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const diff = Math.floor((due.getTime() - today.getTime()) / 86400000);
-            if (diff === 0) nextPaymentDateLabel = 'Hôm nay';
-            else if (diff === 1) nextPaymentDateLabel = 'Ngày mai';
-            else {
-              const day = due.getDate().toString().padStart(2, '0');
-              const month = (due.getMonth() + 1).toString().padStart(2, '0');
-              nextPaymentDateLabel = `${day}/${month}`;
-            }
-          }
-
-          // Get status info using simplified utility
-          const statusCode = getInstallmentStatusCode(it);
-          const statusInfo = getInstallmentStatusInfo(statusCode);
-
-          return {
-            ...it,
-            totalPaid,
-            remainingToPay: remaining,
-            nextPaymentDate: nextPaymentDateLabel,
-            statusInfo,
-          } as InstallmentWithCustomer;
-        });
-
-        setProcessedInstallments(enriched);
-      } catch (err) {
-        console.error('Error computing installment aggregates:', err);
-      } finally {
-        setCalcLoading(false);
-      }
-    };
-
-    compute();
-  }, [installments]);
-  // Handle refresh after contract operations
+      // Handle refresh after contract operations
   const handleRefresh = () => {
     refetch();
     refreshFinancial();

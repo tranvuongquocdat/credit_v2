@@ -44,11 +44,15 @@ export function usePawns() {
   const fetchPawns = useCallback(async () => {
     const fetchId = Math.random().toString(36).substr(2, 9); // Unique ID
     const timestamp = new Date().toISOString().slice(11, 23); // HH:mm:ss.sss
-    console.log(`📊 [${timestamp}] [${fetchId}] usePawns fetchPawns STARTED with filters:`, filters);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`📊 [${timestamp}] [${fetchId}] usePawns fetchPawns STARTED with filters:`, filters);
+    }
     
     // Kiểm tra currentStore - nếu không có store thì trả về dữ liệu rỗng
     if (!currentStore) {
-      console.log(`🚫 [${timestamp}] [${fetchId}] No current store - returning empty data`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`🚫 [${timestamp}] [${fetchId}] No current store - returning empty data`);
+      }
       setPawns([]);
       setTotalItems(0);
       setLoading(false);
@@ -58,7 +62,9 @@ export function usePawns() {
     
     // Cancel previous request
     if (abortControllerRef.current) {
-      console.log(`🚫 [${timestamp}] [${fetchId}] Cancelling previous request`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`🚫 [${timestamp}] [${fetchId}] Cancelling previous request`);
+      }
       abortControllerRef.current.abort();
     }
     
@@ -98,20 +104,26 @@ export function usePawns() {
       }
       
       const endTimestamp = new Date().toISOString().slice(11, 23);
-      console.log(`🎯 [${endTimestamp}] [${fetchId}] Loaded ${result.data.length} pawns successfully`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`🎯 [${endTimestamp}] [${fetchId}] Loaded ${result.data.length} pawns successfully`);
+      }
       
       setPawns(result.data);
       setTotalItems(result.total);
       setLoading(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Handle abort errors gracefully
       if (err instanceof Error && err.name === 'AbortError') {
-        console.log(`🚫 [${timestamp}] [${fetchId}] Request cancelled:`, err.message);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`🚫 [${timestamp}] [${fetchId}] Request cancelled:`, err.message);
+        }
         return;
       }
-      
+
       const errorTimestamp = new Date().toISOString().slice(11, 23);
-      console.log(`❌ [${errorTimestamp}] [${fetchId}] fetchPawns ERROR:`, err);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`❌ [${errorTimestamp}] [${fetchId}] fetchPawns ERROR:`, err);
+      }
       
       setError('Không thể tải dữ liệu hợp đồng');
       setLoading(false);
@@ -137,7 +149,9 @@ export function usePawns() {
   
   // Handle search with filters
   const handleSearch = (searchFilters: SearchFilters) => {
-    console.log('🔍 usePawns handleSearch called with searchFilters:', searchFilters);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 usePawns handleSearch called with searchFilters:', searchFilters);
+    }
     setFilters(searchFilters);
     setCurrentPage(DEFAULT_PAGE); // Reset to first page when searching
   };

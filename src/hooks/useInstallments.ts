@@ -1,24 +1,24 @@
-import { useState, useEffect, useRef } from 'react';
-import { 
-  getInstallments, 
-  updateInstallmentStatus, 
-  deleteInstallment 
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import {
+  getInstallments,
+  updateInstallmentStatus,
+  deleteInstallment
 } from '@/lib/installment';
 import { InstallmentFilters, InstallmentStatus, InstallmentWithCustomer } from '@/models/installment';
 import { useToast } from '@/components/ui/use-toast';
 import { useStore } from '@/contexts/StoreContext';
+import { queryKeys } from '@/lib/query-keys';
+import { prefetchNextPage, prefetchAfterMutation, prefetchInstallmentsPage } from '@/lib/react-query-prefetching';
 
 export function useInstallments() {
-  const [installments, setInstallments] = useState<InstallmentWithCustomer[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [totalItems, setTotalItems] = useState(0);
+  // Pagination and filter state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(30);
-  
+
   // Get current store from context
   const { currentStore } = useStore();
-  
+
   const [filters, setFiltersOriginal] = useState<InstallmentFilters>({
     status: InstallmentStatus.ON_TIME, // Mặc định hiển thị các hợp đồng đang vay
     store_id: currentStore?.id // Set default store_id from context
@@ -28,89 +28,64 @@ export function useInstallments() {
   const setFilters = (newFilters: InstallmentFilters | ((prev: InstallmentFilters) => InstallmentFilters)) => {
     setFiltersOriginal(newFilters);
   };
-  
+
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  // AbortController for request cancellation
-  const abortControllerRef = useRef<AbortController | null>(null);
+  // Prepare query key for caching using centralized query keys
+  const queryKey = queryKeys.installments.list(filters, currentPage, itemsPerPage, currentStore?.id);
 
-  const fetchInstallments = async () => {
-    const fetchId = Math.random().toString(36).substr(2, 9); // Unique ID
-    const timestamp = new Date().toISOString().slice(11, 23); // HH:mm:ss.sss
-    console.log(`📊 [${timestamp}] [${fetchId}] useInstallments fetchInstallments STARTED with filters:`, filters);
-    
+  // Query function with AbortController support
+  const fetchInstallments = useCallback(async () => {
     // Kiểm tra currentStore - nếu không có store thì trả về dữ liệu rỗng
     if (!currentStore) {
-      console.log(`🚫 [${timestamp}] [${fetchId}] No current store - returning empty data`);
-      setInstallments([]);
-      setTotalItems(0);
-      setLoading(false);
-      setError(null);
-      return;
+      return { data: [], count: 0, error: null };
     }
 
-    // Cancel previous request
-    if (abortControllerRef.current) {
-      console.log(`🚫 [${timestamp}] [${fetchId}] Cancelling previous request`);
-      abortControllerRef.current.abort();
-    }
-    
-    // Create new AbortController for this request  
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-    
-    setLoading(true);
-    setError(null);
-    
     // Always ensure store_id is set from context if available
     const currentFilters = {
       ...filters,
-      store_id: currentStore.id // Sử dụng currentStore.id trực tiếp vì đã kiểm tra null ở trên
+      store_id: currentStore.id
     };
-    
-    try {
-      const { data, error, count } = await getInstallments(currentPage, itemsPerPage, currentFilters, controller.signal);
-      
-      // Check if this request was cancelled
-      if (controller.signal.aborted) {
-        console.log(`🚫 [${timestamp}] [${fetchId}] Request was cancelled`);
-        return;
-      }
-      
-      if (error) throw new Error(error.message);
-      
-      const endTimestamp = new Date().toISOString().slice(11, 23);
-      console.log(`🎯 [${endTimestamp}] [${fetchId}] Loaded ${data.length} installments successfully`);
-      setInstallments(data);
-      setTotalItems(count || 0);
-    } catch (err: any) {
-      // Handle abort errors gracefully
-      if (err instanceof Error && err.name === 'AbortError') {
-        console.log(`🚫 [${timestamp}] [${fetchId}] Request cancelled:`, err.message);
-        return;
-      }
-      const errorTimestamp = new Date().toISOString().slice(11, 23);
-      console.log(`❌ [${errorTimestamp}] [${fetchId}] fetchInstallments ERROR:`, err);
-      console.error('Error loading installments:', err);
-      setError(err.message || 'Có lỗi xảy ra khi tải dữ liệu. Vui lòng thử lại sau.');
-      toast({
-        title: "Lỗi",
-        description: err.message || "Không thể tải dữ liệu hợp đồng trả góp",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  // Re-fetch when filters, pagination, or store changes
+    try {
+      const { data, error, count } = await getInstallments(currentPage, itemsPerPage, currentFilters);
+
+      if (error) throw new Error(error.message);
+
+      return { data, count: count || 0, error: null };
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Có lỗi xảy ra khi tải dữ liệu';
+      return { data: [], count: 0, error: errorMessage };
+    }
+  }, [currentPage, itemsPerPage, filters, currentStore]);
+
+  // React Query for installments data
+  const { data: queryData, isLoading, error, refetch } = useQuery({
+    queryKey,
+    queryFn: fetchInstallments,
+    enabled: !!currentStore?.id,
+    staleTime: 2 * 60 * 1000, // 2 minutes cache
+  });
+
+  // Extract data from query result
+  const installments = queryData?.data || [];
+  const totalItems = queryData?.count || 0;
+
+  // Prefetch next page when current page is loaded successfully
   useEffect(() => {
-    fetchInstallments();
-  }, [currentPage, itemsPerPage, filters, currentStore?.id]);
+    if (queryData?.data && queryData.data.length === itemsPerPage && currentPage > 0) {
+      // Only prefetch if we have a full page (indicating there might be more)
+      prefetchNextPage(queryClient, currentPage, filters, itemsPerPage, currentStore?.id);
+    }
+  }, [currentPage, filters, itemsPerPage, currentStore?.id, queryData?.data, queryClient]);
 
   // Handle search filters
   const handleSearch = (newFilters: InstallmentFilters) => {
-    console.log('🔍 useInstallments handleSearch called with newFilters:', newFilters);
+    // Development logging only
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 useInstallments handleSearch called with newFilters:', newFilters);
+    }
     // Preserve the store_id from context
     const updatedFilters = {
       ...newFilters,
@@ -140,82 +115,145 @@ export function useInstallments() {
     setCurrentPage(1); // Reset to first page when changing page size
   };
 
-  // Handle updating status
-  const handleUpdateStatus = async (installmentId: string, status: InstallmentStatus) => {
-    try {
-      const { data, error } = await updateInstallmentStatus(installmentId, status);
-      
-      if (error) throw new Error(error.message);
-      
-      // Update the local state with the updated installment
-      setInstallments(prevInstallments =>
-        prevInstallments.map(item =>
-          item.id === installmentId ? { ...item, status } : item
-        )
-      );
-      
+  // React Query mutation for updating status
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ installmentId, status }: { installmentId: string; status: InstallmentStatus }) =>
+      updateInstallmentStatus(installmentId, status),
+    onMutate: async ({ installmentId, status }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey });
+
+      // Snapshot the previous value
+      const previousData = queryClient.getQueryData(queryKey);
+
+      // Optimistically update to the new value
+      queryClient.setQueryData(queryKey, (oldData: { data?: InstallmentWithCustomer[], count?: number } | undefined) => {
+        if (!oldData?.data) return oldData;
+        return {
+          ...oldData,
+          data: oldData.data.map((item: InstallmentWithCustomer) =>
+            item.id === installmentId ? { ...item, status } : item
+          )
+        };
+      });
+
+      return { previousData };
+    },
+    onError: (err, variables, context) => {
+      // If the mutation fails, use the context returned from onMutate to roll back
+      if (context?.previousData) {
+        queryClient.setQueryData(queryKey, context.previousData);
+      }
+
+      const errorMessage = err instanceof Error ? err.message : 'Không thể cập nhật trạng thái.';
+
+      toast({
+        title: "Lỗi",
+        description: errorMessage,
+        variant: "destructive"
+      });
+    },
+    onSuccess: async () => {
+      // Invalidate related queries to ensure consistency using centralized query keys
+      queryClient.invalidateQueries({ queryKey: queryKeys.installments.summary(currentStore?.id) });
+      // Invalidate all installment-paid-amounts queries since we don't know the exact installment IDs
+      queryClient.invalidateQueries({ queryKey: queryKeys.installments.paidAmounts([]) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.installments.all });
+
       toast({
         title: "Thành công",
         description: "Đã cập nhật trạng thái hợp đồng"
       });
-      
-      return { success: true, error: null };
-    } catch (err: any) {
-      console.error('Error updating installment status:', err);
-      
-      toast({
-        title: "Lỗi",
-        description: err.message || "Không thể cập nhật trạng thái hợp đồng",
-        variant: "destructive"
-      });
-      
-      return { success: false, error: err.message || 'Không thể cập nhật trạng thái.' };
-    }
-  };
 
-  // Handle delete
-  const handleDelete = async (installment: InstallmentWithCustomer) => {
-    try {
-      const { success, error } = await deleteInstallment(installment.id);
-      
-      if (error) throw new Error(error.message);
-      
-      if (success) {
-        // Remove from local state
-        setInstallments(prevInstallments =>
-          prevInstallments.filter(item => item.id !== installment.id)
-        );
-        
-        toast({
-          title: "Thành công",
-          description: "Đã xóa hợp đồng"
-        });
+      // Prefetch current page data for faster UI response
+      try {
+        await prefetchInstallmentsPage(queryClient, filters, currentPage, itemsPerPage, currentStore?.id);
+      } catch (error) {
+        // Prefetching errors are not critical, ignore them
       }
-      
-      return { success, error: null };
-    } catch (err: any) {
-      console.error('Error deleting installment:', err);
-      
+    },
+  });
+
+  // React Query mutation for deleting installment
+  const deleteMutation = useMutation({
+    mutationFn: deleteInstallment,
+    onMutate: async (installmentId: string) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey });
+
+      // Snapshot the previous value
+      const previousData = queryClient.getQueryData(queryKey);
+
+      // Optimistically remove the item from the cache
+      queryClient.setQueryData(queryKey, (oldData: { data?: InstallmentWithCustomer[] }) => {
+        if (!oldData?.data) return oldData;
+        return {
+          ...oldData,
+          data: oldData.data.filter((item: InstallmentWithCustomer) => item.id !== installmentId)
+        };
+      });
+
+      return { previousData };
+    },
+    onError: (err, variables, context) => {
+      // If the mutation fails, roll back
+      if (context?.previousData) {
+        queryClient.setQueryData(queryKey, context.previousData);
+      }
+
+      const errorMessage = err instanceof Error ? err.message : 'Không thể xóa hợp đồng.';
+
       toast({
         title: "Lỗi",
-        description: err.message || "Không thể xóa hợp đồng",
+        description: errorMessage,
         variant: "destructive"
       });
-      
-      return { success: false, error: err.message || 'Không thể xóa hợp đồng.' };
+    },
+    onSuccess: async () => {
+      // Invalidate related queries to ensure consistency using centralized query keys
+      queryClient.invalidateQueries({ queryKey: queryKeys.installments.summary(currentStore?.id) });
+      // Invalidate all installment-paid-amounts queries since we don't know the exact installment IDs
+      queryClient.invalidateQueries({ queryKey: queryKeys.installments.paidAmounts([]) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.installments.all });
+
+      toast({
+        title: "Thành công",
+        description: "Đã xóa hợp đồng"
+      });
+
+      // Prefetch current page data for faster UI response
+      try {
+        await prefetchInstallmentsPage(queryClient, filters, currentPage, itemsPerPage, currentStore?.id);
+      } catch (error) {
+        // Prefetching errors are not critical, ignore them
+      }
+    },
+  });
+
+  // Handle updating status (wrapper for the mutation)
+  const handleUpdateStatus = async (installmentId: string, status: InstallmentStatus): Promise<{ success: boolean; error: string | null }> => {
+    try {
+      await updateStatusMutation.mutateAsync({ installmentId, status });
+      return { success: true, error: null };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Có lỗi xảy ra' };
     }
   };
 
-  // Refetch data
-  const refetch = () => {
-    console.log('🔄 refetch called');
-    fetchInstallments();
+  // Handle delete (wrapper for the mutation)
+  const handleDelete = async (installment: InstallmentWithCustomer): Promise<{ success: boolean; error: string | null }> => {
+    try {
+      await deleteMutation.mutateAsync(installment.id);
+      return { success: true, error: null };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Có lỗi xảy ra' };
+    }
   };
 
   return {
     installments,
-    loading,
-    error,
+    loading: isLoading,
+    error: error instanceof Error ? error.message : null,
     totalItems,
     currentPage,
     itemsPerPage,

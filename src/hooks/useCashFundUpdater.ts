@@ -5,7 +5,7 @@ import { useStore } from '@/contexts/StoreContext';
 interface UseCashFundUpdaterOptions {
   enabled?: boolean;
   onUpdate?: (newCashFund: number) => void;
-  onError?: (error: any) => void;
+  onError?: (error: string | Error) => void;
 }
 
 export function useCashFundUpdater(options: UseCashFundUpdaterOptions = {}) {
@@ -19,15 +19,17 @@ export function useCashFundUpdater(options: UseCashFundUpdaterOptions = {}) {
       const result = await updateCashFundFromAllSources(currentStore.id);
       
       if (result.success && result.newCashFund !== undefined) {
-        console.log('Cash fund updated successfully:', result.newCashFund);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Cash fund updated successfully:', result.newCashFund);
+        }
         onUpdate?.(result.newCashFund);
       } else {
         console.error('Error updating cash fund:', result.error);
-        onError?.(result.error);
+        onError?.(result.error instanceof Error ? result.error : new Error(String(result.error)));
       }
     } catch (error) {
       console.error('Error updating cash fund from all sources:', error);
-      onError?.(error);
+      onError?.(error instanceof Error ? error : new Error(String(error)));
     }
   };
 

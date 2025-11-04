@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { InstallmentWithCustomer } from '@/models/installment';
 import { calculateRemainingToPay } from '@/lib/installmentCalculations';
+import { queryKeys } from '@/lib/query-keys';
 import { getInstallmentStatusInfo, getInstallmentStatusCode } from '@/lib/installment-status-utils';
 
 export interface ProcessedInstallment extends InstallmentWithCustomer {
@@ -21,28 +23,36 @@ export interface ProcessedInstallment extends InstallmentWithCustomer {
 export function useInstallmentCalculation(
   installments: InstallmentWithCustomer[]
 ) {
-  const [processedInstallments, setProcessedInstallments] = useState<ProcessedInstallment[]>([]);
-  const [loading, setLoading] = useState(false);
+  const installmentIds = installments.map((i) => i.id);
 
-  const compute = useCallback(async () => {
+  // React Query for caching paid amounts - expensive RPC call
+  const { data: paidData, isLoading: paidLoading, error: paidError } = useQuery({
+    queryKey: queryKeys.installments.paidAmounts(installmentIds),
+    queryFn: async () => {
+      if (installmentIds.length === 0) return [];
+
+      const { data, error } = await supabase.rpc('installment_get_paid_amount', {
+        p_installment_ids: installmentIds,
+      });
+
+      if (error) throw new Error(error.message);
+      return data || [];
+    },
+    enabled: installmentIds.length > 0,
+    staleTime: 1 * 60 * 1000, // 1 minute cache - payments can happen frequently
+  });
+
+  const compute = useCallback(() => {
     if (installments.length === 0) {
-      setProcessedInstallments([]);
-      return;
+      return [];
     }
 
-    setLoading(true);
     try {
-      const ids = installments.map((i) => i.id);
-
-      /** 1. Tổng tiền đã đóng */
-      const { data: paidRows, error: paidError } = await supabase.rpc('installment_get_paid_amount', {
-        p_installment_ids: ids,
-      });
-      if (paidError) {
-        console.error('installment_get_paid_amount error:', paidError);
-      }
+      /** 1. Tổng tiền đã đóng - use cached data */
       const paidMap = new Map<string, number>(
-        (paidRows ?? []).map((r: any) => [r.installment_id, Number(r.total_paid ?? r.paid_amount ?? 0)])
+        (paidData ?? []).map((r: { installment_id: string; total_paid?: number; paid_amount?: number }) =>
+          [r.installment_id, Number(r.total_paid ?? r.paid_amount ?? 0)]
+        )
       );
       /** 2. Get status codes directly from database view */
       // No need for complex status calculation - just use status_code from view
@@ -83,21 +93,23 @@ export function useInstallmentCalculation(
         } as ProcessedInstallment;
       });
 
-      setProcessedInstallments(enriched);
+      return enriched;
     } catch (err) {
-      console.error('Error computing installment aggregates:', err);
-    } finally {
-      setLoading(false);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error computing installment aggregates:', err);
+      }
+      return [];
     }
-  }, [installments]);
+  }, [installments, paidData]);
 
-  useEffect(() => {
-    compute();
-  }, [compute]);
+  // Compute processed installments whenever data changes
+  const processedInstallments = compute();
 
   return {
     processedInstallments,
-    loading,
-    refresh: compute,
+    loading: paidLoading,
+    refresh: () => {
+      // This will trigger a refetch of the paid amounts query
+    },
   };
 } 

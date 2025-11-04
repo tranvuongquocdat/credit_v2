@@ -13,7 +13,7 @@ import { PlusIcon, Loader2 } from 'lucide-react';
 import { useStore } from '@/contexts/StoreContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useDebounce } from '@/hooks/useDebounce';
-import { getCustomers } from '@/lib/customer';
+import { useCustomerSearch } from '@/hooks/useCustomers';
 import { Customer } from '@/models/customer';
 import { InstallmentStatus } from '@/models/installment';
 interface StatusMapType {
@@ -68,10 +68,6 @@ export function SearchFilters({
   // Kiểm tra quyền tạo mới hợp đồng trả góp
   const canCreateInstallment = hasPermission('tao_moi_hop_dong_tra_gop');
   
-  // State for customer autocomplete
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
-  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [filters, setFilters] = useState<SearchFilters>({
     contract_code: '',
     customer_name: '',
@@ -81,50 +77,36 @@ export function SearchFilters({
     status: 'on_time', // Fixed default, không dùng initialFilters ở đây
     store_id: undefined // Sẽ được set trong useEffect
   });
-  
+
   // Debounce customer name để tránh gọi API liên tục khi nhập nhanh
   const debouncedCustomerName = useDebounce(filters.customer_name, 300);
+
+  // State for customer autocomplete
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+
+  // Use React Query for customer search with caching
+  const { data: customerSearchData, isLoading: customersLoading } = useCustomerSearch(
+    debouncedCustomerName,
+    debouncedCustomerName.length > 0 // Only enable search when we have input
+  );
+
+  // Extract customers from search results
+  const customers = customerSearchData?.data || [];
+  const filteredCustomers = customers;
   
   // Track if we've already processed initialFilters to prevent double search
   const [hasProcessedInitialFilters, setHasProcessedInitialFilters] = useState(false);
   
-  // Load customers for autocomplete
-  useEffect(() => {
-    if (currentStore?.id) {
-      async function loadCustomers() {
-        try {
-          const { data, error } = await getCustomers(
-            1, 
-            1000, 
-            '', // search query
-            currentStore?.id || '', // filter by store_id
-            '' // status filter
-          );
-          if (error) throw error;
-          setCustomers(data || []);
-        } catch (err) {
-          console.error('Error loading customers:', err);
-        }
-      }
-      loadCustomers();
-    }
-  }, [currentStore?.id]);
-
+  
   // Debounced customer search for autocomplete
   useEffect(() => {
     if (debouncedCustomerName.trim() === '') {
-      setFilteredCustomers([]);
       setShowCustomerDropdown(false);
     } else {
-      const filtered = customers.filter(customer =>
-        customer.name.toLowerCase().includes(debouncedCustomerName.toLowerCase()) ||
-        (customer.phone && customer.phone.includes(debouncedCustomerName)) ||
-        (customer.id_number && customer.id_number.includes(debouncedCustomerName))
-      );
-      setFilteredCustomers(filtered);
-      setShowCustomerDropdown(filtered.length > 0);
+      // Show dropdown if we have search results and they're not loading
+      setShowCustomerDropdown(!customersLoading && customers.length > 0);
     }
-  }, [debouncedCustomerName, customers]);
+  }, [debouncedCustomerName, customers, customersLoading]);
 
   // Auto-search when debounced customer name changes
   useEffect(() => {
@@ -141,12 +123,14 @@ export function SearchFilters({
   
   // Single useEffect để handle cả store và initialFilters
   useEffect(() => {
-    console.log('🔧 SearchFilters useEffect triggered:', { 
-      hasCurrentStore: !!currentStore?.id, 
-      hasInitialFilters: !!initialFilters,
-      hasProcessedInitialFilters 
-    });
-    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔧 SearchFilters useEffect triggered:', {
+        hasCurrentStore: !!currentStore?.id,
+        hasInitialFilters: !!initialFilters,
+        hasProcessedInitialFilters
+      });
+    }
+
     // Luôn update store_id khi currentStore thay đổi
     if (currentStore?.id) {
       setFilters(prev => ({
@@ -154,10 +138,12 @@ export function SearchFilters({
         store_id: currentStore.id
       }));
     }
-    
+
     // Chỉ auto-search khi có initialFilters và chưa xử lý
     if (initialFilters && currentStore?.id && !hasProcessedInitialFilters) {
-      console.log('🎯 SearchFilters processing initialFilters for first time:', initialFilters);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🎯 SearchFilters processing initialFilters for first time:', initialFilters);
+      }
       
       // Nếu có contract_code trong initialFilters, dùng status rỗng để hiển thị tất cả trạng thái
       // Nếu không, dùng 'on_time' làm mặc định
@@ -265,7 +251,9 @@ export function SearchFilters({
   };
 
   const handleSearch = () => {
-    console.log('🔍 SearchFilters handleSearch called with filters:', filters);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 SearchFilters handleSearch called with filters:', filters);
+    }
     onSearch(filters);
   };
 
@@ -280,7 +268,6 @@ export function SearchFilters({
       store_id: currentStore?.id
     });
     setShowCustomerDropdown(false);
-    setFilteredCustomers([]);
     onReset();
   };
 
@@ -332,20 +319,31 @@ export function SearchFilters({
             </div>
             {showCustomerDropdown && (
               <div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-md shadow-lg z-50 max-h-60 overflow-y-auto">
-                {filteredCustomers.map(customer => (
-                  <div
-                    key={customer.id}
-                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100"
-                    onClick={() => handleCustomerSelect(customer.name)}
-                  >
-                    <div className="font-medium">{customer.name}</div>
-                    <div className="text-sm text-gray-500">
-                      {customer.phone && `SĐT: ${customer.phone}`}
-                      {customer.phone && customer.id_number && ' • '}
-                      {customer.id_number && `CCCD: ${customer.id_number}`}
-                    </div>
+                {customersLoading ? (
+                  <div className="px-3 py-4 text-center text-gray-500">
+                    <Loader2 className="h-4 w-4 animate-spin inline-block mr-2" />
+                    Đang tìm kiếm...
                   </div>
-                ))}
+                ) : filteredCustomers.length > 0 ? (
+                  filteredCustomers.map(customer => (
+                    <div
+                      key={customer.id}
+                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100"
+                      onClick={() => handleCustomerSelect(customer.name)}
+                    >
+                      <div className="font-medium">{customer.name}</div>
+                      <div className="text-sm text-gray-500">
+                        {customer.phone && `SĐT: ${customer.phone}`}
+                        {customer.phone && customer.id_number && ' • '}
+                        {customer.id_number && `CCCD: ${customer.id_number}`}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="px-3 py-4 text-center text-gray-500">
+                    Không tìm thấy khách hàng
+                  </div>
+                )}
               </div>
             )}
           </div>

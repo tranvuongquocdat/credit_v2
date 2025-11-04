@@ -27,13 +27,17 @@ import { format } from "date-fns";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useStore } from "@/contexts/StoreContext";
 import { useToast } from "@/components/ui/use-toast";
-import { 
+import {
   calculateDailyAmount,
   calculateRatio
 } from "@/lib/installmentCalculations";
 import { supabase } from "@/lib/supabase";
 import { recordContractReopening } from "@/lib/installmentAmountHistory";
 import { usePermissions } from '@/hooks/usePermissions';
+import { useInstallmentHasPaidPeriods } from '@/hooks/useInstallmentHasPaidPeriods';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query-keys';
+import { prefetchAfterMutation } from '@/lib/react-query-prefetching';
 import { 
   Table, 
   TableBody, 
@@ -92,72 +96,99 @@ export function InstallmentsTable({
   itemsPerPage = 30,
   totals,
 }: InstallmentsTableProps) {
-  // State để lưu trữ thông tin có kỳ thanh toán đã được thanh toán hay không cho mỗi installment
-  const [hasPaidPaymentPeriods, setHasPaidPaymentPeriods] = useState<Record<string, boolean>>({});
-  
-  // State for unlock confirmation dialog
-  const [unlockConfirmOpen, setUnlockConfirmOpen] = useState(false);
-  const [installmentToUnlock, setInstallmentToUnlock] = useState<InstallmentWithStatusInfo | null>(null);
-  
-  // State for payment due date update
-  const [isUpdatingDueDate, setIsUpdatingDueDate] = useState(false);
-  
-  // Get current store and toast
+  // Use React Query for payment period caching
+  const { hasPaidPaymentPeriods } = useInstallmentHasPaidPeriods(installments);
+
+  // Get current store, toast, and query client
   const { currentStore } = useStore();
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
+  const queryClient = useQueryClient();
+
   // Kiểm tra quyền xóa hợp đồng trả góp
   const canDeleteInstallment = hasPermission('xoa_hop_dong_tra_gop');
   // Kiểm tra quyền sửa hợp đồng trả góp
   const canEditInstallment = hasPermission('sua_hop_dong_tra_gop');
   // Kiểm tra quyền mở lại hợp đồng trả góp
   const canUnlockInstallment = hasPermission('huy_dong_hop_dong_tra_gop');
-  // Hàm kiểm tra xem installment có kỳ thanh toán nào đã được thanh toán không
-  const checkHasPaidPaymentPeriods = useCallback(async (installmentId: string): Promise<boolean> => {
-    try {
-      const { data, error } = await supabase
-        .from('installment_history')
-        .select('id')
-        .eq('installment_id', installmentId)
-        .eq('transaction_type', 'payment')
-        .eq('is_deleted', false)
-        .limit(1);
-      
-      if (error) {
-        console.error('Error checking paid payment periods:', error);
-        return false;
-      }
-      
-      return data && data.length > 0;
-    } catch (error) {
-      console.error('Error in checkHasPaidPaymentPeriods:', error);
-      return false;
-    }
-  }, []);
 
-  // Check if installments have paid periods when list changes
-  useEffect(() => {
-    const loadPaymentPeriodsInfo = async () => {
-      const newHasPaidPaymentPeriodsInfo: Record<string, boolean> = {};
+  // State for unlock confirmation dialog
+  const [unlockConfirmOpen, setUnlockConfirmOpen] = useState(false);
+  const [installmentToUnlock, setInstallmentToUnlock] = useState<InstallmentWithStatusInfo | null>(null);
 
-      const results = await Promise.all(
-        installments.map(async (installment) => {
-          const hasPaidPayments = await checkHasPaidPaymentPeriods(installment.id);
-          return { installmentId: installment.id, hasPaidPayments };
-        })
-      );
+  // React Query mutation for unlocking installment
+  const unlockMutation = useMutation({
+    mutationFn: async (installmentId: string) => {
+      const { error } = await updateInstallmentStatus(installmentId, InstallmentStatus.ON_TIME);
+      if (error) throw error;
+      await recordContractReopening(installmentId);
+      return installmentId;
+    },
+    onSuccess: async (installmentId: string) => {
+      // Invalidate related queries to ensure consistency
+      queryClient.invalidateQueries({ queryKey: queryKeys.installments.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.installments.summary(currentStore?.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.installments.hasPaidPeriods([]) });
 
-      results.forEach(({ installmentId, hasPaidPayments }) => {
-        newHasPaidPaymentPeriodsInfo[installmentId] = hasPaidPayments;
+      toast({
+        title: "Thành công",
+        description: "Đã mở lại hợp đồng",
       });
 
-      setHasPaidPaymentPeriods(newHasPaidPaymentPeriodsInfo);
-    };
+      // Prefetch related data for better user experience
+      try {
+        await prefetchAfterMutation(queryClient, [installmentId], currentStore?.id);
+      } catch (error) {
+        // Prefetching errors are not critical, ignore them
+      }
 
-    if (installments.length > 0) {
-      loadPaymentPeriodsInfo();
-    }
-  }, [installments, checkHasPaidPaymentPeriods]);
+      onRefresh?.();
+    },
+    onError: (error: Error) => {
+      console.error("Error unlocking installment:", error);
+      toast({
+        title: "Lỗi",
+        description: "Không thể mở lại hợp đồng",
+        variant: "destructive"
+      });
+    },
+  });
+
+  // React Query mutation for updating payment due date
+  const updateDueDateMutation = useMutation({
+    mutationFn: async ({ installmentId, date }: { installmentId: string; date: string }) => {
+      const { error } = await updateInstallmentPaymentDueDate(installmentId, date);
+      if (error) throw error;
+      return { installmentId, date };
+    },
+    onSuccess: async ({ installmentId }: { installmentId: string }) => {
+      // Invalidate related queries to ensure consistency
+      queryClient.invalidateQueries({ queryKey: queryKeys.installments.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.installments.summary(currentStore?.id) });
+
+      toast({
+        title: "Thành công",
+        description: "Đã cập nhật ngày đóng tiền",
+      });
+
+      // Prefetch related data for better user experience
+      try {
+        await prefetchAfterMutation(queryClient, [installmentId], currentStore?.id);
+      } catch (error) {
+        // Prefetching errors are not critical, ignore them
+      }
+
+      onRefresh?.();
+    },
+    onError: (error: Error) => {
+      console.error('Error updating payment due date:', error);
+      toast({
+        title: "Lỗi",
+        description: "Không thể cập nhật ngày đóng tiền",
+        variant: "destructive"
+      });
+    },
+  });
 
   // Show confirmation dialog before unlocking
   const confirmUnlockInstallment = (installment: InstallmentWithStatusInfo) => {
@@ -165,79 +196,30 @@ export function InstallmentsTable({
     setUnlockConfirmOpen(true);
   };
 
-  // Add function to handle unlocking a closed installment
+  // Add function to handle unlocking a closed installment using React Query mutation
   const handleUnlockInstallment = async (installment: InstallmentWithStatusInfo) => {
     // Close the dialog
     setUnlockConfirmOpen(false);
-    
-    try {
-      // If the installment is already open, throw error
-      const status = await getInstallmentStatus(installment.id);
-      if (status === InstallmentStatus.ON_TIME) {
-        toast({
-          title: "Lỗi", 
-          description: "Hợp đồng đã được mở lại",
-        });
-        onRefresh?.();
-        return;
-      }
-      // Since updateInstallmentStatus doesn't support storeId parameter, we'll rely on the 
-      // implementation to handle the store context if needed
-      const { error } = await updateInstallmentStatus(
-        installment.id, 
-        InstallmentStatus.ON_TIME
-      );
 
-      // Ghi lịch sử mở lại hợp đồng
-      await recordContractReopening(installment.id);
-      
-      if (error) {
-        console.error("Error unlocking installment:", error);
-        return;
-      }
-      // Show success toast
-      toast({
-        title: "Thành công",
-        description: "Đã mở lại hợp đồng",
-      });
-      onRefresh?.();
-      // TODO: trigger parent refresh via a callback if needed
-    } catch (err) {
-      console.error("Error unlocking installment:", err);
-    }
-  };
-
-  // Function to handle payment due date update
-  const handlePaymentDueDateUpdate = async (installmentId: string, date: Date) => {
-    setIsUpdatingDueDate(true);
-    try {
-      // Format date as ISO string (YYYY-MM-DD)
-      const formattedDate = format(date, 'yyyy-MM-dd');
-      
-      // Call API to update payment due date
-      const { error } = await updateInstallmentPaymentDueDate(installmentId, formattedDate);
-      
-      if (error) {
-        throw error;
-      }
-      
-      // Show success toast
-      toast({
-        title: "Thành công",
-        description: "Đã cập nhật ngày đóng tiền",
-      });
-      onRefresh?.();
-      // TODO: trigger parent refresh via a callback if needed
-    } catch (error) {
-      console.error('Error updating payment due date:', error);
+    // If the installment is already open, show error and return
+    const status = await getInstallmentStatus(installment.id);
+    if (status === InstallmentStatus.ON_TIME) {
       toast({
         title: "Lỗi",
-        description: "Không thể cập nhật ngày đóng tiền",
-        variant: "destructive"
+        description: "Hợp đồng đã được mở lại",
       });
-    } finally {
-      setIsUpdatingDueDate(false);
+      onRefresh?.();
+      return;
     }
+
+    // Use React Query mutation
+    unlockMutation.mutate(installment.id);
+  };
+
+  // Function to handle payment due date update using React Query mutation
+  const handlePaymentDueDateUpdate = async (installmentId: string, date: Date) => {
+    const formattedDate = format(date, 'yyyy-MM-dd');
+    updateDueDateMutation.mutate({ installmentId, date: formattedDate });
   };
 
   const handleContractCodeClick = (installmentId: string) => {
@@ -314,7 +296,7 @@ export function InstallmentsTable({
                         >
                           {installment.customer?.name || "N/A"}
                         </span>
-                        {(installment.customer as any)?.blacklist_reason && (
+                        {installment.customer?.blacklist_reason && (
                           <div className="relative group">
                             <AlertTriangleIcon className="h-4 w-4 text-red-500" />
                             <div className="absolute left-1/2 transform -translate-x-1/2 bottom-full mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
@@ -469,7 +451,7 @@ export function InstallmentsTable({
                         }}
                         placeholder="Chọn ngày"
                         className="text-sm h-8 w-32"
-                        disabled={isUpdatingDueDate || !canEditInstallment || installment.status === "CLOSED" || installment.status === "DELETED"}
+                        disabled={updateDueDateMutation.isPending || !canEditInstallment || installment.status === "CLOSED" || installment.status === "DELETED"}
                       />
                     </div>
                   )}
@@ -589,7 +571,7 @@ export function InstallmentsTable({
                   >
                     {installment.customer?.name || "N/A"}
                   </span>
-                  {(installment.customer as any)?.blacklist_reason && (
+                  {installment.customer?.blacklist_reason && (
                     <AlertTriangleIcon className="h-4 w-4 text-red-500" />
                   )}
                 </div>
@@ -676,7 +658,7 @@ export function InstallmentsTable({
                       }}
                       placeholder="Chọn ngày"
                       className="text-sm w-36 h-8"
-                      disabled={isUpdatingDueDate || !canEditInstallment || installment.status === "CLOSED" || installment.status === "DELETED"}
+                      disabled={updateDueDateMutation.isPending || !canEditInstallment || installment.status === "CLOSED" || installment.status === "DELETED"}
                     />
                   </div>
                 )}
