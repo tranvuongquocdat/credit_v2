@@ -42,6 +42,7 @@ const translateTransactionType = (transactionType: string): string => {
     'fee': 'Phí',
     'refund': 'Hoàn tiền',
     'initial_loan': 'Khoản vay ban đầu',
+    'contract_rotate': 'Đảo HĐ',
     'update_contract': 'Cập nhật HĐ',
     'contract_delete': 'Xóa HĐ',
     'asset_sale': 'Bán tài sản',

@@ -8,7 +8,13 @@ import { format, startOfDay, endOfDay, parse, parseISO } from 'date-fns';
 // Import type definitions
 import {
   TransactionSummary,
-  FundHistoryItem
+  FundHistoryItem,
+  CreditHistoryRecord,
+  PawnHistoryRecord,
+  InstallmentHistoryRecord,
+  StoreFundHistoryRecord,
+  TransactionRecord,
+  DisplayTransaction
 } from '@/app/reports/transactionSummary/types';
 
 // Function to fetch all data from a query with pagination
@@ -264,9 +270,9 @@ const fetchTransactionData = async (
             income: amount > 0 ? amount : 0,
             expense: amount < 0 ? -amount : 0,
             contractCode: item.contract_code || '-',
-            employeeName,
-            customerName,
-            itemName,
+            employeeName: employeeName || '',
+            customerName: customerName || '',
+            itemName: itemName || '',
           });
 
           if (item.is_deleted && item.updated_at) {

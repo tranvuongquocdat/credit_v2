@@ -90,4 +90,136 @@ export interface TransactionData {
   installment: { income: number; expense: number };
   incomeExpense: { income: number; expense: number };
   capital: { income: number; expense: number };
+}
+
+// Define interface for fund history items used in transaction details
+export interface FundHistoryItem {
+  id: string;
+  date: string;
+  description: string;
+  transactionType: string;
+  source: string;
+  income: number;
+  expense: number;
+  contractCode: string;
+  employeeName: string;
+  customerName: string;
+  itemName: string;
+}
+
+// Database record interfaces for transaction history
+export interface CreditHistoryRecord {
+  id: string;
+  created_at: string;
+  updated_at?: string;
+  is_deleted?: boolean;
+  transaction_type?: string;
+  credit_amount?: number;
+  debit_amount?: number;
+  created_by?: string;
+  credits?: {
+    contract_code?: string;
+    store_id?: string;
+    customers?: {
+      name?: string;
+    };
+  };
+  profiles?: {
+    username?: string;
+  };
+  contract_code?: string;
+}
+
+export interface PawnHistoryRecord {
+  id: string;
+  created_at: string;
+  updated_at?: string;
+  is_deleted?: boolean;
+  transaction_type?: string;
+  credit_amount?: number;
+  debit_amount?: number;
+  created_by?: string;
+  pawns?: {
+    contract_code?: string;
+    store_id?: string;
+    customers?: {
+      name?: string;
+    };
+    collateral_detail?: string | object;
+  };
+  profiles?: {
+    username?: string;
+  };
+  contract_code?: string;
+}
+
+export interface InstallmentHistoryRecord {
+  id: string;
+  created_at: string;
+  updated_at?: string;
+  is_deleted?: boolean;
+  transaction_type?: string;
+  credit_amount?: number;
+  debit_amount?: number;
+  created_by?: string;
+  installments?: {
+    contract_code?: string;
+    employee_id?: string;
+    employees?: {
+      store_id?: string;
+    };
+    customers?: {
+      name?: string;
+    };
+  };
+  profiles?: {
+    username?: string;
+  };
+  contract_code?: string;
+}
+
+export interface StoreFundHistoryRecord {
+  id: string;
+  created_at: string;
+  store_id: string;
+  transaction_type?: string;
+  fund_amount?: number;
+  name?: string;
+}
+
+export interface TransactionRecord {
+  id: string;
+  created_at: string;
+  updated_at?: string;
+  update_at?: string;
+  is_deleted?: boolean;
+  store_id?: string;
+  customer_id?: string;
+  employee_name?: string;
+  credit_amount?: number;
+  debit_amount?: number;
+  amount?: number;
+  transaction_type?: string;
+  description?: string;
+  customers?: {
+    name?: string;
+  };
+}
+
+export interface DisplayTransaction {
+  id: string;
+  created_at: string;
+  is_cancellation?: boolean;
+  credit_amount?: number | null;
+  debit_amount?: number | null;
+  description?: string;
+  store_id?: string;
+  customer_id?: string;
+  employee_name?: string;
+  amount?: number;
+  transaction_type?: string;
+  is_deleted?: boolean;
+  customers?: {
+    name?: string;
+  };
 } 
