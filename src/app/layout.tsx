@@ -33,7 +33,6 @@ export default function RootLayout({
             <StoreProvider>
               {children}
               <Toaster />
-              <CacheDebugger />
             </StoreProvider>
           </AuthProvider>
         </ReactQueryProvider>

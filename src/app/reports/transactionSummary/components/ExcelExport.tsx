@@ -33,6 +33,7 @@ interface TransactionDetail {
 
 interface ExcelExportProps {
   summaryData: SummaryData;
+  transactionDetails?: TransactionDetail[];
   storeId: string | undefined;
   startDate: string;
   endDate: string;
@@ -67,11 +68,12 @@ const fetchAllData = async (query: any, pageSize: number = 1000) => {
   return allData;
 };
 
-export default function ExcelExport({ 
-  summaryData, 
-  storeId, 
-  startDate, 
-  endDate, 
+export default function ExcelExport({
+  summaryData,
+  transactionDetails,
+  storeId,
+  startDate,
+  endDate,
   storeName,
   selectedTransactionType = 'all',
   selectedEmployee = 'all'
@@ -79,11 +81,34 @@ export default function ExcelExport({
   const [isExporting, setIsExporting] = useState(false);
 
   const fetchDetailedTransactions = async (): Promise<TransactionDetail[]> => {
+    // If transactionDetails are provided via props, use them directly
+    if (transactionDetails) {
+      return transactionDetails.map(detail => ({
+        id: detail.id,
+        date: detail.date,
+        source: detail.source,
+        contractCode: detail.contractCode || '-',
+        employeeName: detail.employeeName || '-',
+        customerName: detail.customerName || '-',
+        itemName: detail.itemName || '-',
+        description: detail.description,
+        income: detail.income,
+        expense: detail.expense
+      }));
+    }
+
+    // Fallback to fetching data if not provided (backward compatibility)
     if (!storeId) return [];
 
     try {
       const allTransactions: TransactionDetail[] = [];
-
+      // Filter by date range
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      
       // Process items function (same as TransactionDetailsTable)
       const processItems = (data: any[], source: string) => {
         if (data && data.length > 0) {
@@ -163,6 +188,9 @@ export default function ExcelExport({
             profiles:created_by (username)
           `)
           .eq('credits.store_id', storeId)
+          .or(
+            `and(created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${start.toISOString()},updated_at.lte.${end.toISOString()})`
+          )
       );
       
       if (creditHistoryData) {
@@ -188,6 +216,9 @@ export default function ExcelExport({
             profiles:created_by (username)
           `)
           .eq('pawns.store_id', storeId)
+          .or(
+            `and(created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${start.toISOString()},updated_at.lte.${end.toISOString()})`
+          )
       );
       
       if (pawnHistoryData) {
@@ -213,6 +244,9 @@ export default function ExcelExport({
             profiles:created_by (username)
           `)
           .eq('installments.employees.store_id', storeId)
+          .or(
+            `and(created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${start.toISOString()},updated_at.lte.${end.toISOString()})`
+          )
       );
       
       if (installmentHistoryData) {
@@ -224,32 +258,32 @@ export default function ExcelExport({
       }
       
       // Fund history
-      const { data: storeFundData } = await supabase
+      const storeFundData = await fetchAllData(
+        supabase
         .from('store_fund_history')
         .select('*')
         .eq('store_id', storeId)
-        .limit(10000);
+        .gte('created_at', start.toISOString())
+        .lte('created_at', end.toISOString())
+      );
       
       if (storeFundData) processItems(storeFundData, 'Nguồn vốn');
       
       // Transactions
-      const { data: transactionsData } = await supabase
+      const transactionsData = await fetchAllData(
+        supabase
         .from('transactions')
         .select('*, customers:customer_id(name)')
         .eq('store_id', storeId)
-        .limit(10000);
+        .gte('created_at', start.toISOString())
+        .lte('created_at', end.toISOString())
+      );
       
       if (transactionsData) processItems(transactionsData, 'Thu chi');
 
       // Sort by date (newest first)
       allTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       
-      // Filter by date range
-      const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0);
-      
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
       
       let filteredTransactions = allTransactions.filter(item => {
         const itemDate = new Date(item.date);

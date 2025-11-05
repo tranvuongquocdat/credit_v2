@@ -110,6 +110,22 @@ export const queryKeys = {
       [...queryKeys.cashbook.all, 'capital-transactions', { storeId, startDate, endDate }] as const,
   },
 
+  // Transaction Summary-related queries
+  transactionSummary: {
+    all: ['transactionSummary'] as const,
+    summaries: () => [...queryKeys.transactionSummary.all, 'summary'] as const,
+    summary: (storeId: string, startDate: string, endDate: string, transactionType?: string, employee?: string) =>
+      [...queryKeys.transactionSummary.summaries(), { storeId, startDate, endDate, transactionType, employee }] as const,
+    openingBalance: (storeId: string, date: string) =>
+      [...queryKeys.transactionSummary.all, 'opening-balance', { storeId, date }] as const,
+    closingBalance: (storeId: string) =>
+      [...queryKeys.transactionSummary.all, 'closing-balance', { storeId }] as const,
+    employees: (storeId: string) =>
+      [...queryKeys.transactionSummary.all, 'employees', { storeId }] as const,
+    transactionDetails: (storeId: string, startDate: string, endDate: string, transactionType?: string, employee?: string) =>
+      [...queryKeys.transactionSummary.all, 'transaction-details', { storeId, startDate, endDate, transactionType, employee }] as const,
+  },
+
   // Add other query keys as needed for future features
 } as const;
 

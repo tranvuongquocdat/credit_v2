@@ -58,16 +58,73 @@ const translateTransactionType = (transactionType: string): string => {
 
 export default function CreditTable({ transactions, isLoading }: CreditTableProps) {
   // Calculate totals from the passed transactions
-  const totals = transactions.reduce(
-    (acc, item) => {
-      return {
-        totalLoanAmount: acc.totalLoanAmount + (item.loanAmount || 0),
-        totalInterestAmount: acc.totalInterestAmount + (item.interestAmount || 0),
-      };
-    },
-    { totalLoanAmount: 0, totalInterestAmount: 0 }
-  );
+  const allTransactions: CreditTransaction[] = [];
+  transactions.forEach((item: CreditTransaction) => {
+    if (item.transactionType === 'payment' && item.isDeleted && item.updatedAt) {
+      allTransactions.push({
+        id: `${item.id}-cancel`,
+        date: format(parseISO(item.updatedAt), 'dd/MM/yyyy HH:mm'),
+        contractCode: item.contractCode,
+        customerName: 'N/A',
+        description: 'Huỷ đóng lãi',
+        loanAmount: 0, // Don't show loan amount for cancellation
+        interestAmount: -(item.interestAmount || 0), // Only reverse interest amount in "Thu về" column
+        transactionType: item.transactionType,
+        createdAt: item.updatedAt,
+        isDeleted: item.isDeleted,
+        updatedAt: item.updatedAt
+      });
+    } else {
+      allTransactions.push({
+        id: item.id,
+        date: format(parseISO(item.createdAt), 'dd/MM/yyyy HH:mm'),
+        contractCode: item.contractCode,
+        customerName: 'N/A',
+        description: translateTransactionType(item.transactionType || ''),
+        loanAmount: item.loanAmount || 0,
+        interestAmount: item.interestAmount || 0,
+        transactionType: item.transactionType || '',
+        createdAt: item.createdAt,
+        isDeleted: item.isDeleted,
+        updatedAt: item.updatedAt
+      });
+    }
+  });
 
+  // Group and aggregate transactions by contract, date, transaction type, and description
+  const groupedData = new Map<string, CreditTransaction>();
+
+  allTransactions.forEach(item => {
+    // Create grouping key: contractCode + date (without time) + transactionType + description
+    // Add description to distinguish between "Đóng lãi" and "Huỷ đóng lãi"
+    const transactionDate = new Date(item.createdAt).toDateString();
+    const groupKey = `${item.contractCode}-${transactionDate}-${item.transactionType}-${item.description}`;
+    
+    if (groupedData.has(groupKey)) {
+      const existingItem = groupedData.get(groupKey)!;
+      
+      // Aggregate amounts
+      existingItem.loanAmount += item.loanAmount;
+      existingItem.interestAmount += item.interestAmount;
+      
+      // Use the latest transaction time
+      if (new Date(item.createdAt) > new Date(existingItem.createdAt)) {
+        existingItem.date = item.date;
+        existingItem.createdAt = item.createdAt;
+      }
+    } else {
+      // Create new grouped item
+      groupedData.set(groupKey, { ...item });
+    }
+  });
+
+  // Convert map back to array and sort by transaction date (newest first)
+  const aggregatedTransactions = Array.from(groupedData.values());
+  aggregatedTransactions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  // Calculate totals
+  const totalLoan = aggregatedTransactions.reduce((sum, item) => sum + item.loanAmount, 0);
+  const totalInterest = aggregatedTransactions.reduce((sum, item) => sum + item.interestAmount, 0);
+  const netAmount = totalInterest - totalLoan;
   if (isLoading) {
     return (
       <Card>
@@ -87,100 +144,80 @@ export default function CreditTable({ transactions, isLoading }: CreditTableProp
   }
 
   return (
-    <Card>
+    <Card className="mt-4">
       <CardHeader className="py-3">
-        <CardTitle className="text-base font-bold bg-green-500 text-white p-2 rounded">
-          Giao dịch tín chấp
-        </CardTitle>
+        <CardTitle className="text-base font-bold bg-blue-500 text-white p-2 rounded">Tín chấp</CardTitle>
       </CardHeader>
       <CardContent>
-        {transactions.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            Không có giao dịch tín chấp trong khoảng thời gian đã chọn
+        {isLoading ? (
+          <div className="flex items-center justify-center p-4">
+            <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+            <span>Đang tải dữ liệu...</span>
+          </div>
+        ) : aggregatedTransactions.length === 0 ? (
+          <div className="text-center py-4 text-gray-500">
+            Không có giao dịch nào trong khoảng thời gian này
           </div>
         ) : (
           <div className="rounded-md border border-gray-200 overflow-hidden">
             <Table className="border-collapse">
               <TableHeader className="bg-gray-50">
                 <TableRow>
-                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">
-                    Thời gian
-                  </TableHead>
-                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">
-                    Mã HĐ
-                  </TableHead>
-                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">
-                    Diễn giải
-                  </TableHead>
-                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">
-                    Giải ngân
-                  </TableHead>
-                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">
-                    Thu lãi
-                  </TableHead>
-                  <TableHead className="py-2 px-3 text-center font-bold border-b border-gray-200">
-                    Loại GD
-                  </TableHead>
+                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200 w-12">#</TableHead>
+                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">Ngày GD</TableHead>
+                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">Mã HĐ</TableHead>
+                  <TableHead className="py-2 px-3 text-center font-bold border-r border-b border-gray-200">Loại GD</TableHead>
+                  <TableHead className="py-2 px-3 text-center font-bold border-b border-gray-200">Biến động</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {transactions.map((item, index) => (
-                  <TableRow key={`${item.id}-${index}`}>
-                    <TableCell className="py-2 px-3 text-center border-r border-gray-200">
-                      {item.date}
-                    </TableCell>
-                    <TableCell className="py-2 px-3 text-center border-r border-gray-200">
-                      {item.contractCode === 'N/A' ? (
-                        <span className="text-gray-500">{item.contractCode}</span>
-                      ) : (
-                        <Link
-                          href={`/credits/${item.contractCode}`}
-                          className="text-blue-600 hover:text-blue-800 hover:underline"
-                        >
-                          {item.contractCode}
-                        </Link>
-                      )}
-                    </TableCell>
-                    <TableCell className="py-2 px-3 text-center border-r border-gray-200">
-                      {item.description}
-                    </TableCell>
-                    <TableCell className="py-2 px-3 text-right border-r border-gray-200">
-                      <span className="text-red-600">
-                        {formatCurrency(item.loanAmount)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="py-2 px-3 text-right border-r border-gray-200">
-                      <span className="text-green-600">
-                        {formatCurrency(item.interestAmount)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="py-2 px-3 text-center border-gray-200">
-                      <span className="text-xs text-gray-600">
-                        {translateTransactionType(item.transactionType)}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {aggregatedTransactions.map((item, index) => {
+                  // Calculate net amount for this transaction (same logic as TransactionDetailsTable)
+                  const netAmount = item.interestAmount - item.loanAmount;
+                  
+                  return (
+                    <TableRow key={item.id} className="hover:bg-gray-50 transition-colors">
+                      <TableCell className="py-2 px-3 text-center border-r border-b border-gray-200">
+                        {index + 1}
+                      </TableCell>
+                      <TableCell className="py-2 px-3 text-center border-r border-b border-gray-200">
+                        {item.date}
+                      </TableCell>
+                      <TableCell className="py-2 px-3 text-center border-r border-b border-gray-200">
+                        {item.contractCode !== 'N/A' ? (
+                          <Link href={`/credits/${item.contractCode}`} className="text-blue-600 hover:underline">
+                            {item.contractCode}
+                          </Link>
+                        ) : (
+                          'N/A'
+                        )}
+                      </TableCell>
+                      <TableCell className="py-2 px-3 text-center border-r border-b border-gray-200">
+                        {item.description}
+                      </TableCell>
+                      <TableCell className="py-2 px-3 text-right border-b border-gray-200">
+                        {netAmount > 0 ? (
+                          <span className="text-green-600">+{formatCurrency(netAmount)}</span>
+                        ) : netAmount < 0 ? (
+                          <span className="text-red-600">{formatCurrency(netAmount)}</span>
+                        ) : (
+                          "0"
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
-              <TableFooter>
-                <TableRow className="bg-gray-100">
-                  <TableCell
-                    colSpan={3}
-                    className="py-2 px-3 text-center font-bold border-r border-gray-200"
-                  >
-                    Tổng cộng
+              <TableFooter className="bg-gray-50">
+                <TableRow>
+                  <TableCell colSpan={4} className="py-2 px-3 text-right font-bold border-r border-t border-gray-200">
+                    Tổng giao dịch tín chấp
                   </TableCell>
-                  <TableCell className="py-2 px-3 text-right font-bold border-r border-gray-200">
-                    <span className="text-red-600">
-                      {formatCurrency(totals.totalLoanAmount)}
+                  <TableCell className="py-2 px-3 text-right font-bold border-t border-gray-200">
+                    <span className={netAmount >= 0 ? "text-green-600" : "text-red-600"}>
+                      {netAmount >= 0 ? "+" : ""}{formatCurrency(netAmount)}
                     </span>
                   </TableCell>
-                  <TableCell className="py-2 px-3 text-right font-bold border-r border-gray-200">
-                    <span className="text-green-600">
-                      {formatCurrency(totals.totalInterestAmount)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="py-2 px-3"></TableCell>
                 </TableRow>
               </TableFooter>
             </Table>

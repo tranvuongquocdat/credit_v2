@@ -9,6 +9,8 @@ export interface PawnTransaction {
   interestAmount: number;
   transactionType: string;
   createdAt: string;
+  isDeleted: boolean;
+  updatedAt: string;
 }
 
 export interface CreditTransaction {
@@ -21,6 +23,8 @@ export interface CreditTransaction {
   interestAmount: number;
   transactionType: string;
   createdAt: string;
+  isDeleted: boolean;
+  updatedAt: string;
 }
 
 export interface InstallmentTransaction {
@@ -33,6 +37,8 @@ export interface InstallmentTransaction {
   interestAmount: number;
   transactionType: string;
   createdAt: string;
+  isDeleted: boolean;
+  updatedAt: string;
 }
 
 export interface Transaction {

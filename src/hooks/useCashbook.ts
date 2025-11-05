@@ -28,6 +28,7 @@ interface PawnHistoryRecord {
     contract_code: string;
     store_id: string;
   } | null;
+  updated_at: string | null;
 }
 
 interface CreditHistoryRecord {
@@ -42,11 +43,13 @@ interface CreditHistoryRecord {
     contract_code: string;
     store_id: string;
   } | null;
+  updated_at: string | null;
 }
 
 interface InstallmentHistoryRecord {
   id: string;
   created_at: string;
+  updated_at: string | null;
   description: string | null;
   debit_amount: number | null;
   credit_amount: number | null;
@@ -209,9 +212,10 @@ const fetchTransactionData = async (
           pawns!inner (contract_code, store_id)
         `)
         .eq('pawns.store_id', storeId)
-        .or('is_deleted.is.null,is_deleted.eq.false')
-        .gte('created_at', startDateISO)
-        .lte('created_at', endDateISO)
+        .or(
+          `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
+        )
+        .order('created_at', { ascending: false })
     );
 
     // Format pawn data for transaction list
@@ -224,7 +228,9 @@ const fetchTransactionData = async (
       loanAmount: item.debit_amount || 0,
       interestAmount: item.credit_amount || 0,
       transactionType: item.transaction_type || '',
-      createdAt: item.created_at || ''
+      createdAt: item.created_at || '',
+      isDeleted: item.is_deleted || false,
+      updatedAt: item.updated_at || ''
     }));
 
     // Fetch credit transactions
@@ -236,9 +242,10 @@ const fetchTransactionData = async (
           credits!inner (contract_code, store_id)
         `)
         .eq('credits.store_id', storeId)
-        .or('is_deleted.is.null,is_deleted.eq.false')
-        .gte('created_at', startDateISO)
-        .lte('created_at', endDateISO)
+        .or(
+          `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
+        )
+        .order('created_at', { ascending: false })
     );
 
     // Format credit data for transaction list
@@ -251,25 +258,34 @@ const fetchTransactionData = async (
       loanAmount: item.debit_amount || 0,
       interestAmount: item.credit_amount || 0,
       transactionType: item.transaction_type || '',
-      createdAt: item.created_at || ''
+      createdAt: item.created_at || '',
+      isDeleted: item.is_deleted || false,
+      updatedAt: item.updated_at || ''
     }));
 
     // Fetch installment transactions
     const installmentHistoryData = await fetchAllData(
       supabase
-        .from('installment_history')
-        .select(`
-          *,
-          installments!inner (
-            contract_code,
-            employee_id,
-            employees!inner (store_id)
-          )
-        `)
-        .eq('installments.employees.store_id', storeId)
-        .or('is_deleted.is.null,is_deleted.eq.false')
-        .gte('created_at', startDateISO)
-        .lte('created_at', endDateISO)
+      .from('installment_history')
+      .select(`
+        id,
+        created_at,
+        updated_at,
+        is_deleted,
+        transaction_type,
+        credit_amount,
+        debit_amount,
+        installments!inner (
+          contract_code,
+          employee_id,
+          employees!inner (store_id)
+        )
+      `)
+      .eq('installments.employees.store_id', storeId)
+      .or(
+        `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
+      )
+      .order('created_at', { ascending: false })
     );
 
     // Format installment data for transaction list
@@ -282,7 +298,9 @@ const fetchTransactionData = async (
       loanAmount: item.debit_amount || 0,
       interestAmount: item.credit_amount || 0,
       transactionType: item.transaction_type || '',
-      createdAt: item.created_at || ''
+      createdAt: item.created_at || '',
+      isDeleted: item.is_deleted || false,
+      updatedAt: item.updated_at || ''
     }));
 
     // Fetch transactions (income/expense) - Remove is_deleted filter and apply transform logic
@@ -291,6 +309,8 @@ const fetchTransactionData = async (
         .from('transactions')
         .select('*')
         .eq('store_id', storeId)
+        .order('created_at', { ascending: false })
+
     );
 
     // Transform transactions to display format (same as income/outgoing pages)
@@ -363,10 +383,11 @@ const fetchTransactionData = async (
     const storeFundData = await fetchAllData(
       supabase
         .from('store_fund_history')
-        .select('*')
+        .select('id, created_at, transaction_type, fund_amount, note, store_id')
         .eq('store_id', storeId)
         .gte('created_at', startDateISO)
         .lte('created_at', endDateISO)
+        .order('created_at', { ascending: false })
     );
 
     // Format capital data
@@ -392,7 +413,9 @@ const fetchTransactionData = async (
     let pawnNet = 0;
     if (pawnHistoryData) {
       (pawnHistoryData as PawnHistoryRecord[]).forEach((item: PawnHistoryRecord) => {
-        pawnNet += (item.credit_amount || 0) - (item.debit_amount || 0);
+        if (!item.is_deleted) {
+          pawnNet += (item.credit_amount || 0) - (item.debit_amount || 0);
+        }
       });
     }
 
@@ -400,14 +423,18 @@ const fetchTransactionData = async (
     let creditNet = 0;
     if (creditHistoryData) {
       (creditHistoryData as CreditHistoryRecord[]).forEach((item: CreditHistoryRecord) => {
-        creditNet += (item.credit_amount || 0) - (item.debit_amount || 0);
+        if (!item.is_deleted) {
+          creditNet += (item.credit_amount || 0) - (item.debit_amount || 0);
+        }
       });
     }
 
     // Calculate installment activity
     let installmentNet = 0;
     (installmentHistoryData as InstallmentHistoryRecord[]).forEach((item: InstallmentHistoryRecord) => {
-      installmentNet += (item.credit_amount || 0) - (item.debit_amount || 0);
+      if (!item.is_deleted) {
+        installmentNet += (item.credit_amount || 0) - (item.debit_amount || 0);
+      }
     });
 
     // Calculate income/expense (Thu chi)
@@ -490,7 +517,7 @@ export function useCashbookTransactions(storeId: string, startDate: string, endD
     queryKey: queryKeys.cashbook.incomeExpenseTransactions(storeId, startDate, endDate),
     queryFn: () => fetchTransactionData(storeId, startDate, endDate),
     enabled: !!storeId && !!startDate && !!endDate,
-    staleTime: 5 * 60 * 1000, // 5 minutes cache for transaction data
+    staleTime: 5 * 60 * 1000, // 2 minutes cache for transaction data
     gcTime: 15 * 60 * 1000, // 15 minutes garbage collection
   });
 }
