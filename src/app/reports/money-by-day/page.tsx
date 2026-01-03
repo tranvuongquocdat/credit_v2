@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Layout } from '@/components/Layout';
 import { supabase } from '@/lib/supabase';
 import { useStore } from '@/contexts/StoreContext';
@@ -111,7 +111,10 @@ export default function MoneyFlowByDayPage() {
   );
 
   const [cashFlowData, setCashFlowData] = useState<DailyCashFlow[]>([]);
-  
+
+  // Request ID for race condition prevention
+  const requestIdRef = useRef(0);
+
   // Use hooks for loan calculations - these will be used for the most recent day's data
   const { summary: pawnSummary } = usePawnsSummary();
   const { summary: creditSummary } = useCreditsSummary();
@@ -292,10 +295,13 @@ export default function MoneyFlowByDayPage() {
   // Optimized: Fetch daily cash flow data with parallel processing
   const fetchDailyCashFlow = async () => {
     if (!currentStore?.id) return;
-    
+
+    // Increment request ID to track this request
+    const currentRequestId = ++requestIdRef.current;
+
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const storeId = currentStore.id;
       const startDateObj = startOfDay(parse(startDate, 'yyyy-MM-dd', new Date()));
@@ -478,14 +484,26 @@ export default function MoneyFlowByDayPage() {
       
       // Sort by date descending
       dailyData.sort((a, b) => b.date.getTime() - a.date.getTime());
-      
+
+      // Check if this request is still the latest one before setting state
+      if (currentRequestId !== requestIdRef.current) {
+        return; // A newer request was made, discard this result
+      }
+
       setCashFlowData(dailyData);
       console.log('All processing completed!');
     } catch (err) {
+      // Only set error if this is still the latest request
+      if (currentRequestId !== requestIdRef.current) {
+        return;
+      }
       console.error('Error fetching cash flow data:', err);
       setError('Đã xảy ra lỗi khi tải dữ liệu');
     } finally {
-      setIsLoading(false);
+      // Only set loading false if this is still the latest request
+      if (currentRequestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -560,8 +578,8 @@ export default function MoneyFlowByDayPage() {
                       className="w-40"
                     />
                   </div>
-                  <Button onClick={handleSearch} className="ml-2">
-                    Tìm kiếm
+                  <Button onClick={handleSearch} className="ml-2" disabled={isLoading}>
+                    {isLoading ? 'Đang tải...' : 'Tìm kiếm'}
                   </Button>
                 </div>
               </div>

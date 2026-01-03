@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Layout } from '@/components/Layout';
 import { FinancialSummary } from '@/components/common/FinancialSummary';
 import { useAutoUpdateCashFund } from '@/hooks/useCashFundUpdater';
@@ -246,6 +246,9 @@ export default function IncomePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Request ID for race condition prevention
+  const requestIdRef = useRef(0);
+
   // State for dialogs
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -325,6 +328,8 @@ export default function IncomePage() {
   // Load transactions with customer names and employee names
   const fetchTransactions = async () => {
     if (!currentStore?.id || !canAccessIncome) return;
+
+    const currentRequestId = ++requestIdRef.current;
 
     setIsLoading(true);
     setError(null);
@@ -449,13 +454,23 @@ export default function IncomePage() {
       const to = from + pageSize;
       const paginatedTransactions = filteredTransactions.slice(from, to);
 
+      // Check if this request is still the latest one
+      if (currentRequestId !== requestIdRef.current) {
+        return;
+      }
+
       setTransactions(paginatedTransactions);
       setTotalRecords(totalFilteredRecords);
       setTotalPages(totalPages);
     } catch (err) {
+      if (currentRequestId !== requestIdRef.current) {
+        return;
+      }
       setError(getErrorMessage(err));
     } finally {
-      setIsLoading(false);
+      if (currentRequestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Layout } from '@/components/Layout';
 import { supabase } from '@/lib/supabase';
 import { useStore } from '@/contexts/StoreContext';
@@ -94,7 +94,10 @@ export default function ProfitSummaryPage() {
   const [error, setError] = useState<string | null>(null);
   const [profitData, setProfitData] = useState<ProfitSummaryRow[]>([]);
   const [transactionData, setTransactionData] = useState<TransactionSummary>({ income: 0, expense: 0 });
-  
+
+  // Ref to track the latest request and prevent race conditions
+  const requestIdRef = useRef(0);
+
   // Date range for filtering - default to start of month to today
   const today = new Date();
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -421,6 +424,7 @@ export default function ProfitSummaryPage() {
             .eq('installments.employees.store_id', storeId)
             .eq('transaction_type', 'payment')
             .or('is_deleted.is.null,is_deleted.eq.false')
+            .order('id')
         );
 
         if (installmentHistoryData && installmentHistoryData.length > 0) {
@@ -634,6 +638,9 @@ export default function ProfitSummaryPage() {
   const fetchProfitSummary = async () => {
     if (!currentStore?.id) return;
 
+    // Increment request ID to track this specific request
+    const currentRequestId = ++requestIdRef.current;
+
     setIsLoading(true);
     setError(null);
 
@@ -641,7 +648,7 @@ export default function ProfitSummaryPage() {
       // Execute all data fetching in parallel for better performance
       const [
         pawnData,
-        creditData, 
+        creditData,
         installmentData,
         pawnFinancials,
         creditFinancials,
@@ -656,6 +663,11 @@ export default function ProfitSummaryPage() {
         getInstallmentFinancialsForStore(currentStore.id),
         getTransactionData()
       ]);
+
+      // Check if this request is still the latest one
+      if (currentRequestId !== requestIdRef.current) {
+        return; // A newer request was made, discard this result
+      }
 
       setTransactionData(transactionSummary);
 
@@ -736,13 +748,24 @@ export default function ProfitSummaryPage() {
          )
        ]);
 
+      // Check again before updating state (in case a new request started during processing)
+      if (currentRequestId !== requestIdRef.current) {
+        return; // A newer request was made, discard this result
+      }
+
       setProfitData(summaryData);
 
     } catch (err) {
-      console.error('Error fetching profit summary:', err);
-      setError(err instanceof Error ? err.message : 'Đã xảy ra lỗi khi tải dữ liệu');
+      // Only set error if this is still the latest request
+      if (currentRequestId === requestIdRef.current) {
+        console.error('Error fetching profit summary:', err);
+        setError(err instanceof Error ? err.message : 'Đã xảy ra lỗi khi tải dữ liệu');
+      }
     } finally {
-      setIsLoading(false);
+      // Only update loading state if this is still the latest request
+      if (currentRequestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -751,7 +774,7 @@ export default function ProfitSummaryPage() {
     if (currentStore?.id && canAccessReport && !permissionsLoading) {
       fetchProfitSummary();
     }
-  }, [currentStore?.id, startDate, endDate, canAccessReport, permissionsLoading]);
+  }, [currentStore?.id, canAccessReport, permissionsLoading]); // Removed startDate, endDate - only fetch on button click
 
   // Calculate totals
   const calculateTotals = () => {
@@ -867,8 +890,8 @@ export default function ProfitSummaryPage() {
             
             {/* Action buttons */}
             <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={handleRefresh} className="bg-blue-600 hover:bg-blue-700">
-                Tìm kiếm
+              <Button onClick={handleRefresh} disabled={isLoading} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                {isLoading ? 'Đang tải...' : 'Tìm kiếm'}
               </Button>
               <ExcelExport
                 profitData={profitData}
