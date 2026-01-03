@@ -147,7 +147,7 @@ export default function ContractDeletedPage() {
             .lte('updated_at', endDateObj.toISOString());
         }
 
-        const pawnData = await fetchAllData(pawnQuery);
+        const pawnData = await fetchAllData(pawnQuery.order('id'));
 
         if (pawnData) {
           pawnData.forEach((item) => {
@@ -205,7 +205,7 @@ export default function ContractDeletedPage() {
             .lte('updated_at', endDateObj.toISOString());
         }
 
-        const creditData = await fetchAllData(creditQuery);
+        const creditData = await fetchAllData(creditQuery.order('id'));
 
         if (creditData) {
           creditData.forEach((item) => {
@@ -258,7 +258,7 @@ export default function ContractDeletedPage() {
               .lte('updated_at', endDateObj.toISOString());
           }
 
-          const installmentData = await fetchAllData(installmentQuery);
+          const installmentData = await fetchAllData(installmentQuery.order('id'));
 
           if (installmentData) {
             installmentData.forEach((item) => {

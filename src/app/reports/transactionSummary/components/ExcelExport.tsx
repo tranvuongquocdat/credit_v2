@@ -181,7 +181,7 @@ export default function ExcelExport({
           .select(`
             *,
             credits!inner (
-              contract_code, 
+              contract_code,
               store_id,
               customers (name)
             ),
@@ -191,6 +191,7 @@ export default function ExcelExport({
           .or(
             `and(created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${start.toISOString()},updated_at.lte.${end.toISOString()})`
           )
+          .order('id')
       );
       
       if (creditHistoryData) {
@@ -208,7 +209,7 @@ export default function ExcelExport({
           .select(`
             *,
             pawns!inner (
-              contract_code, 
+              contract_code,
               store_id,
               customers (name),
               collateral_detail
@@ -219,6 +220,7 @@ export default function ExcelExport({
           .or(
             `and(created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${start.toISOString()},updated_at.lte.${end.toISOString()})`
           )
+          .order('id')
       );
       
       if (pawnHistoryData) {
@@ -247,6 +249,7 @@ export default function ExcelExport({
           .or(
             `and(created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${start.toISOString()},updated_at.lte.${end.toISOString()})`
           )
+          .order('id')
       );
       
       if (installmentHistoryData) {
@@ -265,10 +268,11 @@ export default function ExcelExport({
         .eq('store_id', storeId)
         .gte('created_at', start.toISOString())
         .lte('created_at', end.toISOString())
+        .order('id')
       );
-      
+
       if (storeFundData) processItems(storeFundData, 'Nguồn vốn');
-      
+
       // Transactions
       const transactionsData = await fetchAllData(
         supabase
@@ -277,6 +281,7 @@ export default function ExcelExport({
         .eq('store_id', storeId)
         .gte('created_at', start.toISOString())
         .lte('created_at', end.toISOString())
+        .order('id')
       );
       
       if (transactionsData) processItems(transactionsData, 'Thu chi');
