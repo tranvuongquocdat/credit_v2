@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Layout } from '@/components/Layout';
 import { supabase } from '@/lib/supabase';
 import { useStore } from '@/contexts/StoreContext';
@@ -76,6 +76,9 @@ export default function InterestDetailPage() {
 
   // Debounce timer for data fetching
   const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
+
+  // Request ID for race condition prevention
+  const requestIdRef = useRef(0);
 
   // Use permissions hook
   const { hasPermission, loading: permissionsLoading } = usePermissions();
@@ -176,10 +179,13 @@ export default function InterestDetailPage() {
   // Fetch interest detail data
   const fetchInterestDetails = async () => {
     if (!currentStore?.id) return;
-    
+
+    // Increment request ID to track this request
+    const currentRequestId = ++requestIdRef.current;
+
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const storeId = currentStore.id;
       const startDateObj = startOfDay(parse(startDate, 'yyyy-MM-dd', new Date()));
@@ -910,6 +916,11 @@ export default function InterestDetailPage() {
       // Wait for all queries to complete in parallel
       await Promise.all(queryPromises);
 
+      // Check if this request is still the latest one
+      if (currentRequestId !== requestIdRef.current) {
+        return; // A newer request was made, discard this result
+      }
+
       // Group and aggregate data by contract, date, and transaction type
       const groupedData = new Map<string, InterestDetailItem>();
 
@@ -941,12 +952,23 @@ export default function InterestDetailPage() {
       const aggregatedDetails = Array.from(groupedData.values());
       aggregatedDetails.sort((a, b) => new Date(b.transactionDateTime).getTime() - new Date(a.transactionDateTime).getTime());
 
+      // Final check before setting state
+      if (currentRequestId !== requestIdRef.current) {
+        return;
+      }
       setInterestDetails(aggregatedDetails);
     } catch (error) {
+      // Only set error if this is still the latest request
+      if (currentRequestId !== requestIdRef.current) {
+        return;
+      }
       console.error('Error fetching interest details:', error);
       setError('Có lỗi xảy ra khi tải dữ liệu');
     } finally {
-      setIsLoading(false);
+      // Only set loading false if this is still the latest request
+      if (currentRequestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 

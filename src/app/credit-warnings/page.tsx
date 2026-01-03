@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useStore } from "@/contexts/StoreContext";
 import { CreditWithCustomer } from "@/models/credit";
 import { getCreditWarnings, CreditReasonFilter, categorizeCreditReason, calculateUnpaidInterestAmount } from "@/lib/credit-warnings";
@@ -33,7 +33,10 @@ export default function CreditWarningPage() {
   const [customerNameFilter, setCustomerNameFilter] = useState("");
   const [reasonFilter, setReasonFilter] = useState<CreditReasonFilter>("all");
   const [isExporting, setIsExporting] = useState(false);
-  
+
+  // Request ID for race condition prevention
+  const requestIdRef = useRef(0);
+
   const debouncedCustomerFilter = useDebounce(customerNameFilter, 500);
   const { currentStore } = useStore();
   
@@ -63,7 +66,9 @@ export default function CreditWarningPage() {
   
   async function loadCredits() {
     if (!currentStore?.id) return;
-    
+
+    const currentRequestId = ++requestIdRef.current;
+
     setIsLoading(true);
     try {
       const { data, error } = await getCreditWarnings(
@@ -81,16 +86,26 @@ export default function CreditWarningPage() {
         console.error("Error loading credit warnings:", error);
         return;
       }
-      
+
+      // Check if this request is still the latest one
+      if (currentRequestId !== requestIdRef.current) {
+        return;
+      }
+
       setAllCredits(data || []);
     } catch (err) {
+      if (currentRequestId !== requestIdRef.current) {
+        return;
+      }
       console.error("Error in loadCredits:", err);
       toast({
         title: "Có lỗi khi tải dữ liệu hợp đồng",
         description: "Vui lòng thử lại sau",
       });
     } finally {
-      setIsLoading(false);
+      if (currentRequestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   }
   

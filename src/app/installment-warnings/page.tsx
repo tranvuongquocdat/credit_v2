@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useStore } from "@/contexts/StoreContext";
 import { InstallmentStatus, InstallmentWithCustomer } from "@/models/installment";
 import { Search, Download } from "lucide-react";
@@ -63,7 +63,10 @@ export default function InstallmentWarningsPage() {
   
   // Exporting state
   const [isExporting, setIsExporting] = useState(false);
-  
+
+  // Request ID for race condition prevention
+  const requestIdRef = useRef(0);
+
   // Load installments khi page load, store thay đổi, filter thay đổi hoặc trang thay đổi
   useEffect(() => {
     if (canViewInstallmentsList) {
@@ -81,7 +84,9 @@ export default function InstallmentWarningsPage() {
   
   async function loadInstallments() {
     if (!currentStore?.id) return;
-    
+
+    const currentRequestId = ++requestIdRef.current;
+
     setIsLoading(true);
     try {
       const { data, error, totalItems, totalPages } = await getInstallmentWarnings(
@@ -101,11 +106,19 @@ export default function InstallmentWarningsPage() {
         });
         return;
       }
-      
+
+      // Check if this request is still the latest one
+      if (currentRequestId !== requestIdRef.current) {
+        return;
+      }
+
       setInstallments(data || []);
       setFilteredInstallments(data || []); // This will be updated by the table component
-      
+
     } catch (err) {
+      if (currentRequestId !== requestIdRef.current) {
+        return;
+      }
       console.error("Error in loadInstallments:", err);
       toast({
         title: "Có lỗi khi tải dữ liệu hợp đồng",
@@ -113,7 +126,9 @@ export default function InstallmentWarningsPage() {
         variant: "destructive"
       });
     } finally {
-      setIsLoading(false);
+      if (currentRequestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   }
   

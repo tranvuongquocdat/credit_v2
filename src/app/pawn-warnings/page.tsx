@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Layout } from '@/components/Layout';
 import { useStore } from '@/contexts/StoreContext';
 import { PawnWarningsTable } from '@/components/Pawns/PawnWarningsTable';
@@ -52,8 +52,10 @@ export default function PawnWarningsPage() {
   // State for modals
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [selectedPawn, setSelectedPawn] = useState<PawnWithCustomerAndCollateral | null>(null);
-  
-  
+
+  // Request ID for race condition prevention
+  const requestIdRef = useRef(0);
+
   // Load pawns data when the page loads, store changes, or filter changes
   useEffect(() => {
     if (currentStore?.id) {
@@ -65,10 +67,12 @@ export default function PawnWarningsPage() {
   // Load pawns with warnings
   const loadPawns = async () => {
     if (!currentStore?.id) return;
-    
+
+    const currentRequestId = ++requestIdRef.current;
+
     setLoading(true);
     setError(null);
-    
+
     try {
       const { data, error: warningsError } = await getPawnWarnings(
         1,
@@ -80,9 +84,17 @@ export default function PawnWarningsPage() {
       if (warningsError) {
         throw warningsError;
       }
-      
+
+      // Check if this request is still the latest one
+      if (currentRequestId !== requestIdRef.current) {
+        return;
+      }
+
       setAllPawns(data || []);
     } catch (err) {
+      if (currentRequestId !== requestIdRef.current) {
+        return;
+      }
       console.error('Error loading pawn warnings:', err);
       setError('Có lỗi xảy ra khi tải dữ liệu. Vui lòng thử lại sau.');
       toast({
@@ -91,7 +103,9 @@ export default function PawnWarningsPage() {
         variant: 'destructive',
       });
     } finally {
-      setLoading(false);
+      if (currentRequestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   };
   

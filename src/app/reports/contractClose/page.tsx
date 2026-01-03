@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Layout } from '@/components/Layout';
 import { supabase } from '@/lib/supabase';
 import { useStore } from '@/contexts/StoreContext';
@@ -72,6 +72,9 @@ export default function ContractClosePage() {
   // Filter states
   const [selectedContractType, setSelectedContractType] = useState<string>('all');
 
+  // Request ID for race condition prevention
+  const requestIdRef = useRef(0);
+
   // Use permissions hook
   const { hasPermission, loading: permissionsLoading } = usePermissions();
   const router = useRouter();
@@ -134,10 +137,13 @@ export default function ContractClosePage() {
   // Fetch closed contracts data
   const fetchClosedContracts = async () => {
     if (!currentStore?.id) return;
-    
+
+    // Increment request ID to track this request
+    const currentRequestId = ++requestIdRef.current;
+
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const storeId = currentStore.id;
       const startDateObj = startOfDay(parse(startDate, 'yyyy-MM-dd', new Date()));
@@ -255,13 +261,25 @@ export default function ContractClosePage() {
 
       // Sort by close date (newest first)
       allContracts.sort((a, b) => new Date(b.closeDateTime).getTime() - new Date(a.closeDateTime).getTime());
-      
+
+      // Check if this request is still the latest one before setting state
+      if (currentRequestId !== requestIdRef.current) {
+        return; // A newer request was made, discard this result
+      }
+
       setContracts(allContracts);
     } catch (err) {
+      // Only set error if this is still the latest request
+      if (currentRequestId !== requestIdRef.current) {
+        return;
+      }
       console.error('Error fetching closed contracts:', err);
       setError('Đã xảy ra lỗi khi tải dữ liệu');
     } finally {
-      setIsLoading(false);
+      // Only set loading false if this is still the latest request
+      if (currentRequestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 

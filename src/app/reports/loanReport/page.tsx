@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Layout } from '@/components/Layout';
 import { supabase } from '@/lib/supabase';
 import { useStore } from '@/contexts/StoreContext';
@@ -73,6 +73,9 @@ export default function LoanReportPage() {
   // Filter states
   const [selectedContractType, setSelectedContractType] = useState<string>('all');
 
+  // Request ID for race condition prevention
+  const requestIdRef = useRef(0);
+
   // Use permissions hook
   const { hasPermission, loading: permissionsLoading } = usePermissions();
   const router = useRouter();
@@ -130,10 +133,13 @@ export default function LoanReportPage() {
   // Fetch loan report data
   const fetchLoanReports = async () => {
     if (!currentStore?.id) return;
-    
+
+    // Increment request ID to track this request
+    const currentRequestId = ++requestIdRef.current;
+
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const storeId = currentStore.id;
       const allRawData: any[] = [];
@@ -345,23 +351,35 @@ export default function LoanReportPage() {
       // Sort by loan date descending
       processedData.sort((a, b) => new Date(b.loanDate.split('-').reverse().join('-')).getTime() - new Date(a.loanDate.split('-').reverse().join('-')).getTime());
       
+      // Check if this request is still the latest one before setting state
+      if (currentRequestId !== requestIdRef.current) {
+        return; // A newer request was made, discard this result
+      }
+
       // Store all processed data for Excel export
       setAllLoanReports(processedData);
-      
+
       // Update total counts
       await countTotalRecords(processedData);
-      
+
       // Apply pagination
       const offset = (currentPage - 1) * itemsPerPage;
       const paginatedData = processedData.slice(offset, offset + itemsPerPage);
-      
+
       setLoanReports(paginatedData);
-      
+
     } catch (error) {
+      // Only set error if this is still the latest request
+      if (currentRequestId !== requestIdRef.current) {
+        return;
+      }
       console.error('Error fetching loan reports:', error);
       setError('Có lỗi xảy ra khi tải dữ liệu. Vui lòng thử lại.');
     } finally {
-      setIsLoading(false);
+      // Only set loading false if this is still the latest request
+      if (currentRequestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 

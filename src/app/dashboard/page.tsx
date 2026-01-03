@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { getCurrentUser } from '../../lib/auth';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/contexts/StoreContext';
@@ -81,6 +81,11 @@ export default function Dashboard() {
   const router = useRouter();
   const { currentStore } = useStore();
 
+  // Request IDs for race condition prevention
+  const statsRequestIdRef = useRef(0);
+  const chartRequestIdRef = useRef(0);
+  const transactionsRequestIdRef = useRef(0);
+
   useEffect(() => {
     async function fetchUser() {
       const currentUser = await getCurrentUser();
@@ -97,6 +102,8 @@ export default function Dashboard() {
   // Fetch dashboard statistics
   const fetchStats = async () => {
     if (!currentStore?.id) return;
+
+    const currentRequestId = ++statsRequestIdRef.current;
 
     try {
       // Get financial data
@@ -132,6 +139,11 @@ export default function Dashboard() {
           .lte('loan_date', endOfCurrentMonth.toISOString())
       ]);
 
+      // Check if this request is still the latest one
+      if (currentRequestId !== statsRequestIdRef.current) {
+        return;
+      }
+
       setStats({
         totalLoan: {
           pawn: pawnFinancials.totalLoan,
@@ -157,7 +169,9 @@ export default function Dashboard() {
   // Fetch chart data for last 3 months
   const fetchChartData = async () => {
     if (!currentStore?.id) return;
-    
+
+    const currentRequestId = ++chartRequestIdRef.current;
+
     setChartLoading(true);
     try {
       const chartPoints: ChartDataPoint[] = [];
@@ -245,18 +259,27 @@ export default function Dashboard() {
         });
       }
 
+      // Check if this request is still the latest one
+      if (currentRequestId !== chartRequestIdRef.current) {
+        return;
+      }
+
       setChartData(chartPoints);
     } catch (err) {
       console.error('Error fetching chart data:', err);
     } finally {
-      setChartLoading(false);
+      if (currentRequestId === chartRequestIdRef.current) {
+        setChartLoading(false);
+      }
     }
   };
 
   // Fetch recent transactions (similar to TransactionDetailsTable but limit to 10)
   const fetchRecentTransactions = async () => {
     if (!currentStore?.id) return;
-    
+
+    const currentRequestId = ++transactionsRequestIdRef.current;
+
     setTransactionsLoading(true);
     try {
       const allHistoryItems: TransactionItem[] = [];
@@ -414,12 +437,20 @@ export default function Dashboard() {
 
       // Sort by date and take only 10 most recent
       allHistoryItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      // Check if this request is still the latest one
+      if (currentRequestId !== transactionsRequestIdRef.current) {
+        return;
+      }
+
       setRecentTransactions(allHistoryItems.slice(0, 10));
-      
+
     } catch (err) {
       console.error('Error fetching recent transactions:', err);
     } finally {
-      setTransactionsLoading(false);
+      if (currentRequestId === transactionsRequestIdRef.current) {
+        setTransactionsLoading(false);
+      }
     }
   };
 
