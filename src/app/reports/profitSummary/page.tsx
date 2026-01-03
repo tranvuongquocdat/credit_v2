@@ -646,6 +646,7 @@ export default function ProfitSummaryPage() {
 
     try {
       // Execute all data fetching in parallel for better performance
+      // Including interest/profit queries to avoid sequential bottleneck
       const [
         pawnData,
         creditData,
@@ -653,7 +654,10 @@ export default function ProfitSummaryPage() {
         pawnFinancials,
         creditFinancials,
         installmentFinancials,
-        transactionSummary
+        transactionSummary,
+        pawnProfit,
+        creditProfit,
+        installmentProfit
       ] = await Promise.all([
         getContractsWithStatus('pawns', () => Promise.resolve(null)),
         getContractsWithStatus('credits', () => Promise.resolve(null)),
@@ -661,7 +665,10 @@ export default function ProfitSummaryPage() {
         getPawnFinancialsForStore(currentStore.id),
         getCreditFinancialsForStore(currentStore.id),
         getInstallmentFinancialsForStore(currentStore.id),
-        getTransactionData()
+        getTransactionData(),
+        getInterestDataForDateRange('pawns'),
+        getInterestDataForDateRange('credits'),
+        getInterestDataForDateRange('installments')
       ]);
 
       // Check if this request is still the latest one
@@ -676,29 +683,26 @@ export default function ProfitSummaryPage() {
       const creditDebt = creditFinancials.oldDebt || 0;
       const installmentDebt = installmentFinancials.oldDebt || 0;
 
-       // Process data for each contract type
-       const processContractData = async (
+       // Process data for each contract type (now synchronous - profit passed as parameter)
+       const processContractData = (
          allContracts: any[],
          newContracts: any[],
          financials: any,
          debt: number,
          category: string,
          categoryKey: string,
-         contractType: 'pawns' | 'credits' | 'installments'
-       ): Promise<ProfitSummaryRow> => {
+         contractProfit: number  // Profit already fetched in parallel
+       ): ProfitSummaryRow => {
          const allCounts = countContractsByStatus(allContracts);
          const newCounts = countContractsByStatus(newContracts);
 
          // Calculate loan amounts
          const totalLoanAmount = newContracts.reduce((sum, contract) => {
-           const amount = categoryKey === 'installment' 
+           const amount = categoryKey === 'installment'
              ? (contract.down_payment || 0)  // Use down_payment for installments
              : (contract.loan_amount || 0);
            return sum + amount;
          }, 0);
-
-         // Get interest data for all contracts in date range (like interestDetail)
-         const contractProfit = await getInterestDataForDateRange(contractType);
 
          return {
            category,
@@ -713,40 +717,41 @@ export default function ProfitSummaryPage() {
            deleted: allCounts.deleted,
            totalLoanAmount,
            currentLoanAmount: financials.totalLoan || 0,
-           profit: contractProfit, // Profit from new contracts only
+           profit: contractProfit,
            customerDebt: debt
          };
        };
 
-             const summaryData: ProfitSummaryRow[] = await Promise.all([
-         processContractData(
-           pawnData.all,
-           pawnData.filtered,
-           pawnFinancials,
-           pawnDebt,
-           'Cầm đồ',
-           'pawn',
-           'pawns'
-         ),
-         processContractData(
-           creditData.all,
-           creditData.filtered,
-           creditFinancials,
-           creditDebt,
-           'Tín chấp',
-           'credit',
-           'credits'
-         ),
-         processContractData(
-           installmentData.all,
-           installmentData.filtered,
-           installmentFinancials,
-           installmentDebt,
-           'Trả góp',
-           'installment',
-           'installments'
-         )
-       ]);
+      // Now synchronous - no Promise.all needed
+      const summaryData: ProfitSummaryRow[] = [
+        processContractData(
+          pawnData.all,
+          pawnData.filtered,
+          pawnFinancials,
+          pawnDebt,
+          'Cầm đồ',
+          'pawn',
+          pawnProfit
+        ),
+        processContractData(
+          creditData.all,
+          creditData.filtered,
+          creditFinancials,
+          creditDebt,
+          'Tín chấp',
+          'credit',
+          creditProfit
+        ),
+        processContractData(
+          installmentData.all,
+          installmentData.filtered,
+          installmentFinancials,
+          installmentDebt,
+          'Trả góp',
+          'installment',
+          installmentProfit
+        )
+      ];
 
       // Check again before updating state (in case a new request started during processing)
       if (currentRequestId !== requestIdRef.current) {
