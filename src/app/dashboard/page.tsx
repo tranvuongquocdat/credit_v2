@@ -106,19 +106,23 @@ export default function Dashboard() {
     const currentRequestId = ++statsRequestIdRef.current;
 
     try {
-      // Get financial data
-      const [pawnFinancials, creditFinancials, installmentFinancials] = await Promise.all([
-        getPawnFinancialsForStore(currentStore.id),
-        getCreditFinancialsForStore(currentStore.id),
-        getInstallmentFinancialsForStore(currentStore.id)
-      ]);
-
       // Get new contracts count for current month
       const now = new Date();
       const startOfCurrentMonth = startOfMonth(now);
       const endOfCurrentMonth = endOfMonth(now);
 
-      const [newPawns, newCredits, newInstallments] = await Promise.all([
+      // Chạy tất cả queries song song để tối ưu hiệu suất
+      const [
+        pawnFinancials,
+        creditFinancials,
+        installmentFinancials,
+        newPawns,
+        newCredits,
+        newInstallments
+      ] = await Promise.all([
+        getPawnFinancialsForStore(currentStore.id),
+        getCreditFinancialsForStore(currentStore.id),
+        getInstallmentFinancialsForStore(currentStore.id),
         supabase
           .from('pawns')
           .select('id', { count: 'exact' })
