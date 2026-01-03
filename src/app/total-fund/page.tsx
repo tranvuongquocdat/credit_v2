@@ -291,6 +291,7 @@ export default function TotalFundPage() {
           `)
           .eq('credits.store_id', storeId)
           .or('is_deleted.is.null,is_deleted.eq.false')
+          .order('id')
       );
       
       if (creditHistoryData) {
@@ -311,6 +312,7 @@ export default function TotalFundPage() {
           `)
           .eq('pawns.store_id', storeId)
           .or('is_deleted.is.null,is_deleted.eq.false')
+          .order('id')
       );
       
       if (pawnHistoryData) {
@@ -335,6 +337,7 @@ export default function TotalFundPage() {
           `)
           .eq('installments.employees.store_id', storeId)
           .or('is_deleted.is.null,is_deleted.eq.false')
+          .order('id')
       );
       
       if (installmentHistoryData) {

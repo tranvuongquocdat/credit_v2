@@ -455,6 +455,7 @@ export async function updateCashFundFromAllSources(storeId: string) {
         `)
         .eq('credits.store_id', storeId)
         .or('is_deleted.is.null,is_deleted.eq.false')
+        .order('id')
     );
     
     if (creditHistoryData) {
@@ -475,6 +476,7 @@ export async function updateCashFundFromAllSources(storeId: string) {
         `)
         .eq('pawns.store_id', storeId)
         .or('is_deleted.is.null,is_deleted.eq.false')
+        .order('id')
     );
     
     if (pawnHistoryData) {
@@ -499,6 +501,7 @@ export async function updateCashFundFromAllSources(storeId: string) {
         `)
         .eq('installments.employees.store_id', storeId)
         .or('is_deleted.is.null,is_deleted.eq.false')
+        .order('id')
     );
     
     if (installmentHistoryData) {
