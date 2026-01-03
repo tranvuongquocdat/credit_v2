@@ -173,6 +173,7 @@ export default function ContractClosePage() {
             .eq('status', 'closed')
             .gte('updated_at', startDateISO)
             .lte('updated_at', endDateISO)
+            .order('id')
         );
 
         if (pawnData) {
@@ -232,6 +233,7 @@ export default function ContractClosePage() {
             .eq('status', 'closed')
             .gte('updated_at', startDateISO)
             .lte('updated_at', endDateISO)
+            .order('id')
         );
 
         if (creditData) {

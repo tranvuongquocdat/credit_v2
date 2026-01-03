@@ -294,10 +294,10 @@ export default function InterestDetailPage() {
         // Execute all pawn queries in parallel
         queryPromises.push(
           Promise.all([
-            fetchAllData(pawnQueries[0]), // Get ALL payment records, not just in date range
-            fetchAllData(pawnQueries[1]),
-            fetchAllData(pawnQueries[2]),
-            fetchAllData(pawnQueries[3])
+            fetchAllData(pawnQueries[0].order('id')), // Get ALL payment records, not just in date range
+            fetchAllData(pawnQueries[1].order('id')),
+            fetchAllData(pawnQueries[2].order('id')),
+            fetchAllData(pawnQueries[3].order('id'))
           ]).then(async ([pawnPaymentData, pawnCloseData, pawnReopenData, pawnDebtData]) => {
             // Process payment transactions - show both original and cancelled payments
             // PAWN LOGIC: Show original payments and cancelled payments (as separate "Huỷ đóng lãi" records)
@@ -636,10 +636,10 @@ export default function InterestDetailPage() {
         // Execute all credit queries in parallel
         queryPromises.push(
           Promise.all([
-            fetchAllData(creditQueries[0]), // Get ALL payment records, not just in date range
-            fetchAllData(creditQueries[1]),
-            fetchAllData(creditQueries[2]),
-            fetchAllData(creditQueries[3])
+            fetchAllData(creditQueries[0].order('id')), // Get ALL payment records, not just in date range
+            fetchAllData(creditQueries[1].order('id')),
+            fetchAllData(creditQueries[2].order('id')),
+            fetchAllData(creditQueries[3].order('id'))
           ]).then(async ([creditPaymentData, creditCloseData, creditReopenData, creditDebtData]) => {
             // Process payment transactions - separate original and cancel records
             // CREDIT LOGIC: Show both original payments and cancelled payments (as separate "Huỷ đóng lãi" records)
@@ -837,6 +837,7 @@ export default function InterestDetailPage() {
               .eq('installments.employees.store_id', storeId)
               .eq('transaction_type', 'payment')
               .or('is_deleted.is.null,is_deleted.eq.false')
+              .order('id')
           ).then((installmentHistoryData) => {
             if (installmentHistoryData && installmentHistoryData.length > 0) {
               // Group by contract to calculate interest per contract (as-of selected end date)

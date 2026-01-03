@@ -345,6 +345,7 @@ const fetchTransactionData = async (
         .or(
           `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
         )
+        .order('id')
     );
 
     if (creditHistoryData) {
@@ -379,6 +380,7 @@ const fetchTransactionData = async (
         .or(
           `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
         )
+        .order('id')
     );
 
     if (pawnHistoryData) {
@@ -414,6 +416,7 @@ const fetchTransactionData = async (
           `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
         )
         .not('transaction_type', 'in', '(contract_close,contract_rotate)')
+        .order('id')
     );
 
     if (installmentHistoryData) {
@@ -431,6 +434,7 @@ const fetchTransactionData = async (
         .eq('store_id', storeId)
         .gte('created_at', startDateISO)
         .lte('created_at', endDateISO)
+        .order('id')
     );
     if (storeFundData) processItems(storeFundData as any[], 'Nguồn vốn');
 
@@ -441,6 +445,7 @@ const fetchTransactionData = async (
         .eq('store_id', storeId)
         .gte('created_at', startDateISO)
         .lte('created_at', endDateISO)
+        .order('id')
     );
 
     const transformTransactionsForDisplay = (rawTransactions: any[]) => {
@@ -730,6 +735,7 @@ const fetchTransactionDetails = async (
         .or(
           `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
         )
+        .order('id')
     );
 
     if (creditHistoryData) {
@@ -764,6 +770,7 @@ const fetchTransactionDetails = async (
         .or(
           `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
         )
+        .order('id')
     );
 
     if (pawnHistoryData) {
@@ -799,6 +806,7 @@ const fetchTransactionDetails = async (
           `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
         )
         .not('transaction_type', 'in', '(contract_close,contract_rotate)')
+        .order('id')
     );
 
     if (installmentHistoryData) {
@@ -816,6 +824,7 @@ const fetchTransactionDetails = async (
         .eq('store_id', storeId)
         .gte('created_at', startDateISO)
         .lte('created_at', endDateISO)
+        .order('id')
     );
     if (storeFundData) processItems(storeFundData as any[], 'Nguồn vốn');
 
@@ -826,6 +835,7 @@ const fetchTransactionDetails = async (
         .eq('store_id', storeId)
         .gte('created_at', startDateISO)
         .lte('created_at', endDateISO)
+        .order('id')
     );
 
     const transformTransactionsForDisplay = (rawTransactions: any[]) => {

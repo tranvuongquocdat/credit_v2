@@ -338,8 +338,9 @@ export default function MoneyFlowByDayPage() {
             .or('is_deleted.is.null,is_deleted.eq.false')
             .gte('created_at', startRangeISO)
             .lte('created_at', endRangeISO)
+            .order('id')
         ),
-        
+
         // Credit history for entire range
         fetchAllData(
           supabase
@@ -349,6 +350,7 @@ export default function MoneyFlowByDayPage() {
             .or('is_deleted.is.null,is_deleted.eq.false')
             .gte('created_at', startRangeISO)
             .lte('created_at', endRangeISO)
+            .order('id')
         ),
         
         // Installment history for entire range
