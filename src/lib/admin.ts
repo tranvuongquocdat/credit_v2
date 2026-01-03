@@ -39,13 +39,13 @@ export async function getAdmins(
       query = query.eq('is_banned', isBanned);
     }
 
-    // Apply pagination
+    // Order by created_at desc (PHẢI đặt trước range)
+    query = query.order('created_at', { ascending: false });
+
+    // Apply pagination (PHẢI đặt sau order)
     const from = (page - 1) * limit;
     const to = from + limit - 1;
     query = query.range(from, to);
-
-    // Order by created_at desc
-    query = query.order('created_at', { ascending: false });
 
     const { data, error, count } = await query;
 

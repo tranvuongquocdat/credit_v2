@@ -40,10 +40,10 @@ export async function getEmployees(
       query = query.eq('status', status);
     }
 
-    // Thực thi query với phân trang
+    // Thực thi query với phân trang (order PHẢI đặt trước range)
     const { data, error, count } = await query
-      .range(offset, offset + limit - 1)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
     if (error) {
       throw error;
