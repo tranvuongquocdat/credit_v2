@@ -556,3 +556,57 @@ left join installment_history ih
   and ih.is_deleted = false
 group by ids.installment_id;
 $$;
+
+-- Function to get interest/profit collected within a date range for installments
+-- Uses same formula as installment_get_collected_profit but with custom date range
+create or replace function public.get_installment_interest_for_date_range(
+  p_installment_ids uuid[],
+  p_start_date timestamptz,
+  p_end_date timestamptz
+)
+returns table (
+  installment_id uuid,
+  interest_collected numeric
+)
+language sql
+stable
+as $$
+with
+ids as (
+  select unnest(p_installment_ids) as id
+),
+-- Sum of payments before start_date (exclusive)
+payments_before as (
+  select
+    ih.installment_id,
+    sum(ih.credit_amount - coalesce(ih.debit_amount, 0)) as total
+  from installment_history ih
+  where ih.transaction_type = 'payment'
+    and (ih.is_deleted is null or ih.is_deleted = false)
+    and ih.installment_id = any(p_installment_ids)
+    and ih.transaction_date < p_start_date
+  group by ih.installment_id
+),
+-- Sum of payments up to end_date (inclusive) - use end of day
+payments_through_end as (
+  select
+    ih.installment_id,
+    sum(ih.credit_amount - coalesce(ih.debit_amount, 0)) as total
+  from installment_history ih
+  where ih.transaction_type = 'payment'
+    and (ih.is_deleted is null or ih.is_deleted = false)
+    and ih.installment_id = any(p_installment_ids)
+    and ih.transaction_date <= p_end_date
+  group by ih.installment_id
+)
+select
+  i.id as installment_id,
+  greatest(0, coalesce(pe.total, 0) - inst.down_payment)
+  - greatest(0, coalesce(ps.total, 0) - inst.down_payment) as interest_collected
+from ids i
+left join installments inst on inst.id = i.id
+left join payments_before ps on ps.installment_id = i.id
+left join payments_through_end pe on pe.installment_id = i.id
+where greatest(0, coalesce(pe.total, 0) - inst.down_payment)
+  - greatest(0, coalesce(ps.total, 0) - inst.down_payment) > 0
+$$;

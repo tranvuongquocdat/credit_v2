@@ -1514,6 +1514,17 @@ export type Database = {
         Args: { "": unknown }
         Returns: unknown
       }
+      get_installment_interest_for_date_range: {
+        Args: {
+          p_installment_ids: string[]
+          p_start_date: string
+          p_end_date: string
+        }
+        Returns: {
+          installment_id: string
+          interest_collected: number
+        }[]
+      }
     }
     Enums: {
       credit_status:
