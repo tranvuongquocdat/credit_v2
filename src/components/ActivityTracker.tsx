@@ -1,73 +1,117 @@
 "use client";
 
-import { useEffect, useRef } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { signOut } from '@/lib/auth';
+import { useEffect, useRef } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { signOut } from "@/lib/auth";
+
+const LAST_HIDDEN_AT_KEY = "credit_lastHiddenAt";
 
 interface ActivityTrackerProps {
-  inactivityTimeoutMs?: number; // Time in milliseconds before logout due to inactivity
+  inactivityTimeoutMs?: number;
 }
 
 export const ActivityTracker: React.FC<ActivityTrackerProps> = ({
-  inactivityTimeoutMs = 128 * 60 * 1000 // Default: 8 minutes
+  inactivityTimeoutMs = 1 * 60 * 1000,
 }) => {
   const { user } = useAuth();
   const lastActivityRef = useRef<number>(Date.now());
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!user) return;
 
-    // Update last activity timestamp
-    const updateActivity = () => {
-      lastActivityRef.current = Date.now();
-      
-      // Clear existing timeout
+    const clearScheduledLogout = () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
-
-      // Set new timeout for inactivity logout
-      timeoutRef.current = setTimeout(() => {
-        // Use signOut function from auth.ts to ensure consistency
-        signOut();
-      }, inactivityTimeoutMs);
     };
 
-    // List of events that indicate user activity
+    const checkInactivity = (): boolean => {
+      const elapsed = Date.now() - lastActivityRef.current;
+      if (elapsed >= inactivityTimeoutMs) {
+        signOut();
+        return true;
+      }
+      return false;
+    };
+
+    const scheduleInactivityLogout = () => {
+      clearScheduledLogout();
+      const remaining = inactivityTimeoutMs - (Date.now() - lastActivityRef.current);
+      if (remaining <= 0) {
+        signOut();
+        return;
+      }
+      timeoutRef.current = setTimeout(() => {
+        signOut();
+      }, remaining);
+    };
+
+    const updateActivity = () => {
+      lastActivityRef.current = Date.now();
+      if (document.visibilityState === "visible") {
+        scheduleInactivityLogout();
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        try {
+          localStorage.setItem(LAST_HIDDEN_AT_KEY, Date.now().toString());
+        } catch {
+          /* private mode / disabled storage */
+        }
+        clearScheduledLogout();
+        return;
+      }
+
+      if (document.visibilityState === "visible") {
+        try {
+          localStorage.removeItem(LAST_HIDDEN_AT_KEY);
+        } catch {
+          /* ignore */
+        }
+        if (checkInactivity()) return;
+        scheduleInactivityLogout();
+      }
+    };
+
     const activityEvents = [
-      'mousedown',
-      'mousemove', 
-      'keypress',
-      'scroll',
-      'touchstart',
-      'click'
+      "mousedown",
+      "mousemove",
+      "keypress",
+      "scroll",
+      "touchstart",
+      "click",
     ];
 
-    // Add activity listeners
-    activityEvents.forEach(event => {
+    activityEvents.forEach((event) => {
       document.addEventListener(event, updateActivity, true);
     });
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
-    // Initialize activity timer
-    updateActivity();
+    lastActivityRef.current = Date.now();
+    if (document.visibilityState === "visible") {
+      scheduleInactivityLogout();
+    } else {
+      try {
+        localStorage.setItem(LAST_HIDDEN_AT_KEY, Date.now().toString());
+      } catch {
+        /* ignore */
+      }
+    }
 
-    // Cleanup function
     return () => {
-      // Remove activity listeners
-      activityEvents.forEach(event => {
+      activityEvents.forEach((event) => {
         document.removeEventListener(event, updateActivity, true);
       });
-      
-      // Clear timeout
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      clearScheduledLogout();
     };
   }, [user, inactivityTimeoutMs]);
 
-  // This component renders nothing
   return null;
 };
 
-export default ActivityTracker; 
+export default ActivityTracker;
