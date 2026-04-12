@@ -43,7 +43,7 @@ interface ActivityTrackerProps {
 }
 
 export const ActivityTracker: React.FC<ActivityTrackerProps> = ({
-  inactivityTimeoutMs = 1 * 60 * 1000,
+  inactivityTimeoutMs = 15 * 60 * 1000,
 }) => {
   const { user } = useAuth();
   const lastActivityRef = useRef<number>(Date.now());
