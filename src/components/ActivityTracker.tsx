@@ -6,6 +6,38 @@ import { signOut } from "@/lib/auth";
 
 const LAST_HIDDEN_AT_KEY = "credit_lastHiddenAt";
 
+/**
+ * Spec-only targets for SSR-safe registration.
+ * Capture: still sees events when bubble is stopped.
+ * wheel + window scroll: nested overflow does not bubble `scroll`.
+ * Passive: no preventDefault (keeps scrolling smooth).
+ */
+type ActivityListenerTarget = "document" | "window";
+
+type ActivityListenerSpec = Readonly<{
+  target: ActivityListenerTarget;
+  type: string;
+  options: boolean | AddEventListenerOptions;
+}>;
+
+const ACTIVITY_LISTENER_SPECS: readonly ActivityListenerSpec[] = [
+  { target: "document", type: "pointerdown", options: true },
+  { target: "document", type: "pointermove", options: true },
+  { target: "document", type: "keydown", options: true },
+  { target: "document", type: "wheel", options: { capture: true, passive: true } },
+  { target: "document", type: "touchstart", options: true },
+  { target: "document", type: "touchmove", options: { capture: true, passive: true } },
+  { target: "document", type: "click", options: true },
+  { target: "document", type: "input", options: true },
+  { target: "document", type: "focusin", options: true },
+  { target: "document", type: "compositionend", options: true },
+  { target: "window", type: "scroll", options: { capture: true, passive: true } },
+];
+
+function resolveActivityTarget(which: ActivityListenerTarget): EventTarget {
+  return which === "window" ? window : document;
+}
+
 interface ActivityTrackerProps {
   inactivityTimeoutMs?: number;
 }
@@ -27,6 +59,7 @@ export const ActivityTracker: React.FC<ActivityTrackerProps> = ({
       }
     };
 
+    /** On tab visible again: wall-clock check; timers are unreliable while hidden. */
     const checkInactivity = (): boolean => {
       const elapsed = Date.now() - lastActivityRef.current;
       if (elapsed >= inactivityTimeoutMs) {
@@ -36,6 +69,7 @@ export const ActivityTracker: React.FC<ActivityTrackerProps> = ({
       return false;
     };
 
+    /** Re-verify lastActivity on fire; avoids races with rAF-batched reschedules. */
     const scheduleInactivityLogout = () => {
       clearScheduledLogout();
       const remaining = inactivityTimeoutMs - (Date.now() - lastActivityRef.current);
@@ -44,15 +78,36 @@ export const ActivityTracker: React.FC<ActivityTrackerProps> = ({
         return;
       }
       timeoutRef.current = setTimeout(() => {
-        signOut();
+        const elapsed = Date.now() - lastActivityRef.current;
+        if (elapsed >= inactivityTimeoutMs) {
+          signOut();
+          return;
+        }
+        scheduleInactivityLogout();
       }, remaining);
     };
 
-    const updateActivity = () => {
-      lastActivityRef.current = Date.now();
-      if (document.visibilityState === "visible") {
-        scheduleInactivityLogout();
+    let rescheduleRafId: number | null = null;
+
+    const cancelPendingReschedule = () => {
+      if (rescheduleRafId != null) {
+        cancelAnimationFrame(rescheduleRafId);
+        rescheduleRafId = null;
       }
+    };
+
+    /** Bump timestamp immediately; coalesce timer work to once per frame (high-frequency events). */
+    const onUserActivity: EventListener = () => {
+      lastActivityRef.current = Date.now();
+      if (document.visibilityState !== "visible") return;
+
+      if (rescheduleRafId != null) return;
+
+      clearScheduledLogout();
+      rescheduleRafId = requestAnimationFrame(() => {
+        rescheduleRafId = null;
+        scheduleInactivityLogout();
+      });
     };
 
     const onVisibilityChange = () => {
@@ -62,6 +117,7 @@ export const ActivityTracker: React.FC<ActivityTrackerProps> = ({
         } catch {
           /* private mode / disabled storage */
         }
+        cancelPendingReschedule();
         clearScheduledLogout();
         return;
       }
@@ -73,21 +129,13 @@ export const ActivityTracker: React.FC<ActivityTrackerProps> = ({
           /* ignore */
         }
         if (checkInactivity()) return;
+        cancelPendingReschedule();
         scheduleInactivityLogout();
       }
     };
 
-    const activityEvents = [
-      "mousedown",
-      "mousemove",
-      "keypress",
-      "scroll",
-      "touchstart",
-      "click",
-    ];
-
-    activityEvents.forEach((event) => {
-      document.addEventListener(event, updateActivity, true);
+    ACTIVITY_LISTENER_SPECS.forEach(({ target: which, type, options }) => {
+      resolveActivityTarget(which).addEventListener(type, onUserActivity, options);
     });
     document.addEventListener("visibilitychange", onVisibilityChange);
 
@@ -103,10 +151,11 @@ export const ActivityTracker: React.FC<ActivityTrackerProps> = ({
     }
 
     return () => {
-      activityEvents.forEach((event) => {
-        document.removeEventListener(event, updateActivity, true);
+      ACTIVITY_LISTENER_SPECS.forEach(({ target: which, type, options }) => {
+        resolveActivityTarget(which).removeEventListener(type, onUserActivity, options);
       });
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      cancelPendingReschedule();
       clearScheduledLogout();
     };
   }, [user, inactivityTimeoutMs]);
