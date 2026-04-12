@@ -75,7 +75,12 @@ export async function middleware(request: NextRequest) {
           // Người dùng đã bị ban, đăng xuất họ
           console.log("User is banned, signing out:", user.id);
           await supabase.auth.signOut();
-          return NextResponse.redirect(new URL('/', request.url));
+          const redirectResponse = NextResponse.redirect(new URL('/', request.url));
+          // Giữ cookie đã cập nhật (xóa session) từ response gốc — redirect mới mặc định không mang theo
+          response.cookies.getAll().forEach((cookie) => {
+            redirectResponse.cookies.set(cookie);
+          });
+          return redirectResponse;
         }
       } catch (err) {
         console.error("Error in ban check:", err);
@@ -89,7 +94,7 @@ export async function middleware(request: NextRequest) {
   } catch (authError) {
     console.error("Auth error in middleware:", authError);
     // Redirect to home on any auth error for non-public routes
-    const publicPaths = ['/', '/login', '/signup'];
+    const publicPaths = ['/', '/login', '/signup', '/portfolio/about', '/portfolio/projects'];
     if (!publicPaths.includes(request.nextUrl.pathname)) {
       return NextResponse.redirect(new URL('/', request.url));
     }
