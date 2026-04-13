@@ -11,6 +11,7 @@ import { countPawnWarnings } from "@/lib/pawn-warnings";
 import { countCreditWarnings } from "@/lib/credit-warnings";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
+import { startPerfTimer } from "@/lib/perf-debug";
 
 // This interface will represent the notification data structure
 interface NotificationCounts {
@@ -151,6 +152,9 @@ export function TopNavbar() {
       
       // Replace with your actual API call to get notifications for the selected store
       const fetchNotificationsForStore = async () => {
+        const endFetchNotifications = startPerfTimer('TopNavbar.fetchNotificationsForStore', {
+          context: { storeId: currentStore.id },
+        });
         try {
           // Initialize counts with zeros
           let overdueInstallments = 0;
@@ -159,7 +163,9 @@ export function TopNavbar() {
           
           // Only fetch installment warnings if user has permission
           if (hasPermission('xem_danh_sach_hop_dong_tra_gop')) {
+            const endInstallmentWarnings = startPerfTimer('TopNavbar.fetchNotificationsForStore.countInstallmentWarnings');
             const { count, error } = await countInstallmentWarnings(currentStore.id);
+            endInstallmentWarnings();
             if (error) {
               console.error('Error fetching overdue installments count:', error);
             } else {
@@ -169,7 +175,9 @@ export function TopNavbar() {
           
           // Only fetch pawn warnings if user has permission
           if (hasPermission('xem_danh_sach_hop_dong_cam_do')) {
+            const endPawnWarnings = startPerfTimer('TopNavbar.fetchNotificationsForStore.countPawnWarnings');
             const { count, error } = await countPawnWarnings(currentStore.id);
+            endPawnWarnings();
             if (error) {
               console.error('Error fetching pawn warnings count:', error);
             } else {
@@ -179,7 +187,9 @@ export function TopNavbar() {
           
           // Only fetch credit warnings if user has permission
           if (hasPermission('xem_danh_sach_hop_dong_tin_chap')) {
+            const endCreditWarnings = startPerfTimer('TopNavbar.fetchNotificationsForStore.countCreditWarnings');
             const { count, error } = await countCreditWarnings(currentStore.id);
+            endCreditWarnings();
             if (error) {
               console.error('Error fetching credit warnings count:', error);
             } else {
@@ -199,6 +209,8 @@ export function TopNavbar() {
           setNotificationCounts(mockData);
         } catch (error) {
           console.error('Error fetching notifications', error);
+        } finally {
+          endFetchNotifications();
         }
       };
       
