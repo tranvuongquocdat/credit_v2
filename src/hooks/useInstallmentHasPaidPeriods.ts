@@ -71,15 +71,11 @@ export function useInstallmentHasPaidPeriods(installments: InstallmentWithCustom
     enabled: installmentIds.length > 0,
   });
 
-  // Add debugging for cache hits
-  if (process.env.NODE_ENV === 'development') {
-    // biome-ignore lint/correctness/useHookAtTopLevel: Debugging purposes only
-    React.useEffect(() => {
-      if (!isInitialLoading && !isFetching && data) {
-        console.log(`📦 [CACHE] Payment periods loaded from cache (${installmentIds.length} installments)`);
-      }
-    }, [isInitialLoading, isFetching, data, installmentIds.length]);
-  }
+  React.useEffect(() => {
+    if (process.env.NODE_ENV === 'development' && !isInitialLoading && !isFetching && data) {
+      console.log(`📦 [CACHE] Payment periods loaded from cache (${installmentIds.length} installments)`);
+    }
+  }, [isInitialLoading, isFetching, data, installmentIds.length]);
 
   return {
     hasPaidPaymentPeriods: data || {},
