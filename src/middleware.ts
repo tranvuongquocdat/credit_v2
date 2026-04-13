@@ -37,6 +37,15 @@ export async function middleware(request: NextRequest) {
   );
 
   try {
+    const currentPath = request.nextUrl.pathname;
+    const isNuvorasBuild = process.env.NEXT_PUBLIC_BUILD_NAME === 'nuvoras';
+
+    // Build khác nuvoras: chặn route /portfolio/* và chuyển sang /portfolio_v2/*
+    if (!isNuvorasBuild && (currentPath === '/portfolio' || currentPath.startsWith('/portfolio/'))) {
+      const mappedPath = currentPath.replace('/portfolio', '/portfolio_v2');
+      return NextResponse.redirect(new URL(mappedPath, request.url));
+    }
+
     // Get the current user
     const { data: { user }, error } = await supabase.auth.getUser();
     
@@ -44,8 +53,9 @@ export async function middleware(request: NextRequest) {
     console.log("middleware path:", request.nextUrl.pathname);
 
     // Danh sách các trang được phép truy cập khi chưa login
-    const publicPaths = ['/', '/login', '/signup', '/portfolio/about', '/portfolio/projects'];
-    const currentPath = request.nextUrl.pathname;
+    const publicPaths = isNuvorasBuild
+      ? ['/', '/login', '/signup', '/portfolio/about', '/portfolio/projects', '/portfolio/skills']
+      : ['/', '/login', '/signup', '/portfolio_v2/about', '/portfolio_v2/projects', '/portfolio_v2/skills'];
 
     // Nếu chưa login và không phải trang public → redirect về "/"
     if (!user && !publicPaths.includes(currentPath)) {

@@ -87,6 +87,10 @@ export default function Dashboard() {
   const chartRequestIdRef = useRef(0);
   const transactionsRequestIdRef = useRef(0);
 
+  // check if the build name is nuvoras_v2
+  const isNuvorasV1 = process.env.NEXT_PUBLIC_BUILD_NAME === 'nuvoras';
+  
+
   useEffect(() => {
     async function fetchUser() {
       const currentUser = await getCurrentUser();
