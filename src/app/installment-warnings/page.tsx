@@ -92,7 +92,7 @@ export default function InstallmentWarningsPage() {
     try {
       const { data, error, totalItems, totalPages } = await getInstallmentWarnings(
         1, // Always fetch from page 1
-        1000, // Fetch all records for client-side filtering
+        200, // Fetch records for client-side filtering
         currentStore.id,
         debouncedCustomerFilter,
         debouncedContractFilter,
