@@ -23,34 +23,36 @@ export function useInstallmentsSummary() {
         // First, get the store financial data for cash_fund
         const storeFinancialData = await getStoreFinancialData(currentStore.id);
 
-        // Lấy tất cả hợp đồng chưa bị xóa, chưa đóng và thuộc cửa hàng hiện tại
-        const { data: activeInstallments, error: installmentsError } = await supabase
-          .from('installments_by_store')
-          .select(`
-            id,
-            contract_code,
-            down_payment,
-            loan_period,
-            loan_date,
-            installment_amount,
-            status,
-            store_id,
-            debt_amount
-          `)
-          .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST'])
-          .eq('store_id', currentStore.id);
+        // Lấy active và closed installments song song — 2 queries độc lập nhau
+        const [
+          { data: activeInstallments, error: installmentsError },
+          { data: closedInstallments, error: closedInstallmentsError },
+        ] = await Promise.all([
+          supabase
+            .from('installments_by_store')
+            .select(`
+              id,
+              contract_code,
+              down_payment,
+              loan_period,
+              loan_date,
+              installment_amount,
+              status,
+              store_id,
+              debt_amount
+            `)
+            .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST'])
+            .eq('store_id', currentStore.id),
+          supabase
+            .from('installments_by_store')
+            .select('id')
+            .eq('status_code', 'CLOSED')
+            .eq('store_id', currentStore.id),
+        ]);
 
         if (installmentsError) {
           throw installmentsError;
         }
-
-        // Lấy danh sách hợp đồng đã đóng
-        const { data: closedInstallments, error: closedInstallmentsError } = await supabase
-          .from('installments_by_store')
-          .select('id')
-          .eq('status_code', 'CLOSED')
-          .eq('store_id', currentStore.id);
-
         if (closedInstallmentsError) {
           throw closedInstallmentsError;
         }
@@ -98,20 +100,16 @@ export function useInstallmentsSummary() {
           .map(it => it.id)
           .filter((id): id is string => id !== null);   // → string[]
 
-        /* 3.1 oldDebt (đã có) */
-        const { data: debtRows } = await supabase.rpc(
-          'get_installment_old_debt', { p_installment_ids: ids }
-        );
-
-        /* 3.2 tổng paid (cho loanAmount) */
-        const { data: paidRows } = await supabase.rpc(
-          'installment_get_paid_amount', { p_installment_ids: ids }
-        );
-
-        /* 3.3 profitCollected ( tính cả hợp đồng đã đóng )  */
-        const { data: profitRows } = await supabase.rpc(
-          'installment_get_collected_profit', { p_installment_ids: [...ids, ...closedIds] }
-        );
+        /* 3.1 + 3.2 + 3.3 — chạy song song, logic xử lý kết quả giữ nguyên */
+        const [
+          { data: debtRows },
+          { data: paidRows },
+          { data: profitRows },
+        ] = await Promise.all([
+          supabase.rpc('get_installment_old_debt', { p_installment_ids: ids }),
+          supabase.rpc('installment_get_paid_amount', { p_installment_ids: ids }),
+          supabase.rpc('installment_get_collected_profit', { p_installment_ids: [...ids, ...closedIds] }),
+        ]);
 
         /* xây 3 map rồi truyền xuống calculateInstallmentMetrics */
         const debtMap   = new Map(debtRows?.map(r => [r.installment_id, Number(r.old_debt)]));
