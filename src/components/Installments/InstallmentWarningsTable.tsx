@@ -157,30 +157,28 @@ export function InstallmentWarningsTable({
       try {
         const ids = installments.map((i) => i.id);
 
-        /* 1. late periods from overdue stats */
-        const { data: lateRows, error: lateErr } = await (supabase as any).rpc('installment_overdue_stats', {
-          p_installment_ids: ids,
-        });
+        /* 1+2+3. Gọi song song 3 RPCs — logic xử lý kết quả giữ nguyên */
+        const [
+          { data: lateRows, error: lateErr },
+          { data: nextRows, error: nextErr },
+          { data: oldDebtRows },
+        ] = await Promise.all([
+          (supabase as any).rpc('installment_overdue_stats', { p_installment_ids: ids }),
+          (supabase as any).rpc('installment_next_unpaid_date', { p_installment_ids: ids }),
+          (supabase as any).rpc('get_installment_old_debt', { p_installment_ids: ids }),
+        ]);
+
         if (lateErr) {
           console.error('installment_overdue_stats error:', lateErr);
           return;
         }
-        const lateMap = new Map((lateRows as any[]).map((r: any) => [r.installment_id, r.late_periods]));
-
-        /* 2. next unpaid date */
-        const { data: nextRows, error: nextErr } = await (supabase as any).rpc('installment_next_unpaid_date', {
-          p_installment_ids: ids,
-        });
         if (nextErr) {
           console.error('installment_next_unpaid_date error:', nextErr);
           return;
         }
-        const nextMap = new Map((nextRows as any[]).map((r: any) => [r.installment_id, r.next_unpaid_date]));
 
-        /* 3. old debt */
-        const { data: oldDebtRows, error: oldDebtErr } = await (supabase as any).rpc('get_installment_old_debt', {
-          p_installment_ids: ids,
-        });
+        const lateMap = new Map((lateRows as any[]).map((r: any) => [r.installment_id, r.late_periods]));
+        const nextMap = new Map((nextRows as any[]).map((r: any) => [r.installment_id, r.next_unpaid_date]));
         const oldDebtMap = new Map((oldDebtRows as any[]).map((r: any) => [r.installment_id, r.old_debt]));
 
         const warningResults: InstallmentWarning[] = [];
