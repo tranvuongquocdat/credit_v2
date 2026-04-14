@@ -280,25 +280,24 @@ export async function getInstallments(
     // Ngay sau khi lấy biến `data` từ supabase
     const ids = (data ?? []).map((it: any) => it.id);
 
-    // RPC 1 lần duy nhất
-    const { data: debtRows, error: debtErr } = await (supabase.rpc as any)(
-      'get_installment_old_debt',
-      { p_installment_ids: ids }
-    );
+    // Chạy 2 RPC song song — độc lập nhau
+    const _tRpc = performance.now();
+    const [
+      { data: debtRows, error: debtErr },
+      { data: latestPaymentRows, error: latestPaymentErr },
+    ] = await Promise.all([
+      (supabase.rpc as any)('get_installment_old_debt', { p_installment_ids: ids }),
+      (supabase.rpc as any)('get_latest_installment_payment_paid_dates', { p_installment_ids: ids }),
+    ]);
+    console.log(`[PERF] getInstallments - 2 RPCs (parallel): ${Math.round(performance.now() - _tRpc)}ms`);
     if (debtErr) throw debtErr;
+    if (latestPaymentErr) throw latestPaymentErr;
 
     const debtMap = new Map<string, number>();
     (debtRows ?? []).forEach(
       (r: { installment_id: string; old_debt: number }) =>
         debtMap.set(r.installment_id, Number(r.old_debt || 0))
     );
-
-    // Get latest payment dates for all installments
-    const { data: latestPaymentRows, error: latestPaymentErr } = await (supabase.rpc as any)(
-      'get_latest_installment_payment_paid_dates',
-      { p_installment_ids: ids }
-    );
-    if (latestPaymentErr) throw latestPaymentErr;
 
     const latestPaymentMap = new Map<string, string>();
     (latestPaymentRows ?? []).forEach(

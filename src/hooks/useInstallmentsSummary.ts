@@ -78,28 +78,26 @@ export function useInstallmentsSummary() {
           collectedInterest: 0
         };
 
-        // Always calculate profit from closed installments, even if there are no active ones
-        if (closedIds.length > 0) {
-          const { data: closedProfitRows } = await supabase.rpc(
-            'installment_get_collected_profit', { p_installment_ids: closedIds }
-          );
+        // Check if there are any active installments to process
+        if (!activeInstallments || activeInstallments.length === 0) {
+          // Chỉ gọi RPC này khi không có active installments (khi có active thì block 3 RPCs dưới đã bao gồm closedIds)
+          if (closedIds.length > 0) {
+            const _tClosedProfit = performance.now();
+            const { data: closedProfitRows } = await supabase.rpc(
+              'installment_get_collected_profit', { p_installment_ids: closedIds }
+            );
+            console.log(`[PERF] summary - closedProfit RPC (no active): ${Math.round(performance.now() - _tClosedProfit)}ms`);
 
-          if (closedProfitRows) {
-            const closedProfitMap = new Map(closedProfitRows.map(r => [r.installment_id, Number(r.profit_collected)]));
-            let collectedProfitFromClosed = 0;
-            closedIds.forEach(id => {
-              const profitVal = closedProfitMap.get(id ?? '') ?? 0;
-              collectedProfitFromClosed += profitVal;
-            });
-            // Only set this if there are no active installments to avoid double counting
-            if (!activeInstallments || activeInstallments.length === 0) {
+            if (closedProfitRows) {
+              const closedProfitMap = new Map(closedProfitRows.map(r => [r.installment_id, Number(r.profit_collected)]));
+              let collectedProfitFromClosed = 0;
+              closedIds.forEach(id => {
+                const profitVal = closedProfitMap.get(id ?? '') ?? 0;
+                collectedProfitFromClosed += profitVal;
+              });
               summaryData.collectedInterest = collectedProfitFromClosed;
             }
           }
-        }
-
-        // Check if there are any active installments to process
-        if (!activeInstallments || activeInstallments.length === 0) {
           return summaryData;
         }
 
