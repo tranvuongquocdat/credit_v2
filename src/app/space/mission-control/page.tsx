@@ -2,14 +2,24 @@
 import { useRouter } from 'next/navigation';
 import { StarfieldBackground } from '@/components/space/StarfieldBackground';
 
-const TELEMETRY = [
+interface TelemetryItem {
+  label: string;
+  value: string;
+}
+
+interface ActionItem {
+  label: string;
+  path: string | null;
+}
+
+const TELEMETRY: TelemetryItem[] = [
   { label: 'Coordinates', value: 'RA 05h 35m 17s / Dec −05° 23′' },
   { label: 'Distance', value: '1,344 light-years' },
   { label: 'Last Contact', value: '14 APR 2026 — 03:42 UTC' },
   { label: 'Status', value: 'NOMINAL' },
 ];
 
-const ACTIONS = [
+const ACTIONS: ActionItem[] = [
   { label: 'View Telemetry', path: null },
   { label: 'Signal Analysis', path: null },
   { label: 'Access Terminal', path: '/login' },
@@ -71,7 +81,7 @@ export default function MissionControlPage() {
                   <button
                     key={action.label}
                     onClick={() => action.path && router.push(action.path)}
-                    className="w-full text-left px-6 py-4 bg-white/5 border border-white/10 text-gray-300 text-xs tracking-widest uppercase hover:border-white/20 hover:bg-white/[0.07] transition-all duration-200 rounded-sm cursor-default"
+                    className={`w-full text-left px-6 py-4 bg-white/5 border border-white/10 text-gray-300 text-xs tracking-widest uppercase hover:border-white/20 hover:bg-white/[0.07] transition-all duration-200 rounded-sm ${action.path ? 'cursor-pointer' : 'cursor-default'}`}
                   >
                     {action.label}
                   </button>
