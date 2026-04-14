@@ -229,9 +229,60 @@ export function InstallmentsTable({
   };
 
   if (isLoading) {
+    const skeletonRows = Array.from({ length: 8 });
     return (
-      <div className="h-96 flex items-center justify-center">
-        <Spinner size="lg" />
+      <div className="mb-4">
+        {/* Desktop skeleton */}
+        <div className="hidden lg:block rounded-md border overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table className="border-collapse min-w-full">
+              <TableHeader className="bg-gray-50">
+                <TableRow>
+                  <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-10">#</TableHead>
+                  <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-24">Mã HĐ</TableHead>
+                  <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-36">Tên KH</TableHead>
+                  <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-28">Tiền giao khách</TableHead>
+                  <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-16">Tỷ lệ</TableHead>
+                  <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-20">Thời gian</TableHead>
+                  <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-28">Tiền đã đóng</TableHead>
+                  <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-24">Nợ</TableHead>
+                  <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-24">Tiền 1 ngày</TableHead>
+                  <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-28">Còn phải đóng</TableHead>
+                  <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-28">Tình trạng</TableHead>
+                  <TableHead className="py-3 px-3 text-center font-medium text-sm border-r border-gray-200 w-28">Ngày phải đóng</TableHead>
+                  <TableHead className="py-3 px-3 text-center font-medium text-sm w-32">Thao tác</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="bg-white divide-y divide-gray-200">
+                {skeletonRows.map((_, i) => (
+                  <TableRow key={i} className="animate-pulse">
+                    {Array.from({ length: 13 }).map((__, j) => (
+                      <TableCell key={j} className="py-3 px-3 border-r border-gray-200">
+                        <div className="h-4 bg-gray-200 rounded mx-auto" style={{ width: j === 0 ? '24px' : j === 12 ? '80px' : '80%' }} />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+        {/* Mobile skeleton */}
+        <div className="lg:hidden space-y-2">
+          {skeletonRows.map((_, i) => (
+            <div key={i} className="border rounded-lg p-3 animate-pulse space-y-2">
+              <div className="flex justify-between">
+                <div className="h-4 bg-gray-200 rounded w-24" />
+                <div className="h-4 bg-gray-200 rounded w-16" />
+              </div>
+              <div className="h-4 bg-gray-200 rounded w-32" />
+              <div className="flex gap-2">
+                <div className="h-4 bg-gray-200 rounded w-20" />
+                <div className="h-4 bg-gray-200 rounded w-20" />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
