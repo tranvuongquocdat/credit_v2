@@ -89,6 +89,7 @@ export default function InstallmentWarningsPage() {
     const currentRequestId = ++requestIdRef.current;
 
     if (!silent) setIsLoading(true);
+    const _tLoad = performance.now();
     try {
       const { data, error, totalItems, totalPages } = await getInstallmentWarnings(
         1, // Always fetch from page 1
@@ -98,6 +99,7 @@ export default function InstallmentWarningsPage() {
         debouncedContractFilter,
         employeeFilter === 'all' ? '' : employeeFilter
       );
+      console.log(`[PERF] loadInstallments (warnings)${silent ? ' [silent]' : ''}: ${Math.round(performance.now() - _tLoad)}ms — ${data?.length ?? 0} records`);
 
       if (error) {
         toast({
@@ -292,6 +294,7 @@ export default function InstallmentWarningsPage() {
   // Process payment after confirmation
   const processPayment = async (installment: InstallmentWithCustomer, amount: number) => {
     setProcessingPayment(true);
+    const _tPay = performance.now();
     const { id: userId } = await getCurrentUser();
     try {
       // 1. Lấy ngày cuối cùng đã đóng tiền
@@ -466,6 +469,7 @@ export default function InstallmentWarningsPage() {
         }
       }
       
+      console.log(`[PERF] processPayment TOTAL: ${Math.round(performance.now() - _tPay)}ms — ${allDailyRecords.length} records inserted`);
       // Success
       toast({
         title: "Thanh toán thành công",

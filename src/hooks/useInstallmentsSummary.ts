@@ -20,10 +20,15 @@ export function useInstallmentsSummary() {
       }
 
       try {
+        const _tTotal = performance.now();
+
         // First, get the store financial data for cash_fund
+        const _t1 = performance.now();
         const storeFinancialData = await getStoreFinancialData(currentStore.id);
+        console.log(`[PERF] summary - getStoreFinancialData: ${Math.round(performance.now() - _t1)}ms`);
 
         // Lấy active và closed installments song song — 2 queries độc lập nhau
+        const _t2 = performance.now();
         const [
           { data: activeInstallments, error: installmentsError },
           { data: closedInstallments, error: closedInstallmentsError },
@@ -49,6 +54,8 @@ export function useInstallmentsSummary() {
             .eq('status_code', 'CLOSED')
             .eq('store_id', currentStore.id),
         ]);
+
+        console.log(`[PERF] summary - fetch active+closed (parallel): ${Math.round(performance.now() - _t2)}ms — active: ${activeInstallments?.length ?? 0}, closed: ${closedInstallments?.length ?? 0}`);
 
         if (installmentsError) {
           throw installmentsError;
@@ -101,6 +108,7 @@ export function useInstallmentsSummary() {
           .filter((id): id is string => id !== null);   // → string[]
 
         /* 3.1 + 3.2 + 3.3 — chạy song song, logic xử lý kết quả giữ nguyên */
+        const _t3 = performance.now();
         const [
           { data: debtRows },
           { data: paidRows },
@@ -110,17 +118,20 @@ export function useInstallmentsSummary() {
           supabase.rpc('installment_get_paid_amount', { p_installment_ids: ids }),
           supabase.rpc('installment_get_collected_profit', { p_installment_ids: [...ids, ...closedIds] }),
         ]);
+        console.log(`[PERF] summary - 3 RPCs (parallel): ${Math.round(performance.now() - _t3)}ms — ${ids.length} active ids`);
 
         /* xây 3 map rồi truyền xuống calculateInstallmentMetrics */
         const debtMap   = new Map(debtRows?.map(r => [r.installment_id, Number(r.old_debt)]));
         const paidMap   = new Map(paidRows?.map(r => [r.installment_id, Number(r.paid_amount)]));
         const profitMap = new Map(profitRows?.map(r => [r.installment_id, Number(r.profit_collected)]));
 
+        const _t4 = performance.now();
         const results = await Promise.all(
           activeInstallments.map(inst =>
             calculateInstallmentMetrics(inst, { debtMap, paidMap, profitMap })
           )
         );
+        console.log(`[PERF] summary - calculateInstallmentMetrics x${activeInstallments.length}: ${Math.round(performance.now() - _t4)}ms`);
 
         /* gộp kết quả */
         let totalLoan = 0;
@@ -158,6 +169,7 @@ export function useInstallmentsSummary() {
           collectedInterest: collectedProfit
         };
 
+        console.log(`[PERF] summary - TOTAL: ${Math.round(performance.now() - _tTotal)}ms`);
         return summaryData;
       } catch (err) {
         if (process.env.NODE_ENV === 'development') {

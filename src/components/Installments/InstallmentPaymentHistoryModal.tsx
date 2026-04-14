@@ -236,15 +236,19 @@ export function InstallmentPaymentHistoryModal({
       setError(null);
 
       try {
+        const _tGen = performance.now();
+
         // 1. Get payment history from database - filter out deleted records
+        const _t1 = performance.now();
         const allPaymentHistory = await getinstallmentPaymentHistory(currentInstallmentId);
         const paymentHistory = allPaymentHistory.filter(record => !record.is_deleted);
-        console.log('Payment history from DB:', paymentHistory.length, 'active records (', allPaymentHistory.length, 'total)');
-        
+        console.log(`[PERF] generatePeriods - getinstallmentPaymentHistory: ${Math.round(performance.now() - _t1)}ms — ${paymentHistory.length} active (${allPaymentHistory.length} total)`);
+
         // 2. Get daily interest amounts using getExpectedMoney
+        const _t2 = performance.now();
         const dailyAmounts = await getExpectedMoney(currentInstallmentId);
-        console.log('Daily amounts from getExpectedMoney:', dailyAmounts.length, 'days');
-        
+        console.log(`[PERF] generatePeriods - getExpectedMoney: ${Math.round(performance.now() - _t2)}ms — ${dailyAmounts.length} days`);
+
         // 3. Calculate loan end date
         const loanStartDate = installment?.start_date;
         if (!loanStartDate) {
@@ -260,6 +264,7 @@ export function InstallmentPaymentHistoryModal({
         
         // 4. Use convertFromHistoryToTimeArrayWithStatus to get periods and statuses
         const interestPeriod = installment?.payment_period || 30;
+        const _t3 = performance.now();
         const { periods: timePeriods, statuses } = convertFromHistoryToTimeArrayWithStatus(
           loanStartDate,
           loanEndDate,
@@ -267,14 +272,13 @@ export function InstallmentPaymentHistoryModal({
           paymentHistory,
           paymentHistory
         );
-        
-        console.log('Generated time periods:', timePeriods.length, 'periods');
-        console.log('Statuses:', statuses);
-        
+        console.log(`[PERF] generatePeriods - convertFromHistoryToTimeArrayWithStatus: ${Math.round(performance.now() - _t3)}ms — ${timePeriods.length} periods`);
+
         // 5. Calculate expected amount for each period using getExpectedMoney
         const allPeriods: InstallmentPaymentPeriod[] = [];
         const loanStart = new Date(loanStartDate);
-        
+
+        const _t4 = performance.now();
         timePeriods.forEach((timePeriod, index) => {
           const [start_date, end_date] = timePeriod;
           const isChecked = statuses[index];
@@ -328,6 +332,8 @@ export function InstallmentPaymentHistoryModal({
           
           allPeriods.push(newPeriod);
         });
+        console.log(`[PERF] generatePeriods - period building loop: ${Math.round(performance.now() - _t4)}ms — ${allPeriods.length} periods`);
+        console.log(`[PERF] generatePeriods TOTAL: ${Math.round(performance.now() - _tGen)}ms`);
 
         // Kiểm tra nếu modal session vẫn là session hiện tại
         if (sessionId !== modalSessionId.current) {
@@ -336,7 +342,6 @@ export function InstallmentPaymentHistoryModal({
         }
 
         setGeneratedPeriods(allPeriods);
-        console.log('✅ Generated', allPeriods.length, 'periods using convertFromHistoryToTimeArrayWithStatus + getExpectedMoney');
         
       } catch (error) {
         console.error('Error generating periods:', error);

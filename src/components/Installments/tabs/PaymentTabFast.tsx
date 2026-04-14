@@ -112,7 +112,10 @@ export function PaymentTabFast({
     checked: boolean,
   ) => {
     if (!installment?.id || isProcessingCheckbox) return;
+    const _tCheck = performance.now();
+    const _t1 = performance.now();
     const status = await getInstallmentStatus(installment.id);
+    console.log(`[PERF] handleCheckboxChange - getInstallmentStatus: ${Math.round(performance.now() - _t1)}ms`);
     if (status === InstallmentStatus.CLOSED) {
       toast({ variant: 'destructive', title: 'Lỗi', description: 'Hợp đồng đã đóng' });
       return;
@@ -142,7 +145,9 @@ export function PaymentTabFast({
 
       if (checked) {
         // ----- INSERT PAYMENT RECORDS -----
+        const _t2 = performance.now();
         const latestPaidDate = await getLatestPaymentPaidDate(installment.id);
+        console.log(`[PERF] handleCheckboxChange - getLatestPaymentPaidDate: ${Math.round(performance.now() - _t2)}ms`);
         let startDate: string;
         if (latestPaidDate) {
           const next = new Date(latestPaidDate);
@@ -159,9 +164,11 @@ export function PaymentTabFast({
         if (totalDays <= 0) throw new Error('Ngày này đã được đóng lãi. Bạn có thể tải lại bảng để xem lại');
 
         // Dùng cached dailyAmounts từ hook — tránh DB round-trip thêm
+        const _t3 = performance.now();
         const dailyAmounts = cachedDailyAmounts.length > 0
           ? cachedDailyAmounts
           : await getExpectedMoney(installment.id);
+        console.log(`[PERF] handleCheckboxChange - dailyAmounts (${cachedDailyAmounts.length > 0 ? 'CACHE HIT' : 'DB fetch'}): ${Math.round(performance.now() - _t3)}ms`);
         const loanStart = new Date(installment.start_date);
 
         const cycles: { start: Date; end: Date }[] = [];
@@ -211,9 +218,12 @@ export function PaymentTabFast({
           }
         });
 
+        const _t4 = performance.now();
         const { error } = await supabase.from('installment_history').upsert(records).select();
+        console.log(`[PERF] handleCheckboxChange - upsert ${records.length} records: ${Math.round(performance.now() - _t4)}ms`);
         if (error) throw new Error(error.message);
         // Update payment_due_date
+        const _t5 = performance.now();
         const updatedLatestPaidDate = await getLatestPaymentPaidDate(installment.id);
         if (updatedLatestPaidDate) {
           const latestPaidDateObj = new Date(updatedLatestPaidDate);
@@ -227,6 +237,8 @@ export function PaymentTabFast({
             await updateInstallmentPaymentDueDate(installment.id, newDueDate.toISOString());
           }
         }
+        console.log(`[PERF] handleCheckboxChange - updateDueDate: ${Math.round(performance.now() - _t5)}ms`);
+        console.log(`[PERF] handleCheckboxChange CHECK TOTAL: ${Math.round(performance.now() - _tCheck)}ms`);
         toast({ title: 'Thành công', description: `Đã tạo ${records.length} bản ghi thanh toán` });
         setEditingPeriodId(null);
       } else {
@@ -276,6 +288,7 @@ export function PaymentTabFast({
         else {
           await updateInstallmentPaymentDueDate(installment.id, installment.start_date || '');
         }
+        console.log(`[PERF] handleCheckboxChange UNCHECK TOTAL: ${Math.round(performance.now() - _tCheck)}ms`);
         toast({ title: 'Thành công', description: `Đã xoá ${data?.length || 0} bản ghi` });
       }
 

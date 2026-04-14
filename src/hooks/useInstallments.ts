@@ -49,7 +49,9 @@ export function useInstallments() {
     };
 
     try {
+      const _t0 = performance.now();
       const { data, error, count } = await getInstallments(currentPage, itemsPerPage, currentFilters);
+      console.log(`[PERF] fetchInstallments (page ${currentPage}): ${Math.round(performance.now() - _t0)}ms — ${count} records`);
 
       if (error) throw new Error(error.message);
 
