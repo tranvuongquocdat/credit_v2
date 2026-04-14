@@ -50,7 +50,7 @@ export const HomePageV2 = () => {
 
       {/* Stats */}
       <section className="relative z-10 container mx-auto px-6 pb-24">
-        <div className="grid grid-cols-3 gap-6 max-w-3xl mx-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-3xl mx-auto">
           {[
             { label: 'Stars Mapped', value: '2,847,391' },
             { label: 'Light Years Traveled', value: '∞' },
