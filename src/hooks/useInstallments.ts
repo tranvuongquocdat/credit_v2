@@ -156,9 +156,6 @@ export function useInstallments() {
     onSuccess: async () => {
       // Invalidate related queries to ensure consistency using centralized query keys
       queryClient.invalidateQueries({ queryKey: queryKeys.installments.summary(currentStore?.id) });
-      // Invalidate all installment-paid-amounts queries since we don't know the exact installment IDs
-      queryClient.invalidateQueries({ queryKey: queryKeys.installments.paidAmounts([]) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.installments.all });
 
       toast({
         title: "Thành công",
@@ -212,9 +209,6 @@ export function useInstallments() {
     onSuccess: async () => {
       // Invalidate related queries to ensure consistency using centralized query keys
       queryClient.invalidateQueries({ queryKey: queryKeys.installments.summary(currentStore?.id) });
-      // Invalidate all installment-paid-amounts queries since we don't know the exact installment IDs
-      queryClient.invalidateQueries({ queryKey: queryKeys.installments.paidAmounts([]) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.installments.all });
 
       toast({
         title: "Thành công",
