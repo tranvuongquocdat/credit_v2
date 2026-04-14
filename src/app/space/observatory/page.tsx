@@ -8,7 +8,14 @@ const BADGE_STYLES: Record<string, string> = {
   ARCHIVED: 'text-gray-500 border-gray-500/40 bg-gray-500/10',
 };
 
-const OBJECTS = [
+interface CelestialObject {
+  name: string;
+  description: string;
+  badge: 'ACTIVE' | 'MONITORING' | 'ARCHIVED';
+  path: string | null;
+}
+
+const OBJECTS: CelestialObject[] = [
   {
     name: 'Andromeda Galaxy',
     description: 'Spiral galaxy approximately 2.537 million light-years from Earth. Largest galaxy in the Local Group.',
@@ -71,7 +78,7 @@ export default function ObservatoryPage() {
               <div
                 key={obj.name}
                 onClick={() => obj.path && router.push(obj.path)}
-                className={`p-6 bg-white/5 backdrop-blur-sm border border-white/10 rounded-sm transition-all duration-200 hover:border-white/20 hover:bg-white/[0.07] ${obj.path ? 'cursor-pointer' : ''}`}
+                className={`p-6 bg-white/5 backdrop-blur-sm border border-white/10 rounded-sm transition-all duration-200 hover:border-white/20 hover:bg-white/[0.07] ${obj.path ? 'cursor-pointer' : 'cursor-default'}`}
               >
                 <div className="flex justify-between items-start mb-4 gap-2">
                   <h3 className="text-white font-semibold text-sm">{obj.name}</h3>
