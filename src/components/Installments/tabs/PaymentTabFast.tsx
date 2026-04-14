@@ -32,6 +32,7 @@ export function PaymentTabFast({
     periods: generatedPeriods,
     loading,
     error,
+    dailyAmounts: cachedDailyAmounts,
   } = useInstallmentPaymentPeriods(
     installment?.id,
     installment?.start_date,
@@ -157,7 +158,10 @@ export function PaymentTabFast({
         const totalDays = Math.floor((endObj.getTime() - startObj.getTime()) / 86400000) + 1;
         if (totalDays <= 0) throw new Error('Ngày này đã được đóng lãi. Bạn có thể tải lại bảng để xem lại');
 
-        const dailyAmounts = await getExpectedMoney(installment.id);
+        // Dùng cached dailyAmounts từ hook — tránh DB round-trip thêm
+        const dailyAmounts = cachedDailyAmounts.length > 0
+          ? cachedDailyAmounts
+          : await getExpectedMoney(installment.id);
         const loanStart = new Date(installment.start_date);
 
         const cycles: { start: Date; end: Date }[] = [];

@@ -18,6 +18,7 @@ export function useInstallmentPaymentPeriods(
   const [periods, setPeriods] = useState<InstallmentPaymentPeriod[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dailyAmounts, setDailyAmounts] = useState<number[]>([]);
 
   useEffect(() => {
     if (!installmentId || !loanStartDate) return;
@@ -35,6 +36,7 @@ export function useInstallmentPaymentPeriods(
 
         // 2. Daily expected amounts
         const dailyAmounts = await getExpectedMoney(installmentId!);
+        if (!isCancelled) setDailyAmounts(dailyAmounts);
 
         // 3. Determine loan end date based on length of dailyAmounts
         const startDateObj = new Date(loanStartDate!);
@@ -114,5 +116,5 @@ export function useInstallmentPaymentPeriods(
     };
   }, [installmentId, loanStartDate, paymentPeriod, refreshKey]);
 
-  return { periods, loading, error };
+  return { periods, loading, error, dailyAmounts };
 } 
