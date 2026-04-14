@@ -456,6 +456,120 @@ left join credit_history ch
 group by ids.credit_id;
 $$;
 
+-- Bottleneck 1 / Option A: một RPC gom dữ liệu tài chính credit (dùng trong useCreditCalculations).
+create or replace function public.get_credit_financial_summary(
+  p_all_credit_ids uuid[],
+  p_active_credit_ids uuid[],
+  p_start_date timestamptz,
+  p_end_date timestamptz
+)
+returns jsonb
+language plpgsql
+stable
+as $$
+begin
+  return jsonb_build_object(
+    'paid_interest_range',
+    coalesce(
+      (
+        select jsonb_agg(
+          jsonb_build_object(
+            'credit_id', r.credit_id,
+            'paid_interest', r.paid_interest
+          )
+        )
+        from get_paid_interest(p_all_credit_ids, p_start_date, p_end_date) as r
+      ),
+      '[]'::jsonb
+    ),
+    'paid_interest_total',
+    coalesce(
+      (
+        select jsonb_agg(
+          jsonb_build_object(
+            'credit_id', t.credit_id,
+            'paid_interest', t.paid_interest
+          )
+        )
+        from get_paid_interest(p_all_credit_ids) as t
+      ),
+      '[]'::jsonb
+    ),
+    'current_principal',
+    coalesce(
+      (
+        select jsonb_agg(
+          jsonb_build_object(
+            'credit_id', p.credit_id,
+            'current_principal', p.current_principal
+          )
+        )
+        from get_current_principal(p_all_credit_ids) as p
+      ),
+      '[]'::jsonb
+    ),
+    'old_debt',
+    coalesce(
+      (
+        select jsonb_agg(
+          jsonb_build_object(
+            'credit_id', d.credit_id,
+            'old_debt', d.old_debt
+          )
+        )
+        from get_old_debt(p_active_credit_ids) as d
+      ),
+      '[]'::jsonb
+    ),
+    'expected_interest',
+    coalesce(
+      (
+        select jsonb_agg(
+          jsonb_build_object(
+            'credit_id', e.credit_id,
+            'expected_profit', e.expected_profit,
+            'interest_today', e.interest_today
+          )
+        )
+        from get_expected_interest(p_all_credit_ids) as e
+      ),
+      '[]'::jsonb
+    ),
+    'latest_payment_paid_dates',
+    coalesce(
+      (
+        select jsonb_agg(
+          jsonb_build_object(
+            'credit_id', lp.credit_id,
+            'latest_paid_date', lp.latest_paid_date
+          )
+        )
+        from get_latest_payment_paid_dates(p_all_credit_ids) as lp
+      ),
+      '[]'::jsonb
+    ),
+    'next_payment_info',
+    coalesce(
+      (
+        select jsonb_agg(
+          jsonb_build_object(
+            'credit_id', np.credit_id,
+            'next_date', np.next_date,
+            'is_completed', np.is_completed,
+            'has_paid', np.has_paid
+          )
+        )
+        from get_next_payment_info(p_active_credit_ids) as np
+      ),
+      '[]'::jsonb
+    )
+  );
+end;
+$$;
+
+grant execute on function public.get_credit_financial_summary(uuid[], uuid[], timestamptz, timestamptz)
+  to anon, authenticated, service_role;
+
 create or replace function public.credit_get_totals(
   p_store_id uuid,
   p_filters  jsonb default null

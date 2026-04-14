@@ -14,6 +14,7 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
+import { useCallback, useMemo } from 'react';
 import { PawnStatus, PawnWithCustomer } from '@/models/pawn';
 import { MoreVertical, DollarSignIcon, UnlockIcon, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
@@ -81,14 +82,21 @@ export function PawnsTable({
   
   // Kiểm tra quyền mở lại hợp đồng cầm đồ
   const canUnlockPawn = hasPermission('huy_dong_hop_dong_cam_do');
+  // Giữ nguyên logic kiểm tra quyền cũ đang dùng trong bảng desktop
+  const canUnlockPawnFromHistory = hasPermission('huy_dong_hop_dong_tin_chap');
   
+  const currencyFormatter = useMemo(
+    () => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }),
+    []
+  );
+
   // Format tiền tệ
-  const formatCurrency = (amount: number): string => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
-  };
+  const formatCurrency = useCallback((amount: number): string => {
+    return currencyFormatter.format(amount);
+  }, [currencyFormatter]);
 
   // Format ngày tháng
-  const formatDate = (dateString: string | null | undefined): string => {
+  const formatDate = useCallback((dateString: string | null | undefined): string => {
     if (!dateString) return '-';
     try {
       return format(new Date(dateString), 'dd/MM/yyyy', { locale: vi });
@@ -96,17 +104,17 @@ export function PawnsTable({
       console.error('Error formatting date:', error);
       return '-';
     }
-  };
+  }, []);
   
   // Hàm xử lý khi click vào mã hợp đồng
-  const handleContractCodeClick = (pawnId: string) => {
+  const handleContractCodeClick = useCallback((pawnId: string) => {
     if (canEditPawn) {
       onEdit(pawnId);
     }
-  };
+  }, [canEditPawn, onEdit]);
 
   // Hàm xử lý mở lại hợp đồng cầm đồ
-  const handleUnlockPawn = async (pawn: PawnWithCustomer) => {
+  const handleUnlockPawn = useCallback(async (pawn: PawnWithCustomer) => {
     try {
       // Call the reopen contract function
       await reopenContract(pawn.id);
@@ -127,7 +135,40 @@ export function PawnsTable({
         variant: "destructive"
       });
     }
-  };
+  }, [toast, onRefresh]);
+
+  const rowViewModels = useMemo(() => {
+    return pawns.map((pawn, index) => {
+      const detail = calculatedDetails?.[pawn.id];
+      const statusInfo = getPawnStatusInfo(pawn.status_code || 'ON_TIME');
+      const nextPaymentDisplay = (() => {
+        if (!detail) return { text: '-', className: '' };
+        if (detail.isCompleted) return { text: 'Hoàn thành', className: 'text-green-600 font-medium text-xs lg:text-sm' };
+        if (!detail.nextPayment) return { text: '-', className: '' };
+        const nextDate = new Date(detail.nextPayment);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        nextDate.setHours(0, 0, 0, 0);
+        const diff = (nextDate.getTime() - today.getTime()) / (24 * 3600 * 1000);
+        const className = diff < 0
+          ? 'text-red-600 font-medium text-xs lg:text-sm'
+          : diff === 0
+            ? 'text-amber-600 font-medium text-xs lg:text-sm'
+            : 'text-xs lg:text-sm';
+        return { text: formatDate(detail.nextPayment), className };
+      })();
+
+      return {
+        pawn,
+        index,
+        rowNumber: (currentPage - 1) * itemsPerPage + index + 1,
+        detail,
+        statusInfo,
+        nextPaymentDisplay,
+        interestDisplay: getPawnInterestDisplayString(pawn),
+      };
+    });
+  }, [pawns, calculatedDetails, currentPage, itemsPerPage, formatDate]);
 
   return (
     <div className="mb-4">
@@ -159,9 +200,9 @@ export function PawnsTable({
               </TableCell>
             </TableRow>
           ) : (
-            pawns.map((pawn, index) => (
+            rowViewModels.map(({ pawn, rowNumber, detail, statusInfo, nextPaymentDisplay, interestDisplay }) => (
               <TableRow key={pawn.id} className="hover:bg-gray-50 transition-colors">
-                <TableCell className="py-3 px-3 text-gray-500 text-center border-b border-r border-gray-200 hidden lg:table-cell">{(currentPage - 1) * itemsPerPage + index + 1}</TableCell>
+                <TableCell className="py-3 px-3 text-gray-500 text-center border-b border-r border-gray-200 hidden lg:table-cell">{rowNumber}</TableCell>
                 <TableCell 
                   className="py-3 px-1 lg:px-3 font-medium text-blue-600 cursor-pointer text-center border-b border-r border-gray-200 text-xs lg:text-sm" 
                   onClick={() => handleContractCodeClick(pawn.id)}
@@ -189,7 +230,7 @@ export function PawnsTable({
                   <div className="flex flex-col items-center">
                     <span className="text-xs lg:text-sm">{formatCurrency(calculatedDetails?.[pawn.id]?.actualLoanAmount ?? pawn.loan_amount)}</span>
                     <div className="text-xs text-red-800 mt-1">
-                      {getPawnInterestDisplayString(pawn)}
+                      {interestDisplay}
                     </div>
                   </div>
                 </TableCell>
@@ -211,41 +252,21 @@ export function PawnsTable({
                   {formatCurrency(calculatedDetails?.[pawn.id]?.paidInterest ?? 0)}
                 </TableCell>
                 <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200 hidden lg:table-cell">
-                  {formatCurrency(calculatedDetails?.[pawn.id]?.oldDebt ?? 0)}
+                  {formatCurrency(detail?.oldDebt ?? 0)}
                 </TableCell>
                 <TableCell className="py-3 px-3 text-center text-rose-600 font-medium border-b border-r border-gray-200 hidden lg:table-cell">
-                  {formatCurrency(calculatedDetails?.[pawn.id]?.interestToday ?? 0)}
+                  {formatCurrency(detail?.interestToday ?? 0)}
                 </TableCell>
                 <TableCell className="py-3 px-1 lg:px-3 text-center border-b border-r border-gray-200 text-xs lg:text-sm">
-                  {/* Ngày phải đóng lãi phí */}
-                  {(() => {
-                    const det = calculatedDetails?.[pawn.id];
-                    if (!det) return '-';
-                    if (det.isCompleted) return <span className="text-green-600 font-medium text-xs lg:text-sm">Hoàn thành</span>;
-                    if (!det.nextPayment) return '-';
-                    const nextDate = new Date(det.nextPayment);
-                    const today = new Date();
-                    today.setHours(0,0,0,0);
-                    nextDate.setHours(0,0,0,0);
-                    const diff = (nextDate.getTime()-today.getTime())/(24*3600*1000);
-                    const cls = diff<0 ? 'text-red-600 font-medium text-xs lg:text-sm' : diff===0 ? 'text-amber-600 font-medium text-xs lg:text-sm' : 'text-xs lg:text-sm';
-                    return <span className={cls}>{formatDate(det.nextPayment)}</span>;
-                  })()}
+                  {nextPaymentDisplay.text === '-' ? '-' : <span className={nextPaymentDisplay.className}>{nextPaymentDisplay.text}</span>}
                 </TableCell>
                 <TableCell className="py-3 px-1 lg:px-3 text-center border-b border-r border-gray-200">
-                  {/* ----- Status Cell ----- */}
-                  {(() => {
-                    // Use status_code from pawns_by_store view
-                    const statusCode = pawn.status_code || 'ON_TIME';
-                    const statusInfo = getPawnStatusInfo(statusCode);
-                    
-                    return <Badge className={`${statusInfo.color} text-xs lg:text-sm px-1 lg:px-2`}>{statusInfo.label}</Badge>;
-                  })()}
+                  <Badge className={`${statusInfo.color} text-xs lg:text-sm px-1 lg:px-2`}>{statusInfo.label}</Badge>
                 </TableCell>
                 <TableCell className="py-3 px-1 lg:px-3 border-b border-r border-gray-200">
                   <div className="flex justify-center">
                     {onShowPaymentHistory && (
-                      pawn.status === 'closed' && hasPermission('huy_dong_hop_dong_tin_chap') ? (
+                      pawn.status === 'closed' && canUnlockPawnFromHistory ? (
                         <>
                           <Button 
                             variant="ghost" 
@@ -382,16 +403,14 @@ export function PawnsTable({
             Không có hợp đồng cầm đồ nào
           </div>
         ) : (
-          pawns.map((pawn, index) => {
-            const statusInfo = getPawnStatusInfo(pawn.status_code || 'ON_TIME');
-            const financialDetail = calculatedDetails?.[pawn.id];
+          rowViewModels.map(({ pawn, rowNumber, detail: financialDetail, statusInfo, interestDisplay }) => {
 
             return (
               <div key={pawn.id} className="bg-white border rounded-lg p-4 shadow-sm">
                 {/* Header - Prioritize Customer Name */}
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm text-gray-600">#{(currentPage - 1) * itemsPerPage + index + 1}</span>
+                    <span className="font-medium text-sm text-gray-600">#{rowNumber}</span>
                     <span 
                       className="font-bold text-lg text-blue-600 cursor-pointer hover:underline" 
                       onClick={() => handleContractCodeClick(pawn.id)}
@@ -435,7 +454,7 @@ export function PawnsTable({
                   </div>
                   <div>
                     <span className="text-gray-600">Lãi phí:</span>
-                    <div className="font-medium">{getPawnInterestDisplayString(pawn)}</div>
+                    <div className="font-medium">{interestDisplay}</div>
                   </div>
                   <div>
                     <span className="text-gray-600">Nợ cũ:</span>

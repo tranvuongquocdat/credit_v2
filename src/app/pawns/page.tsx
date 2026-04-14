@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Layout } from '@/components/Layout';
 import { 
@@ -71,7 +71,6 @@ export default function PawnsPage() {
     handleDelete,
     refetch
   } = usePawns();
-  console.log(pawns);
   // Sử dụng hook kiểm tra quyền
   const { hasPermission, loading: permissionsLoading } = usePermissions();
   
@@ -79,18 +78,14 @@ export default function PawnsPage() {
   const canViewPawnsList = hasPermission('xem_danh_sach_hop_dong_cam_do');
   
   // Lấy dữ liệu tài chính tổng hợp (summary only)
-  const { summary: financialSummary, refresh: refreshSummary } = usePawnsSummary();
+  const { summary: financialSummary, refresh: refreshSummary } = usePawnsSummary({ autoFetch: false });
   
   // Tính toán chi tiết tài chính bằng hook
-  const { details: pawnDetails, loading: calcLoading, refresh: refreshPawnDetails } = usePawnCalculations();
+  const { details: pawnDetails, loading: calcLoading, refresh: refreshPawnDetails } = usePawnCalculations({ autoFetch: false });
 
   // Use auto update cash fund hook
   const { triggerUpdate } = useAutoUpdateCashFund({
-    onUpdate: (newCashFund) => {
-      console.log('Cash fund updated to:', newCashFund);
-      refreshSummary();
-      refreshPawnDetails();
-    }
+    onUpdate: () => {}
   });
   // State for dialogs
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -134,7 +129,7 @@ export default function PawnsPage() {
     }
   }, [currentStore?.id, loading, permissionsLoading, calcLoading]);
 
-  const fetchTotals = async (f = filters) => {
+  const fetchTotals = useCallback(async (f: typeof filters) => {
     if (!currentStore?.id) return;
     try {
       const { data, error } = await (supabase as any).rpc('pawn_get_totals', {
@@ -147,12 +142,21 @@ export default function PawnsPage() {
     } catch (err) {
       console.error('pawn_get_totals error', err);
     }
-  };
+  }, [currentStore?.id]);
+
+  const refreshPawnsScreenData = useCallback(async (f: typeof filters) => {
+    await Promise.allSettled([
+      refetch(),
+      refreshSummary(),
+      refreshPawnDetails(),
+      fetchTotals(f),
+    ]);
+  }, [fetchTotals, refetch, refreshSummary, refreshPawnDetails]);
 
   // Fetch totals when filters or store change
   useEffect(() => {
-    fetchTotals(filters);
-  }, [JSON.stringify(filters), currentStore?.id]);
+    refreshPawnsScreenData(filters);
+  }, [filters, currentStore?.id, refreshPawnsScreenData]);
   // Removed: Status calculation now handled by pawns_by_store view directly
 
   // No client-side filtering needed - all filtering now handled server-side by pawns_by_store view
@@ -418,10 +422,7 @@ export default function PawnsPage() {
   
   // Handle refresh after contract operations
   const handleRefresh = () => {
-    refetch();
-    refreshSummary();
-    refreshPawnDetails();
-    fetchTotals(filters);
+    refreshPawnsScreenData(filters);
   };
   
 
@@ -538,7 +539,7 @@ export default function PawnsPage() {
           onClose={() => setIsPawnCreateModalOpen(false)}
           onSuccess={() => {
             setIsPawnCreateModalOpen(false);
-            refetch(); // Refresh danh sách hợp đồng sau khi tạo mới
+            handleRefresh(); // Refresh đồng bộ dữ liệu màn pawns
             triggerUpdate(); // Trigger cash fund update
           }}
         />
@@ -551,7 +552,7 @@ export default function PawnsPage() {
             pawnId={editPawnId}
             onSuccess={() => {
               setIsPawnEditModalOpen(false);
-              refetch(); // Refresh danh sách hợp đồng sau khi cập nhật
+              handleRefresh(); // Refresh đồng bộ dữ liệu màn pawns
               triggerUpdate(); // Trigger cash fund update
             }}
           />

@@ -26,34 +26,33 @@ export function useCreditsSummary() {
     try {
       const storeId = currentStore.id;
 
-      // store cash fund / investment
-      const endStoreQuery = startPerfTimer('useCreditsSummary.fetchSummary.queryStore');
-      const { data: storeData } = await supabase
+      // store + active + closed queries run in parallel
+      const storePromise = supabase
         .from('stores')
         .select('investment, cash_fund')
         .eq('id', storeId)
         .single();
-      endStoreQuery();
 
-      // active + closed ids using credits_by_store view
-      const endActiveCreditsQuery = startPerfTimer('useCreditsSummary.fetchSummary.queryActiveCredits');
-      const { data: activeCredits } = await supabase
+      const activeCreditsPromise = supabase
         .from('credits_by_store')
         .select('id, loan_amount')
         .eq('store_id', storeId)
         .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']);
-      endActiveCreditsQuery();
 
-      const endClosedCreditsQuery = startPerfTimer('useCreditsSummary.fetchSummary.queryClosedCredits');
-      const { data: closedCredits } = await supabase
+      const closedCreditsPromise = supabase
         .from('credits_by_store')
         .select('id')
         .eq('store_id', storeId)
         .eq('status_code', 'CLOSED');
-      endClosedCreditsQuery();
 
-      const activeIds = activeCredits?.map(c => c.id).filter((id): id is string => id !== null) ?? [];
-      const closedIds = closedCredits?.map(c => c.id).filter((id): id is string => id !== null) ?? [];
+      const [
+        { data: storeData },
+        { data: activeCredits },
+        { data: closedCredits },
+      ] = await Promise.all([storePromise, activeCreditsPromise, closedCreditsPromise]);
+
+      const activeIds = activeCredits?.map((c: { id: string | null }) => c.id).filter((id: string | null): id is string => id !== null) ?? [];
+      const closedIds = closedCredits?.map((c: { id: string | null }) => c.id).filter((id: string | null): id is string => id !== null) ?? [];
       const allIds = [...activeIds, ...closedIds];
 
       let totalLoan = 0;
@@ -62,34 +61,24 @@ export function useCreditsSummary() {
       let totalCollectedInterest = 0;
 
       if (activeIds.length) {
-        // principal
-        const endPrincipalQuery = startPerfTimer('useCreditsSummary.fetchSummary.rpcCurrentPrincipal', {
-          context: { credits: activeIds.length },
-        });
-        const { data: prinRows } = await supabase.rpc('get_current_principal', {
+        const principalPromise = supabase.rpc('get_current_principal', {
           p_credit_ids: activeIds,
         });
-        endPrincipalQuery();
+        const oldDebtPromise = supabase.rpc('get_old_debt', {
+          p_credit_ids: activeIds,
+        });
+        const expectedInterestPromise = (supabase.rpc as any)('get_expected_interest', {
+          p_credit_ids: activeIds,
+        });
+
+        const [
+          { data: prinRows },
+          { data: debtRows },
+          { data: expRows },
+        ] = await Promise.all([principalPromise, oldDebtPromise, expectedInterestPromise]);
+
         totalLoan = prinRows?.reduce((sum: number, r: any) => sum + Number(r.current_principal || 0), 0) ?? 0;
-
-        // old debt
-        const endOldDebtQuery = startPerfTimer('useCreditsSummary.fetchSummary.rpcOldDebt', {
-          context: { credits: activeIds.length },
-        });
-        const { data: debtRows } = await supabase.rpc('get_old_debt', {
-          p_credit_ids: activeIds,
-        });
-        endOldDebtQuery();
         totalOldDebt = debtRows?.reduce((s: number, r: any) => s + Number(r.old_debt || 0), 0) ?? 0;
-
-        // expected profit whole period
-        const endExpectedInterestQuery = startPerfTimer('useCreditsSummary.fetchSummary.rpcExpectedInterest', {
-          context: { credits: activeIds.length },
-        });
-        const { data: expRows } = await (supabase.rpc as any)('get_expected_interest', {
-          p_credit_ids: activeIds,
-        });
-        endExpectedInterestQuery();
         totalProfit = expRows?.reduce((s: number, r: any) => s + Number(r.expected_profit || 0), 0) ?? 0;
       }
 

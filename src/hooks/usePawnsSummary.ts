@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useStore } from '@/contexts/StoreContext';
 import { PawnStatus } from '@/models/pawn';
@@ -12,36 +12,43 @@ export interface PawnStoreSummary {
   collectedInterest: number;
 }
 
-export function usePawnsSummary() {
+interface UsePawnsSummaryOptions {
+  autoFetch?: boolean;
+}
+
+export function usePawnsSummary({ autoFetch = true }: UsePawnsSummaryOptions = {}) {
   const { currentStore } = useStore();
   const [summary, setSummary] = useState<PawnStoreSummary | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const fetchSummary = async () => {
+  const fetchSummary = useCallback(async () => {
     if (!currentStore?.id) return;
     setLoading(true);
     try {
       const storeId = currentStore.id;
 
-      // 1. Store info
-      const { data: storeData } = await supabase
-        .from('stores')
-        .select('investment, cash_fund')
-        .eq('id', storeId)
-        .single();
-
-      // 2. List pawn ids (ON_TIME & CLOSED) - using optimized view
-      const { data: activePawns } = await supabase
-        .from('pawns_by_store')
-        .select('id')
-        .eq('store_id', storeId)
-        .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']);
-
-      const { data: closedPawns } = await supabase
-        .from('pawns_by_store')
-        .select('id')
-        .eq('store_id', storeId)
-        .eq('status_code', 'CLOSED');
+      // 1-3. Fetch store + active/closed pawns in parallel
+      const [
+        { data: storeData },
+        { data: activePawns },
+        { data: closedPawns },
+      ] = await Promise.all([
+        supabase
+          .from('stores')
+          .select('investment, cash_fund')
+          .eq('id', storeId)
+          .single(),
+        supabase
+          .from('pawns_by_store')
+          .select('id')
+          .eq('store_id', storeId)
+          .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']),
+        supabase
+          .from('pawns_by_store')
+          .select('id')
+          .eq('store_id', storeId)
+          .eq('status_code', 'CLOSED'),
+      ]);
 
       const activeIds = activePawns?.map(p => p.id).filter(id => id !== null) ?? [];
       const closedIds = closedPawns?.map(p => p.id).filter(id => id !== null) ?? [];
@@ -96,11 +103,12 @@ export function usePawnsSummary() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentStore?.id]);
 
   useEffect(() => {
+    if (!autoFetch) return;
     fetchSummary();
-  }, [currentStore?.id]);
+  }, [autoFetch, fetchSummary]);
 
   return { summary, loading, refresh: fetchSummary };
 } 

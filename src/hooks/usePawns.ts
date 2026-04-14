@@ -226,9 +226,9 @@ export function usePawns() {
   };
   
   // Manual refetch function
-  const refetch = () => {
+  const refetch = useCallback(() => {
     fetchPawns();
-  };
+  }, [fetchPawns]);
   
   return {
     pawns,

@@ -1,5 +1,5 @@
 // src/hooks/usePawnCalculation.ts
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { PawnStatus } from '@/models/pawn';
 import { useStore } from '@/contexts/StoreContext';
@@ -29,13 +29,17 @@ export interface PawnFinancialDetail {
   loading: boolean;
 }
 
-export function usePawnCalculations() {
+interface UsePawnCalculationsOptions {
+  autoFetch?: boolean;
+}
+
+export function usePawnCalculations({ autoFetch = true }: UsePawnCalculationsOptions = {}) {
   const [summary, setSummary] = useState<StoreFinancialData | null>(null);
   const [details, setDetails] = useState<Record<string, PawnFinancialDetail>>({});
   const [loading, setLoading] = useState(true);
   const { currentStore } = useStore();
   
-  const fetchAllData = async () => {
+  const fetchAllData = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -208,11 +212,12 @@ export function usePawnCalculations() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentStore?.id]);
   
   useEffect(() => {
+    if (!autoFetch) return;
     fetchAllData();
-  }, [currentStore?.id]);
+  }, [autoFetch, fetchAllData]);
   
   return {
     summary,
