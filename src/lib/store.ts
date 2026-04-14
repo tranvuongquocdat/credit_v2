@@ -445,7 +445,10 @@ export async function updateCashFundFromAllSources(storeId: string) {
       return allData;
     };
 
+    const _tTotal = performance.now();
+
     // Fetch credit history
+    const _t1 = performance.now();
     const creditHistoryData = await fetchAllData(
       supabase
         .from('credit_history')
@@ -457,7 +460,8 @@ export async function updateCashFundFromAllSources(storeId: string) {
         .or('is_deleted.is.null,is_deleted.eq.false')
         .order('id')
     );
-    
+    console.log(`[PERF] store.updateCashFund - credit_history: ${Math.round(performance.now() - _t1)}ms — ${creditHistoryData?.length ?? 0} records`);
+
     if (creditHistoryData) {
       const processedCreditData = creditHistoryData.map(item => ({
         ...item,
@@ -467,6 +471,7 @@ export async function updateCashFundFromAllSources(storeId: string) {
     }
 
     // Fetch pawn history
+    const _t2 = performance.now();
     const pawnHistoryData = await fetchAllData(
       supabase
         .from('pawn_history')
@@ -478,7 +483,8 @@ export async function updateCashFundFromAllSources(storeId: string) {
         .or('is_deleted.is.null,is_deleted.eq.false')
         .order('id')
     );
-    
+    console.log(`[PERF] store.updateCashFund - pawn_history: ${Math.round(performance.now() - _t2)}ms — ${pawnHistoryData?.length ?? 0} records`);
+
     if (pawnHistoryData) {
       const processedPawnData = pawnHistoryData.map(item => ({
         ...item,
@@ -488,6 +494,7 @@ export async function updateCashFundFromAllSources(storeId: string) {
     }
 
     // Fetch installment history
+    const _t3 = performance.now();
     const installmentHistoryData = await fetchAllData(
       supabase
         .from('installment_history')
@@ -503,7 +510,8 @@ export async function updateCashFundFromAllSources(storeId: string) {
         .or('is_deleted.is.null,is_deleted.eq.false')
         .order('id')
     );
-    
+    console.log(`[PERF] store.updateCashFund - installment_history: ${Math.round(performance.now() - _t3)}ms — ${installmentHistoryData?.length ?? 0} records`);
+
     if (installmentHistoryData) {
       const processedInstallmentData = installmentHistoryData.map(item => ({
         ...item,
@@ -513,22 +521,27 @@ export async function updateCashFundFromAllSources(storeId: string) {
     }
 
     // Fetch store fund history
+    const _t4 = performance.now();
     const { data: storeFundData } = await supabase
       .from('store_fund_history')
       .select('*')
       .eq('store_id', storeId);
-    
+    console.log(`[PERF] store.updateCashFund - store_fund_history: ${Math.round(performance.now() - _t4)}ms — ${storeFundData?.length ?? 0} records`);
+
     if (storeFundData) {
       processItems(storeFundData, 'Nguồn vốn');
     }
 
     // Fetch income/expense from transactions table
+    const _t5 = performance.now();
     const { data: transactionData } = await supabase
       .from('transactions')
       .select('*')
       .eq('store_id', storeId)
       .or('is_deleted.is.null,is_deleted.eq.false');
     
+    console.log(`[PERF] store.updateCashFund - transactions: ${Math.round(performance.now() - _t5)}ms — ${transactionData?.length ?? 0} records`);
+
     if (transactionData) {
       processItems(transactionData, 'Thu chi');
     }
@@ -567,6 +580,7 @@ export async function updateCashFundFromAllSources(storeId: string) {
       .update({ cash_fund: grandTotal })
       .eq('id', storeId);
 
+    console.log(`[PERF] store.updateCashFund - TOTAL: ${Math.round(performance.now() - _tTotal)}ms — grandTotal: ${grandTotal}`);
     return { success: true, error: null, newCashFund: grandTotal };
   } catch (error) {
     console.error('Error updating cash fund from all sources:', error);
