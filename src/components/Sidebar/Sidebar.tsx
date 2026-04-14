@@ -155,6 +155,7 @@ export interface SidebarProps {
 
 export default function Sidebar({ isCollapsed, onToggleCollapsed }: SidebarProps) {
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
+  const isNuvorasBuild = process.env.NEXT_PUBLIC_BUILD_NAME === 'nuvoras';
 
   // Đọc user & trạng thái loading từ AuthContext (đã cache ở AuthProvider)
   const { user: currentUser, loading: authLoading } = useAuth();
@@ -216,6 +217,10 @@ export default function Sidebar({ isCollapsed, onToggleCollapsed }: SidebarProps
         
         // Filter out admin-only items for non-admin and non-superadmin users
         if (item.adminOnly && !['admin', 'superadmin'].includes(currentUser?.role)) {
+          return false;
+        }
+
+        if (!isNuvorasBuild && (item.path === '/credits' || item.path === '/installments')) {
           return false;
         }
 
