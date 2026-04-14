@@ -93,12 +93,17 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function fetchUser() {
-      const currentUser = await getCurrentUser();
-      setUser(currentUser);
-      setLoading(false);
-      
-      if (!currentUser) {
+      try {
+        const currentUser = await getCurrentUser();
+        setUser(currentUser);
+        if (!currentUser) {
+          router.push('/login');
+        }
+      } catch (err) {
+        console.error('fetchUser error:', err);
         router.push('/login');
+      } finally {
+        setLoading(false);
       }
     }
     fetchUser();
