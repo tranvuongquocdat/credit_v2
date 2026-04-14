@@ -487,42 +487,29 @@ export async function updateCashFundFromAllSources(storeId: string) {
       processItems(processedPawnData, 'Cầm đồ');
     }
 
-    // Fetch installment history — 2 bước để dùng index trên installment_id
-    // (installments không có store_id trực tiếp, phải đi qua employees)
-    const { data: storeEmployees } = await supabase
-      .from('employees')
-      .select('id')
-      .eq('store_id', storeId);
-
-    const employeeIds = (storeEmployees || []).map((e: any) => e.id);
-
-    if (employeeIds.length > 0) {
-      const { data: storeInstallments } = await supabase
-        .from('installments')
-        .select('id, contract_code')
-        .in('employee_id', employeeIds);
-
-      const installmentIds = (storeInstallments || []).map((i: any) => i.id);
-      const contractCodeMap = new Map((storeInstallments || []).map((i: any) => [i.id, i.contract_code]));
-
-      if (installmentIds.length > 0) {
-        const installmentHistoryData = await fetchAllData(
-          supabase
-            .from('installment_history')
-            .select('*')
-            .in('installment_id', installmentIds)
-            .or('is_deleted.is.null,is_deleted.eq.false')
-            .order('id')
-        );
-
-        if (installmentHistoryData) {
-          const processedInstallmentData = installmentHistoryData.map((item: any) => ({
-            ...item,
-            contract_code: contractCodeMap.get(item.installment_id) || null
-          }));
-          processItems(processedInstallmentData, 'Trả góp');
-        }
-      }
+    // Fetch installment history
+    const installmentHistoryData = await fetchAllData(
+      supabase
+        .from('installment_history')
+        .select(`
+          *,
+          installments!inner (
+            contract_code,
+            employee_id,
+            employees!inner (store_id)
+          )
+        `)
+        .eq('installments.employees.store_id', storeId)
+        .or('is_deleted.is.null,is_deleted.eq.false')
+        .order('id')
+    );
+    
+    if (installmentHistoryData) {
+      const processedInstallmentData = installmentHistoryData.map(item => ({
+        ...item,
+        contract_code: item.installments?.contract_code || null
+      }));
+      processItems(processedInstallmentData, 'Trả góp');
     }
 
     // Fetch store fund history
