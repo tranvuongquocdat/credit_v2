@@ -1,17 +1,22 @@
 'use client';
 import { useMemo } from 'react';
 
+function seededRandom(seed: number): number {
+  const x = Math.sin(seed + 1) * 10000;
+  return x - Math.floor(x);
+}
+
 export function StarfieldBackground() {
   const stars = useMemo(
     () =>
       Array.from({ length: 150 }, (_, i) => ({
         id: i,
-        top: `${Math.random() * 100}%`,
-        left: `${Math.random() * 100}%`,
-        size: Math.random() * 2 + 1,
-        opacity: Math.random() * 0.6 + 0.1,
-        duration: Math.random() * 3 + 2,
-        delay: Math.random() * 4,
+        top: `${seededRandom(i * 6 + 0) * 100}%`,
+        left: `${seededRandom(i * 6 + 1) * 100}%`,
+        size: seededRandom(i * 6 + 2) * 2 + 1,
+        opacity: seededRandom(i * 6 + 3) * 0.6 + 0.1,
+        duration: seededRandom(i * 6 + 4) * 3 + 2,
+        delay: seededRandom(i * 6 + 5) * 4,
       })),
     []
   );
