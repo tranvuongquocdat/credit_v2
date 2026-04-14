@@ -20,10 +20,10 @@ const TELEMETRY: TelemetryItem[] = [
 ];
 
 const ACTIONS: ActionItem[] = [
-  { label: 'View Telemetry', path: null },
-  { label: 'Signal Analysis', path: null },
+  { label: 'View Telemetry', path: '/space/telemetry' },
+  { label: 'Signal Analysis', path: '/space/analysis' },
   { label: 'Access Terminal', path: '/login' },
-  { label: 'Export Report', path: null },
+  { label: 'Export Report', path: '/space/report' },
 ];
 
 export default function MissionControlPage() {

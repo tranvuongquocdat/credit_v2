@@ -55,16 +55,18 @@ export async function middleware(request: NextRequest) {
     // Danh sách các trang được phép truy cập khi chưa login
     const publicPaths = isNuvorasBuild
       ? ['/', '/login', '/signup', '/portfolio/about', '/portfolio/projects', '/portfolio/skills']
-      : ['/', '/login', '/signup', '/space/observatory', '/space/mission-control'];
+      : ['/', '/login', '/signup'];
+
+    const isPublic = publicPaths.includes(currentPath) || (!isNuvorasBuild && currentPath.startsWith('/space/'));
 
     // Nếu chưa login và không phải trang public → redirect về "/"
-    if (!user && !publicPaths.includes(currentPath)) {
+    if (!user && !isPublic) {
       console.log("User not authenticated, redirecting to home:", currentPath);
       return NextResponse.redirect(new URL('/', request.url));
     }
 
     // Handle authentication errors
-    if (error && !publicPaths.includes(currentPath)) {
+    if (error && !isPublic) {
       console.log("Auth error, redirecting to home:", error.message);
       return NextResponse.redirect(new URL('/', request.url));
     }

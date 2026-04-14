@@ -16,42 +16,12 @@ interface CelestialObject {
 }
 
 const OBJECTS: CelestialObject[] = [
-  {
-    name: 'Andromeda Galaxy',
-    description: 'Spiral galaxy approximately 2.537 million light-years from Earth. Largest galaxy in the Local Group.',
-    badge: 'MONITORING',
-    path: null,
-  },
-  {
-    name: 'Orion Nebula',
-    description: "Diffuse nebula situated in the Milky Way south of Orion's Belt. One of the most scrutinized and photographed objects in the night sky.",
-    badge: 'ACTIVE',
-    path: '/space/mission-control',
-  },
-  {
-    name: 'Crab Nebula',
-    description: 'Supernova remnant and pulsar wind nebula in the constellation of Taurus. Result of a supernova recorded by astronomers in 1054.',
-    badge: 'ARCHIVED',
-    path: null,
-  },
-  {
-    name: 'Milky Way Core',
-    description: 'The central bulge of our galaxy, containing a supermassive black hole designated Sagittarius A*.',
-    badge: 'MONITORING',
-    path: null,
-  },
-  {
-    name: 'Horsehead Nebula',
-    description: 'A dark nebula in the constellation Orion, part of the Orion Molecular Cloud complex.',
-    badge: 'ACTIVE',
-    path: null,
-  },
-  {
-    name: 'Whirlpool Galaxy',
-    description: 'An interacting grand-design spiral galaxy with a Seyfert 2 active galactic nucleus located at 23 million light-years.',
-    badge: 'ARCHIVED',
-    path: null,
-  },
+  { name: 'Andromeda Galaxy', description: 'Spiral galaxy approximately 2.537 million light-years from Earth. Largest galaxy in the Local Group.', badge: 'MONITORING', path: '/space/andromeda-galaxy' },
+  { name: 'Orion Nebula', description: "Diffuse nebula situated in the Milky Way south of Orion's Belt. One of the most scrutinized and photographed objects in the night sky.", badge: 'ACTIVE', path: '/space/mission-control' },
+  { name: 'Crab Nebula', description: 'Supernova remnant and pulsar wind nebula in the constellation of Taurus. Result of a supernova recorded by astronomers in 1054.', badge: 'ARCHIVED', path: '/space/crab-nebula' },
+  { name: 'Milky Way Core', description: 'The central bulge of our galaxy, containing a supermassive black hole designated Sagittarius A*.', badge: 'MONITORING', path: '/space/milky-way-core' },
+  { name: 'Horsehead Nebula', description: 'A dark nebula in the constellation Orion, part of the Orion Molecular Cloud complex.', badge: 'ACTIVE', path: '/space/horsehead-nebula' },
+  { name: 'Whirlpool Galaxy', description: 'An interacting grand-design spiral galaxy with a Seyfert 2 active galactic nucleus located at 23 million light-years.', badge: 'ARCHIVED', path: '/space/whirlpool-galaxy' },
 ];
 
 export default function ObservatoryPage() {
