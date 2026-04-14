@@ -83,12 +83,12 @@ export default function InstallmentWarningsPage() {
     })();
   }, [currentStore?.id]);
   
-  async function loadInstallments() {
+  async function loadInstallments(silent = false) {
     if (!currentStore?.id) return;
 
     const currentRequestId = ++requestIdRef.current;
 
-    setIsLoading(true);
+    if (!silent) setIsLoading(true);
     try {
       const { data, error, totalItems, totalPages } = await getInstallmentWarnings(
         1, // Always fetch from page 1
@@ -127,7 +127,7 @@ export default function InstallmentWarningsPage() {
         variant: "destructive"
       });
     } finally {
-      if (currentRequestId === requestIdRef.current) {
+      if (!silent && currentRequestId === requestIdRef.current) {
         setIsLoading(false);
       }
     }
@@ -472,8 +472,12 @@ export default function InstallmentWarningsPage() {
         description: `Đã thanh toán ${amount.toLocaleString()} VND cho hợp đồng ${installment.contract_code} (${numberOfPeriods} kỳ, ${allDailyRecords.length} ngày)`,
       });
       
-      // Reload installments to update the UI
-      loadInstallments();
+      // Bước 1: Xóa item khỏi danh sách ngay lập tức (optimistic)
+      setInstallments(prev => prev.filter(i => i.id !== installment.id));
+      setFilteredInstallments(prev => prev.filter(i => i.id !== installment.id));
+
+      // Bước 2: Reload ngầm không block UI
+      loadInstallments(true);
       
     } catch (err) {
       console.error("Error processing payment:", err);
