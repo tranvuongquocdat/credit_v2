@@ -55,7 +55,7 @@ export async function middleware(request: NextRequest) {
     // Danh sách các trang được phép truy cập khi chưa login
     const publicPaths = isNuvorasBuild
       ? ['/', '/login', '/signup', '/portfolio/about', '/portfolio/projects', '/portfolio/skills']
-      : ['/', '/login', '/signup', '/portfolio_v2/about', '/portfolio_v2/projects', '/portfolio_v2/skills'];
+      : ['/', '/login', '/signup', '/space/observatory', '/space/mission-control'];
 
     // Nếu chưa login và không phải trang public → redirect về "/"
     if (!user && !publicPaths.includes(currentPath)) {
