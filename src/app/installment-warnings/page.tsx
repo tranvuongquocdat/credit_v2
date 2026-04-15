@@ -48,7 +48,6 @@ export default function InstallmentWarningsPage() {
   const [itemsPerPage, setItemsPerPage] = useState(30);
   const { currentStore } = useStore();
   const [processingPayment, setProcessingPayment] = useState(false);
-  const [isSilentRefreshing, setIsSilentRefreshing] = useState(false);
   const { hasPermission, loading: permissionsLoading } = usePermissions();
   // Kiểm tra quyền xem danh sách hợp đồng trả góp
   const canViewInstallmentsList = isNuvorasBuild && hasPermission('xem_danh_sach_hop_dong_tra_gop');
@@ -91,8 +90,6 @@ export default function InstallmentWarningsPage() {
 
     if (!options?.silent) {
       setIsLoading(true);
-    } else {
-      setIsSilentRefreshing(true);
     }
     try {
       const { data, error, totalItems, totalPages } = await getInstallmentWarnings(
@@ -134,9 +131,6 @@ export default function InstallmentWarningsPage() {
     } finally {
       if (currentRequestId === requestIdRef.current && !options?.silent) {
         setIsLoading(false);
-      }
-      if (options?.silent && currentRequestId === requestIdRef.current) {
-        setIsSilentRefreshing(false);
       }
     }
   }
@@ -642,7 +636,6 @@ export default function InstallmentWarningsPage() {
               onCustomerClick={handleCustomerClick}
               onShowPaymentHistory={handleShowPaymentHistory}
               disablePayments={processingPayment}
-              isSilentRefresh={isSilentRefreshing}
           />
           
           {/* Pagination Component */}

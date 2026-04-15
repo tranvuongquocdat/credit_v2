@@ -31,7 +31,6 @@ interface InstallmentWarningsTableProps {
   onCustomerClick?: (installment: InstallmentWithCustomer) => void; // Optional callback for customer click
   onShowPaymentHistory?: (installment: InstallmentWithCustomer) => void; // Optional callback for payment history modal
   disablePayments?: boolean; // Disable all pay buttons during processing
-  isSilentRefresh?: boolean; // When true, keep existing rows visible during reprocessing
 }
 
 // ================= Helper functions for simplified overdue computation =================
@@ -108,7 +107,6 @@ export function InstallmentWarningsTable({
   onCustomerClick,
   onShowPaymentHistory,
   disablePayments = false,
-  isSilentRefresh = false,
 }: InstallmentWarningsTableProps) {
   
   
@@ -156,9 +154,6 @@ export function InstallmentWarningsTable({
       }
       
       setLoadingPayments(true);
-      if (!isSilentRefresh) {
-        setWarnings([]); // Clear on full context change (store/filter switch), not on background sync
-      }
 
       try {
         const ids = installments.map((i) => i.id);
