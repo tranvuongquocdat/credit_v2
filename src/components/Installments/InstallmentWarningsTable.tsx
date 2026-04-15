@@ -2,7 +2,7 @@ import { InstallmentWithCustomer } from "@/models/installment";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 import Spinner from "@/components/ui/spinner";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { InstallmentPaymentPeriod } from "@/models/installmentPayment";
 import { AlertTriangleIcon, DollarSignIcon, ArrowUpDownIcon, ChevronUpIcon, ChevronDownIcon } from "lucide-react";
 import { useStore } from "@/contexts/StoreContext";
@@ -30,6 +30,7 @@ interface InstallmentWarningsTableProps {
   onPayment?: (installment: InstallmentWithCustomer, amount: number) => void;
   onCustomerClick?: (installment: InstallmentWithCustomer) => void; // Optional callback for customer click
   onShowPaymentHistory?: (installment: InstallmentWithCustomer) => void; // Optional callback for payment history modal
+  disablePayments?: boolean; // Disable all pay buttons during processing
 }
 
 // ================= Helper functions for simplified overdue computation =================
@@ -105,13 +106,13 @@ export function InstallmentWarningsTable({
   onPayment,
   onCustomerClick,
   onShowPaymentHistory,
+  disablePayments = false,
 }: InstallmentWarningsTableProps) {
   
   
   // State for storing processed warnings
   const [warnings, setWarnings] = useState<InstallmentWarning[]>([]);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isPaymentSubmitting, setIsPaymentSubmitting] = useState(false);
+  const [loadingPayments, setLoadingPayments] = useState(false);
   
   // State for sorting
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -121,8 +122,6 @@ export function InstallmentWarningsTable({
     totalOldDebt: 0,
     totalAmount: 0,
   });
-  const theadRef = useRef<HTMLTableSectionElement>(null);
-  const [theadHeight, setTheadHeight] = useState(0);
   
   // Get current store from store context
   const { currentStore } = useStore();
@@ -145,36 +144,18 @@ export function InstallmentWarningsTable({
   const handleSortToggle = () => {
     setSortOrder(current => current === 'asc' ? 'desc' : 'asc');
   };
-
-  const handleQuickPaymentClick = async (
-    warning: InstallmentWarning,
-    amount: number
-  ) => {
-    if (!onPayment) return;
-
-    setIsPaymentSubmitting(true);
-    try {
-      await Promise.resolve(onPayment(warning, amount));
-    } finally {
-      setIsPaymentSubmitting(false);
-    }
-  };
   
   // Process installments to identify warnings
   useEffect(() => {
     async function processWarnings() {
-      setIsRefreshing(true);
+      if (!installments.length) {
+        setWarnings([]); // Clear warnings when no installments
+        return;
+      }
       
-      try {
-        if (!installments.length) {
-          // Keep behavior consistent for both initial load and refresh
-          setTotals({ totalOldDebt: 0, totalAmount: 0 });
-          if (onFilteredResults) {
-            onFilteredResults([]);
-          }
-          return;
-        }
+      setLoadingPayments(true);
 
+      try {
         const ids = installments.map((i) => i.id);
 
         /* 1. late periods from overdue stats */
@@ -328,49 +309,37 @@ export function InstallmentWarningsTable({
       } catch (err) {
         console.error("Error processing installment warnings:", err);
       } finally {
-        setIsRefreshing(false);
+        setLoadingPayments(false);
       }
     }
     
     processWarnings();
   }, [installments, currentStore, reasonFilter, currentPage, itemsPerPage, sortOrder]);
 
-  const isTableLoading = isLoading || isRefreshing || isPaymentSubmitting;
+  if ((isLoading || loadingPayments) && warnings.length === 0) {
+    return (
+      <div className="h-96 flex items-center justify-center">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
 
-  useEffect(() => {
-    if (!theadRef.current) return;
-
-    const updateTheadHeight = () => {
-      setTheadHeight(theadRef.current?.getBoundingClientRect().height || 0);
-    };
-
-    updateTheadHeight();
-    window.addEventListener("resize", updateTheadHeight);
-
-    return () => {
-      window.removeEventListener("resize", updateTheadHeight);
-    };
-  }, []);
+  if (warnings.length === 0) {
+    return (
+      <div className="h-64 flex flex-col items-center justify-center text-gray-500">
+        <AlertTriangleIcon size={40} className="mb-2 text-green-500" />
+        <p className="text-lg font-medium">Không có cảnh báo trả góp{currentStore ? ` tại ${currentStore.name}` : ''}</p>
+        <p className="text-sm">Tất cả các hợp đồng đều đang được thanh toán đúng hạn.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="rounded-md border overflow-hidden">
-      <div className="overflow-x-auto max-w-full">
-        <div className="relative">
-          {isTableLoading && (
-            <div
-              className="absolute inset-x-0 bottom-0 z-10 bg-white/50 pointer-events-none"
-              style={{ top: theadHeight }}
-            >
-              <div className="fixed inset-0 z-20 flex items-center justify-center">
-                <div className="flex items-center gap-2 rounded-md bg-white/90 px-3 py-2 text-gray-600 shadow-sm">
-                  <Spinner size="sm" />
-                  {/* <span className="text-sm">Đang làm mới dữ liệu...</span> */}
-                </div>
-              </div>
-            </div>
-          )}
+    <div className={`transition-opacity duration-300 ${loadingPayments ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
+      <div className="rounded-md border overflow-hidden">
+        <div className="overflow-x-auto max-w-full">
         <table className="border-collapse min-w-full divide-y divide-gray-200">
-        <thead ref={theadRef} className="bg-gray-50">
+        <thead className="bg-gray-50">
           <tr>
             <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-6 sm:w-8">#</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28 hidden lg:table-cell">Mã hợp đồng</th>
@@ -445,7 +414,8 @@ export function InstallmentWarningsTable({
                   variant="outline" 
                   size="sm"
                   className="mx-0.5 sm:mx-1 px-1 sm:px-3 py-1 bg-green-100 hover:bg-green-200 text-green-800 border-green-300 text-xs sm:text-sm"
-                  onClick={() => handleQuickPaymentClick(warning, warning.buttonValues[i])}
+                  onClick={() => onPayment && onPayment(warning, warning.buttonValues[i])}
+                  disabled={disablePayments}
                 >
                   {buttonAmount}
                 </Button>
@@ -513,19 +483,8 @@ export function InstallmentWarningsTable({
               </tr>
             );
           })}
-          {!isTableLoading && warnings.length === 0 && (
-            <tr>
-              <td colSpan={10} className="py-10">
-                <div className="flex flex-col items-center justify-center text-gray-500">
-                  <AlertTriangleIcon size={32} className="mb-2 text-green-500" />
-                  <p className="text-base font-medium">Không có cảnh báo trả góp{currentStore ? ` tại ${currentStore.name}` : ""}</p>
-                  <p className="text-sm">Tất cả các hợp đồng đều đang được thanh toán đúng hạn.</p>
-                </div>
-              </td>
-            </tr>
-          )}
         </tbody>
-        {!isTableLoading && warnings.length > 0 && (
+        {warnings.length > 0 && (
           <tfoot className="bg-yellow-200 font-semibold">
             <tr>
               <td colSpan={5} className="py-2 px-1 sm:px-3 text-center font-bold hidden lg:table-cell text-xs sm:text-sm">Tổng</td>
