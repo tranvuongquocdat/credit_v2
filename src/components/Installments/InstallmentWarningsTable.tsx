@@ -30,6 +30,7 @@ interface InstallmentWarningsTableProps {
   onPayment?: (installment: InstallmentWithCustomer, amount: number) => void;
   onCustomerClick?: (installment: InstallmentWithCustomer) => void; // Optional callback for customer click
   onShowPaymentHistory?: (installment: InstallmentWithCustomer) => void; // Optional callback for payment history modal
+  disablePayments?: boolean; // Disable all pay buttons during processing
 }
 
 // ================= Helper functions for simplified overdue computation =================
@@ -105,6 +106,7 @@ export function InstallmentWarningsTable({
   onPayment,
   onCustomerClick,
   onShowPaymentHistory,
+  disablePayments = false,
 }: InstallmentWarningsTableProps) {
   
   
@@ -413,6 +415,7 @@ export function InstallmentWarningsTable({
                   size="sm"
                   className="mx-0.5 sm:mx-1 px-1 sm:px-3 py-1 bg-green-100 hover:bg-green-200 text-green-800 border-green-300 text-xs sm:text-sm"
                   onClick={() => onPayment && onPayment(warning, warning.buttonValues[i])}
+                  disabled={disablePayments}
                 >
                   {buttonAmount}
                 </Button>
