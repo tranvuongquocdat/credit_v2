@@ -16,6 +16,7 @@ import {
   getInstallmentFinancialsForStore
 } from '@/lib/overview';
 import { startPerfTimer } from '@/lib/perf-debug';
+import { fetchDashboardChartMetrics, type ChartDataPoint } from '@/lib/dashboard-chart';
 import {
   Table,
   TableBody,
@@ -26,7 +27,7 @@ import {
   TableFooter,
 } from "@/components/ui/table";
 import Link from 'next/link';
-import { format, startOfMonth, endOfMonth, subMonths, parseISO } from 'date-fns';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface DashboardStats {
@@ -59,12 +60,6 @@ interface TransactionItem {
   employeeName?: string;
   customerName?: string;
   itemName?: string;
-}
-
-interface ChartDataPoint {
-  month: string;
-  choVay: number;
-  loiNhuan: number;
 }
 
 export default function Dashboard() {
@@ -196,109 +191,24 @@ export default function Dashboard() {
 
     const currentRequestId = ++chartRequestIdRef.current;
 
+
     setChartLoading(true);
     try {
-      const chartPoints: ChartDataPoint[] = [];
-      const now = new Date();
-      
-      // Get data for last 3 months
-      for (let i = 2; i >= 0; i--) {
-        const endMonthLoop = startPerfTimer('Dashboard.fetchChartData.monthIteration', {
-          context: { monthOffset: i },
-        });
-        const monthDate = subMonths(now, i);
-        const monthStart = startOfMonth(monthDate);
-        const monthEnd = endOfMonth(monthDate);
-        const monthName = format(monthDate, 'MM/yyyy');
-
-        // Get loan amounts for this month (total loans issued)
-        const endMonthlyLoans = startPerfTimer('Dashboard.fetchChartData.monthlyLoanQueries');
-        const [pawnLoans, creditLoans, installmentLoans] = await Promise.all([
-          supabase
-            .from('pawns')
-            .select('loan_amount')
-            .eq('store_id', currentStore.id)
-            .gte('loan_date', monthStart.toISOString())
-            .lte('loan_date', monthEnd.toISOString()),
-          supabase
-            .from('credits')
-            .select('loan_amount')
-            .eq('store_id', currentStore.id)
-            .gte('loan_date', monthStart.toISOString())
-            .lte('loan_date', monthEnd.toISOString()),
-          supabase
-            .from('installments_by_store')
-            .select('installment_amount')
-            .eq('store_id', currentStore.id)
-            .gte('loan_date', monthStart.toISOString())
-            .lte('loan_date', monthEnd.toISOString())
-        ]);
-        endMonthlyLoans();
-
-        // Calculate total loans issued in this month
-        const totalPawnLoans = pawnLoans.data?.reduce((sum, item) => sum + (item.loan_amount || 0), 0) || 0;
-        const totalCreditLoans = creditLoans.data?.reduce((sum, item) => sum + (item.loan_amount || 0), 0) || 0;
-        const totalInstallmentLoans = installmentLoans.data?.reduce((sum, item) => sum + (item.installment_amount || 0), 0) || 0;
-        const totalChoVay = totalPawnLoans + totalCreditLoans + totalInstallmentLoans;
-
-        // Get interest collected in this month
-        const endMonthlyInterest = startPerfTimer('Dashboard.fetchChartData.monthlyInterestQueries');
-        const [pawnHistory, creditHistory, installmentHistory] = await Promise.all([
-          supabase
-            .from('pawn_history')
-            .select(`
-              credit_amount,
-              pawns!inner (store_id)
-            `)
-            .eq('pawns.store_id', currentStore.id)
-            .gte('created_at', monthStart.toISOString())
-            .lte('created_at', monthEnd.toISOString()),
-          supabase
-            .from('credit_history')
-            .select(`
-              credit_amount,
-              credits!inner (store_id)
-            `)
-            .eq('credits.store_id', currentStore.id)
-            .gte('created_at', monthStart.toISOString())
-            .lte('created_at', monthEnd.toISOString()),
-          supabase
-            .from('installment_history')
-            .select(`
-              credit_amount,
-              installments!inner (
-                employee_id,
-                employees!inner (store_id)
-              )
-            `)
-            .eq('installments.employees.store_id', currentStore.id)
-            .gte('created_at', monthStart.toISOString())
-            .lte('created_at', monthEnd.toISOString())
-        ]);
-        endMonthlyInterest();
-
-        // Calculate total interest collected in this month
-        const totalPawnInterest = pawnHistory.data?.reduce((sum, item) => sum + (item.credit_amount || 0), 0) || 0;
-        const totalCreditInterest = creditHistory.data?.reduce((sum, item) => sum + (item.credit_amount || 0), 0) || 0;
-        const totalInstallmentInterest = installmentHistory.data?.reduce((sum, item) => sum + (item.credit_amount || 0), 0) || 0;
-        const totalLoiNhuan = totalPawnInterest + totalCreditInterest + totalInstallmentInterest;
-
-        chartPoints.push({
-          month: monthName,
-          choVay: totalChoVay,
-          loiNhuan: totalLoiNhuan
-        });
-        endMonthLoop();
-      }
+      const chartPoints = await fetchDashboardChartMetrics(currentStore.id);
 
       // Check if this request is still the latest one
       if (currentRequestId !== chartRequestIdRef.current) {
         return;
       }
 
+
       setChartData(chartPoints);
     } catch (err) {
-      console.error('Error fetching chart data:', err);
+      console.error('[Dashboard.fetchChartData] error', {
+        storeId: currentStore?.id,
+        requestId: currentRequestId,
+        err,
+      });
     } finally {
       if (currentRequestId === chartRequestIdRef.current) {
         setChartLoading(false);
