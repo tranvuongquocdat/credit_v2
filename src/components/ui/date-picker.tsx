@@ -16,86 +16,104 @@ interface DatePickerProps extends Omit<React.InputHTMLAttributes<HTMLInputElemen
 }
 
 const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
-  ({ value, onChange, placeholder = 'Chọn ngày', className = '', maxDate, minDate, ...props }, ref) => {
+  ({ value, onChange, placeholder = 'dd/mm/yyyy', className = '', maxDate, minDate, ...props }, ref) => {
     const [isOpen, setIsOpen] = useState(false);
     const [position, setPosition] = useState({ top: 0, left: 0, showAbove: false });
+    const [inputText, setInputText] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
-    
-    // Format the display value in Vietnamese
-    const displayValue = value ? format(new Date(value), 'dd/MM/yyyy', { locale: vi }) : '';
+
     const selectedDate = value ? new Date(value) : undefined;
-    
+
+    // Sync inputText when value changes externally (e.g., calendar selection)
+    useEffect(() => {
+      setInputText(value ? format(new Date(value), 'dd/MM/yyyy', { locale: vi }) : '');
+    }, [value]);
+
     // Calculate optimal position when opening calendar
     useEffect(() => {
       if (isOpen && inputRef.current) {
         const rect = inputRef.current.getBoundingClientRect();
-        
+
         const calendarHeight = 400;
         const calendarWidth = 300;
 
-        // Available space relative to viewport because popup uses fixed positioning
         const spaceBelow = window.innerHeight - rect.bottom;
         const spaceAbove = rect.top;
-        
-        // Determine if we should render above the input
+
         const showAbove = spaceAbove > spaceBelow && spaceBelow < calendarHeight;
-        
-        // Horizontal position (centered relative to input)
+
         let left = rect.left + (rect.width / 2) - (calendarWidth / 2);
-        
-        // Adjust horizontal position if it would go off-screen
+
         if (left < 10) {
           left = 10;
         } else if (left + calendarWidth > window.innerWidth - 10) {
           left = window.innerWidth - calendarWidth - 10;
         }
-        
-        // Calculate vertical position
+
         let top;
         if (showAbove) {
           top = rect.top - calendarHeight - 8;
-          // Ensure it doesn't go above viewport
-          if (top < 10) {
-            top = 10;
-          }
+          if (top < 10) top = 10;
         } else {
           top = rect.bottom + 8;
-          // If it would go below viewport, force it above
           if (top + calendarHeight > window.innerHeight - 10) {
             top = rect.top - calendarHeight - 8;
-            if (top < 10) {
-              top = 10;
-            }
+            if (top < 10) top = 10;
           }
         }
-        
+
         setPosition({ top, left, showAbove });
       }
     }, [isOpen]);
-    
+
+    // Auto-format input as dd/MM/yyyy while typing
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
+      let formatted = digits;
+      if (digits.length > 2) {
+        formatted = digits.slice(0, 2) + '/' + digits.slice(2);
+      }
+      if (digits.length > 4) {
+        formatted = digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4);
+      }
+      setInputText(formatted);
+
+      if (digits.length === 8) {
+        const dd = digits.slice(0, 2);
+        const mm = digits.slice(2, 4);
+        const yyyy = digits.slice(4, 8);
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+        const date = new Date(dateStr);
+        if (!isNaN(date.getTime()) && date.getMonth() + 1 === parseInt(mm)) {
+          onChange(dateStr);
+        }
+      } else if (digits.length === 0) {
+        onChange('');
+      }
+    };
+
+    // On blur, revert to last valid value if input is incomplete
+    const handleInputBlur = () => {
+      setInputText(value ? format(new Date(value), 'dd/MM/yyyy', { locale: vi }) : '');
+    };
+
     const handleDaySelect = (date: Date | undefined) => {
       if (date) {
-        // Format as YYYY-MM-DD for consistency
-        const formattedDate = format(date, 'yyyy-MM-dd');
-        onChange(formattedDate);
+        onChange(format(date, 'yyyy-MM-dd'));
       } else {
         onChange('');
       }
       setIsOpen(false);
     };
-    
-    // Calendar popup component
+
     const CalendarPopup = () => (
       <>
-        {/* Backdrop */}
-        <div 
-          className="fixed inset-0 z-[99998]" 
+        <div
+          className="fixed inset-0 z-[99998]"
           onClick={() => setIsOpen(false)}
           style={{ pointerEvents: 'auto' }}
         />
-        
-        {/* Calendar */}
-        <div 
+        <div
           className="fixed z-[99999] bg-white border border-gray-200 rounded-md shadow-xl"
           style={{
             top: `${position.top}px`,
@@ -113,6 +131,9 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
             locale={vi}
             showOutsideDays
             className="p-3"
+            captionLayout="dropdown"
+            fromYear={2015}
+            toYear={2035}
             toDate={maxDate ? new Date(maxDate) : undefined}
             fromDate={minDate ? new Date(minDate) : undefined}
             classNames={{
@@ -120,6 +141,10 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
               month: "space-y-4",
               caption: "flex justify-center pt-1 relative items-center",
               caption_label: "text-sm font-medium",
+              caption_dropdowns: "flex gap-1",
+              dropdown: "text-sm border border-gray-200 rounded px-1 py-0.5 cursor-pointer bg-white",
+              dropdown_month: "",
+              dropdown_year: "",
               nav: "space-x-1 flex items-center",
               nav_button: "inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-7 w-7 cursor-pointer",
               nav_button_previous: "absolute left-1",
@@ -142,8 +167,7 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
               IconRight: () => <span>›</span>,
             }}
           />
-          
-          {/* Action buttons */}
+
           <div className="flex justify-between items-center px-3 pb-3 pt-0 border-t border-gray-100">
             <button
               type="button"
@@ -178,10 +202,9 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
         </div>
       </>
     );
-    
+
     return (
       <div className="relative">
-        {/* Visible input showing Vietnamese formatted date */}
         <Input
           ref={(node) => {
             inputRef.current = node;
@@ -192,26 +215,17 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
             }
           }}
           type="text"
-          value={displayValue}
+          value={inputText}
           placeholder={placeholder}
-          className={`cursor-pointer ${className}`}
-          readOnly
-          onClick={() => setIsOpen(!isOpen)}
+          className={`pr-10 ${className}`}
+          onChange={handleInputChange}
+          onBlur={handleInputBlur}
           onKeyDown={(e) => {
-            // Allow opening picker with Enter or Space
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setIsOpen(!isOpen);
-            }
-            // Close with Escape
-            if (e.key === 'Escape') {
-              setIsOpen(false);
-            }
+            if (e.key === 'Escape') setIsOpen(false);
           }}
           {...props}
         />
-        
-        {/* Calendar icon */}
+
         <button
           type="button"
           className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer hover:bg-gray-50 rounded-r-md transition-colors"
@@ -219,22 +233,21 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
           tabIndex={-1}
           disabled={props.disabled}
         >
-          <svg 
-            className="w-4 h-4 text-gray-400 hover:text-gray-600" 
-            fill="none" 
-            stroke="currentColor" 
+          <svg
+            className="w-4 h-4 text-gray-400 hover:text-gray-600"
+            fill="none"
+            stroke="currentColor"
             viewBox="0 0 24 24"
           >
-            <path 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
-              strokeWidth={2} 
-              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 002 2v12a2 2 0 002 2z" 
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 002 2v12a2 2 0 002 2z"
             />
           </svg>
         </button>
-        
-        {/* Calendar Popup - Rendered via Portal */}
+
         {isOpen && typeof document !== 'undefined' && createPortal(
           <CalendarPopup />,
           document.body
