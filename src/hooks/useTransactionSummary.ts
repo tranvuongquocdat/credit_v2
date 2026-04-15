@@ -737,6 +737,7 @@ const fetchTransactionDetails = async (
         )
         .order('id')
     );
+    console.log('query history credit', storeId, startDateISO, endDateISO);
 
     if (creditHistoryData) {
       const processedCreditData = creditHistoryData.map((item: any) => ({
