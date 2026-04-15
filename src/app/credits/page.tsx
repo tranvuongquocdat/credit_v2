@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Layout } from '@/components/Layout';
 import { 
@@ -34,7 +34,6 @@ import { supabase } from '@/lib/supabase';
 import { getInterestDisplayString } from '@/lib/interest-calculator';
 import { formatCurrencyExcel } from '@/lib/utils';
 import { useStore } from '@/contexts/StoreContext';
-import { startScreenLoadTimer } from '@/lib/perf-debug';
 
 // Import shared status utility
 import { getCreditStatusInfo } from '@/lib/credit-status-utils';
@@ -48,7 +47,6 @@ interface CreditTotals {
 }
 
 export default function CreditsPage() {
-  const screenLoadTimerRef = useRef<(() => void) | null>(null);
   const router = useRouter();
   const { currentStore } = useStore();
   
@@ -97,7 +95,7 @@ export default function CreditsPage() {
   const { summary: financialSummary, refresh: refreshSummary } = useCreditsSummary();
   
   // Lấy chi tiết tài chính & summary qua hook chung
-  const { details: creditDetails, loading: creditCalcLoading } = useCreditCalculations();
+  const { details: creditDetails } = useCreditCalculations();
   
   // Status codes are now available directly in credits data from credits_by_store view
   // Use auto update cash fund hook
@@ -127,24 +125,6 @@ export default function CreditsPage() {
   
   // Totals state & fetch
   const [totals, setTotals] = useState<CreditTotals | null>(null);
-
-  useEffect(() => {
-    if (!currentStore?.id) return;
-
-    const isPageLoading = loading || permissionsLoading || creditCalcLoading;
-
-    if (isPageLoading && !screenLoadTimerRef.current) {
-      screenLoadTimerRef.current = startScreenLoadTimer('CreditsPage', {
-        context: { storeId: currentStore.id },
-      });
-      return;
-    }
-
-    if (!isPageLoading && screenLoadTimerRef.current) {
-      screenLoadTimerRef.current();
-      screenLoadTimerRef.current = null;
-    }
-  }, [currentStore?.id, loading, permissionsLoading, creditCalcLoading]);
   
   const fetchTotals = async (f = filters) => {
     if (!currentStore?.id) return;

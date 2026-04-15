@@ -27,7 +27,6 @@ import {
 } from "@/components/ui/select";
 
 export default function CreditWarningPage() {
-  const isNuvorasBuild = process.env.NEXT_PUBLIC_BUILD_NAME === 'nuvoras';
   const [allCredits, setAllCredits] = useState<CreditWithCustomer[]>([]);
   const [filteredCredits, setFilteredCredits] = useState<CreditWithCustomer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,7 +52,7 @@ export default function CreditWarningPage() {
 
   const { hasPermission, loading: permissionsLoading } = usePermissions();
   // Kiểm tra quyền xem danh sách hợp đồng trả góp
-  const canViewCreditWarnings = isNuvorasBuild && hasPermission('xem_danh_sach_hop_dong_tin_chap');
+  const canViewCreditWarnings = hasPermission('xem_danh_sach_hop_dong_tin_chap');
   
   // Get credit calculations
   const { details: creditCalculations, loading: calculationsLoading } = useCreditCalculations();
@@ -313,10 +312,6 @@ export default function CreditWarningPage() {
       {permissionsLoading ? (
         <div className="p-4 border rounded-md mb-4 bg-gray-50">
           <p className="text-center text-gray-500">Đang tải...</p>
-        </div>
-      ) : !isNuvorasBuild ? (
-        <div className="p-4 border rounded-md mb-4 bg-gray-50">
-          <p className="text-center text-gray-500">Tính năng cảnh báo tín chấp đã được ẩn ở build hiện tại</p>
         </div>
       ) : !canViewCreditWarnings ? (
         <div className="p-4 border rounded-md mb-4 bg-gray-50">

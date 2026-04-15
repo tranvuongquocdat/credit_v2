@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Layout } from '@/components/Layout';
 import { 
@@ -40,7 +40,6 @@ import * as XLSX from 'xlsx';
 import { isSameDay, addDays } from 'date-fns';
 import { usePawnCalculations } from '@/hooks/usePawnCalculation';
 import { useStore } from '@/contexts/StoreContext';
-import { startScreenLoadTimer } from '@/lib/perf-debug';
 
 // Type for totals row returned by RPC
 interface PawnTotals {
@@ -51,7 +50,6 @@ interface PawnTotals {
 }
 
 export default function PawnsPage() {
-  const screenLoadTimerRef = useRef<(() => void) | null>(null);
   
   // State để lưu initial filters từ URL
   const [initialFilters, setInitialFilters] = useState<Partial<any> | undefined>(undefined);
@@ -115,24 +113,6 @@ export default function PawnsPage() {
 
   // Current store context
   const { currentStore } = useStore();
-
-  useEffect(() => {
-    if (!currentStore?.id) return;
-
-    const isPageLoading = loading || permissionsLoading || calcLoading;
-
-    if (isPageLoading && !screenLoadTimerRef.current) {
-      screenLoadTimerRef.current = startScreenLoadTimer('PawnsPage', {
-        context: { storeId: currentStore.id },
-      });
-      return;
-    }
-
-    if (!isPageLoading && screenLoadTimerRef.current) {
-      screenLoadTimerRef.current();
-      screenLoadTimerRef.current = null;
-    }
-  }, [currentStore?.id, loading, permissionsLoading, calcLoading]);
 
   const fetchTotals = async (f = filters) => {
     if (!currentStore?.id) return;

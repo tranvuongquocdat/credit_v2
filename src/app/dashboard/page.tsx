@@ -15,7 +15,6 @@ import {
   getCreditFinancialsForStore,
   getInstallmentFinancialsForStore
 } from '@/lib/overview';
-import { startPerfTimer } from '@/lib/perf-debug';
 import {
   Table,
   TableBody,
@@ -87,23 +86,14 @@ export default function Dashboard() {
   const chartRequestIdRef = useRef(0);
   const transactionsRequestIdRef = useRef(0);
 
-  // check if the build name is nuvoras_v2
-  const isNuvorasV1 = process.env.NEXT_PUBLIC_BUILD_NAME === 'nuvoras';
-  
-
   useEffect(() => {
     async function fetchUser() {
-      try {
-        const currentUser = await getCurrentUser();
-        setUser(currentUser);
-        if (!currentUser) {
-          router.push('/login');
-        }
-      } catch (err) {
-        console.error('fetchUser error:', err);
+      const currentUser = await getCurrentUser();
+      setUser(currentUser);
+      setLoading(false);
+      
+      if (!currentUser) {
         router.push('/login');
-      } finally {
-        setLoading(false);
       }
     }
     fetchUser();
@@ -112,9 +102,6 @@ export default function Dashboard() {
   // Fetch dashboard statistics
   const fetchStats = async () => {
     if (!currentStore?.id) return;
-    const endFetchStats = startPerfTimer('Dashboard.fetchStats', {
-      context: { storeId: currentStore.id },
-    });
 
     const currentRequestId = ++statsRequestIdRef.current;
 
@@ -125,7 +112,6 @@ export default function Dashboard() {
       const endOfCurrentMonth = endOfMonth(now);
 
       // Chạy tất cả queries song song để tối ưu hiệu suất
-      const endFetchStatsParallel = startPerfTimer('Dashboard.fetchStats.parallelQueries');
       const [
         pawnFinancials,
         creditFinancials,
@@ -156,7 +142,6 @@ export default function Dashboard() {
           .gte('loan_date', startOfCurrentMonth.toISOString())
           .lte('loan_date', endOfCurrentMonth.toISOString())
       ]);
-      endFetchStatsParallel();
 
       // Check if this request is still the latest one
       if (currentRequestId !== statsRequestIdRef.current) {
@@ -182,17 +167,12 @@ export default function Dashboard() {
       });
     } catch (err) {
       console.error('Error fetching stats:', err);
-    } finally {
-      endFetchStats();
     }
   };
 
   // Fetch chart data for last 3 months
   const fetchChartData = async () => {
     if (!currentStore?.id) return;
-    const endFetchChartData = startPerfTimer('Dashboard.fetchChartData', {
-      context: { storeId: currentStore.id },
-    });
 
     const currentRequestId = ++chartRequestIdRef.current;
 
@@ -203,16 +183,12 @@ export default function Dashboard() {
       
       // Get data for last 3 months
       for (let i = 2; i >= 0; i--) {
-        const endMonthLoop = startPerfTimer('Dashboard.fetchChartData.monthIteration', {
-          context: { monthOffset: i },
-        });
         const monthDate = subMonths(now, i);
         const monthStart = startOfMonth(monthDate);
         const monthEnd = endOfMonth(monthDate);
         const monthName = format(monthDate, 'MM/yyyy');
 
         // Get loan amounts for this month (total loans issued)
-        const endMonthlyLoans = startPerfTimer('Dashboard.fetchChartData.monthlyLoanQueries');
         const [pawnLoans, creditLoans, installmentLoans] = await Promise.all([
           supabase
             .from('pawns')
@@ -233,7 +209,6 @@ export default function Dashboard() {
             .gte('loan_date', monthStart.toISOString())
             .lte('loan_date', monthEnd.toISOString())
         ]);
-        endMonthlyLoans();
 
         // Calculate total loans issued in this month
         const totalPawnLoans = pawnLoans.data?.reduce((sum, item) => sum + (item.loan_amount || 0), 0) || 0;
@@ -242,7 +217,6 @@ export default function Dashboard() {
         const totalChoVay = totalPawnLoans + totalCreditLoans + totalInstallmentLoans;
 
         // Get interest collected in this month
-        const endMonthlyInterest = startPerfTimer('Dashboard.fetchChartData.monthlyInterestQueries');
         const [pawnHistory, creditHistory, installmentHistory] = await Promise.all([
           supabase
             .from('pawn_history')
@@ -275,7 +249,6 @@ export default function Dashboard() {
             .gte('created_at', monthStart.toISOString())
             .lte('created_at', monthEnd.toISOString())
         ]);
-        endMonthlyInterest();
 
         // Calculate total interest collected in this month
         const totalPawnInterest = pawnHistory.data?.reduce((sum, item) => sum + (item.credit_amount || 0), 0) || 0;
@@ -288,7 +261,6 @@ export default function Dashboard() {
           choVay: totalChoVay,
           loiNhuan: totalLoiNhuan
         });
-        endMonthLoop();
       }
 
       // Check if this request is still the latest one
@@ -303,16 +275,12 @@ export default function Dashboard() {
       if (currentRequestId === chartRequestIdRef.current) {
         setChartLoading(false);
       }
-      endFetchChartData();
     }
   };
 
   // Fetch recent transactions (similar to TransactionDetailsTable but limit to 10)
   const fetchRecentTransactions = async () => {
     if (!currentStore?.id) return;
-    const endFetchRecentTransactions = startPerfTimer('Dashboard.fetchRecentTransactions', {
-      context: { storeId: currentStore.id },
-    });
 
     const currentRequestId = ++transactionsRequestIdRef.current;
 
@@ -380,7 +348,6 @@ export default function Dashboard() {
       };
 
       // Fetch all transaction data (limited for performance)
-      const endHistoryQueries = startPerfTimer('Dashboard.fetchRecentTransactions.parallelQueries');
       const [creditHistoryData, pawnHistoryData, installmentHistoryData, storeFundData, transactionsData] = await Promise.all([
         supabase
           .from('credit_history')
@@ -443,7 +410,6 @@ export default function Dashboard() {
           .order('created_at', { ascending: false })
           .limit(50)
       ]);
-      endHistoryQueries();
 
       // Process each data source
       if (creditHistoryData.data) {
@@ -474,7 +440,6 @@ export default function Dashboard() {
       if (transactionsData.data) processItems(transactionsData.data, 'Thu chi');
 
       // Sort by date and take only 10 most recent
-      const endSortTransactions = startPerfTimer('Dashboard.fetchRecentTransactions.sortAndSlice');
       allHistoryItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       // Check if this request is still the latest one
@@ -483,7 +448,6 @@ export default function Dashboard() {
       }
 
       setRecentTransactions(allHistoryItems.slice(0, 10));
-      endSortTransactions();
 
     } catch (err) {
       console.error('Error fetching recent transactions:', err);
@@ -491,7 +455,6 @@ export default function Dashboard() {
       if (currentRequestId === transactionsRequestIdRef.current) {
         setTransactionsLoading(false);
       }
-      endFetchRecentTransactions();
     }
   };
 

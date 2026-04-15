@@ -11,7 +11,6 @@ import { countPawnWarnings } from "@/lib/pawn-warnings";
 import { countCreditWarnings } from "@/lib/credit-warnings";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
-import { startPerfTimer } from "@/lib/perf-debug";
 
 // This interface will represent the notification data structure
 interface NotificationCounts {
@@ -113,7 +112,6 @@ const StoreDropdown = memo(({
 StoreDropdown.displayName = 'StoreDropdown';
 
 export function TopNavbar() {
-  const isNuvorasBuild = process.env.NEXT_PUBLIC_BUILD_NAME === 'nuvoras';
   // This state will be replaced with data from your backend API
   const [notificationCounts, setNotificationCounts] = useState<NotificationCounts>({
     storeInvoices: 0,
@@ -153,9 +151,6 @@ export function TopNavbar() {
       
       // Replace with your actual API call to get notifications for the selected store
       const fetchNotificationsForStore = async () => {
-        const endFetchNotifications = startPerfTimer('TopNavbar.fetchNotificationsForStore', {
-          context: { storeId: currentStore.id },
-        });
         try {
           // Initialize counts with zeros
           let overdueInstallments = 0;
@@ -163,10 +158,8 @@ export function TopNavbar() {
           let creditWarningsCount = 0;
           
           // Only fetch installment warnings if user has permission
-          if (isNuvorasBuild && hasPermission('xem_danh_sach_hop_dong_tra_gop')) {
-            const endInstallmentWarnings = startPerfTimer('TopNavbar.fetchNotificationsForStore.countInstallmentWarnings');
+          if (hasPermission('xem_danh_sach_hop_dong_tra_gop')) {
             const { count, error } = await countInstallmentWarnings(currentStore.id);
-            endInstallmentWarnings();
             if (error) {
               console.error('Error fetching overdue installments count:', error);
             } else {
@@ -176,9 +169,7 @@ export function TopNavbar() {
           
           // Only fetch pawn warnings if user has permission
           if (hasPermission('xem_danh_sach_hop_dong_cam_do')) {
-            const endPawnWarnings = startPerfTimer('TopNavbar.fetchNotificationsForStore.countPawnWarnings');
             const { count, error } = await countPawnWarnings(currentStore.id);
-            endPawnWarnings();
             if (error) {
               console.error('Error fetching pawn warnings count:', error);
             } else {
@@ -187,10 +178,8 @@ export function TopNavbar() {
           }
           
           // Only fetch credit warnings if user has permission
-          if (isNuvorasBuild && hasPermission('xem_danh_sach_hop_dong_tin_chap')) {
-            const endCreditWarnings = startPerfTimer('TopNavbar.fetchNotificationsForStore.countCreditWarnings');
+          if (hasPermission('xem_danh_sach_hop_dong_tin_chap')) {
             const { count, error } = await countCreditWarnings(currentStore.id);
-            endCreditWarnings();
             if (error) {
               console.error('Error fetching credit warnings count:', error);
             } else {
@@ -210,8 +199,6 @@ export function TopNavbar() {
           setNotificationCounts(mockData);
         } catch (error) {
           console.error('Error fetching notifications', error);
-        } finally {
-          endFetchNotifications();
         }
       };
       
@@ -302,34 +289,30 @@ export function TopNavbar() {
               {renderNotificationBadge(notificationCounts.pawnInvoices)}
             </button>
           </div>
-          {isNuvorasBuild && (
-            <div 
-              className="p-2.5 hover:bg-white/15 transition-all duration-200 rounded-lg relative group" 
-              title={`Tín chấp có ${notificationCounts.loanInvoices} hóa đơn cần xử lý`}
+          <div 
+            className="p-2.5 hover:bg-white/15 transition-all duration-200 rounded-lg relative group" 
+            title={`Tín chấp có ${notificationCounts.loanInvoices} hóa đơn cần xử lý`}
+          >
+            <button 
+              className="flex items-center justify-center"
+              onClick={() => router.push('/credit-warnings')}
             >
-              <button 
-                className="flex items-center justify-center"
-                onClick={() => router.push('/credit-warnings')}
-              >
-                <DollarSign className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
-                {renderNotificationBadge(notificationCounts.loanInvoices)}
-              </button>
-            </div>
-          )}
-          {isNuvorasBuild && (
-            <div 
-              className="p-2.5 hover:bg-white/15 transition-all duration-200 rounded-lg relative group" 
-              title={`Trả góp có ${notificationCounts.installmentInvoices} hợp đồng cần xử lý`}
+              <DollarSign className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
+              {renderNotificationBadge(notificationCounts.loanInvoices)}
+            </button>
+          </div>
+          <div 
+            className="p-2.5 hover:bg-white/15 transition-all duration-200 rounded-lg relative group" 
+            title={`Trả góp có ${notificationCounts.installmentInvoices} hợp đồng cần xử lý`}
+          >
+            <button 
+              className="flex items-center justify-center"
+              onClick={() => router.push('/installment-warnings')}
             >
-              <button 
-                className="flex items-center justify-center"
-                onClick={() => router.push('/installment-warnings')}
-              >
-                <Salad className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
-                {renderNotificationBadge(notificationCounts.installmentInvoices)}
-              </button>
-            </div>
-          )}
+              <Salad className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
+              {renderNotificationBadge(notificationCounts.installmentInvoices)}
+            </button>
+          </div>
         </div>
         
         {/* Memomized Store Dropdown Component với storeVersion để buộc re-render */}

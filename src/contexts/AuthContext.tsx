@@ -3,8 +3,8 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode, useCallback, useRef } from "react";
 import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
 import ActivityTracker from "@/components/ActivityTracker";
-import { useQueryClient } from "@tanstack/react-query";
 
 interface AuthContextType {
   user: any | null;
@@ -33,7 +33,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const queryClient = useQueryClient();
+  const router = useRouter();
   const lastUserIdRef = useRef<string | null>(null);
 
   const fetchAuthData = useCallback(async (forceRefresh = false) => {
@@ -117,14 +117,21 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             break;
 
           case 'SIGNED_OUT':
-            lastUserIdRef.current = null;
+            console.log('User signed out');
             setUser(null);
             setPermissions([]);
             setIsAdmin(false);
             setError(null);
-            setLoading(false);
-            queryClient.clear();
-            window.location.replace("/");
+            
+            // Check if current page is public (consistent with middleware)
+            const currentPath = window.location.pathname;
+            const publicPaths = ['/', '/login', '/signup', '/portfolio/about', '/portfolio/projects'];
+            const isPublicPath = publicPaths.includes(currentPath);
+            
+            // If not on a public path, redirect to home
+            if (!isPublicPath) {
+              router.push('/');
+            }
             break;
 
           case 'USER_UPDATED':
@@ -145,7 +152,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     );
 
     return () => subscription.unsubscribe();
-  }, [fetchAuthData, queryClient]);
+  }, [fetchAuthData, router]);
 
   const hasPermission = (permissionId: string) =>
     isAdmin ? true : permissions.includes(permissionId);

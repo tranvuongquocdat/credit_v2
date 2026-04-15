@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState, Suspense } from 'react';
-import { signIn, getCurrentUser } from '../../lib/auth';
+import { signIn } from '../../lib/auth';
 import { useRouter } from 'next/navigation';
 
 function LoginForm() {
@@ -28,16 +28,8 @@ function LoginForm() {
           setError(error.message || 'Đã có lỗi xảy ra khi đăng nhập');
         }
       } else {
-        const currentUser = await getCurrentUser(true);
-        const role = currentUser?.role;
-        const isV2 = process.env.NEXT_PUBLIC_BUILD_NAME === 'nuvoras_v2';
-        if (role === 'superadmin') {
-          router.push('/admins');
-        } else if (isV2) {
-          router.push('/pawns');
-        } else {
-          router.push('/installments');
-        }
+        router.refresh();
+        router.push('/installments');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Đã có lỗi xảy ra');
