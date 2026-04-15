@@ -2,9 +2,58 @@ import React, { forwardRef, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
-import { DayPicker } from 'react-day-picker';
+import { DayPicker, useNavigation } from 'react-day-picker';
 import { Input } from './input';
 import 'react-day-picker/dist/style.css';
+
+function CalendarCaption({ displayMonth, fromYear = 2015, toYear = 2050, fromDate, toDate }: {
+  displayMonth: Date;
+  fromYear?: number;
+  toYear?: number;
+  fromDate?: Date;
+  toDate?: Date;
+}) {
+  const { goToMonth, nextMonth, previousMonth } = useNavigation();
+
+  const startYear = fromDate ? fromDate.getFullYear() : fromYear;
+  const endYear = toDate ? toDate.getFullYear() : toYear;
+
+  const months = Array.from({ length: 12 }, (_, i) => ({
+    value: i,
+    label: format(new Date(displayMonth.getFullYear(), i, 1), 'MMMM', { locale: vi }),
+  }));
+  const years = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
+
+  const btnCls = "inline-flex items-center justify-center rounded-md h-7 w-7 border border-input bg-background hover:bg-accent hover:text-accent-foreground disabled:opacity-50 disabled:pointer-events-none cursor-pointer";
+  const selectCls = "text-sm border border-gray-200 rounded px-1 py-0.5 cursor-pointer bg-white";
+
+  return (
+    <div className="flex items-center justify-between pt-1">
+      <button className={btnCls} onClick={() => previousMonth && goToMonth(previousMonth)} disabled={!previousMonth} type="button">
+        ‹
+      </button>
+      <div className="flex gap-1 items-center">
+        <select
+          className={selectCls}
+          value={displayMonth.getMonth()}
+          onChange={e => goToMonth(new Date(displayMonth.getFullYear(), +e.target.value))}
+        >
+          {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+        </select>
+        <select
+          className={selectCls}
+          value={displayMonth.getFullYear()}
+          onChange={e => goToMonth(new Date(+e.target.value, displayMonth.getMonth()))}
+        >
+          {years.map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+      </div>
+      <button className={btnCls} onClick={() => nextMonth && goToMonth(nextMonth)} disabled={!nextMonth} type="button">
+        ›
+      </button>
+    </div>
+  );
+}
 
 interface DatePickerProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value'> {
   value: string;
@@ -131,7 +180,6 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
             locale={vi}
             showOutsideDays
             className="p-3"
-            captionLayout="dropdown"
             fromYear={2015}
             toYear={2050}
             toDate={maxDate ? new Date(maxDate) : undefined}
@@ -141,12 +189,8 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
               month: "space-y-4",
               caption: "flex justify-center pt-1 relative items-center",
               caption_label: "text-sm font-medium",
-              caption_dropdowns: "flex gap-1",
-              dropdown: "text-sm border border-gray-200 rounded px-1 py-0.5 cursor-pointer bg-white",
-              dropdown_month: "",
-              dropdown_year: "",
               nav: "space-x-1 flex items-center",
-              nav_button: "inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-7 w-7 cursor-pointer",
+              nav_button: "inline-flex items-center justify-center rounded-md text-sm font-medium disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-7 w-7 cursor-pointer",
               nav_button_previous: "absolute left-1",
               nav_button_next: "absolute right-1",
               table: "w-full border-collapse space-y-1",
@@ -154,7 +198,7 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
               head_cell: "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]",
               row: "flex w-full mt-2",
               cell: "text-center text-sm p-0 relative [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
-              day: "inline-flex items-center justify-center rounded-md text-sm font-normal ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 aria-selected:opacity-100 h-9 w-9 cursor-pointer hover:bg-accent hover:text-accent-foreground",
+              day: "inline-flex items-center justify-center rounded-md text-sm font-normal disabled:pointer-events-none disabled:opacity-50 aria-selected:opacity-100 h-9 w-9 cursor-pointer hover:bg-accent hover:text-accent-foreground",
               day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
               day_today: "bg-accent text-accent-foreground",
               day_outside: "text-muted-foreground opacity-50",
@@ -163,8 +207,15 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
               day_hidden: "invisible",
             }}
             components={{
-              IconLeft: () => <span>‹</span>,
-              IconRight: () => <span>›</span>,
+              Caption: ({ displayMonth }) => (
+                <CalendarCaption
+                  displayMonth={displayMonth}
+                  fromYear={2015}
+                  toYear={2050}
+                  fromDate={minDate ? new Date(minDate) : undefined}
+                  toDate={maxDate ? new Date(maxDate) : undefined}
+                />
+              ),
             }}
           />
 
