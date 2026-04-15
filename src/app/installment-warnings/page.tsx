@@ -32,6 +32,7 @@ import { format } from 'date-fns';
 import { formatCurrencyExcel } from "@/lib/utils";
 
 export default function InstallmentWarningsPage() {
+  const isNuvorasBuild = process.env.NEXT_PUBLIC_BUILD_NAME === 'nuvoras';
   const [installments, setInstallments] = useState<InstallmentWithCustomer[]>([]);
   const [filteredInstallments, setFilteredInstallments] = useState<InstallmentWithCustomer[]>([]);
   const [allFilteredWarnings, setAllFilteredWarnings] = useState<any[]>([]); // Store all filtered warnings
@@ -49,9 +50,9 @@ export default function InstallmentWarningsPage() {
   const [processingPayment, setProcessingPayment] = useState(false);
   const { hasPermission, loading: permissionsLoading } = usePermissions();
   // Kiểm tra quyền xem danh sách hợp đồng trả góp
-  const canViewInstallmentsList = hasPermission('xem_danh_sach_hop_dong_tra_gop');
+  const canViewInstallmentsList = isNuvorasBuild && hasPermission('xem_danh_sach_hop_dong_tra_gop');
   // Kiểm tra quyền thanh toán nhanh
-  const canPayInstallment = hasPermission('dong_lai_tra_gop');
+  const canPayInstallment = isNuvorasBuild && hasPermission('dong_lai_tra_gop');
   
   const router = useRouter();
   
@@ -496,6 +497,10 @@ export default function InstallmentWarningsPage() {
       {permissionsLoading ? (
         <div className="p-4 border rounded-md mb-4 bg-gray-50">
           <p className="text-center text-gray-500">Đang tải...</p>
+        </div>
+      ) : !isNuvorasBuild ? (
+        <div className="p-4 border rounded-md mb-4 bg-gray-50">
+          <p className="text-center text-gray-500">Tính năng cảnh báo trả góp đã được ẩn ở build hiện tại</p>
         </div>
       ) : !canViewInstallmentsList ? (
         <div className="p-4 border rounded-md mb-4 bg-gray-50">

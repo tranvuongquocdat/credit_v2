@@ -1,10 +1,17 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { signOut } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { 
   FiHome, 
   FiCreditCard, 
@@ -141,33 +148,42 @@ const sidebarItems: SidebarItem[] = [
   },
 ];
 
-export default function Sidebar() {
-  const [isCollapsed, setIsCollapsed] = useState(true);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
+export interface SidebarProps {
+  isCollapsed: boolean;
+  onToggleCollapsed: () => void;
+}
+
+export default function Sidebar({ isCollapsed, onToggleCollapsed }: SidebarProps) {
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
+  const isNuvorasBuild = process.env.NEXT_PUBLIC_BUILD_NAME === 'nuvoras';
 
   // Đọc user & trạng thái loading từ AuthContext (đã cache ở AuthProvider)
   const { user: currentUser, loading: authLoading } = useAuth();
   const pathname = usePathname();
-  const router = useRouter();
   const { hasPermission } = usePermissions();
 
-  const toggleExpanded = (path: string) => {
-    if (isCollapsed) {
-      // Nếu sidebar đang thu gọn và bấm vào menu có submenu, mở rộng sidebar
-      setIsCollapsed(false);
-      
-      // Sau đó mở submenu
-      setExpandedItems(prev => 
-        prev.includes(path) ? prev : [...prev, path]
-      );
-      return;
+  // Theo route hiện tại: mở nhóm menu (submenu) tương ứng để thấy mục đang truy cập.
+  // Không cập nhật isCollapsed — nếu user đã thu gọn sidebar thì vẫn thu gọn khi đổi tab/link.
+  useEffect(() => {
+    const parentsToOpen: string[] = [];
+    for (const item of sidebarItems) {
+      if (!item.submenu?.length) continue;
+      const matchesRoute =
+        pathname.startsWith(item.path) ||
+        item.submenu.some((sub) => pathname.startsWith(sub.path));
+      if (matchesRoute) parentsToOpen.push(item.path);
     }
-    
-    setExpandedItems(prev => 
-      prev.includes(path) 
-        ? prev.filter(item => item !== path)
-        : [...prev, path]
+    if (parentsToOpen.length === 0) return;
+    setExpandedItems((prev) => {
+      const merged = new Set(prev);
+      parentsToOpen.forEach((p) => merged.add(p));
+      return Array.from(merged);
+    });
+  }, [pathname]);
+
+  const toggleExpanded = (path: string) => {
+    setExpandedItems((prev) =>
+      prev.includes(path) ? prev.filter((p) => p !== path) : [...prev, path]
     );
   };
 
@@ -180,15 +196,6 @@ export default function Sidebar() {
 
   const isSubItemActive = (subPath: string) => {
     return pathname.startsWith(subPath);
-  };
-
-  const toggleCollapsed = () => {
-    const newCollapsedState = !isCollapsed;
-    setIsCollapsed(newCollapsedState);
-    
-    // Dispatch a custom event for Layout to listen to
-    const event = new CustomEvent('sidebar-toggle', { detail: { isCollapsed: newCollapsedState } });
-    window.dispatchEvent(event);
   };
 
   // Filter sidebar items based on user role and permissions
@@ -210,6 +217,10 @@ export default function Sidebar() {
         
         // Filter out admin-only items for non-admin and non-superadmin users
         if (item.adminOnly && !['admin', 'superadmin'].includes(currentUser?.role)) {
+          return false;
+        }
+
+        if (!isNuvorasBuild && (item.path === '/credits' || item.path === '/installments')) {
           return false;
         }
 
@@ -344,7 +355,7 @@ export default function Sidebar() {
                 <h2 className="text-sm font-medium text-gray-600">Menu điều hướng</h2>
               </div>
               <button
-                onClick={toggleCollapsed}
+                onClick={onToggleCollapsed}
                 className="p-2 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0"
               >
                 <FiChevronLeft size={20} />
@@ -353,7 +364,7 @@ export default function Sidebar() {
           ) : (
             <div className="w-full flex justify-center">
               <button
-                onClick={toggleCollapsed}
+                onClick={onToggleCollapsed}
                 className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
               >
                 <FiMenu size={20} />
@@ -384,7 +395,7 @@ export default function Sidebar() {
               )}
             </div>
             <button
-              onClick={toggleCollapsed}
+              onClick={onToggleCollapsed}
               className="p-2 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0"
             >
               <FiChevronLeft size={20} />
@@ -393,7 +404,7 @@ export default function Sidebar() {
         ) : (
           <div className="w-full flex justify-center">
             <button
-              onClick={toggleCollapsed}
+              onClick={onToggleCollapsed}
               className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
             >
               <FiMenu size={20} />
@@ -408,55 +419,90 @@ export default function Sidebar() {
             <li key={item.path}>
               {item.submenu ? (
                 <div>
-                  <button
-                    onClick={() => toggleExpanded(item.path)}
-                    className={`w-full flex items-center ${!isCollapsed ? 'justify-between' : 'justify-center'} p-2.5 rounded-lg transition-colors ${
-                      isItemActive(item)
-                        ? 'bg-blue-50 text-blue-600'
-                        : 'text-gray-600 hover:bg-gray-50'
-                    } ${
-                      item.superAdminOnly ? 'border-2 border-red-200' : ''
-                    }`}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <span className="flex-shrink-0">{item.icon}</span>
-                      {!isCollapsed && (
-                        <span className={item.redColor ? 'text-red-600 font-medium' : ''}>
+                  {isCollapsed ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className={`w-full flex items-center justify-center p-2.5 rounded-lg transition-colors ${
+                            isItemActive(item)
+                              ? 'bg-blue-50 text-blue-600'
+                              : 'text-gray-600 hover:bg-gray-50'
+                          } ${item.superAdminOnly ? 'border-2 border-red-200' : ''}`}
+                        >
+                          <span className="flex-shrink-0">{item.icon}</span>
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent side="right" align="start" sideOffset={8} className="min-w-[12rem]">
+                        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
                           {item.title}
+                        </DropdownMenuLabel>
+                        {item.submenu.map((subItem) => (
+                          <DropdownMenuItem key={subItem.path} asChild>
+                            <Link
+                              href={subItem.path}
+                              className={`flex cursor-pointer items-center gap-2 ${
+                                isSubItemActive(subItem.path)
+                                  ? 'text-blue-600'
+                                  : 'text-gray-600'
+                              }`}
+                            >
+                              <span className="flex-shrink-0">{subItem.icon}</span>
+                              <span className={subItem.redColor ? 'text-red-600 font-medium' : ''}>
+                                {subItem.title}
+                              </span>
+                            </Link>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(item.path)}
+                        className={`w-full flex items-center justify-between p-2.5 rounded-lg transition-colors ${
+                          isItemActive(item)
+                            ? 'bg-blue-50 text-blue-600'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        } ${item.superAdminOnly ? 'border-2 border-red-200' : ''}`}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <span className="flex-shrink-0">{item.icon}</span>
+                          <span className={item.redColor ? 'text-red-600 font-medium' : ''}>
+                            {item.title}
+                          </span>
+                        </div>
+                        <span className="flex-shrink-0">
+                          {expandedItems.includes(item.path) ? (
+                            <FiChevronDown size={16} />
+                          ) : (
+                            <FiChevronRight size={16} />
+                          )}
                         </span>
+                      </button>
+                      {expandedItems.includes(item.path) && (
+                        <ul className="ml-4 mt-1 space-y-1 border-l border-gray-200 pl-4">
+                          {item.submenu.map((subItem) => (
+                            <li key={subItem.path}>
+                              <Link
+                                href={subItem.path}
+                                className={`flex items-center space-x-3 p-2 rounded-lg transition-colors text-sm ${
+                                  isSubItemActive(subItem.path)
+                                    ? 'bg-blue-50 text-blue-600'
+                                    : 'text-gray-600 hover:bg-gray-50'
+                                }`}
+                              >
+                                <span className="flex-shrink-0">{subItem.icon}</span>
+                                <span className={subItem.redColor ? 'text-red-600 font-medium' : ''}>
+                                  {subItem.title}
+                                </span>
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
                       )}
-                    </div>
-                    {!isCollapsed && (
-                      <span className="flex-shrink-0">
-                        {expandedItems.includes(item.path) ? 
-                          <FiChevronDown size={16} /> : 
-                          <FiChevronRight size={16} />
-                        }
-                      </span>
-                    )}
-                  </button>
-                  
-                  {/* Submenu */}
-                  {!isCollapsed && expandedItems.includes(item.path) && (
-                    <ul className="ml-4 mt-1 space-y-1 border-l border-gray-200 pl-4">
-                      {item.submenu.map((subItem) => (
-                        <li key={subItem.path}>
-                          <Link
-                            href={subItem.path}
-                            className={`flex items-center space-x-3 p-2 rounded-lg transition-colors text-sm ${
-                              isSubItemActive(subItem.path)
-                                ? 'bg-blue-50 text-blue-600'
-                                : 'text-gray-600 hover:bg-gray-50'
-                            }`}
-                          >
-                            <span className="flex-shrink-0">{subItem.icon}</span>
-                            <span className={subItem.redColor ? 'text-red-600 font-medium' : ''}>
-                              {subItem.title}
-                            </span>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
+                    </>
                   )}
                 </div>
               ) : (

@@ -130,6 +130,7 @@ export function BottomNavigation() {
   const pathname = usePathname();
   const { user } = useAuth();
   const [submenuOpen, setSubmenuOpen] = useState<string | null>(null);
+  const isNuvorasBuild = process.env.NEXT_PUBLIC_BUILD_NAME === 'nuvoras';
 
   const handleNavigation = (path: string, hasSubmenu?: boolean, itemPath?: string) => {
     if (hasSubmenu) {
@@ -153,23 +154,31 @@ export function BottomNavigation() {
 
   // Filter items based on user role and permissions
   const getFilteredNavItems = () => {
-    if (!user) return navItems.filter(item => !item.adminOnly && !item.superAdminOnly);
+    if (!user) {
+      return navItems
+        .filter(item => !item.adminOnly && !item.superAdminOnly)
+        .filter(item => isNuvorasBuild || (item.path !== '/credits' && item.path !== '/installments'));
+    }
     
     // If user is superadmin, only show SuperAdmin items
     if (user.role === 'superadmin') {
-      return navItems.filter(item => item.superAdminOnly);
+      return navItems
+        .filter(item => item.superAdminOnly)
+        .filter(item => isNuvorasBuild || (item.path !== '/credits' && item.path !== '/installments'));
     }
     
     // For other users, filter based on permissions
-    return navItems.filter(item => {
-      if (item.superAdminOnly && user.role !== 'superadmin') {
-        return false;
-      }
-      if (item.adminOnly && user.role !== 'admin' && user.role !== 'superadmin') {
-        return false;
-      }
-      return true;
-    });
+    return navItems
+      .filter(item => {
+        if (item.superAdminOnly && user.role !== 'superadmin') {
+          return false;
+        }
+        if (item.adminOnly && user.role !== 'admin' && user.role !== 'superadmin') {
+          return false;
+        }
+        return true;
+      })
+      .filter(item => isNuvorasBuild || (item.path !== '/credits' && item.path !== '/installments'));
   };
 
   const filteredNavItems = getFilteredNavItems();
