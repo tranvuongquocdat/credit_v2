@@ -418,6 +418,8 @@ export function InstallmentPaymentHistoryModal({
         // Tải lại dữ liệu kỳ thanh toán khi thông tin hợp đồng thay đổi
         generatePeriodsFromExpectedMoney(data.id, currentSessionId);
       }
+      // reload transaction history
+      loadTransactionHistory()
     } catch (err) {
       console.error("Error reloading installment info:", err);
     }
