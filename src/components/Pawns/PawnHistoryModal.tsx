@@ -549,10 +549,14 @@ export function PawnHistoryModal({
                   <tr>
                     <td className="py-1 px-2 border font-bold">Tài sản</td>
                     <td className="py-1 px-2 text-right border">
-                      {currentPawn?.collateral_asset?.name ||
-                       (currentPawn?.collateral_detail && typeof currentPawn.collateral_detail === 'object'
-                         ? `${currentPawn.collateral_detail.name}${currentPawn.collateral_detail.quantity ? ` (x${currentPawn.collateral_detail.quantity})` : ''}`
-                         : (currentPawn?.collateral_detail as unknown as string)) || '-'}
+                      {(() => {
+                        const name = currentPawn?.collateral_asset?.name ||
+                          (currentPawn?.collateral_detail && typeof currentPawn.collateral_detail === 'object'
+                            ? currentPawn.collateral_detail.name
+                            : typeof currentPawn?.collateral_detail === 'string' ? currentPawn.collateral_detail : null) || '-';
+                        const qty = currentPawn?.collateral_detail?.quantity;
+                        return qty ? `${name} (x${qty})` : name;
+                      })()}
                     </td>
                   </tr>
                 </tbody>

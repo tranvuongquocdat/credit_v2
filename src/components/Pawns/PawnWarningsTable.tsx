@@ -226,10 +226,14 @@ export function PawnWarningsTable({
                 {pawn.collateral_asset?.code || 'N/A'}
               </td>
               <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center text-xs sm:text-sm">
-                {pawn.collateral_asset?.name ||
-                 (pawn.collateral_detail && typeof pawn.collateral_detail === 'object'
-                   ? `${pawn.collateral_detail.name}${pawn.collateral_detail.quantity ? ` (x${pawn.collateral_detail.quantity})` : ''}`
-                   : pawn.collateral_detail) || 'N/A'}
+                {(() => {
+                  const name = pawn.collateral_asset?.name ||
+                    (pawn.collateral_detail && typeof pawn.collateral_detail === 'object'
+                      ? pawn.collateral_detail.name
+                      : typeof pawn.collateral_detail === 'string' ? pawn.collateral_detail : null) || 'N/A';
+                  const qty = pawn.collateral_detail?.quantity;
+                  return qty ? `${name} (x${qty})` : name;
+                })()}
               </td>
               <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center text-xs sm:text-sm">
                 {formatCurrency(pawn.loan_amount || 0)}
