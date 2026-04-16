@@ -126,11 +126,12 @@ export async function saveCustomPaymentWithAmount(
     }
 
     // 2. Use custom amount instead of auto-calculation from getExpectedMoney
+    // Dùng totalAmount để phản ánh cả tiền tùy chỉnh (otherAmount)
     await recordDailyPaymentsWithCustomAmount(
-      pawnId, 
-      paymentData.startDate, 
+      pawnId,
+      paymentData.startDate,
       paymentData.endDate,
-      paymentData.interestAmount
+      paymentData.totalAmount
     );
     
     // 3. Update loan_period by adding the number of days
