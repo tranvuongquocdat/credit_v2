@@ -256,7 +256,6 @@ export function PawnPaymentForm({
               value={formattedOtherAmount}
               onChange={handleOtherAmountChange}
               className="w-48"
-              inputMode="numeric"
               type="text"
               disabled={disabled}
               placeholder="0"
