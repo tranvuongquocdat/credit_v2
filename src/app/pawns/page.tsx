@@ -237,7 +237,7 @@ export default function PawnsPage() {
             'SĐT': p.customer?.phone || '',
             'CMND': p.customer?.id_number || '',
             'Địa chỉ': (p as any).address || '',
-            'Đồ cầm': p.collateral_detail.name || '',
+            'Đồ cầm': p.collateral_detail?.name || '',
             'Tiền vay': formatCurrencyExcel(p.loan_amount),
             'Lãi phí': getPawnInterestDisplayString(p),
             'Ngày vay': startDateStr,
