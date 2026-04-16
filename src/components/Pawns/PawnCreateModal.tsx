@@ -293,13 +293,6 @@ export function PawnCreateModal({
       setContractCode(generatedCode);
     }
   }, [isOpen, autoGenerateCode]);
-
-  // Reset collateral quantity when modal closes
-  useEffect(() => {
-    if (!isOpen) {
-      setCollateralQuantity('');
-    }
-  }, [isOpen]);
   
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -679,6 +672,7 @@ export function PawnCreateModal({
               onChange={(e) => setCollateralQuantity(e.target.value)}
               placeholder="1"
               min={1}
+              step={1}
               className="w-full sm:w-24"
             />
           </div>
