@@ -125,15 +125,21 @@ export function PawnPaymentForm({
     }
   };
   
-  // Handle other amount change
+  // Handle other amount change - hỗ trợ số âm
   const handleOtherAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value.replace(/\./g, '');
+    const input = e.target.value;
+    const isNegative = input.startsWith('-');
+    const digits = input.replace(/[^0-9]/g, '');
+    // rawValue: "-50000", "50000", hoặc "-" (trạng thái trung gian)
+    const rawValue = isNegative ? (digits ? `-${digits}` : '-') : digits;
     setOtherAmount(rawValue);
-    setFormattedOtherAmount(formatNumber(rawValue));
+    // Format hiển thị với dấu chấm ngăn cách hàng nghìn
+    const formattedDigits = digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    setFormattedOtherAmount(isNegative ? (digits ? `-${formattedDigits}` : '-') : formattedDigits);
   };
   
   // Tính tổng tiền
-  const totalAmount = Number(interestAmount) + Number(otherAmount);
+  const totalAmount = Number(interestAmount) + (Number(otherAmount) || 0);
   
   // Tính ngày đóng tiếp theo dựa trên kỳ hạn
   const nextPaymentDate = (() => {
