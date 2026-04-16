@@ -75,17 +75,20 @@ export function PawnPaymentForm({
   const [interestAmount, setInterestAmount] = useState('0');
   const [formattedInterestAmount, setFormattedInterestAmount] = useState('0');
   
-  const [otherAmount, setOtherAmount] = useState('0');
-  const [formattedOtherAmount, setFormattedOtherAmount] = useState('0');
+  const [otherAmount, setOtherAmount] = useState('');
+  const [formattedOtherAmount, setFormattedOtherAmount] = useState('');
 
   // State để track việc đang tính toán
   const [isCalculating, setIsCalculating] = useState(false);
   const { hasPermission } = usePermissions();
   // Recalculate end date when days change
   useEffect(() => {
-    const start = new Date(startDate);
-    const end = addDays(start, parseInt(days) - 1);
-    setEndDate(format(end, 'yyyy-MM-dd'));
+    const daysNum = parseInt(days);
+    if (!isNaN(daysNum) && daysNum > 0) {
+      const start = new Date(startDate);
+      const end = addDays(start, daysNum - 1);
+      setEndDate(format(end, 'yyyy-MM-dd'));
+    }
   }, [days, startDate]);
   
   // Recalculate interest when dates change - XỬ LÝ ASYNC ĐÚNG CÁCH
@@ -120,7 +123,8 @@ export function PawnPaymentForm({
   // Handle days change
   const handleDaysChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newDays = e.target.value;
-    if (parseInt(newDays) > 0) {
+    // Cho phép xóa trắng để nhập lại
+    if (newDays === '' || parseInt(newDays) > 0) {
       setDays(newDays);
     }
   };
