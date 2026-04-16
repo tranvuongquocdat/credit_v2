@@ -509,7 +509,7 @@ export default function InstallmentWarningsPage() {
         </div>
       ) : !isNuvorasBuild ? (
         <div className="p-4 border rounded-md mb-4 bg-gray-50">
-          <p className="text-center text-gray-500">Tính năng cảnh báo trả góp đã được ẩn ở build hiện tại</p>
+          <p className="text-center text-gray-500">Tính năng không khả dụng</p>
         </div>
       ) : !canViewInstallmentsList ? (
         <div className="p-4 border rounded-md mb-4 bg-gray-50">

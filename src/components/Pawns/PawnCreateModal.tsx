@@ -20,7 +20,7 @@ import { getCustomers, createCustomer } from '@/lib/customer';
 import { getCollateralsByStore } from '@/lib/collateral';
 import { Customer } from '@/models/customer';
 import { Collateral } from '@/models/collateral';
-import { CreatePawnParams, InterestType, PawnStatus } from '@/models/pawn';
+import { CreatePawnParams, InterestType, PawnStatus, CollateralDetail } from '@/models/pawn';
 import { getStoreFinancialData } from '@/lib/store';
 import { AlertCircle } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
@@ -49,11 +49,12 @@ export function PawnCreateModal({
   const [address, setAddress] = useState('');
   const [collateralId, setCollateralId] = useState('');
   const [collateralName, setCollateralName] = useState('');
+  const [collateralQuantity, setCollateralQuantity] = useState<string>('');
   const [collateralAttributes, setCollateralAttributes] = useState<Record<string, string>>({});
   const [loanAmount, setLoanAmount] = useState<string>('');
   const [formattedLoanAmount, setFormattedLoanAmount] = useState<string>('');
   const [interestType, setInterestType] = useState<string>('daily');
-  const [interestNotation, setInterestNotation] = useState<string>('k_per_million');
+  const [interestNotation, setInterestNotation] = useState<string>('k_per_day');
   const [interestValue, setInterestValue] = useState<string>('');
   const [interestPeriod, setInterestPeriod] = useState<string>('30');
   const [loanDate, setLoanDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -256,10 +257,11 @@ export function PawnCreateModal({
     const selected = collaterals.find(c => c.id === collateralId);
     if (selected) {
       setSelectedCollateral(selected);
-      
+
       // Reset collateral attributes when changing collateral type
       setCollateralAttributes({});
-      
+      setCollateralQuantity('');
+
       // Optionally pre-fill loan amount based on collateral default value
       if (selected.default_amount) {
         const defaultAmount = selected.default_amount.toString();
@@ -269,6 +271,7 @@ export function PawnCreateModal({
     } else {
       setSelectedCollateral(null);
       setCollateralAttributes({});
+      setCollateralQuantity('');
     }
   };
 
@@ -422,8 +425,11 @@ export function PawnCreateModal({
       };
       
       // Prepare collateral detail as JSON
-      const collateralDetailJson = {
+      const collateralDetailJson: CollateralDetail = {
         name: collateralName,
+        ...(collateralQuantity && parseInt(collateralQuantity) > 0
+          ? { quantity: parseInt(collateralQuantity) }
+          : {}),
         attributes: collateralAttributes
       };
 
@@ -648,7 +654,7 @@ export function PawnCreateModal({
             <Label htmlFor="collateralName" className="text-left sm:text-right font-medium">
               Tên tài sản <span className="text-red-500">*</span>
             </Label>
-            <Input 
+            <Input
               id="collateralName"
               value={collateralName}
               onChange={(e) => setCollateralName(e.target.value)}
@@ -656,7 +662,21 @@ export function PawnCreateModal({
               required
             />
           </div>
-          
+
+          <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+            <Label htmlFor="collateralQuantity" className="text-left sm:text-right font-medium">Số lượng</Label>
+            <Input
+              id="collateralQuantity"
+              type="number"
+              value={collateralQuantity}
+              onChange={(e) => setCollateralQuantity(e.target.value)}
+              placeholder="1"
+              min={1}
+              step={1}
+              className="w-full sm:w-24"
+            />
+          </div>
+
           {selectedCollateral && (
             <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-start">
               <div className="text-left sm:text-right text-sm text-gray-500">Thông tin tài sản:</div>

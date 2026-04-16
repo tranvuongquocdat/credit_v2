@@ -75,17 +75,20 @@ export function PawnPaymentForm({
   const [interestAmount, setInterestAmount] = useState('0');
   const [formattedInterestAmount, setFormattedInterestAmount] = useState('0');
   
-  const [otherAmount, setOtherAmount] = useState('0');
-  const [formattedOtherAmount, setFormattedOtherAmount] = useState('0');
+  const [otherAmount, setOtherAmount] = useState('');
+  const [formattedOtherAmount, setFormattedOtherAmount] = useState('');
 
   // State để track việc đang tính toán
   const [isCalculating, setIsCalculating] = useState(false);
   const { hasPermission } = usePermissions();
   // Recalculate end date when days change
   useEffect(() => {
-    const start = new Date(startDate);
-    const end = addDays(start, parseInt(days) - 1);
-    setEndDate(format(end, 'yyyy-MM-dd'));
+    const daysNum = parseInt(days);
+    if (!isNaN(daysNum) && daysNum > 0) {
+      const start = new Date(startDate);
+      const end = addDays(start, daysNum - 1);
+      setEndDate(format(end, 'yyyy-MM-dd'));
+    }
   }, [days, startDate]);
   
   // Recalculate interest when dates change - XỬ LÝ ASYNC ĐÚNG CÁCH
@@ -120,27 +123,27 @@ export function PawnPaymentForm({
   // Handle days change
   const handleDaysChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newDays = e.target.value;
-    if (parseInt(newDays) > 0) {
+    // Cho phép xóa trắng để nhập lại
+    if (newDays === '' || parseInt(newDays) > 0) {
       setDays(newDays);
     }
   };
   
-  // Handle interest amount change
-  const handleInterestAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value.replace(/\./g, '');
-    setInterestAmount(rawValue);
-    setFormattedInterestAmount(formatNumber(rawValue));
-  };
-  
-  // Handle other amount change
+  // Handle other amount change - hỗ trợ số âm
   const handleOtherAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value.replace(/\./g, '');
+    const input = e.target.value;
+    const isNegative = input.startsWith('-');
+    const digits = input.replace(/[^0-9]/g, '');
+    // rawValue: "-50000", "50000", hoặc "-" (trạng thái trung gian)
+    const rawValue = isNegative ? (digits ? `-${digits}` : '-') : digits;
     setOtherAmount(rawValue);
-    setFormattedOtherAmount(formatNumber(rawValue));
+    // Format hiển thị với dấu chấm ngăn cách hàng nghìn
+    const formattedDigits = digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    setFormattedOtherAmount(isNegative ? (digits ? `-${formattedDigits}` : '-') : formattedDigits);
   };
   
   // Tính tổng tiền
-  const totalAmount = Number(interestAmount) + Number(otherAmount);
+  const totalAmount = Number(interestAmount) + (Number(otherAmount) || 0);
   
   // Tính ngày đóng tiếp theo dựa trên kỳ hạn
   const nextPaymentDate = (() => {
@@ -185,7 +188,7 @@ export function PawnPaymentForm({
       endDate,
       days: Number(days),
       interestAmount: Number(interestAmount),
-      otherAmount: Number(otherAmount),
+      otherAmount: Number(otherAmount) || 0,
       totalAmount
     });
   };
@@ -236,12 +239,11 @@ export function PawnPaymentForm({
           <div className="flex items-center gap-3">
             <div className="relative">
               <Input
-                value={formattedInterestAmount} 
-                onChange={handleInterestAmountChange}
-                className="w-48"
+                value={formattedInterestAmount}
+                className="w-48 bg-gray-50 cursor-not-allowed"
                 inputMode="numeric"
                 type="text"
-                disabled={disabled}
+                disabled={true}
               />
               {isCalculating && (
                 <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
@@ -249,7 +251,20 @@ export function PawnPaymentForm({
                 </div>
               )}
             </div>
-            <span className="text-gray-500 text-sm">VNĐ (Tự động tính khi thay đổi số ngày)</span>
+            <span className="text-gray-500 text-sm">VNĐ (Tự động tính, không thể thay đổi)</span>
+          </div>
+
+          <div className="text-right pr-2">Tiền tùy chỉnh :</div>
+          <div className="flex items-center gap-3">
+            <Input
+              value={formattedOtherAmount}
+              onChange={handleOtherAmountChange}
+              className="w-48"
+              type="text"
+              disabled={disabled}
+              placeholder="0"
+            />
+            <span className="text-gray-500 text-sm">VNĐ (có thể âm)</span>
           </div>
 
           <div className="text-right pr-2">Tổng tiền lãi phí :</div>

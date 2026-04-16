@@ -14,6 +14,12 @@ export enum InterestType {
   FIXED_AMOUNT = 'fixed_amount' // Số tiền cố định
 }
 
+export interface CollateralDetail {
+  name: string;
+  quantity?: number;
+  attributes?: Record<string, string>;
+}
+
 export interface Pawn {
   id: string;
   store_id: string;
@@ -23,7 +29,7 @@ export interface Pawn {
   phone?: string | null;
   address?: string | null;
   collateral_id: string;        // ID của tài sản thế chấp
-  collateral_detail?: any | null; // Chi tiết về tài sản dưới dạng JSON: {name: string, attributes: {attr_01: string, ...}}
+  collateral_detail?: CollateralDetail | null; // Chi tiết về tài sản dưới dạng JSON: {name: string, attributes: {attr_01: string, ...}}
   loan_amount: number;
   interest_type: InterestType;
   interest_value: number;
@@ -46,7 +52,7 @@ export interface CreatePawnParams {
   phone?: string;
   address?: string;
   collateral_id: string;
-  collateral_detail?: any;
+  collateral_detail?: CollateralDetail;
   loan_amount: number;
   interest_type: InterestType;
   interest_value: number;
@@ -67,7 +73,7 @@ export interface UpdatePawnParams {
   phone?: string;
   address?: string;
   collateral_id?: string;
-  collateral_detail?: any;
+  collateral_detail?: CollateralDetail;
   loan_amount?: number;
   interest_type?: InterestType;
   interest_value?: number;
