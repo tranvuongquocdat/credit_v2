@@ -550,7 +550,9 @@ export function PawnHistoryModal({
                     <td className="py-1 px-2 border font-bold">Tài sản</td>
                     <td className="py-1 px-2 text-right border">
                       {currentPawn?.collateral_asset?.name ||
-                       currentPawn?.collateral_detail?.name || '-'}
+                       (currentPawn?.collateral_detail && typeof currentPawn.collateral_detail === 'object'
+                         ? currentPawn.collateral_detail.name
+                         : (currentPawn?.collateral_detail as unknown as string)) || '-'}
                     </td>
                   </tr>
                 </tbody>
