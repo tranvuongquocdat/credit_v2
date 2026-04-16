@@ -54,7 +54,7 @@ export function PawnCreateModal({
   const [loanAmount, setLoanAmount] = useState<string>('');
   const [formattedLoanAmount, setFormattedLoanAmount] = useState<string>('');
   const [interestType, setInterestType] = useState<string>('daily');
-  const [interestNotation, setInterestNotation] = useState<string>('k_per_million');
+  const [interestNotation, setInterestNotation] = useState<string>('k_per_day');
   const [interestValue, setInterestValue] = useState<string>('');
   const [interestPeriod, setInterestPeriod] = useState<string>('30');
   const [loanDate, setLoanDate] = useState(format(new Date(), 'yyyy-MM-dd'));
