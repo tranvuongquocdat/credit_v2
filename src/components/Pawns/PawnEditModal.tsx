@@ -169,13 +169,15 @@ export function PawnEditModal({
     const selected = collaterals.find(c => c.id === collateralId);
     if (selected) {
       setSelectedCollateral(selected);
-      
+
       // Reset collateral attributes when changing collateral type
       setCollateralAttributes({});
-      
+      setCollateralQuantity('');
+
     } else {
       setSelectedCollateral(null);
       setCollateralAttributes({});
+      setCollateralQuantity('');
     }
   };
 
@@ -246,6 +248,11 @@ export function PawnEditModal({
         } else if (typeof pawnData.collateral_detail === 'string') {
           // Handle legacy string format
           setCollateralName(pawnData.collateral_detail);
+          setCollateralAttributes({});
+          setCollateralQuantity('');
+        } else {
+          // Handle null/undefined case
+          setCollateralName('');
           setCollateralAttributes({});
           setCollateralQuantity('');
         }
