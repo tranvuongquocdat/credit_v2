@@ -184,7 +184,7 @@ export function PawnPaymentForm({
       endDate,
       days: Number(days),
       interestAmount: Number(interestAmount),
-      otherAmount: Number(otherAmount),
+      otherAmount: Number(otherAmount) || 0,
       totalAmount
     });
   };
