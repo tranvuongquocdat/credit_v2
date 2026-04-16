@@ -250,6 +250,20 @@ export function PawnPaymentForm({
             <span className="text-gray-500 text-sm">VNĐ (Tự động tính, không thể thay đổi)</span>
           </div>
 
+          <div className="text-right pr-2">Tiền tùy chỉnh :</div>
+          <div className="flex items-center gap-3">
+            <Input
+              value={formattedOtherAmount}
+              onChange={handleOtherAmountChange}
+              className="w-48"
+              inputMode="numeric"
+              type="text"
+              disabled={disabled}
+              placeholder="0"
+            />
+            <span className="text-gray-500 text-sm">VNĐ (có thể âm)</span>
+          </div>
+
           <div className="text-right pr-2">Tổng tiền lãi phí :</div>
           <div className="text-red-600 font-bold">
             {new Intl.NumberFormat('vi-VN').format(totalAmount)} VNĐ
