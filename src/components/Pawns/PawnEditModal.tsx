@@ -19,7 +19,7 @@ import { getPawnById, hasPawnAnyPayments, updatePawn } from '@/lib/pawn';
 import { getCustomers } from '@/lib/customer';
 import { getCollateralById, getCollateralsByStore } from '@/lib/collateral';
 import { Customer } from '@/models/customer';
-import { PawnStatus, UpdatePawnParams, Pawn, InterestType } from '@/models/pawn';
+import { PawnStatus, UpdatePawnParams, Pawn, InterestType, CollateralDetail } from '@/models/pawn';
 import { toast } from '@/components/ui/use-toast';
 import { MoneyInput } from '@/components/ui/money-input';
 import { Collateral } from '@/models/collateral';
@@ -63,6 +63,7 @@ export function PawnEditModal({
   
   // State for collateral details
   const [collateralName, setCollateralName] = useState('');
+  const [collateralQuantity, setCollateralQuantity] = useState<string>('');
   const [collateralAttributes, setCollateralAttributes] = useState<Record<string, string>>({});
   const [collaterals, setCollaterals] = useState<Collateral[]>([]);
   
@@ -241,10 +242,12 @@ export function PawnEditModal({
         if (pawnData.collateral_detail && typeof pawnData.collateral_detail === 'object') {
           setCollateralName(pawnData.collateral_detail.name || '');
           setCollateralAttributes(pawnData.collateral_detail.attributes || {});
+          setCollateralQuantity(pawnData.collateral_detail.quantity?.toString() || '');
         } else if (typeof pawnData.collateral_detail === 'string') {
           // Handle legacy string format
           setCollateralName(pawnData.collateral_detail);
           setCollateralAttributes({});
+          setCollateralQuantity('');
         }
         
         // Load customers list filtered by current store
@@ -339,8 +342,11 @@ export function PawnEditModal({
       };
       
       // Prepare collateral detail as JSON
-      const collateralDetailJson = {
+      const collateralDetailJson: CollateralDetail = {
         name: collateralName,
+        ...(collateralQuantity && parseInt(collateralQuantity) > 0
+          ? { quantity: parseInt(collateralQuantity) }
+          : {}),
         attributes: collateralAttributes
       };
 
@@ -494,7 +500,7 @@ export function PawnEditModal({
               <Label htmlFor="collateralName" className="text-left sm:text-right font-medium">
                 Tên tài sản <span className="text-red-500">*</span>
               </Label>
-              <Input 
+              <Input
                 id="collateralName"
                 value={collateralName}
                 onChange={(e) => setCollateralName(e.target.value)}
@@ -502,7 +508,21 @@ export function PawnEditModal({
                 required
               />
             </div>
-            
+
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <Label htmlFor="collateralQuantity" className="text-left sm:text-right font-medium">Số lượng</Label>
+              <Input
+                id="collateralQuantity"
+                type="number"
+                value={collateralQuantity}
+                onChange={(e) => setCollateralQuantity(e.target.value)}
+                placeholder="1"
+                min={1}
+                step={1}
+                className="w-full sm:w-24"
+              />
+            </div>
+
             {selectedCollateral && (
               <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-start">
                 <div className="text-left sm:text-right text-sm text-gray-500">Thông tin tài sản:</div>
