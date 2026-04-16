@@ -125,13 +125,6 @@ export function PawnPaymentForm({
     }
   };
   
-  // Handle interest amount change
-  const handleInterestAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value.replace(/\./g, '');
-    setInterestAmount(rawValue);
-    setFormattedInterestAmount(formatNumber(rawValue));
-  };
-  
   // Handle other amount change
   const handleOtherAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value.replace(/\./g, '');
@@ -236,12 +229,11 @@ export function PawnPaymentForm({
           <div className="flex items-center gap-3">
             <div className="relative">
               <Input
-                value={formattedInterestAmount} 
-                onChange={handleInterestAmountChange}
-                className="w-48"
+                value={formattedInterestAmount}
+                className="w-48 bg-gray-50 cursor-not-allowed"
                 inputMode="numeric"
                 type="text"
-                disabled={disabled}
+                disabled={true}
               />
               {isCalculating && (
                 <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
@@ -249,7 +241,7 @@ export function PawnPaymentForm({
                 </div>
               )}
             </div>
-            <span className="text-gray-500 text-sm">VNĐ (Tự động tính khi thay đổi số ngày)</span>
+            <span className="text-gray-500 text-sm">VNĐ (Tự động tính, không thể thay đổi)</span>
           </div>
 
           <div className="text-right pr-2">Tổng tiền lãi phí :</div>
