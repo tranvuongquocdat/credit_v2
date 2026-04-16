@@ -1,7 +1,16 @@
 /**
  * Test script: So sánh kết quả RPC query với fetchAllData logic hiện tại
  *
- * Chạy: npx tsx scripts/test-rpc-queries.ts
+ * Chạy:
+ *   npx tsx scripts/test-rpc-queries.ts
+ *   TEST_RPC_TARGET=installment npx tsx scripts/test-rpc-queries.ts
+ *   TEST_RPC_TARGET=all npx tsx scripts/test-rpc-queries.ts
+ *
+ * Hoặc: npx tsx scripts/test-rpc-installment-queries.ts (chỉ trả góp)
+ *
+ * Biến môi trường: `.env.local` (NEXT_PUBLIC_SUPABASE_URL, key, TEST_STORE_ID, …)
+ *
+ * TEST_RPC_TARGET: `credit` (mặc định) | `installment` | `all`
  *
  * Script này:
  * 1. Chạy RPC function mới (GROUP BY)
@@ -30,6 +39,10 @@ loadEnvConfig(projectDir);
 // ─────────────────────────────────────────────
 // CONFIG — sửa các giá trị này trước khi chạy
 // ─────────────────────────────────────────────
+const rawTarget = (process.env.TEST_RPC_TARGET ?? 'credit').toLowerCase();
+const testRpcTarget: 'credit' | 'installment' | 'all' =
+  rawTarget === 'installment' ? 'installment' : rawTarget === 'all' ? 'all' : 'credit';
+
 const CONFIG = {
   supabaseUrl:   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   supabaseKey:   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -40,6 +53,7 @@ const CONFIG = {
   // Bật true để so sánh với logic cũ (fetchAllData + processItems)
   // Bật false để chỉ chạy RPC và in kết quả
   compareWithOldLogic: true,
+  testRpcTarget,
 };
 // ─────────────────────────────────────────────
 
@@ -117,6 +131,10 @@ function translateTransactionType(tx: string): string {
   return map[tx] ?? tx;
 }
 
+// Prefix id so sánh trong script (khác id trong UI `processItems`)
+const ID_PREFIX_CREDIT = 'tin-chap';
+const ID_PREFIX_INSTALLMENT = 'tra-gop';
+
 // ─────────────────────────────────────────────
 // LOGIC CŨ: credit_history → FundHistoryItem[]
 // (tương đương processItems với source = 'Tín chấp')
@@ -140,6 +158,7 @@ async function fetchOldCreditHistory(startDateISO: string, endDateISO: string) {
   );
 
   const items: OldFundHistoryItem[] = [];
+  const pfx = ID_PREFIX_CREDIT;
 
   (rawData as OldRawRow[]).forEach((item) => {
     if (!item.created_at) return;
@@ -150,7 +169,7 @@ async function fetchOldCreditHistory(startDateISO: string, endDateISO: string) {
 
     if (item.transaction_type === 'payment') {
       items.push({
-        id: `tin-chap-${contractCode}-${item.created_at}`,
+        id: `${pfx}-${contractCode}-${item.created_at}`,
         date: item.created_at,
         description: 'Đóng lãi',
         income: amount > 0 ? amount : 0,
@@ -162,7 +181,7 @@ async function fetchOldCreditHistory(startDateISO: string, endDateISO: string) {
 
       if (item.is_deleted && item.updated_at) {
         items.push({
-          id: `tin-chap-${contractCode}-${item.created_at}-cancel`,
+          id: `${pfx}-${contractCode}-${item.created_at}-cancel`,
           date: item.updated_at,
           description: 'Huỷ đóng lãi',
           income: amount < 0 ? -amount : 0,
@@ -174,7 +193,7 @@ async function fetchOldCreditHistory(startDateISO: string, endDateISO: string) {
       }
     } else {
       items.push({
-        id: `tin-chap-${contractCode}-${item.created_at}`,
+        id: `${pfx}-${contractCode}-${item.created_at}`,
         date: item.created_at,
         description: translateTransactionType(item.transaction_type),
         income: amount > 0 ? amount : 0,
@@ -204,16 +223,15 @@ async function fetchNewCreditHistory(startDateISO: string, endDateISO: string) {
     return [];
   }
 
+  const pfx = ID_PREFIX_CREDIT;
+
   return (data as NewCreditRow[]).map((row) => {
     const amount = Number(row.credit_amount) - Number(row.debit_amount);
-    const date = row.is_deleted && row.cancel_date
-      ? row.cancel_date
-      : `${row.transaction_date}T00:00:00`;
 
     if (row.transaction_type === 'payment') {
       const items: OldFundHistoryItem[] = [
         {
-          id: `tin-chap-${row.contract_code}-${row.transaction_date}`,
+          id: `${pfx}-${row.contract_code}-${row.transaction_date}`,
           date: `${row.transaction_date}T00:00:00`,
           description: 'Đóng lãi',
           income: amount > 0 ? amount : 0,
@@ -226,7 +244,7 @@ async function fetchNewCreditHistory(startDateISO: string, endDateISO: string) {
 
       if (row.is_deleted && row.cancel_date) {
         items.push({
-          id: `tin-chap-${row.contract_code}-${row.transaction_date}-cancel`,
+          id: `${pfx}-${row.contract_code}-${row.transaction_date}-cancel`,
           date: row.cancel_date,
           description: 'Huỷ đóng lãi',
           income: amount < 0 ? -amount : 0,
@@ -242,7 +260,150 @@ async function fetchNewCreditHistory(startDateISO: string, endDateISO: string) {
 
     return [
       {
-        id: `tin-chap-${row.contract_code}-${row.transaction_date}`,
+        id: `${pfx}-${row.contract_code}-${row.transaction_date}`,
+        date: `${row.transaction_date}T00:00:00`,
+        description: translateTransactionType(row.transaction_type),
+        income: amount > 0 ? amount : 0,
+        expense: amount < 0 ? -amount : 0,
+        contractCode: row.contract_code ?? '-',
+        employeeName: row.employee_name ?? '',
+        customerName: row.customer_name ?? '',
+      },
+    ];
+  }).flat();
+}
+
+// ─────────────────────────────────────────────
+// LOGIC CŨ: installment_history → FundHistoryItem[]
+// (tương đương processItems với source = 'Trả góp'; filter giống useTransactionSummary.ts)
+// ─────────────────────────────────────────────
+async function fetchOldInstallmentHistory(startDateISO: string, endDateISO: string) {
+  const rawData = await fetchAllData(
+    supabase
+      .from('installment_history')
+      .select(`
+        id, created_at, updated_at, is_deleted, transaction_type,
+        credit_amount, debit_amount, created_by,
+        installments!inner(
+          contract_code,
+          employee_id,
+          employees!inner(store_id),
+          customers(name)
+        ),
+        profiles:created_by(username)
+      `)
+      .eq('installments.employees.store_id', CONFIG.storeId)
+      .or(
+        `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
+      )
+      .not('transaction_type', 'in', '(contract_close,contract_rotate)')
+      .order('id'),
+  );
+
+  const items: OldFundHistoryItem[] = [];
+  const pfx = ID_PREFIX_INSTALLMENT;
+
+  (rawData as OldInstallmentRawRow[]).forEach((item) => {
+    if (!item.created_at) return;
+    const amount = Number(item.credit_amount ?? 0) - Number(item.debit_amount ?? 0);
+    const contractCode = (item.installments as any)?.contract_code ?? '-';
+    const customerName = (item.installments as any)?.customers?.name ?? '';
+    const employeeName = (item.profiles as any)?.username ?? '';
+
+    if (item.transaction_type === 'payment') {
+      items.push({
+        id: `${pfx}-${contractCode}-${item.created_at}`,
+        date: item.created_at,
+        description: 'Đóng lãi',
+        income: amount > 0 ? amount : 0,
+        expense: amount < 0 ? -amount : 0,
+        contractCode,
+        employeeName,
+        customerName,
+      });
+
+      if (item.is_deleted && item.updated_at) {
+        items.push({
+          id: `${pfx}-${contractCode}-${item.created_at}-cancel`,
+          date: item.updated_at,
+          description: 'Huỷ đóng lãi',
+          income: amount < 0 ? -amount : 0,
+          expense: amount > 0 ? amount : 0,
+          contractCode,
+          employeeName,
+          customerName,
+        });
+      }
+    } else {
+      items.push({
+        id: `${pfx}-${contractCode}-${item.created_at}`,
+        date: item.created_at,
+        description: translateTransactionType(item.transaction_type),
+        income: amount > 0 ? amount : 0,
+        expense: amount < 0 ? -amount : 0,
+        contractCode,
+        employeeName,
+        customerName,
+      });
+    }
+  });
+
+  return items;
+}
+
+// ─────────────────────────────────────────────
+// LOGIC MỚI: rpc_installment_history_grouped → FundHistoryItem[]
+// ─────────────────────────────────────────────
+async function fetchNewInstallmentHistory(startDateISO: string, endDateISO: string) {
+  const { data, error } = await supabase.rpc('rpc_installment_history_grouped', {
+    p_store_id:   CONFIG.storeId,
+    p_start_date: startDateISO,
+    p_end_date:   endDateISO,
+  });
+
+  if (error) {
+    console.error('❌ RPC error (installment):', error);
+    return [];
+  }
+
+  const pfx = ID_PREFIX_INSTALLMENT;
+
+  return (data as NewCreditRow[]).map((row) => {
+    const amount = Number(row.credit_amount) - Number(row.debit_amount);
+
+    if (row.transaction_type === 'payment') {
+      const items: OldFundHistoryItem[] = [
+        {
+          id: `${pfx}-${row.contract_code}-${row.transaction_date}`,
+          date: `${row.transaction_date}T00:00:00`,
+          description: 'Đóng lãi',
+          income: amount > 0 ? amount : 0,
+          expense: amount < 0 ? -amount : 0,
+          contractCode: row.contract_code ?? '-',
+          employeeName: row.employee_name ?? '',
+          customerName: row.customer_name ?? '',
+        },
+      ];
+
+      if (row.is_deleted && row.cancel_date) {
+        items.push({
+          id: `${pfx}-${row.contract_code}-${row.transaction_date}-cancel`,
+          date: row.cancel_date,
+          description: 'Huỷ đóng lãi',
+          income: amount < 0 ? -amount : 0,
+          expense: amount > 0 ? amount : 0,
+          contractCode: row.contract_code ?? '-',
+          employeeName: row.employee_name ?? '',
+          customerName: row.customer_name ?? '',
+        });
+      }
+
+      return items;
+    }
+
+    return [
+      {
+        id: `${pfx}-${row.contract_code}-${row.transaction_date}`,
         date: `${row.transaction_date}T00:00:00`,
         description: translateTransactionType(row.transaction_type),
         income: amount > 0 ? amount : 0,
@@ -270,6 +431,20 @@ interface OldRawRow {
   credit_amount: number | null; debit_amount: number | null;
   created_by: string | null;
   credits: { contract_code: string; store_id: string; customers: { name: string } } | null;
+  profiles: { username: string } | null;
+}
+
+interface OldInstallmentRawRow {
+  id: string; created_at: string; updated_at: string | null;
+  is_deleted: boolean; transaction_type: string;
+  credit_amount: number | null; debit_amount: number | null;
+  created_by: string | null;
+  installments: {
+    contract_code: string;
+    employee_id: string;
+    employees: { store_id: string };
+    customers: { name: string } | null;
+  } | null;
   profiles: { username: string } | null;
 }
 
@@ -319,22 +494,23 @@ function compare(
   return { passed: diff.length === 0 && missing.length === 0 && extra.length === 0, missing, extra, diff };
 }
 
-// ─────────────────────────────────────────────
-// MAIN
-// ─────────────────────────────────────────────
-async function main() {
+async function runParityTest(
+  title: string,
+  fetchOld: (start: string, end: string) => Promise<OldFundHistoryItem[]>,
+  fetchNew: (start: string, end: string) => Promise<OldFundHistoryItem[]>,
+  startDateISO: string,
+  endDateISO: string,
+) {
   console.log('═══════════════════════════════════════');
-  console.log('  Test: credit_history RPC vs fetchAllData');
+  console.log(`  Test: ${title}`);
   console.log(`  Store: ${CONFIG.storeId}`);
   console.log(`  Date:  ${CONFIG.startDate} → ${CONFIG.endDate}`);
+  console.log(`  TEST_RPC_TARGET: ${CONFIG.testRpcTarget}`);
   console.log('═══════════════════════════════════════\n');
 
-  const { startDateISO, endDateISO } = getDateRange(CONFIG.startDate, CONFIG.endDate);
-
   if (!CONFIG.compareWithOldLogic) {
-    // ── Chế độ 1: Chỉ chạy RPC, in kết quả ──
     console.log('🔍 Chế độ: Chỉ chạy RPC (không so sánh)\n');
-    const newItems = await fetchNewCreditHistory(startDateISO, endDateISO);
+    const newItems = await fetchNew(startDateISO, endDateISO);
     console.log(`✅ RPC trả về ${newItems.length} rows:\n`);
     newItems.slice(0, 20).forEach((item) => {
       console.log(
@@ -347,13 +523,12 @@ async function main() {
     return;
   }
 
-  // ── Chế độ 2: So sánh RPC vs logic cũ ──
   console.log('🔄 Đang chạy logic cũ (fetchAllData)...');
-  const oldItems = await fetchOldCreditHistory(startDateISO, endDateISO);
+  const oldItems = await fetchOld(startDateISO, endDateISO);
   console.log(`   ✓ Logic cũ: ${oldItems.length} rows\n`);
 
   console.log('🔄 Đang chạy RPC mới...');
-  const newItems = await fetchNewCreditHistory(startDateISO, endDateISO);
+  const newItems = await fetchNew(startDateISO, endDateISO);
   console.log(`   ✓ RPC mới:  ${newItems.length} rows\n`);
 
   const result = compare(oldItems, newItems);
@@ -379,7 +554,6 @@ async function main() {
     }
   }
 
-  // In sample rows để manual verify
   console.log('\n📋 Sample 10 rows từ RPC:');
   newItems.slice(0, 10).forEach((item) => {
     console.log(
@@ -389,7 +563,7 @@ async function main() {
     );
   });
 
-  console.log('\n sample 10 rows from old logic:');
+  console.log('\n📋 Sample 10 rows từ logic cũ:');
   oldItems.slice(0, 10).forEach((item) => {
     console.log(
       `  ${item.id} | ${item.date} | "${item.description}" | ` +
@@ -397,6 +571,35 @@ async function main() {
       `${item.contractCode} | "${item.employeeName}" | "${item.customerName}"`
     );
   });
+}
+
+// ─────────────────────────────────────────────
+// MAIN
+// ─────────────────────────────────────────────
+async function main() {
+  const { startDateISO, endDateISO } = getDateRange(CONFIG.startDate, CONFIG.endDate);
+  const t = CONFIG.testRpcTarget;
+
+  if (t === 'credit' || t === 'all') {
+    await runParityTest(
+      'credit_history ↔ rpc_credit_history_grouped',
+      fetchOldCreditHistory,
+      fetchNewCreditHistory,
+      startDateISO,
+      endDateISO,
+    );
+    if (t === 'all') console.log('\n\n');
+  }
+
+  if (t === 'installment' || t === 'all') {
+    await runParityTest(
+      'installment_history ↔ rpc_installment_history_grouped',
+      fetchOldInstallmentHistory,
+      fetchNewInstallmentHistory,
+      startDateISO,
+      endDateISO,
+    );
+  }
 }
 
 main().catch(console.error);

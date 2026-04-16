@@ -58,6 +58,8 @@ ORDER BY
 - [ ] **Check:** Số dòng GROUP BY phải ít hơn đáng kể so với `SELECT *` không group (bước này đo hiệu suất).
 - [x] **Check:** `credit_amount`, `debit_amount` là SUM đúng.
 
+**Trạng thái RPC:** `rpc_credit_history_grouped` đã được đối chiếu **khớp** với luồng cũ (`fetchAllData` + xử lý `payment` / `is_deleted` / dòng huỷ) qua script `scripts/test-rpc-queries.ts` (mục 1.6). Không cần chỉnh lại SQL tín chấp cho mục đích parity đó.
+
 ---
 
 ### 0.2. Verify `pawn_history` — Cầm đồ
@@ -118,7 +120,7 @@ ORDER BY
 ```sql
 SELECT
   i.contract_code,
-  ih.created_at::date                            AS transaction_date,
+  ih.created_at::date                            AS txn_date,
   ih.transaction_type,
   ih.is_deleted,
   COALESCE(SUM(ih.credit_amount), 0)            AS credit_amount,
@@ -148,12 +150,15 @@ GROUP BY
   cust.name,
   prof.username
 ORDER BY
-  transaction_date DESC,
+  txn_date DESC,
   i.contract_code;
 ```
 
-- [ ] **Verify:** Chạy trong SQL Editor. Filter `NOT IN ('contract_close', 'contract_rotate')` phải có.
-- [ ] **Check:** Join path: `installments.employee_id → employees.user_id → profiles.id` (nếu `created_by` là `user_id` chứ không phải `profile.id`).
+- [x] **Verify:** Chạy trong SQL Editor. Filter `NOT IN ('contract_close', 'contract_rotate')` phải có.
+- [x] **Check:** Join path / filter cửa hàng khớp ứng dụng (`employees.store_id` vs `employee_id IN (SELECT …)` trong RPC) — đã ổn qua parity script.
+- [x] **Parity tự động:** Script `scripts/test-rpc-queries.ts` (`TEST_RPC_TARGET=installment`) hoặc `scripts/test-rpc-installment-queries.ts` — kết quả `KẾT QUẢ: GIỐNG NHAU`.
+
+**Trạng thái RPC:** `rpc_installment_history_grouped` đã **đối chiếu khớp** luồng cũ (`fetchAllData` + map `payment` / huỷ / `NOT IN contract_close, contract_rotate`) như tín chấp; không cần chỉnh lại SQL trả góp cho mục parity đó.
 
 ---
 
@@ -220,11 +225,12 @@ SELECT
 FROM transactions t
 LEFT JOIN customers cust
     ON t.customer_id = cust.id
-WHERE (
+WHERE t.store_id = $3
+  AND (
     (t.is_deleted = false AND t.created_at BETWEEN $1 AND $2)
     OR
     (t.is_deleted = true  AND t.update_at BETWEEN $1 AND $2)
-)
+  )
 GROUP BY
   t.created_at::date,
   t.transaction_type,
@@ -236,8 +242,9 @@ ORDER BY
   transaction_date DESC;
 ```
 
-- [ ] **Verify:** Chạy trong SQL Editor. `transactions.store_id = $1` phải có trong WHERE.
+- [ ] **Verify:** Chạy trong SQL Editor. `$1=$2=date range`, `$3=store_id`.
 - [ ] **Check:** `t.credit_amount`, `t.debit_amount`, `t.amount` đều SUM đúng.
+- [ ] **Note:** `transactions` hủy KHÔNG filter theo `transaction_type='payment'` (hủy mọi loại giao dịch).
 
 ---
 
@@ -270,14 +277,14 @@ BEGIN
   RETURN QUERY
   SELECT
     c.contract_code,
-    ch.created_at::date,
+    ch.created_at::date                            AS transaction_date,
     ch.transaction_type::TEXT,
     ch.is_deleted,
-    COALESCE(SUM(ch.credit_amount), 0)::NUMERIC,
-    COALESCE(SUM(ch.debit_amount), 0)::NUMERIC,
+    COALESCE(SUM(ch.credit_amount), 0)::NUMERIC    AS credit_amount,
+    COALESCE(SUM(ch.debit_amount), 0)::NUMERIC     AS debit_amount,
     MAX(ch.updated_at) FILTER (WHERE ch.is_deleted = true) AS cancel_date,
     cust.name,
-    COALESCE(prof.username, '')
+    COALESCE(prof.username, '')                    AS employee_name
   FROM credit_history ch
   JOIN credits c ON ch.credit_id = c.id
   JOIN customers cust ON c.customer_id = cust.id
@@ -303,6 +310,7 @@ END;
 $$;
 ```
 
+- [x] **Verify (parity):** Đã so sánh với logic cũ bằng `scripts/test-rpc-queries.ts` — kết quả mong đợi: `KẾT QUẢ: GIỐNG NHAU`.
 - [ ] **Step:** Tạo file migration `20260415_group_transaction_history.sql`
 - [ ] **Step:** Paste function trên vào file
 - [ ] **Step:** Chạy `supabase db reset` hoặc `supabase db push` để apply migration
@@ -402,7 +410,7 @@ BEGIN
   RETURN QUERY
   SELECT
     i.contract_code,
-    ih.created_at::date,
+    ih.created_at::date                            AS txn_date,
     ih.transaction_type::TEXT,
     ih.is_deleted,
     COALESCE(SUM(ih.credit_amount), 0)::NUMERIC,
@@ -432,13 +440,14 @@ BEGIN
     cust.name,
     prof.username
   ORDER BY
-    transaction_date DESC,
+    txn_date DESC,
     contract_code;
 END;
 $$;
 ```
 
 - [ ] **Step:** Thêm function trên vào file migration
+- [x] **Verify (parity):** So sánh `rpc_installment_history_grouped` với `fetchAllData` + map cũ theo **mục 1.6.1** — đã chạy script (`TEST_RPC_TARGET=installment` / `test-rpc-installment-queries.ts`), kết quả GIỐNG NHAU.
 
 ### 1.4. RPC: `rpc_store_fund_history_grouped`
 
@@ -460,10 +469,10 @@ AS $$
 BEGIN
   RETURN QUERY
   SELECT
-    sfh.created_at::date,
+    sfh.created_at::date                            AS transaction_date,
     sfh.transaction_type::TEXT,
     sfh.fund_amount,
-    COALESCE(sfh.name, '')::TEXT,
+    COALESCE(sfh.name, '')::TEXT                   AS customer_name,
     sfh.id
   FROM store_fund_history sfh
   WHERE sfh.store_id = p_store_id
@@ -506,22 +515,21 @@ AS $$
 BEGIN
   RETURN QUERY
   SELECT
-    t.created_at::date,
+    t.created_at::date                            AS transaction_date,
     t.transaction_type::TEXT,
     t.is_deleted,
-    t.update_at,
-    COALESCE(SUM(t.credit_amount), 0)::NUMERIC,
-    COALESCE(SUM(t.debit_amount), 0)::NUMERIC,
-    COALESCE(SUM(t.amount), 0)::NUMERIC,
-    COALESCE(cust.name, '')::TEXT,
-    COALESCE(t.employee_name, '')::TEXT
+    t.update_at                                   AS cancel_date,
+    COALESCE(SUM(t.credit_amount), 0)::NUMERIC    AS credit_amount,
+    COALESCE(SUM(t.debit_amount), 0)::NUMERIC     AS debit_amount,
+    COALESCE(SUM(t.amount), 0)::NUMERIC           AS raw_amount,
+    COALESCE(cust.name, '')::TEXT                 AS customer_name,
+    COALESCE(t.employee_name, '')::TEXT          AS employee_name
   FROM transactions t
   LEFT JOIN customers cust ON t.customer_id = cust.id
   WHERE (
       (t.is_deleted = false AND t.created_at BETWEEN p_start_date AND p_end_date)
       OR
-      (t.is_deleted = true  AND t.transaction_type = 'payment'
-       AND t.update_at BETWEEN p_start_date AND p_end_date)
+      (t.is_deleted = true  AND t.update_at BETWEEN p_start_date AND p_end_date)
     )
     AND t.store_id = p_store_id
   GROUP BY
@@ -575,10 +583,53 @@ npx tsx scripts/test-rpc-queries.ts
 - ✅ `KẾT QUẢ: GIỐNG NHAU` — RPC chính xác
 - ❌ `KẾT QUẢ: KHÁC NHAU` — có bug, đọc diff chi tiết
 
-**Mở rộng:** Script hiện chỉ test `credit_history`. Sau khi ổn, thêm test cho 4 bảng còn lại cùng file.
+**Trạng thái script:** `scripts/test-rpc-queries.ts` — env `.env.local` (`@next/env`). Đã có nhánh **tín chấp** và **trả góp** (`TEST_RPC_TARGET=credit` | `installment` | `all`). Wrapper: `scripts/test-rpc-installment-queries.ts`.
 
-- [ ] **Step:** Chạy script cho `credit_history` trước — đảm bảo kết quả giống nhau
-- [ ] **Step:** Sau khi ổn, mở rộng script test cho `pawn_history`, `installment_history`, `store_fund_history`, `transactions`
+- [x] **Step:** Chạy script cho `credit_history` — đảm bảo kết quả giống nhau với logic cũ
+- [x] **Step:** Thêm và chạy parity cho `installment_history` ↔ `rpc_installment_history_grouped` (mục 1.6.1) — đã xong
+- [ ] **Step:** Mở rộng script cho `pawn_history`, `store_fund_history`, `transactions`
+
+### 1.6.1. Test `rpc_installment_history_grouped` (cùng pattern `test-rpc-queries.ts`)
+
+Mục tiêu giống tín chấp: **RPC (GROUP BY)** vs **`fetchAllData` + map thủ công** (tương đương `processItems` cho nguồn Trả góp), cùng `getDateRange`, cùng hàm `compare()` (map theo `id`, so các field `income`, `expense`, `description`, `contractCode`, `employeeName`, `customerName`).
+
+**1) Logic cũ — `fetchOldInstallmentHistory(startDateISO, endDateISO)`**
+
+- Gọi `fetchAllData` trên `installment_history` với `select` **trùng** hook `useTransactionSummary.ts`:
+  - `installments!inner(contract_code, employee_id, employees!inner(store_id), customers(name))`
+  - `profiles:created_by(username)`
+- Filter:
+  - `.eq('installments.employees.store_id', CONFIG.storeId)` — **tương đương** RPC: `i.employee_id IN (SELECT id FROM employees WHERE store_id = p_store_id)` (đã khớp qua parity script).
+  - `.or(\`…\`)` — **giống hook** `useTransactionSummary.ts` (có khoảng trắng sau dấu phẩy: `), and(` trước nhánh `payment` đã xóa).
+  - `.not('transaction_type', 'in', '(contract_close,contract_rotate)')` — **bắt buộc** khớp `WHERE ... NOT IN ('contract_close','contract_rotate')` trong RPC.
+- `.order('id')`
+- Vòng `forEach` raw row → mảng item so sánh (cùng quy tắc amount / `payment` + `is_deleted` + dòng **Huỷ đóng lãi** như nhánh tín chấp trong script).
+- **Prefix `id` so sánh** (song song file script, tách biệt tín chấp): dùng ví dụ `tra-gop-${contractCode}-${created_at}` cho từng dòng logic cũ; nhánh RPC map sang cùng quy ước với `transaction_date` / `cancel_date` như `fetchNewCreditHistory` (đổi prefix thành `tra-gop-` và field `contract_code` từ row RPC).
+
+**2) Logic mới — `fetchNewInstallmentHistory(startDateISO, endDateISO)`**
+
+```typescript
+const { data, error } = await supabase.rpc('rpc_installment_history_grouped', {
+  p_store_id:   CONFIG.storeId,
+  p_start_date: startDateISO,
+  p_end_date:   endDateISO,
+});
+```
+
+- Map từng row RPC → một hoặc hai phần tử (giống `fetchNewCreditHistory`: `payment` có thêm dòng huỷ khi `is_deleted && cancel_date`).
+- `translateTransactionType` dùng chung file script.
+- `id` / `date` / `income` / `expense` cùng pattern với tín chấp, chỉ đổi prefix `tra-gop-`.
+
+**3) `main()`**
+
+- Đã tích hợp: `CONFIG.testRpcTarget` từ env `TEST_RPC_TARGET` (`credit` | `installment` | `all`) + `runParityTest` gọi `fetchOldInstallmentHistory` / `fetchNewInstallmentHistory` / `compare`.
+
+**4) Checklist**
+
+- [x] **Step:** Thêm `fetchOldInstallmentHistory` + `fetchNewInstallmentHistory` vào `scripts/test-rpc-queries.ts` (row RPC dùng chung shape như `NewCreditRow`)
+- [x] **Step:** Chạy với `TEST_STORE_ID` / khoảng ngày có dữ liệu trả góp — `KẾT QUẢ: GIỐNG NHAU`
+- [x] **Step:** RPC / filter cửa hàng / `NOT IN` / OR huỷ `payment` — đã xác nhận khớp
+- **Ghi chú (regression):** Nếu sau này lệch, kiểm tra lại: `NOT IN ('contract_close','contract_rotate')`, OR `payment` + `updated_at`, subquery `employee_id` vs `installments.employees.store_id`
 
 ---
 
