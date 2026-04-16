@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { signOut } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
+import { getNavDisplayLabel, type NavDisplayLabelKey } from '@/utils/nav-display-labels';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,6 +55,8 @@ interface SidebarItem {
   path: string;
   icon: React.ReactElement;
   submenu?: SubMenuItem[];
+  /** Trùng segment path (ví dụ `/credits` → `credits`, `/total-fund` → `total-fund`). */
+  labelKey: NavDisplayLabelKey;
   redColor?: boolean;
   superAdminOnly?: boolean;
   adminOnly?: boolean;
@@ -62,27 +65,32 @@ interface SidebarItem {
 const sidebarItems: SidebarItem[] = [
   { 
     title: 'Cầm đồ', 
-    path: '/pawns', 
+    path: '/pawns',
+    labelKey: 'pawns',
     icon: <FiShoppingBag size={20} />,
   },
   { 
     title: 'Tín chấp', 
     path: '/credits', 
+    labelKey: 'credits',
     icon: <FiCreditCard size={20} />,
   },
   { 
     title: 'Trả góp', 
-    path: '/installments', 
+    path: '/installments',
+    labelKey: 'installments',
     icon: <FiCalendar size={20} />
   },
   { 
     title: 'Khách hàng', 
-    path: '/customers', 
+    path: '/customers',
+    labelKey: 'customers',
     icon: <FiUsers size={20} />
   },
   { 
     title: 'Cửa hàng', 
-    path: '/stores', 
+    path: '/stores',
+    labelKey: 'stores',
     icon: <FiShoppingBag size={20} />,
     submenu: [
       { title: 'Tổng quát chuỗi cửa hàng', path: '/stores/overview', icon: <FiPieChart size={18} /> },
@@ -94,11 +102,13 @@ const sidebarItems: SidebarItem[] = [
   {
     title: 'Nguồn vốn',
     path: '/capital',
+    labelKey: 'capital',
     icon: <FiTrendingUp size={20} />
   },
   { 
     title: 'Thu chi', 
-    path: '/income', 
+    path: '/income',
+    labelKey: 'income',
     icon: <FiDollarSign size={20} />,
     submenu: [
       { title: 'Hoạt động thu', path: '/income', icon: <FiDollarSign size={18} /> },
@@ -108,7 +118,8 @@ const sidebarItems: SidebarItem[] = [
   },
   { 
     title: 'Nhân viên', 
-    path: '/employees',   
+    path: '/employees',
+    labelKey: 'employees',
     icon: <FiUsers size={20} />,
     submenu: [
       { title: 'Danh sách nhân viên', path: '/employees', icon: <FiUsers size={18} /> },
@@ -117,13 +128,15 @@ const sidebarItems: SidebarItem[] = [
   },
   { 
     title: 'Quỹ', 
-    path: '/total-fund', 
+    path: '/total-fund',
+    labelKey: 'total-fund',
     icon: <FiPieChart size={20} />,
     adminOnly: true
   },
   { 
     title: 'Báo cáo', 
-    path: '/reports', 
+    path: '/reports',
+    labelKey: 'reports',
     icon: <FiActivity size={20} />,
     submenu: [
       { title: 'Số quỹ tiền mặt', path: '/reports/cashbook', icon: <FiDollarSign size={18} /> },
@@ -139,7 +152,8 @@ const sidebarItems: SidebarItem[] = [
   // SuperAdmin section
   { 
     title: 'Quản trị hệ thống', 
-    path: '/admins', 
+    path: '/admins',
+    labelKey: 'admins',
     icon: <FiShield size={20} />,
     superAdminOnly: true,
     submenu: [
@@ -197,6 +211,9 @@ export default function Sidebar({ isCollapsed, onToggleCollapsed }: SidebarProps
   const isSubItemActive = (subPath: string) => {
     return pathname.startsWith(subPath);
   };
+
+  const resolveItemTitle = (item: SidebarItem) =>
+    getNavDisplayLabel(item.labelKey);
 
   // Filter sidebar items based on user role and permissions
   const getFilteredSidebarItems = () => {
@@ -435,7 +452,7 @@ export default function Sidebar({ isCollapsed, onToggleCollapsed }: SidebarProps
                       </DropdownMenuTrigger>
                       <DropdownMenuContent side="right" align="start" sideOffset={8} className="min-w-[12rem]">
                         <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-                          {item.title}
+                          {resolveItemTitle(item)}
                         </DropdownMenuLabel>
                         {item.submenu.map((subItem) => (
                           <DropdownMenuItem key={subItem.path} asChild>
@@ -470,7 +487,7 @@ export default function Sidebar({ isCollapsed, onToggleCollapsed }: SidebarProps
                         <div className="flex items-center space-x-3">
                           <span className="flex-shrink-0">{item.icon}</span>
                           <span className={item.redColor ? 'text-red-600 font-medium' : ''}>
-                            {item.title}
+                            {resolveItemTitle(item)}
                           </span>
                         </div>
                         <span className="flex-shrink-0">
@@ -519,7 +536,7 @@ export default function Sidebar({ isCollapsed, onToggleCollapsed }: SidebarProps
                   <span className="flex-shrink-0">{item.icon}</span>
                   {!isCollapsed && (
                     <span className={item.redColor ? 'text-red-600 font-medium' : ''}>
-                      {item.title}
+                      {resolveItemTitle(item)}
                     </span>
                   )}
                 </Link>

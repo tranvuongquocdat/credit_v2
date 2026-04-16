@@ -12,6 +12,7 @@ import { countCreditWarnings } from "@/lib/credit-warnings";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { startPerfTimer } from "@/lib/perf-debug";
+import { getNavDisplayLabel, isNuvorasBuild as getIsNuvorasBuild } from "@/utils/nav-display-labels";
 
 // This interface will represent the notification data structure
 interface NotificationCounts {
@@ -113,7 +114,7 @@ const StoreDropdown = memo(({
 StoreDropdown.displayName = 'StoreDropdown';
 
 export function TopNavbar() {
-  const isNuvorasBuild = process.env.NEXT_PUBLIC_BUILD_NAME === 'nuvoras';
+  const isNuvorasBuild = getIsNuvorasBuild();
   // This state will be replaced with data from your backend API
   const [notificationCounts, setNotificationCounts] = useState<NotificationCounts>({
     storeInvoices: 0,
@@ -305,7 +306,7 @@ export function TopNavbar() {
           {isNuvorasBuild && (
             <div 
               className="p-2.5 hover:bg-white/15 transition-all duration-200 rounded-lg relative group" 
-              title={`Tín chấp có ${notificationCounts.loanInvoices} hóa đơn cần xử lý`}
+              title={`${getNavDisplayLabel('credits')} có ${notificationCounts.loanInvoices} hóa đơn cần xử lý`}
             >
               <button 
                 className="flex items-center justify-center"

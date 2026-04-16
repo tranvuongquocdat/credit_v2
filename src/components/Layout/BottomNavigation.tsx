@@ -22,6 +22,7 @@ import {
   XCircle
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { getNavDisplayLabel, type NavDisplayLabelKey } from '@/utils/nav-display-labels';
 
 interface SubMenuItem {
   title: string;
@@ -34,6 +35,7 @@ interface NavItem {
   path: string;
   icon: React.ComponentType<{ className?: string }>;
   submenu?: SubMenuItem[];
+  labelKey: NavDisplayLabelKey;
   adminOnly?: boolean;
   superAdminOnly?: boolean;
 }
@@ -42,26 +44,31 @@ const navItems: NavItem[] = [
   {
     label: 'Cầm đồ',
     path: '/pawns',
+    labelKey: 'pawns',
     icon: Store
   },
   {
     label: 'Tín chấp',
     path: '/credits',
+    labelKey: 'credits',
     icon: CreditCard
   },
   {
     label: 'Trả góp',
     path: '/installments',
+    labelKey: 'installments',
     icon: Calendar
   },
   {
     label: 'Khách hàng',
     path: '/customers',
+    labelKey: 'customers',
     icon: Users
   },
   {
     label: 'Cửa hàng',
     path: '/stores',
+    labelKey: 'stores',
     icon: Store,
     submenu: [
       { title: 'Tổng quát chuỗi cửa hàng', path: '/stores/overview', icon: PieChart },
@@ -73,11 +80,13 @@ const navItems: NavItem[] = [
   {
     label: 'Nguồn vốn',
     path: '/capital',
+    labelKey: 'capital',
     icon: TrendingUp
   },
   {
     label: 'Thu chi',
     path: '/income',
+    labelKey: 'income',
     icon: DollarSign,
     submenu: [
       { title: 'Hoạt động thu', path: '/income', icon: DollarSign },
@@ -87,6 +96,7 @@ const navItems: NavItem[] = [
   {
     label: 'Nhân viên',
     path: '/employees',
+    labelKey: 'employees',
     icon: Users,
     submenu: [
       { title: 'Danh sách nhân viên', path: '/employees', icon: Users },
@@ -96,12 +106,14 @@ const navItems: NavItem[] = [
   {
     label: 'Quỹ',
     path: '/total-fund',
+    labelKey: 'total-fund',
     icon: PieChart,
     adminOnly: true
   },
   {
     label: 'Báo cáo',
     path: '/reports',
+    labelKey: 'reports',
     icon: BarChart3,
     submenu: [
       { title: 'Số quỹ tiền mặt', path: '/reports/cashbook', icon: DollarSign },
@@ -117,6 +129,7 @@ const navItems: NavItem[] = [
   {
     label: 'Quản trị',
     path: '/admins',
+    labelKey: 'admins',
     icon: ShieldCheck,
     superAdminOnly: true,
     submenu: [
@@ -184,6 +197,8 @@ export function BottomNavigation() {
   const filteredNavItems = getFilteredNavItems();
   const currentSubmenu = submenuOpen ? navItems.find(item => item.path === submenuOpen) : null;
 
+  const resolveNavLabel = (item: NavItem) => getNavDisplayLabel(item.labelKey);
+
   return (
     <>
       <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg md:hidden">
@@ -213,7 +228,7 @@ export function BottomNavigation() {
                   <span className={`text-xs font-medium truncate max-w-[60px] ${
                     isActive ? 'text-blue-600' : 'text-gray-600'
                   }`}>
-                    {item.label}
+                    {resolveNavLabel(item)}
                   </span>
                   {/* Submenu indicator */}
                   {hasSubmenu && (
@@ -246,7 +261,9 @@ export function BottomNavigation() {
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
               <div className="flex items-center space-x-3">
                 <currentSubmenu.icon className="w-6 h-6 text-blue-600" />
-                <h3 className="text-lg font-semibold text-gray-900">{currentSubmenu.label}</h3>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {resolveNavLabel(currentSubmenu)}
+                </h3>
               </div>
               <button
                 onClick={closeSubmenu}
