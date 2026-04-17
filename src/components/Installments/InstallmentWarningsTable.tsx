@@ -30,6 +30,7 @@ interface InstallmentWarningsTableProps {
   onPayment?: (installment: InstallmentWithCustomer, amount: number) => void;
   onCustomerClick?: (installment: InstallmentWithCustomer) => void; // Optional callback for customer click
   onShowPaymentHistory?: (installment: InstallmentWithCustomer) => void; // Optional callback for payment history modal
+  disablePayments?: boolean; // Disable all pay buttons during processing
 }
 
 // ================= Helper functions for simplified overdue computation =================
@@ -105,6 +106,7 @@ export function InstallmentWarningsTable({
   onPayment,
   onCustomerClick,
   onShowPaymentHistory,
+  disablePayments = false,
 }: InstallmentWarningsTableProps) {
   
   
@@ -152,8 +154,7 @@ export function InstallmentWarningsTable({
       }
       
       setLoadingPayments(true);
-      setWarnings([]); // Clear old warnings before processing new ones
-      
+
       try {
         const ids = installments.map((i) => i.id);
 
@@ -315,7 +316,7 @@ export function InstallmentWarningsTable({
     processWarnings();
   }, [installments, currentStore, reasonFilter, currentPage, itemsPerPage, sortOrder]);
 
-  if (isLoading || loadingPayments) {
+  if ((isLoading || loadingPayments) && warnings.length === 0) {
     return (
       <div className="h-96 flex items-center justify-center">
         <Spinner size="lg" />
@@ -334,8 +335,9 @@ export function InstallmentWarningsTable({
   }
 
   return (
-    <div className="rounded-md border overflow-hidden">
-      <div className="overflow-x-auto max-w-full">
+    <div className={`transition-opacity duration-300 ${loadingPayments ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
+      <div className="rounded-md border overflow-hidden">
+        <div className="overflow-x-auto max-w-full">
         <table className="border-collapse min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
@@ -413,6 +415,7 @@ export function InstallmentWarningsTable({
                   size="sm"
                   className="mx-0.5 sm:mx-1 px-1 sm:px-3 py-1 bg-green-100 hover:bg-green-200 text-green-800 border-green-300 text-xs sm:text-sm"
                   onClick={() => onPayment && onPayment(warning, warning.buttonValues[i])}
+                  disabled={disablePayments}
                 >
                   {buttonAmount}
                 </Button>
@@ -497,6 +500,7 @@ export function InstallmentWarningsTable({
           </tfoot>
         )}
         </table>
+        </div>
       </div>
     </div>
   );

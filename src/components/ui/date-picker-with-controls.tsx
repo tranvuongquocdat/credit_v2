@@ -2,11 +2,60 @@ import React, { forwardRef, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { format, addDays, parse } from 'date-fns';
 import { vi } from 'date-fns/locale';
-import { DayPicker } from 'react-day-picker';
+import { DayPicker, useNavigation } from 'react-day-picker';
 import { Input } from './input';
 import { Button } from './button';
 import { ChevronUp, ChevronDown } from 'lucide-react';
 import 'react-day-picker/dist/style.css';
+
+function CalendarCaption({ displayMonth, fromYear = 2015, toYear = 2050, fromDate, toDate }: {
+  displayMonth: Date;
+  fromYear?: number;
+  toYear?: number;
+  fromDate?: Date;
+  toDate?: Date;
+}) {
+  const { goToMonth, nextMonth, previousMonth } = useNavigation();
+
+  const startYear = fromDate ? fromDate.getFullYear() : fromYear;
+  const endYear = toDate ? toDate.getFullYear() : toYear;
+
+  const months = Array.from({ length: 12 }, (_, i) => ({
+    value: i,
+    label: format(new Date(displayMonth.getFullYear(), i, 1), 'MMMM', { locale: vi }),
+  }));
+  const years = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
+
+  const btnCls = "inline-flex items-center justify-center rounded-md h-7 w-7 border border-input bg-background hover:bg-accent hover:text-accent-foreground disabled:opacity-50 disabled:pointer-events-none cursor-pointer";
+  const selectCls = "text-sm border border-gray-200 rounded px-1 py-0.5 cursor-pointer bg-white";
+
+  return (
+    <div className="flex items-center justify-between pt-1">
+      <button className={btnCls} onClick={() => previousMonth && goToMonth(previousMonth)} disabled={!previousMonth} type="button">
+        ‹
+      </button>
+      <div className="flex gap-1 items-center">
+        <select
+          className={selectCls}
+          value={displayMonth.getMonth()}
+          onChange={e => goToMonth(new Date(displayMonth.getFullYear(), +e.target.value))}
+        >
+          {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+        </select>
+        <select
+          className={selectCls}
+          value={displayMonth.getFullYear()}
+          onChange={e => goToMonth(new Date(+e.target.value, displayMonth.getMonth()))}
+        >
+          {years.map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+      </div>
+      <button className={btnCls} onClick={() => nextMonth && goToMonth(nextMonth)} disabled={!nextMonth} type="button">
+        ›
+      </button>
+    </div>
+  );
+}
 
 interface DatePickerWithControlsProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value'> {
   value: string;
@@ -18,120 +67,130 @@ interface DatePickerWithControlsProps extends Omit<React.InputHTMLAttributes<HTM
 }
 
 const DatePickerWithControls = forwardRef<HTMLInputElement, DatePickerWithControlsProps>(
-  ({ value, onChange, placeholder = 'Chọn ngày', className = '', maxDate, minDate, ...props }, ref) => {
+  ({ value, onChange, placeholder = 'dd/mm/yyyy', className = '', maxDate, minDate, ...props }, ref) => {
     const [isOpen, setIsOpen] = useState(false);
     const [position, setPosition] = useState({ top: 0, left: 0, showAbove: false });
+    const [inputText, setInputText] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
-    
-    // Format the display value in Vietnamese
-    const displayValue = value ? format(new Date(value), 'dd/MM/yyyy', { locale: vi }) : '';
+
     const selectedDate = value ? new Date(value) : undefined;
-    
-    // Function to handle date increment
+
+    // Sync inputText when value changes externally
+    useEffect(() => {
+      setInputText(value ? format(new Date(value), 'dd/MM/yyyy', { locale: vi }) : '');
+    }, [value]);
+
     const incrementDate = () => {
       try {
         if (!value) {
-          // If no date is selected, set to today
-          const today = format(new Date(), 'yyyy-MM-dd');
-          onChange(today);
+          onChange(format(new Date(), 'yyyy-MM-dd'));
           return;
         }
         const currentDate = parse(value, 'yyyy-MM-dd', new Date());
-        const newDate = addDays(currentDate, 1);
-        onChange(format(newDate, 'yyyy-MM-dd'));
+        onChange(format(addDays(currentDate, 1), 'yyyy-MM-dd'));
       } catch (error) {
         console.error('Error incrementing date:', error);
       }
     };
 
-    // Function to handle date decrement
     const decrementDate = () => {
       try {
         if (!value) {
-          // If no date is selected, set to today
-          const today = format(new Date(), 'yyyy-MM-dd');
-          onChange(today);
+          onChange(format(new Date(), 'yyyy-MM-dd'));
           return;
         }
         const currentDate = parse(value, 'yyyy-MM-dd', new Date());
-        const newDate = addDays(currentDate, -1);
-        onChange(format(newDate, 'yyyy-MM-dd'));
+        onChange(format(addDays(currentDate, -1), 'yyyy-MM-dd'));
       } catch (error) {
         console.error('Error decrementing date:', error);
       }
     };
-    
-    // Calculate optimal position when opening calendar
+
     useEffect(() => {
       if (isOpen && inputRef.current) {
         const rect = inputRef.current.getBoundingClientRect();
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
         const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
-        
+
         const calendarHeight = 400;
         const calendarWidth = 300;
         const spaceBelow = window.innerHeight - rect.bottom;
         const spaceAbove = rect.top;
-        
-        // Determine if should show above
+
         const showAbove = spaceAbove > spaceBelow && spaceBelow < calendarHeight;
-        
-        // Calculate horizontal position (center relative to input)
+
         let left = rect.left + scrollLeft + (rect.width / 2) - (calendarWidth / 2);
-        
-        // Adjust horizontal position if it would go off-screen
+
         if (left < 10) {
           left = 10;
         } else if (left + calendarWidth > window.innerWidth - 10) {
           left = window.innerWidth - calendarWidth - 10;
         }
-        
-        // Calculate vertical position
+
         let top;
         if (showAbove) {
           top = rect.top + scrollTop - calendarHeight - 8;
-          // Ensure it doesn't go above viewport
-          if (top < 10) {
-            top = 10;
-          }
+          if (top < 10) top = 10;
         } else {
           top = rect.bottom + scrollTop + 8;
-          // If it would go below viewport, force it above
           if (top + calendarHeight > window.innerHeight + scrollTop - 10) {
             top = rect.top + scrollTop - calendarHeight - 8;
-            if (top < 10) {
-              top = 10;
-            }
+            if (top < 10) top = 10;
           }
         }
-        
+
         setPosition({ top, left, showAbove });
       }
     }, [isOpen]);
-    
+
+    // Auto-format input as dd/MM/yyyy while typing
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
+      let formatted = digits;
+      if (digits.length > 2) {
+        formatted = digits.slice(0, 2) + '/' + digits.slice(2);
+      }
+      if (digits.length > 4) {
+        formatted = digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4);
+      }
+      setInputText(formatted);
+
+      if (digits.length === 8) {
+        const dd = digits.slice(0, 2);
+        const mm = digits.slice(2, 4);
+        const yyyy = digits.slice(4, 8);
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+        const date = new Date(dateStr);
+        if (!isNaN(date.getTime()) && date.getMonth() + 1 === parseInt(mm)) {
+          onChange(dateStr);
+        }
+      } else if (digits.length === 0) {
+        onChange('');
+      }
+    };
+
+    // On blur, revert to last valid value if input is incomplete
+    const handleInputBlur = () => {
+      setInputText(value ? format(new Date(value), 'dd/MM/yyyy', { locale: vi }) : '');
+    };
+
     const handleDaySelect = (date: Date | undefined) => {
       if (date) {
-        // Format as YYYY-MM-DD for consistency
-        const formattedDate = format(date, 'yyyy-MM-dd');
-        onChange(formattedDate);
+        onChange(format(date, 'yyyy-MM-dd'));
       } else {
         onChange('');
       }
       setIsOpen(false);
     };
-    
-    // Calendar popup component
+
     const CalendarPopup = () => (
       <>
-        {/* Backdrop */}
-        <div 
-          className="fixed inset-0 z-[99998]" 
+        <div
+          className="fixed inset-0 z-[99998]"
           onClick={() => setIsOpen(false)}
           style={{ pointerEvents: 'auto' }}
         />
-        
-        {/* Calendar */}
-        <div 
+        <div
           className="fixed z-[99999] bg-white border border-gray-200 rounded-md shadow-xl"
           style={{
             top: `${position.top}px`,
@@ -149,6 +208,8 @@ const DatePickerWithControls = forwardRef<HTMLInputElement, DatePickerWithContro
             locale={vi}
             showOutsideDays
             className="p-3"
+            fromYear={2015}
+            toYear={2050}
             toDate={maxDate ? new Date(maxDate) : undefined}
             fromDate={minDate ? new Date(minDate) : undefined}
             classNames={{
@@ -157,7 +218,7 @@ const DatePickerWithControls = forwardRef<HTMLInputElement, DatePickerWithContro
               caption: "flex justify-center pt-1 relative items-center",
               caption_label: "text-sm font-medium",
               nav: "space-x-1 flex items-center",
-              nav_button: "inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-7 w-7 cursor-pointer",
+              nav_button: "inline-flex items-center justify-center rounded-md text-sm font-medium disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-7 w-7 cursor-pointer",
               nav_button_previous: "absolute left-1",
               nav_button_next: "absolute right-1",
               table: "w-full border-collapse space-y-1",
@@ -165,7 +226,7 @@ const DatePickerWithControls = forwardRef<HTMLInputElement, DatePickerWithContro
               head_cell: "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]",
               row: "flex w-full mt-2",
               cell: "text-center text-sm p-0 relative [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
-              day: "inline-flex items-center justify-center rounded-md text-sm font-normal ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 aria-selected:opacity-100 h-9 w-9 cursor-pointer hover:bg-accent hover:text-accent-foreground",
+              day: "inline-flex items-center justify-center rounded-md text-sm font-normal disabled:pointer-events-none disabled:opacity-50 aria-selected:opacity-100 h-9 w-9 cursor-pointer hover:bg-accent hover:text-accent-foreground",
               day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
               day_today: "bg-accent text-accent-foreground",
               day_outside: "text-muted-foreground opacity-50",
@@ -174,12 +235,18 @@ const DatePickerWithControls = forwardRef<HTMLInputElement, DatePickerWithContro
               day_hidden: "invisible",
             }}
             components={{
-              IconLeft: () => <span>‹</span>,
-              IconRight: () => <span>›</span>,
+              Caption: ({ displayMonth }) => (
+                <CalendarCaption
+                  displayMonth={displayMonth}
+                  fromYear={2015}
+                  toYear={2050}
+                  fromDate={minDate ? new Date(minDate) : undefined}
+                  toDate={maxDate ? new Date(maxDate) : undefined}
+                />
+              ),
             }}
           />
-          
-          {/* Action buttons */}
+
           <div className="flex justify-between items-center px-3 pb-3 pt-0 border-t border-gray-100">
             <button
               type="button"
@@ -214,10 +281,9 @@ const DatePickerWithControls = forwardRef<HTMLInputElement, DatePickerWithContro
         </div>
       </>
     );
-    
+
     return (
       <div className="relative">
-        {/* Visible input showing Vietnamese formatted date */}
         <Input
           ref={(node) => {
             inputRef.current = node;
@@ -228,22 +294,13 @@ const DatePickerWithControls = forwardRef<HTMLInputElement, DatePickerWithContro
             }
           }}
           type="text"
-          value={displayValue}
+          value={inputText}
           placeholder={placeholder}
-          className={`cursor-pointer pr-10 ${className}`}
-          readOnly
-          onClick={() => setIsOpen(!isOpen)}
+          className={`pr-10 ${className}`}
+          onChange={handleInputChange}
+          onBlur={handleInputBlur}
           onKeyDown={(e) => {
-            // Allow opening picker with Enter or Space
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setIsOpen(!isOpen);
-            }
-            // Close with Escape
-            if (e.key === 'Escape') {
-              setIsOpen(false);
-            }
-            // Navigate with arrow keys
+            if (e.key === 'Escape') setIsOpen(false);
             if (e.key === 'ArrowUp') {
               e.preventDefault();
               incrementDate();
@@ -255,10 +312,8 @@ const DatePickerWithControls = forwardRef<HTMLInputElement, DatePickerWithContro
           }}
           {...props}
         />
-        
-        {/* Calendar icon and up/down controls */}
+
         <div className="absolute inset-y-0 right-0 flex items-center">
-          {/* Up/Down Controls */}
           <div className="flex flex-col mr-1">
             <Button
               type="button"
@@ -281,31 +336,29 @@ const DatePickerWithControls = forwardRef<HTMLInputElement, DatePickerWithContro
               <ChevronDown className="h-3 w-3" />
             </Button>
           </div>
-          
-          {/* Calendar icon */}
+
           <button
             type="button"
             className="pr-3 cursor-pointer hover:bg-gray-50 rounded-r-md transition-colors flex items-center"
             onClick={() => setIsOpen(!isOpen)}
             tabIndex={-1}
           >
-            <svg 
-              className="w-4 h-4 text-gray-400 hover:text-gray-600" 
-              fill="none" 
-              stroke="currentColor" 
+            <svg
+              className="w-4 h-4 text-gray-400 hover:text-gray-600"
+              fill="none"
+              stroke="currentColor"
               viewBox="0 0 24 24"
             >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 002 2v12a2 2 0 002 2z" 
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 002 2v12a2 2 0 002 2z"
               />
             </svg>
           </button>
         </div>
-        
-        {/* Calendar Popup - Rendered via Portal */}
+
         {isOpen && typeof document !== 'undefined' && createPortal(
           <CalendarPopup />,
           document.body
@@ -317,4 +370,4 @@ const DatePickerWithControls = forwardRef<HTMLInputElement, DatePickerWithContro
 
 DatePickerWithControls.displayName = 'DatePickerWithControls';
 
-export { DatePickerWithControls }; 
+export { DatePickerWithControls };

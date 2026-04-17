@@ -183,7 +183,9 @@ export function PawnsTable({
                   </div>
                 </TableCell>
                 <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200 hidden lg:table-cell">
-                {pawn.collateral_detail?.name || '-'}
+                {pawn.collateral_detail?.name
+                  ? `${pawn.collateral_detail.name}${pawn.collateral_detail.quantity ? ` (x${pawn.collateral_detail.quantity})` : ''}`
+                  : '-'}
                 </TableCell>
                 <TableCell className="py-3 px-1 lg:px-3 text-center border-b border-r border-gray-200 text-xs lg:text-sm">
                   <div className="flex flex-col items-center">
@@ -416,7 +418,7 @@ export function PawnsTable({
                   </div>
                   {pawn.collateral_detail?.name && (
                     <div className="text-sm text-gray-600">
-                      Tài sản: {pawn.collateral_detail?.name}
+                      Tài sản: {pawn.collateral_detail.name}{pawn.collateral_detail.quantity ? ` (x${pawn.collateral_detail.quantity})` : ''}
                     </div>
                   )}
                 </div>

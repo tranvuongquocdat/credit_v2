@@ -83,12 +83,14 @@ export default function InstallmentWarningsPage() {
     })();
   }, [currentStore?.id]);
   
-  async function loadInstallments() {
+  async function loadInstallments(options?: { silent?: boolean }) {
     if (!currentStore?.id) return;
 
     const currentRequestId = ++requestIdRef.current;
 
-    setIsLoading(true);
+    if (!options?.silent) {
+      setIsLoading(true);
+    }
     try {
       const { data, error, totalItems, totalPages } = await getInstallmentWarnings(
         1, // Always fetch from page 1
@@ -127,7 +129,7 @@ export default function InstallmentWarningsPage() {
         variant: "destructive"
       });
     } finally {
-      if (currentRequestId === requestIdRef.current) {
+      if (currentRequestId === requestIdRef.current && !options?.silent) {
         setIsLoading(false);
       }
     }
@@ -471,9 +473,16 @@ export default function InstallmentWarningsPage() {
         title: "Thanh toán thành công",
         description: `Đã thanh toán ${amount.toLocaleString()} VND cho hợp đồng ${installment.contract_code} (${numberOfPeriods} kỳ, ${allDailyRecords.length} ngày)`,
       });
-      
-      // Reload installments to update the UI
-      loadInstallments();
+
+      // Optimistic update: remove installment immediately if fully paid
+      const remainingPeriods = unpaidPeriods.length - numberOfPeriods;
+      if (remainingPeriods <= 0) {
+        setFilteredInstallments(prev => prev.filter(i => i.id !== installment.id));
+        setInstallments(prev => prev.filter(i => i.id !== installment.id));
+      }
+
+      // Silent background sync — no spinner
+      loadInstallments({ silent: true }).catch(err => console.error("Background sync failed:", err));
       
     } catch (err) {
       console.error("Error processing payment:", err);
@@ -500,7 +509,7 @@ export default function InstallmentWarningsPage() {
         </div>
       ) : !isNuvorasBuild ? (
         <div className="p-4 border rounded-md mb-4 bg-gray-50">
-          <p className="text-center text-gray-500">Tính năng cảnh báo trả góp đã được ẩn ở build hiện tại</p>
+          <p className="text-center text-gray-500">Tính năng không khả dụng</p>
         </div>
       ) : !canViewInstallmentsList ? (
         <div className="p-4 border rounded-md mb-4 bg-gray-50">
@@ -626,6 +635,7 @@ export default function InstallmentWarningsPage() {
               onPayment={handlePayment}
               onCustomerClick={handleCustomerClick}
               onShowPaymentHistory={handleShowPaymentHistory}
+              disablePayments={processingPayment}
           />
           
           {/* Pagination Component */}
