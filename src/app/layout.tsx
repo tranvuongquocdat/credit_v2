@@ -8,12 +8,13 @@ import { SidebarCollapseProvider } from "@/contexts/SidebarCollapseContext";
 import { ReactQueryProvider } from '@/components/ReactQueryProvider';
 import { CacheDebugger } from '@/components/CacheDebugger';
 import { SIDEBAR_COLLAPSED_COOKIE } from "@/lib/sidebar-collapse";
+import { getDisplayLabelByBuild } from "@/utils/nav-display-labels";
 
 // Không cần import font từ Google Fonts vì sẽ sử dụng Arial (system font)
 
 export const metadata: Metadata = {
-  title: "Nuvoras",
-  description: "Nuvoras",
+  title: getDisplayLabelByBuild('title_build'),
+  description: getDisplayLabelByBuild('title_build'),
 };
 
 export default async function RootLayout({

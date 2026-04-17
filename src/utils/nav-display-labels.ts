@@ -66,6 +66,10 @@ const LABELS = {
     nuvoras_v2: 'Quản lý hợp đồng mượn tài sản',
     default: 'Quản lý hợp đồng cầm đồ',
   },
+  title_build:{
+    nuvoras_v2: 'Ubosa',
+    default: 'Nuvoras',
+  },
 } as const satisfies Record<string, NavLabelRow>;
 
 export type NavDisplayLabelKey = keyof typeof LABELS;
