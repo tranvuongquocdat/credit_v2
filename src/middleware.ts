@@ -37,6 +37,15 @@ export async function middleware(request: NextRequest) {
   );
 
   try {
+    const currentPath = request.nextUrl.pathname;
+    const isNuvorasBuild = process.env.NEXT_PUBLIC_BUILD_NAME === 'nuvoras';
+
+    // Build khác nuvoras: chặn route /portfolio/* và chuyển sang /portfolio_v2/*
+    if (!isNuvorasBuild && (currentPath === '/portfolio' || currentPath.startsWith('/portfolio/'))) {
+      const mappedPath = currentPath.replace('/portfolio', '/portfolio_v2');
+      return NextResponse.redirect(new URL(mappedPath, request.url));
+    }
+
     // Get the current user
     const { data: { user }, error } = await supabase.auth.getUser();
     
@@ -44,17 +53,20 @@ export async function middleware(request: NextRequest) {
     console.log("middleware path:", request.nextUrl.pathname);
 
     // Danh sách các trang được phép truy cập khi chưa login
-    const publicPaths = ['/', '/login', '/signup', '/portfolio/about', '/portfolio/projects'];
-    const currentPath = request.nextUrl.pathname;
+    const publicPaths = isNuvorasBuild
+      ? ['/', '/login', '/signup', '/portfolio/about', '/portfolio/projects', '/portfolio/skills']
+      : ['/', '/login', '/signup'];
+
+    const isPublic = publicPaths.includes(currentPath) || (!isNuvorasBuild && currentPath.startsWith('/space/'));
 
     // Nếu chưa login và không phải trang public → redirect về "/"
-    if (!user && !publicPaths.includes(currentPath)) {
+    if (!user && !isPublic) {
       console.log("User not authenticated, redirecting to home:", currentPath);
       return NextResponse.redirect(new URL('/', request.url));
     }
 
     // Handle authentication errors
-    if (error && !publicPaths.includes(currentPath)) {
+    if (error && !isPublic) {
       console.log("Auth error, redirecting to home:", error.message);
       return NextResponse.redirect(new URL('/', request.url));
     }
@@ -75,7 +87,12 @@ export async function middleware(request: NextRequest) {
           // Người dùng đã bị ban, đăng xuất họ
           console.log("User is banned, signing out:", user.id);
           await supabase.auth.signOut();
-          return NextResponse.redirect(new URL('/', request.url));
+          const redirectResponse = NextResponse.redirect(new URL('/', request.url));
+          // Giữ cookie đã cập nhật (xóa session) từ response gốc — redirect mới mặc định không mang theo
+          response.cookies.getAll().forEach((cookie) => {
+            redirectResponse.cookies.set(cookie);
+          });
+          return redirectResponse;
         }
       } catch (err) {
         console.error("Error in ban check:", err);
@@ -89,7 +106,7 @@ export async function middleware(request: NextRequest) {
   } catch (authError) {
     console.error("Auth error in middleware:", authError);
     // Redirect to home on any auth error for non-public routes
-    const publicPaths = ['/', '/login', '/signup'];
+    const publicPaths = ['/', '/login', '/signup', '/portfolio/about', '/portfolio/projects'];
     if (!publicPaths.includes(request.nextUrl.pathname)) {
       return NextResponse.redirect(new URL('/', request.url));
     }

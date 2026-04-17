@@ -1,5 +1,6 @@
 "use client";
 import { ReactNode, useState, useEffect } from 'react';
+import { useSidebarCollapse } from '@/contexts/SidebarCollapseContext';
 import { Sidebar } from '../Sidebar';
 import { TopNavbar } from './TopNavbar';
 import { BottomNavigation } from './BottomNavigation';
@@ -9,27 +10,17 @@ interface LayoutProps {
 }
 
 export function Layout({ children }: LayoutProps) {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true); // Default to collapsed
+  const { isCollapsed, toggleCollapsed } = useSidebarCollapse();
   const [isMobile, setIsMobile] = useState(false);
-  
-  // Check if mobile on mount and resize
+
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };
-    
+
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-  
-  useEffect(() => {
-    const handleSidebarToggle = (event: CustomEvent) => {
-      setSidebarCollapsed(event.detail.isCollapsed);
-    };
-    
-    window.addEventListener('sidebar-toggle', handleSidebarToggle as EventListener);
-    return () => window.removeEventListener('sidebar-toggle', handleSidebarToggle as EventListener);
   }, []);
 
   return (
@@ -42,7 +33,10 @@ export function Layout({ children }: LayoutProps) {
       <div className="flex flex-1 pt-14">
         {/* Sidebar is positioned fixed */}
         <div className="hidden md:block">
-          <Sidebar />
+          <Sidebar
+            isCollapsed={isCollapsed}
+            onToggleCollapsed={toggleCollapsed}
+          />
         </div>
         
         {/* Main Content - Adjust margin based on sidebar state */}
@@ -52,7 +46,7 @@ export function Layout({ children }: LayoutProps) {
           min-w-0
           transition-all duration-300
           ${isMobile ? 'pb-20' : 'pb-4'}
-          ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}
+          ${isCollapsed ? 'md:ml-20' : 'md:ml-64'}
         `}>
           {children}
         </main>

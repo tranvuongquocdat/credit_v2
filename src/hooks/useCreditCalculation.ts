@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { CreditStatus } from '@/models/credit';
 import { useStore } from '@/contexts/StoreContext';
 import { calculateCreditMetrics } from '@/lib/Credits/calculate_credit_metrics';
+import { startPerfTimer } from '@/lib/perf-debug';
 
 // Interface cho dữ liệu tài chính tổng hợp
 export interface StoreFinancialData {
@@ -37,31 +38,40 @@ export function useCreditCalculations() {
   const { currentStore } = useStore();
   
   const fetchAllData = async () => {
+    const endFetchAllData = startPerfTimer('useCreditCalculations.fetchAllData', {
+      context: { storeId: currentStore?.id || null },
+    });
     try {
       setLoading(true);
       
       const storeId = currentStore?.id || '1';
       
       // 1. Lấy thông tin store
+      const endStoreQuery = startPerfTimer('useCreditCalculations.fetchAllData.queryStore');
       const { data: storeData } = await supabase
         .from('stores')
         .select('investment, cash_fund')
         .eq('id', storeId)
         .single();
+      endStoreQuery();
       
       // 2. Lấy danh sách credits đang hoạt động từ view (bao gồm ON_TIME, OVERDUE, LATE_INTEREST)
+      const endActiveCreditsQuery = startPerfTimer('useCreditCalculations.fetchAllData.queryActiveCredits');
       const { data: activeCreditsData } = await supabase
         .from('credits_by_store')
         .select('id, loan_amount, loan_date, loan_period')
         .eq('store_id', storeId)
         .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']);
+      endActiveCreditsQuery();
       
       // 3. Lấy danh sách credits đã đóng từ view
+      const endClosedCreditsQuery = startPerfTimer('useCreditCalculations.fetchAllData.queryClosedCredits');
       const { data: closedCreditsData } = await supabase
         .from('credits_by_store')
         .select('id, loan_amount, loan_date, loan_period')
         .eq('store_id', storeId)
         .eq('status_code', 'CLOSED');
+      endClosedCreditsQuery();
       
       let totalLoan = 0;
       let totalOldDebt = 0;
@@ -83,34 +93,50 @@ export function useCreditCalculations() {
         /* (a) date-range */
         const start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
         const end   = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+        const endInterestRangeQuery = startPerfTimer('useCreditCalculations.fetchAllData.rpcPaidInterestRange', {
+          context: { credits: allIds.length },
+        });
         const { data: interestRowsR } = await supabase.rpc('get_paid_interest', {
           p_credit_ids: allIds,
           p_start_date: start.toISOString(),
           p_end_date  : end.toISOString(),
         });
+        endInterestRangeQuery();
         interestRowsR?.forEach((r: any) =>
           interestRangeMap.set(r.credit_id, Number(r.paid_interest || 0)));
 
         /* (b) total */
+        const endInterestTotalQuery = startPerfTimer('useCreditCalculations.fetchAllData.rpcPaidInterestTotal', {
+          context: { credits: allIds.length },
+        });
         const { data: interestRowsT } = await supabase.rpc('get_paid_interest', {
           p_credit_ids: allIds,
         });
+        endInterestTotalQuery();
         interestRowsT?.forEach((r: any) =>
           interestTotalMap.set(r.credit_id, Number(r.paid_interest || 0)));
       }
 
+      const endPrincipalQuery = startPerfTimer('useCreditCalculations.fetchAllData.rpcCurrentPrincipal', {
+        context: { credits: allIds.length },
+      });
       const { data: principalRows } = await supabase.rpc('get_current_principal', {
         p_credit_ids: allIds,
       });
+      endPrincipalQuery();
       const principalMap = new Map<string, number>();
       principalRows?.forEach((r: { credit_id: string; current_principal: number }) => {
         principalMap.set(r.credit_id, Number(r.current_principal));
       });
 
       // 5. RPC lấy old debt
+      const endOldDebtQuery = startPerfTimer('useCreditCalculations.fetchAllData.rpcOldDebt', {
+        context: { credits: activeIds.length },
+      });
       const { data: debtRows } = await supabase.rpc('get_old_debt', {
         p_credit_ids: activeIds,
       });
+      endOldDebtQuery();
       const debtMap = new Map<string, number>();
       debtRows?.forEach((r: { credit_id: string; old_debt: number }) =>
         debtMap.set(r.credit_id, Number(r.old_debt || 0))
@@ -121,9 +147,13 @@ export function useCreditCalculations() {
       const todayMap = new Map<string, number>();
 
       if (allIds.length) {
+        const endExpectedInterestQuery = startPerfTimer('useCreditCalculations.fetchAllData.rpcExpectedInterest', {
+          context: { credits: allIds.length },
+        });
         const { data: expRows, error: expErr } = await (supabase.rpc as any)('get_expected_interest', {
           p_credit_ids: allIds,
         });
+        endExpectedInterestQuery();
         if (!expErr && Array.isArray(expRows)) {
           expRows.forEach((r: any) => {
             expectedMap.set(r.credit_id, Number(r.expected_profit || 0));
@@ -135,9 +165,13 @@ export function useCreditCalculations() {
       /* ---------- 7.1. RPC lấy latest payment paid date cho tất cả credit ---------- */
       const latestPaidMap = new Map<string, string | null>();
       if (allIds.length) {
+        const endLatestPaidQuery = startPerfTimer('useCreditCalculations.fetchAllData.rpcLatestPaymentPaidDates', {
+          context: { credits: allIds.length },
+        });
         const { data: latestPaidRows, error: latestPaidErr } = await (supabase.rpc as any)('get_latest_payment_paid_dates', {
           p_credit_ids: allIds,
         });
+        endLatestPaidQuery();
         if (!latestPaidErr && Array.isArray(latestPaidRows)) {
           latestPaidRows.forEach((r: any) => {
             latestPaidMap.set(r.credit_id, r.latest_paid_date || null);
@@ -148,9 +182,13 @@ export function useCreditCalculations() {
       /* ---------- 7. RPC lấy thông tin kỳ thanh toán tiếp theo ---------- */
       const nextMap = new Map<string, { nextDate: string | null; isCompleted: boolean; hasPaid: boolean }>();
       if (activeIds.length) {
+        const endNextPaymentQuery = startPerfTimer('useCreditCalculations.fetchAllData.rpcNextPaymentInfo', {
+          context: { credits: activeIds.length },
+        });
         const { data: npRows, error: npErr } = await (supabase.rpc as any)('get_next_payment_info', {
           p_credit_ids: activeIds,
         });
+        endNextPaymentQuery();
         if (!npErr && Array.isArray(npRows)) {
           npRows.forEach((r: any) => {
             nextMap.set(r.credit_id, {
@@ -162,7 +200,10 @@ export function useCreditCalculations() {
         }
       }
         
-        const results = await Promise.all(
+      const endCalculateMetrics = startPerfTimer('useCreditCalculations.fetchAllData.calculateCreditMetrics', {
+        context: { credits: (activeCreditsData?.length || 0) + (closedCreditsData?.length || 0) },
+      });
+      const results = await Promise.all(
         [...(activeCreditsData || []), ...(closedCreditsData || [])]
           .filter(c => c.id !== null && c.loan_amount !== null && c.loan_date !== null && c.loan_period !== null)
           .map(c =>
@@ -175,6 +216,7 @@ export function useCreditCalculations() {
             })
           )
       );
+      endCalculateMetrics();
         
         // Aggregate results
         results.forEach(result => {
@@ -223,6 +265,7 @@ export function useCreditCalculations() {
       console.error('Error in useCreditCalculations:', error);
     } finally {
       setLoading(false);
+      endFetchAllData();
     }
   };
   
