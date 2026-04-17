@@ -22,7 +22,7 @@ import {
   XCircle
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getNavDisplayLabel, type NavDisplayLabelKey } from '@/utils/nav-display-labels';
+import { getDisplayLabelByBuild, type NavDisplayLabelKey } from '@/utils/nav-display-labels';
 
 interface SubMenuItem {
   title: string;
@@ -197,7 +197,7 @@ export function BottomNavigation() {
   const filteredNavItems = getFilteredNavItems();
   const currentSubmenu = submenuOpen ? navItems.find(item => item.path === submenuOpen) : null;
 
-  const resolveNavLabel = (item: NavItem) => getNavDisplayLabel(item.labelKey);
+  const resolveNavLabel = (item: NavItem) => getDisplayLabelByBuild(item.labelKey);
 
   return (
     <>

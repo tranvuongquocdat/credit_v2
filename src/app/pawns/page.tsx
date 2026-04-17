@@ -41,6 +41,7 @@ import { isSameDay, addDays } from 'date-fns';
 import { usePawnCalculations } from '@/hooks/usePawnCalculation';
 import { useStore } from '@/contexts/StoreContext';
 import { startScreenLoadTimer } from '@/lib/perf-debug';
+import { getDisplayLabelByBuild } from '@/utils/nav-display-labels';
 
 // Type for totals row returned by RPC
 interface PawnTotals {
@@ -431,7 +432,7 @@ export default function PawnsPage() {
         {/* Title và nút trở về */}
         <div className="flex items-center justify-between border-b pb-2 mb-2">
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold">Quản lý hợp đồng cầm đồ</h1>
+            <h1 className="text-lg font-bold">{getDisplayLabelByBuild('quan_ly_hop_dong_cam_do')}</h1>
           </div>
         </div>
         

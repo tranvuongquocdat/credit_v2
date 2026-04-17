@@ -25,6 +25,7 @@ import { getStoreFinancialData } from '@/lib/store';
 import { AlertCircle } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { MoneyInput } from '@/components/ui/money-input';
+import { getDisplayLabelByBuild } from '@/utils/nav-display-labels';
 
 interface PawnCreateModalProps {
   isOpen: boolean;
@@ -493,7 +494,7 @@ export function PawnCreateModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="w-[95vw] max-w-[400px] sm:max-w-[500px] md:max-w-[600px] lg:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-center">Hợp đồng cầm đồ</DialogTitle>
+          <DialogTitle className="text-center">{getDisplayLabelByBuild('pawn_contract_label')}</DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
@@ -633,7 +634,7 @@ export function PawnCreateModal({
           
           <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
             <Label htmlFor="collateralId" className="text-left sm:text-right font-medium">
-              Tài sản thế chấp <span className="text-red-500">*</span>
+              {getDisplayLabelByBuild('collateral_for_pawn')} <span className="text-red-500">*</span>
             </Label>
             <select 
               className="border rounded-md p-2 w-full"

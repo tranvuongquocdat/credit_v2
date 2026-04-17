@@ -11,7 +11,7 @@ export type NavLabelRow = { default: string } & Record<string, string>;
 
 const LABELS = {
   pawns: {
-    nuvoras_v2: 'abc',
+    nuvoras_v2: 'Mượn tài sản',
     default: 'Cầm đồ',
   },
   credits: {
@@ -46,6 +46,26 @@ const LABELS = {
   admins: {
     default: 'Quản trị hệ thống',
   },
+  pawn_contract_label: {
+    nuvoras_v2: 'Hợp đồng mượn tài sản',
+    default: 'Hợp đồng cầm đồ',
+  },
+  collateral_for_pawn: {
+    nuvoras_v2: 'Tài sản cho mượn',
+    default: 'Tài sản thế chấp',
+  },
+  tien_cam: {
+    nuvoras_v2: 'Giá trị tài sản',
+    default: 'Tiền cầm',
+  },
+  cam_tu_ngay: {
+    nuvoras_v2: 'Ngày mượn',
+    default: 'Cầm từ ngày',
+  },
+  quan_ly_hop_dong_cam_do: {
+    nuvoras_v2: 'Quản lý hợp đồng mượn tài sản',
+    default: 'Quản lý hợp đồng cầm đồ',
+  },
 } as const satisfies Record<string, NavLabelRow>;
 
 export type NavDisplayLabelKey = keyof typeof LABELS;
@@ -65,7 +85,7 @@ export function isNuvorasBuild(): boolean {
 }
 
 /** Trả về chuỗi hiển thị theo key menu (trùng segment path) và build hiện tại. */
-export function getNavDisplayLabel(key: NavDisplayLabelKey): string {
+export function getDisplayLabelByBuild(key: NavDisplayLabelKey): string {
   const row = LABELS[key];
   const buildName = process.env.NEXT_PUBLIC_BUILD_NAME;
   return pickLabelForBuild(row, buildName);

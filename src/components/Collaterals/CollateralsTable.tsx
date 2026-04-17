@@ -17,6 +17,7 @@ import {
 import { cn } from '@/lib/utils';
 import { CollateralWithStore, CollateralStatus } from '@/models/collateral';
 import { MoreVertical, EditIcon, Trash2Icon } from 'lucide-react';
+import { getDisplayLabelByBuild } from '@/utils/nav-display-labels';
 
 interface StatusMapType {
   [key: string]: { 
@@ -76,7 +77,7 @@ export function CollateralsTable({
             <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Lĩnh vực</TableHead>
             <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Tên</TableHead>
             <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Mã</TableHead>
-            <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Tiền cầm</TableHead>
+            <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">{getDisplayLabelByBuild('tien_cam')}</TableHead>
             <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Lãi phí</TableHead>
             <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Kỳ lãi phí</TableHead>
             <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Thanh lý sau</TableHead>

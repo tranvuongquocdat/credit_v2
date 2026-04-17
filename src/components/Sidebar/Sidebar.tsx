@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { signOut } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
-import { getNavDisplayLabel, type NavDisplayLabelKey } from '@/utils/nav-display-labels';
+import { getDisplayLabelByBuild, type NavDisplayLabelKey } from '@/utils/nav-display-labels';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -213,7 +213,7 @@ export default function Sidebar({ isCollapsed, onToggleCollapsed }: SidebarProps
   };
 
   const resolveItemTitle = (item: SidebarItem) =>
-    getNavDisplayLabel(item.labelKey);
+    getDisplayLabelByBuild(item.labelKey);
 
   // Filter sidebar items based on user role and permissions
   const getFilteredSidebarItems = () => {

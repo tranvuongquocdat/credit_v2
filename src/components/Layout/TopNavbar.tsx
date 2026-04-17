@@ -12,7 +12,7 @@ import { countCreditWarnings } from "@/lib/credit-warnings";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { startPerfTimer } from "@/lib/perf-debug";
-import { getNavDisplayLabel, isNuvorasBuild as getIsNuvorasBuild } from "@/utils/nav-display-labels";
+import { getDisplayLabelByBuild, isNuvorasBuild as getIsNuvorasBuild } from "@/utils/nav-display-labels";
 
 // This interface will represent the notification data structure
 interface NotificationCounts {
@@ -306,7 +306,7 @@ export function TopNavbar() {
           {isNuvorasBuild && (
             <div 
               className="p-2.5 hover:bg-white/15 transition-all duration-200 rounded-lg relative group" 
-              title={`${getNavDisplayLabel('credits')} có ${notificationCounts.loanInvoices} hóa đơn cần xử lý`}
+              title={`${getDisplayLabelByBuild('credits')} có ${notificationCounts.loanInvoices} hóa đơn cần xử lý`}
             >
               <button 
                 className="flex items-center justify-center"

@@ -17,6 +17,7 @@ import { formatCurrency, calculateDaysBetween, formatDate, formatDateTime } from
 import { calculateActualLoanAmount } from '@/lib/Pawns/calculate_actual_loan_amount';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Badge } from '@/components/ui/badge';
+import {getDisplayLabelByBuild} from '@/utils/nav-display-labels';
 // Removed: import { calculatePawnStatus, PawnStatusResult } from '@/lib/Pawns/calculate_pawn_status';
 
 interface PawnHistoryModalProps {
@@ -500,14 +501,14 @@ export function PawnHistoryModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(hasDataChanged)}>
       <DialogContent className="sm:max-w-[800px] md:max-w-[900px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Hợp đồng cầm đồ</DialogTitle>
+          <DialogTitle>{getDisplayLabelByBuild('pawn_contract_label')}</DialogTitle>
         </DialogHeader>
 
         <div className="mt-2">
           {/* Customer information */}
           <div className="flex justify-between items-center mb-2">
             <h3 className="font-medium">{currentPawn?.customer?.name || 'Khách hàng'}</h3>
-            <h3 className="font-medium">Hợp đồng cầm đồ</h3>
+            <h3 className="font-medium">{getDisplayLabelByBuild('pawn_contract_label')}</h3>
           </div>
           
           {/* Summary details */}
@@ -516,7 +517,7 @@ export function PawnHistoryModal({
               <table className="w-full border-collapse">
                 <tbody>
                   <tr>
-                    <td className="py-1 px-2 border font-bold">Tiền cầm</td>
+                    <td className="py-1 px-2 border font-bold">{getDisplayLabelByBuild('tien_cam')}</td>
                     <td className="py-1 px-2 text-right border" colSpan={2}>{formatCurrency(actualLoanAmount || currentPawn?.loan_amount || 0)}</td>
                   </tr>
                   <tr>
@@ -526,7 +527,7 @@ export function PawnHistoryModal({
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-1 px-2 border font-bold">Cầm từ ngày</td>
+                    <td className="py-1 px-2 border font-bold">{getDisplayLabelByBuild('cam_tu_ngay')}</td>
                     <td className="py-1 px-2 text-right border">{loanDateFormatted}</td>
                     <td className="py-1 px-2 text-right border">{endDateFormatted}</td>
                   </tr>

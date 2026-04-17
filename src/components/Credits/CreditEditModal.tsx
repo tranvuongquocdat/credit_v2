@@ -25,6 +25,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { DatePicker } from '../ui/date-picker';
 import { getStoreFinancialData } from '@/lib/store';
 import { calculateActualLoanAmount } from '@/lib/Credits/calculate_actual_loan_amount';
+import { getDisplayLabelByBuild } from '@/utils/nav-display-labels';
 
 interface CreditEditModalProps {
   isOpen: boolean;
@@ -587,7 +588,7 @@ export function CreditEditModal({
             </div>
             
             <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-start">
-              <Label htmlFor="collateral" className="text-left sm:text-right font-medium sm:mt-2">Tài sản thế chấp</Label>
+              <Label htmlFor="collateral" className="text-left sm:text-right font-medium sm:mt-2">{getDisplayLabelByBuild('collateral_for_pawn')}</Label>
               <Textarea 
                 id="collateral"
                 value={collateral}
