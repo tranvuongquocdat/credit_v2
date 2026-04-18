@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { getDisplayLabelByBuild } from '@/utils/nav-display-labels';
 import { 
   Dialog, 
   DialogContent, 
@@ -17,7 +18,6 @@ import { formatCurrency, calculateDaysBetween, formatDate, formatDateTime } from
 import { calculateActualLoanAmount } from '@/lib/Pawns/calculate_actual_loan_amount';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Badge } from '@/components/ui/badge';
-import {getDisplayLabelByBuild} from '@/utils/nav-display-labels';
 // Removed: import { calculatePawnStatus, PawnStatusResult } from '@/lib/Pawns/calculate_pawn_status';
 
 interface PawnHistoryModalProps {
@@ -77,7 +77,7 @@ export function PawnHistoryModal({
       if (pawn.status_code) {
         // Map status_code to status result directly
         const statusMapping: Record<string, { status: string; statusCode: string }> = {
-          'ON_TIME': { status: 'Đang vay', statusCode: 'ON_TIME' },
+          'ON_TIME': { status: getDisplayLabelByBuild('dang_vay'), statusCode: 'ON_TIME' },
           'CLOSED': { status: 'Đã đóng', statusCode: 'CLOSED' },
           'DELETED': { status: 'Đã xóa', statusCode: 'DELETED' },
           'OVERDUE': { status: 'Quá hạn', statusCode: 'OVERDUE' },
@@ -90,7 +90,7 @@ export function PawnHistoryModal({
         setPawnStatus(mappedStatus);
       } else {
         // Fallback: assume ON_TIME if status_code not available
-        setPawnStatus({ status: 'Đang vay', statusCode: 'ON_TIME' });
+        setPawnStatus({ status: getDisplayLabelByBuild('dang_vay'), statusCode: 'ON_TIME' });
       }
     } catch (error) {
       console.error('Error loading pawn status:', error);

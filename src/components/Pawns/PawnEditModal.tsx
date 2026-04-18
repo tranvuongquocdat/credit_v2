@@ -572,7 +572,7 @@ export function PawnEditModal({
             
             <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
               <Label htmlFor="loanAmount" className="text-left sm:text-right font-medium">
-                Tổng số tiền vay <span className="text-red-500">*</span>
+                {getDisplayLabelByBuild('tong_so_tien_vay')} <span className="text-red-500">*</span>
               </Label>
               <MoneyInput 
                 id="loanAmount"
@@ -708,7 +708,7 @@ export function PawnEditModal({
             
             <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
               <Label htmlFor="interestPeriod" className="text-left sm:text-right font-medium">
-                Kỳ lãi phí <span className="text-red-500">*</span>
+                {getDisplayLabelByBuild('ky_lai_phi')} <span className="text-red-500">*</span>
               </Label>
               <div className="space-y-2 sm:space-y-0 sm:flex sm:items-center sm:gap-2">
                 <Input 
@@ -732,7 +732,7 @@ export function PawnEditModal({
             </div>
             
             <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
-              <Label htmlFor="loanDate" className="text-left sm:text-right font-medium">Ngày vay</Label>
+              <Label htmlFor="loanDate" className="text-left sm:text-right font-medium">{getDisplayLabelByBuild('ngay_vay')} <span className="text-red-500">*</span></Label>
               <DatePicker
                 value={loanDate}
                 onChange={(value) => setLoanDate(value)}
