@@ -38,6 +38,7 @@ import Link from 'next/link';
 
 // Import Excel Export component
 import ExcelExport from './components/ExcelExport';
+import { getDisplayLabelByBuild } from '@/utils/nav-display-labels';
 
 // Interface for interest detail data
 interface InterestDetailItem {
@@ -386,7 +387,7 @@ export default function InterestDetailPage() {
                 interestAmount,
                 otherAmount: 0,
                 totalAmount: interestAmount,
-                transactionType: 'Chuộc đồ',
+                transactionType: getDisplayLabelByBuild('chuoc_do'),
                 type: 'Cầm đồ' as const
               };
             });
@@ -495,7 +496,7 @@ export default function InterestDetailPage() {
                 interestAmount,
                 otherAmount: 0,
                 totalAmount: interestAmount,
-                transactionType: 'Chuộc đồ',
+                transactionType: getDisplayLabelByBuild('chuoc_do'),
                 type: 'Cầm đồ' as const
               };
             });
@@ -1185,7 +1186,7 @@ export default function InterestDetailPage() {
                             <span className={`px-2 py-1 rounded text-xs font-medium ${
                               item.transactionType === 'Đóng lãi' ? 'bg-green-100 text-green-800' :
                               item.transactionType === 'Huỷ đóng lãi' ? 'bg-red-100 text-red-800' :
-                              item.transactionType === 'Chuộc đồ' || item.transactionType === 'Đóng HĐ' ? 'bg-blue-100 text-blue-800' :
+                              item.transactionType === getDisplayLabelByBuild('chuoc_do') || item.transactionType === 'Đóng HĐ' ? 'bg-blue-100 text-blue-800' :
                               item.transactionType === 'Huỷ chuộc đồ' || item.transactionType === 'Huỷ đóng HĐ' ? 'bg-red-100 text-red-800' :
                               item.transactionType === 'Lãi họ' ? 'bg-purple-100 text-purple-800' :
                               item.transactionType === 'Trả nợ' ? 'bg-yellow-100 text-yellow-800' :

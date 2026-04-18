@@ -26,6 +26,8 @@ export interface EmployeePermissionFormData {
   permission_ids: string[];
 }
 
+import { getDisplayLabelByBuild } from '@/utils/nav-display-labels';
+
 // Predefined permissions structure
 export const DEFAULT_PERMISSIONS = [
   {
@@ -75,7 +77,7 @@ export const DEFAULT_PERMISSIONS = [
       },
       { 
         id: 'chuoc_do_cam_do', 
-        name: 'Chuộc đồ' 
+        name: getDisplayLabelByBuild('chuoc_do')
       },
       { 
         id: 'sua_ngay_chuoc_do_cam_do', 

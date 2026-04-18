@@ -18,6 +18,7 @@ import { useCustomerSearch } from '@/hooks/useCustomers';
 import { Customer } from '@/models/customer';
 import { useStore } from '@/contexts/StoreContext';
 import { PawnStatus } from '@/models/pawn';
+import { getDisplayLabelByBuild } from '@/utils/nav-display-labels';
 
 
 
@@ -52,7 +53,7 @@ export function SearchFilters({
   onPageSizeChange
 }: SearchFiltersProps) {
   const statusMap = {
-    [PawnStatus.ON_TIME]: { label: 'Đang vay', color: 'bg-green-100 text-green-800' },
+    [PawnStatus.ON_TIME]: { label: getDisplayLabelByBuild('dang_vay'), color: 'bg-green-100 text-green-800' },
     [PawnStatus.CLOSED]: { label: 'Đã đóng', color: 'bg-blue-100 text-blue-800' },
     [PawnStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
     due_tomorrow: { label: 'Ngày mai đóng lãi', color: 'bg-amber-100 text-amber-800' },

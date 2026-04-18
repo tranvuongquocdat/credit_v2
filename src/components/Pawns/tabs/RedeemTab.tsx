@@ -18,6 +18,7 @@ import { format, addDays, isAfter, isBefore } from "date-fns";
 import { vi } from 'date-fns/locale';
 import { DatePicker } from '@/components/ui/date-picker';
 import { usePermissions } from '@/hooks/usePermissions';
+import { getDisplayLabelByBuild } from '@/utils/nav-display-labels';
 
 interface RedeemTabProps {
   pawn: PawnWithCustomerAndCollateral;
@@ -140,7 +141,7 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
             transaction_type: 'contract_close',
             credit_amount: contractRedeemAmount + remainingAmount,
             debit_amount: 0,
-            description: `Chuộc đồ (gốc: ${formatCurrency(actualLoanAmount)} + lãi: ${formatCurrency(remainingAmount)})`,
+            description: `${getDisplayLabelByBuild('chuoc_do')} (gốc: ${formatCurrency(actualLoanAmount)} + lãi: ${formatCurrency(remainingAmount)})`,
             is_created_from_contract_closure: true,
             created_by: userId
 
@@ -171,7 +172,7 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
             transaction_type: 'contract_close',
             credit_amount: contractRedeemAmount,
             debit_amount: 0,
-            description: `Chuộc đồ (gốc: ${formatCurrency(actualLoanAmount)} + lãi: ${formatCurrency(remainingAmount)})`,
+            description: `${getDisplayLabelByBuild('chuoc_do')} (gốc: ${formatCurrency(actualLoanAmount)} + lãi: ${formatCurrency(remainingAmount)})`,
             is_created_from_contract_closure: true,
             created_by: userId
           } as any);
@@ -274,7 +275,7 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
   return (
     <div className="p-4">
       <div className="p-4 border rounded-md">
-        <h3 className="text-lg font-medium mb-4">Chuộc đồ</h3>
+        <h3 className="text-lg font-medium mb-4">{getDisplayLabelByBuild('chuoc_do')}</h3>
 
         {isCalculating && (
           <div className="flex items-center justify-center p-4 mb-4 bg-blue-50 border border-blue-200 rounded">
@@ -376,10 +377,10 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
               className="bg-green-600 hover:bg-green-700 text-white px-8"
               disabled={isClosed || isCalculating || isRedeeming}
             >
-              {isRedeeming ? "Đang chuộc đồ..." :
+              {isRedeeming ? getDisplayLabelByBuild('dang_chuoc_do') :
                isCalculating ? "Đang tính toán..." :
                pawn?.status === PawnStatus.DELETED ? "Hợp đồng đã xóa" : 
-               pawn?.status === PawnStatus.CLOSED ? "Đã chuộc đồ" : "Chuộc đồ"}
+               pawn?.status === PawnStatus.CLOSED ? getDisplayLabelByBuild('da_chuoc_do') : getDisplayLabelByBuild('chuoc_do')}
             </Button>
           ) : (
             /* Show two buttons if there's old debt */
@@ -389,16 +390,16 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
                 className="bg-green-600 hover:bg-green-700 text-white px-6"
                 disabled={isCalculating || isRedeeming}
               >
-                {isRedeeming && payDebt ? "Đang chuộc đồ..." :
-                 isCalculating ? "Đang tính toán..." : "Chuộc đồ và trả nợ"}
+                {isRedeeming && payDebt ? getDisplayLabelByBuild('dang_chuoc_do') :
+                 isCalculating ? "Đang tính toán..." : getDisplayLabelByBuild('thanh_ly_va_tra_no')}
               </Button>
               <Button 
                 onClick={() => { setPayDebt(false); setShowConfirm(true); }} 
                 className="bg-orange-600 hover:bg-orange-700 text-white px-6"
                 disabled={isCalculating || isRedeeming}
               >
-                {isRedeeming && !payDebt ? "Đang chuộc đồ..." :
-                 isCalculating ? "Đang tính toán..." : "Chuộc đồ và không trả nợ"}
+                {isRedeeming && !payDebt ? getDisplayLabelByBuild('dang_chuoc_do') :
+                 isCalculating ? "Đang tính toán..." : getDisplayLabelByBuild('thanh_ly_khong_tra_no')}
               </Button>
             </div>
           )}

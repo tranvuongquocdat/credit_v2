@@ -3,6 +3,8 @@
  * Shared utilities for pawn status handling and display
  */
 
+import { getDisplayLabelByBuild } from '@/utils/nav-display-labels';
+
 export interface StatusInfo {
   label: string;
   color: string;
@@ -15,7 +17,7 @@ export interface StatusInfo {
 export const PAWN_STATUS_MAP: Record<string, StatusInfo> = {
   // Database view status codes
   'ON_TIME': {
-    label: 'Đang vay',
+    label: getDisplayLabelByBuild('dang_vay'),
     color: 'bg-green-100 text-green-800 border-green-200'
   },
   'LATE_INTEREST': {
