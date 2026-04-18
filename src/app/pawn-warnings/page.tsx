@@ -111,11 +111,8 @@ export default function PawnWarningsPage() {
   
 
   // Client-side filtering and pagination
-  const filteredResults = reasonFilter === "all" 
-    ? allPawns.filter(pawn => {
-        const reasonCategories = categorizePawnReason(pawn.reason || '');
-        return !reasonCategories.includes("tomorrow_due");
-      })
+  const filteredResults = reasonFilter === "all"
+    ? allPawns
     : allPawns.filter(pawn => {
         const reasonCategories = categorizePawnReason(pawn.reason || '');
         return reasonCategories.includes(reasonFilter);
