@@ -16,6 +16,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { DatePicker } from '@/components/ui/date-picker';
 import { createPawn } from '@/lib/pawn';
+import { getExpectedMoney } from '@/lib/Pawns/get_expected_money';
+import { getCurrentUser } from '@/lib/auth';
+import { supabase } from '@/lib/supabase';
 import { getCustomers, createCustomer } from '@/lib/customer';
 import { getCollateralsByStore } from '@/lib/collateral';
 import { Customer } from '@/models/customer';
@@ -466,7 +469,51 @@ export function PawnCreateModal({
       if (!data) {
         throw new Error('Không thể tạo hợp đồng cầm đồ');
       }
-      
+
+      if (advancePayment) {
+        const { id: userId } = await getCurrentUser();
+        const interestPeriodDays = convertInterestPeriodForStorage(interestPeriod, interestType);
+        const loanDateObj = new Date(loanDate);
+        const endDateObj = new Date(loanDateObj);
+        endDateObj.setDate(loanDateObj.getDate() + interestPeriodDays - 1);
+
+        const dailyAmounts = await getExpectedMoney(data.id);
+        const dates: string[] = [];
+        const cur = new Date(loanDateObj);
+        while (cur <= endDateObj) {
+          dates.push(cur.toISOString().split('T')[0]);
+          cur.setDate(cur.getDate() + 1);
+        }
+
+        const paymentRecords = dates.map((dateStr, index) => {
+          const dayIndex = Math.floor((new Date(dateStr).getTime() - loanDateObj.getTime()) / (1000 * 60 * 60 * 24));
+          let dateStatus: string | null = null;
+          if (dates.length === 1) dateStatus = 'only';
+          else if (index === 0) dateStatus = 'start';
+          else if (index === dates.length - 1) dateStatus = 'end';
+          return {
+            pawn_id: data.id,
+            transaction_type: 'payment' as const,
+            effective_date: new Date(dateStr).toISOString(),
+            date_status: dateStatus,
+            credit_amount: dayIndex < dailyAmounts.length ? dailyAmounts[dayIndex] : 0,
+            debit_amount: 0,
+            description: `Thu lãi trước ngày ${index + 1}/${dates.length}`,
+            is_deleted: false,
+            is_created_from_contract_closure: false,
+            created_by: userId,
+          };
+        });
+
+        await supabase.from('pawn_history').insert(paymentRecords);
+
+        const initialLoanPeriod = convertLoanPeriodToDays(interestPeriod, interestType);
+        await supabase
+          .from('pawns')
+          .update({ loan_period: initialLoanPeriod + interestPeriodDays })
+          .eq('id', data.id);
+      }
+
       // Show success message
       toast({
         title: 'Thành công',
