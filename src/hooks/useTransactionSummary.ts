@@ -58,6 +58,10 @@ type GroupedHistoryRpcRow = {
   employee_name: string | null;
 };
 
+type GroupedPawnHistoryRpcRow = GroupedHistoryRpcRow & {
+  item_name: string | null;
+};
+
 const fetchCreditHistoryByRpc = async (
   storeId: string,
   startDateISO: string,
@@ -113,6 +117,40 @@ const fetchInstallmentHistoryByRpc = async (
     installments: {
       contract_code: row.contract_code || null,
       customers: { name: row.customer_name || '' },
+    },
+    profiles: { username: row.employee_name || '' },
+  }));
+};
+
+const fetchPawnHistoryByRpc = async (
+  storeId: string,
+  startDateISO: string,
+  endDateISO: string
+) => {
+  const { data, error } = await (supabase as any).rpc('rpc_pawn_history_grouped', {
+    p_store_id: storeId,
+    p_start_date: startDateISO,
+    p_end_date: endDateISO,
+  });
+
+  if (error) throw error;
+
+  return (((data || []) as unknown) as GroupedPawnHistoryRpcRow[]).map((row, index) => ({
+    id: `pawn-rpc-${index}`,
+    created_at: `${row.transaction_date}T00:00:00`,
+    updated_at: row.cancel_date,
+    is_deleted: row.is_deleted,
+    transaction_type: row.transaction_type,
+    credit_amount: Number(row.credit_amount || 0),
+    debit_amount: Number(row.debit_amount || 0),
+    contract_code: row.contract_code || null,
+    pawns: {
+      contract_code: row.contract_code || null,
+      customers: { name: row.customer_name || '' },
+      collateral_detail:
+        row.item_name != null && String(row.item_name).length > 0
+          ? { name: row.item_name }
+          : null,
     },
     profiles: { username: row.employee_name || '' },
   }));
@@ -423,40 +461,35 @@ const fetchTransactionData = async (
     const creditHistoryData = await fetchCreditHistoryByRpc(storeId, startDateISO, endDateISO);
     if (creditHistoryData) processItems(creditHistoryData as any[], 'Tín chấp');
 
-    const pawnHistoryData = await fetchAllData(
-      supabase
-        .from('pawn_history')
-        .select(`
-          id,
-          created_at,
-          updated_at,
-          is_deleted,
-          transaction_type,
-          credit_amount,
-          debit_amount,
-          created_by,
-          pawns!inner (
-            contract_code,
-            store_id,
-            customers (name),
-            collateral_detail
-          ),
-          profiles:created_by (username)
-        `)
-        .eq('pawns.store_id', storeId)
-        .or(
-          `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
-        )
-        .order('id')
-    );
-
-    if (pawnHistoryData) {
-      const processedPawnData = pawnHistoryData.map((item: any) => ({
-        ...item,
-        contract_code: item.pawns?.contract_code || null,
-      }));
-      processItems(processedPawnData, 'Cầm đồ');
-    }
+    // Logic cũ để đối chiếu:
+    // const pawnHistoryData = await fetchAllData(
+    //   supabase
+    //     .from('pawn_history')
+    //     .select(`
+    //       id,
+    //       created_at,
+    //       updated_at,
+    //       is_deleted,
+    //       transaction_type,
+    //       credit_amount,
+    //       debit_amount,
+    //       created_by,
+    //       pawns!inner (
+    //         contract_code,
+    //         store_id,
+    //         customers (name),
+    //         collateral_detail
+    //       ),
+    //       profiles:created_by (username)
+    //     `)
+    //     .eq('pawns.store_id', storeId)
+    //     .or(
+    //       `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
+    //     )
+    //     .order('id')
+    // );
+    const pawnHistoryData = await fetchPawnHistoryByRpc(storeId, startDateISO, endDateISO);
+    if (pawnHistoryData) processItems(pawnHistoryData as any[], 'Cầm đồ');
 
     // Logic cũ để đối chiếu:
     // const installmentHistoryData = await fetchAllData(
@@ -803,40 +836,35 @@ const fetchTransactionDetails = async (
     const creditHistoryData = await fetchCreditHistoryByRpc(storeId, startDateISO, endDateISO);
     if (creditHistoryData) processItems(creditHistoryData as any[], 'Tín chấp');
 
-    const pawnHistoryData = await fetchAllData(
-      supabase
-        .from('pawn_history')
-        .select(`
-          id,
-          created_at,
-          updated_at,
-          is_deleted,
-          transaction_type,
-          credit_amount,
-          debit_amount,
-          created_by,
-          pawns!inner (
-            contract_code,
-            store_id,
-            customers (name),
-            collateral_detail
-          ),
-          profiles:created_by (username)
-        `)
-        .eq('pawns.store_id', storeId)
-        .or(
-          `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
-        )
-        .order('id')
-    );
-
-    if (pawnHistoryData) {
-      const processedPawnData = pawnHistoryData.map((item: any) => ({
-        ...item,
-        contract_code: item.pawns?.contract_code || null,
-      }));
-      processItems(processedPawnData, 'Cầm đồ');
-    }
+    // Logic cũ để đối chiếu:
+    // const pawnHistoryData = await fetchAllData(
+    //   supabase
+    //     .from('pawn_history')
+    //     .select(`
+    //       id,
+    //       created_at,
+    //       updated_at,
+    //       is_deleted,
+    //       transaction_type,
+    //       credit_amount,
+    //       debit_amount,
+    //       created_by,
+    //       pawns!inner (
+    //         contract_code,
+    //         store_id,
+    //         customers (name),
+    //         collateral_detail
+    //       ),
+    //       profiles:created_by (username)
+    //     `)
+    //     .eq('pawns.store_id', storeId)
+    //     .or(
+    //       `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
+    //     )
+    //     .order('id')
+    // );
+    const pawnHistoryData = await fetchPawnHistoryByRpc(storeId, startDateISO, endDateISO);
+    if (pawnHistoryData) processItems(pawnHistoryData as any[], 'Cầm đồ');
 
     // Logic cũ để đối chiếu:
     // const installmentHistoryData = await fetchAllData(

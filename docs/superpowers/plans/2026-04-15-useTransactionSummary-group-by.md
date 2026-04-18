@@ -64,37 +64,41 @@ ORDER BY
 
 ### 0.2. Verify `pawn_history` — Cầm đồ
 
+Luồng lọc thời gian (khớp `useTransactionSummary` / `.or(...)` trên `pawn_history`):
+
+- **Nhánh 1:** Mọi dòng có `created_at` trong khoảng báo cáo — **kể cả** `payment` đã `is_deleted` (vẫn giữ dòng “gốc” theo ngày tạo).
+- **Nhánh 2:** Thêm các `payment` đã huỷ có `updated_at` trong khoảng (để có dòng sự kiện huỷ khi ngày huỷ nằm trong range nhưng `created_at` nằm ngoài).
+
+Filter cửa hàng: trong app và RPC parity dùng `pawns.store_id` (`p.store_id`). Khi kiểm thủ công bằng SQL thuần có thể thay bằng `cust.store_id` nếu dữ liệu khách hàng cùng cửa hàng với hợp đồng.
+
 ```sql
 SELECT
   p.contract_code,
-  ph.created_at::date                            AS transaction_date,
+  ph.created_at::date AS transaction_date,
   ph.transaction_type,
   ph.is_deleted,
-  COALESCE(SUM(ph.credit_amount), 0)            AS credit_amount,
-  COALESCE(SUM(ph.debit_amount), 0)              AS debit_amount,
+  COALESCE(SUM(ph.credit_amount), 0) AS credit_amount,
+  COALESCE(SUM(ph.debit_amount), 0) AS debit_amount,
   MAX(ph.updated_at) FILTER (WHERE ph.is_deleted = true) AS cancel_date,
-  cust.name                                       AS customer_name,
-  prof.username                                   AS employee_name,
-  -- collateral_detail là JSON, cần trích tên
-  COALESCE(
-    p.collateral_detail ->> 'name',
-    col.name
-  )                                              AS item_name
+  cust.name AS customer_name,
+  prof.username AS employee_name,
+  COALESCE(p.collateral_detail::jsonb ->> 'name', col.name) AS item_name
 FROM pawn_history ph
-JOIN pawns p
-    ON ph.pawn_id = p.id
-JOIN customers cust
-    ON p.customer_id = cust.id
-LEFT JOIN profiles prof
-    ON prof.id = ph.created_by
-LEFT JOIN collaterals col
-    ON p.collateral_id = col.id
-WHERE (
-    (ph.is_deleted = false AND ph.created_at BETWEEN $1 AND $2)
+JOIN pawns p ON ph.pawn_id = p.id
+JOIN customers cust ON p.customer_id = cust.id
+LEFT JOIN profiles prof ON prof.id = ph.created_by
+LEFT JOIN collaterals col ON p.collateral_id = col.id
+WHERE
+  (
+    (ph.created_at BETWEEN $1 AND $2)
     OR
-    (ph.is_deleted = true  AND ph.transaction_type = 'payment'
-     AND ph.updated_at BETWEEN $1 AND $2)
-)
+    (
+      ph.transaction_type = 'payment'
+      AND ph.is_deleted = true
+      AND ph.updated_at BETWEEN $1 AND $2
+    )
+  )
+  AND p.store_id = $store_id
 GROUP BY
   p.contract_code,
   ph.created_at::date,
@@ -102,16 +106,15 @@ GROUP BY
   ph.is_deleted,
   cust.name,
   prof.username,
-  p.collateral_detail,
-  col.name
+  COALESCE(p.collateral_detail::jsonb ->> 'name', col.name)
 ORDER BY
   transaction_date DESC,
   p.contract_code;
 ```
 
-- [ ] **Verify:** Chạy trong SQL Editor. `collateral_detail ->> 'name'` lấy tên tài sản cầm.
-- [ ] **Check:** `pawns.store_id` filter có được apply không (thêm `p.store_id = $store_id` trong WHERE).
-- [ ] **Check:** Nếu `p.collateral_detail` là JSON string thay vì JSONB, dùng `p.collateral_detail::json ->> 'name'`.
+- [ ] **Verify:** Chạy trong SQL Editor (thay `$1`, `$2`, `$store_id`). `collateral_detail::jsonb ->> 'name'` lấy tên tài sản cầm; fallback `col.name`.
+- [x] **Check:** Filter cửa hàng qua `p.store_id` (đã nhất quán với hook).
+- [ ] **Check:** Nếu cột chỉ là `json` (không cast), vẫn dùng `::jsonb` như trên để ổn định toán tử `->>`.
 
 ---
 
@@ -317,6 +320,8 @@ $$;
 
 ### 1.2. RPC: `rpc_pawn_history_grouped`
 
+Cùng semantics với mục **0.2** (đã áp dụng trong migration `20260418120000_rpc_credit_installment_history_grouped.sql`).
+
 ```sql
 CREATE OR REPLACE FUNCTION rpc_pawn_history_grouped(
   p_store_id   UUID,
@@ -324,16 +329,16 @@ CREATE OR REPLACE FUNCTION rpc_pawn_history_grouped(
   p_end_date   TIMESTAMPTZ
 )
 RETURNS TABLE (
-  contract_code     TEXT,
-  transaction_date DATE,
-  transaction_type TEXT,
-  is_deleted       BOOLEAN,
-  credit_amount    NUMERIC,
-  debit_amount     NUMERIC,
-  cancel_date      TIMESTAMPTZ,
-  customer_name    TEXT,
-  employee_name    TEXT,
-  item_name        TEXT
+  contract_code      TEXT,
+  transaction_date   DATE,
+  transaction_type   TEXT,
+  is_deleted         BOOLEAN,
+  credit_amount      NUMERIC,
+  debit_amount       NUMERIC,
+  cancel_date        TIMESTAMPTZ,
+  customer_name      TEXT,
+  employee_name      TEXT,
+  item_name          TEXT
 )
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
@@ -341,7 +346,7 @@ BEGIN
   RETURN QUERY
   SELECT
     p.contract_code,
-    ph.created_at::date,
+    ph.created_at::date                            AS transaction_date,
     ph.transaction_type::TEXT,
     ph.is_deleted,
     COALESCE(SUM(ph.credit_amount), 0)::NUMERIC,
@@ -349,9 +354,8 @@ BEGIN
     MAX(ph.updated_at) FILTER (WHERE ph.is_deleted = true) AS cancel_date,
     cust.name,
     COALESCE(prof.username, ''),
-    -- collateral_detail: thử JSONB ->> 'name', fallback sang collaterals.name
     COALESCE(
-      NULLIF(p.collateral_detail ->> 'name', ''),
+      NULLIF(p.collateral_detail::jsonb ->> 'name', ''),
       col.name,
       ''
     )::TEXT
@@ -361,10 +365,13 @@ BEGIN
   LEFT JOIN profiles prof ON prof.id = ph.created_by
   LEFT JOIN collaterals col ON p.collateral_id = col.id
   WHERE (
-      (ph.is_deleted = false AND ph.created_at BETWEEN p_start_date AND p_end_date)
+      (ph.created_at BETWEEN p_start_date AND p_end_date)
       OR
-      (ph.is_deleted = true  AND ph.transaction_type = 'payment'
-       AND ph.updated_at BETWEEN p_start_date AND p_end_date)
+      (
+        ph.transaction_type = 'payment'
+        AND ph.is_deleted = true
+        AND ph.updated_at BETWEEN p_start_date AND p_end_date
+      )
     )
     AND p.store_id = p_store_id
   GROUP BY
@@ -374,8 +381,11 @@ BEGIN
     ph.is_deleted,
     cust.name,
     prof.username,
-    p.collateral_detail,
-    col.name
+    COALESCE(
+      NULLIF(p.collateral_detail::jsonb ->> 'name', ''),
+      col.name,
+      ''
+    )
   ORDER BY
     transaction_date DESC,
     contract_code;
@@ -383,7 +393,7 @@ END;
 $$;
 ```
 
-- [ ] **Step:** Thêm function trên vào file migration
+- [x] **Step:** Đã thêm function vào migration `supabase/migrations/20260418120000_rpc_credit_installment_history_grouped.sql`
 
 ### 1.3. RPC: `rpc_installment_history_grouped`
 
@@ -583,11 +593,12 @@ npx tsx scripts/test-rpc-queries.ts
 - ✅ `KẾT QUẢ: GIỐNG NHAU` — RPC chính xác
 - ❌ `KẾT QUẢ: KHÁC NHAU` — có bug, đọc diff chi tiết
 
-**Trạng thái script:** `scripts/test-rpc-queries.ts` — env `.env.local` (`@next/env`). Đã có nhánh **tín chấp** và **trả góp** (`TEST_RPC_TARGET=credit` | `installment` | `all`). Wrapper: `scripts/test-rpc-installment-queries.ts`.
+**Trạng thái script:** `scripts/test-rpc-queries.ts` — env `.env.local` (`@next/env`). Đã có nhánh **tín chấp**, **trả góp**, **cầm đồ** (`TEST_RPC_TARGET=credit` | `installment` | `pawn` | `all`). Wrapper: `scripts/test-rpc-installment-queries.ts`, `scripts/test-rpc-pawn-queries.ts`.
 
 - [x] **Step:** Chạy script cho `credit_history` — đảm bảo kết quả giống nhau với logic cũ
 - [x] **Step:** Thêm và chạy parity cho `installment_history` ↔ `rpc_installment_history_grouped` (mục 1.6.1) — đã xong
-- [ ] **Step:** Mở rộng script cho `pawn_history`, `store_fund_history`, `transactions`
+- [x] **Step:** Parity `pawn_history` ↔ `rpc_pawn_history_grouped` (mục 1.6.2) — đã thêm code + wrapper; cần chạy trên DB đã apply migration
+- [ ] **Step:** Mở rộng script cho `store_fund_history`, `transactions`
 
 ### 1.6.1. Test `rpc_installment_history_grouped` (cùng pattern `test-rpc-queries.ts`)
 
@@ -622,7 +633,7 @@ const { data, error } = await supabase.rpc('rpc_installment_history_grouped', {
 
 **3) `main()`**
 
-- Đã tích hợp: `CONFIG.testRpcTarget` từ env `TEST_RPC_TARGET` (`credit` | `installment` | `all`) + `runParityTest` gọi `fetchOldInstallmentHistory` / `fetchNewInstallmentHistory` / `compare`.
+- Đã tích hợp: `CONFIG.testRpcTarget` từ env `TEST_RPC_TARGET` (`credit` | `installment` | `pawn` | `all`) + `runParityTest` gọi `fetchOldInstallmentHistory` / `fetchNewInstallmentHistory` / `compare`.
 
 **4) Checklist**
 
@@ -630,6 +641,28 @@ const { data, error } = await supabase.rpc('rpc_installment_history_grouped', {
 - [x] **Step:** Chạy với `TEST_STORE_ID` / khoảng ngày có dữ liệu trả góp — `KẾT QUẢ: GIỐNG NHAU`
 - [x] **Step:** RPC / filter cửa hàng / `NOT IN` / OR huỷ `payment` — đã xác nhận khớp
 - **Ghi chú (regression):** Nếu sau này lệch, kiểm tra lại: `NOT IN ('contract_close','contract_rotate')`, OR `payment` + `updated_at`, subquery `employee_id` vs `installments.employees.store_id`
+
+### 1.6.2. Test `rpc_pawn_history_grouped` (cùng pattern `test-rpc-queries.ts`)
+
+**1) Logic cũ — `fetchOldPawnHistory`**
+
+- `fetchAllData` trên `pawn_history` với `select` khớp hook `useTransactionSummary.ts`: `pawns!inner(contract_code, store_id, customers(name), collateral_detail)`, `profiles:created_by(username)`.
+- `.eq('pawns.store_id', CONFIG.storeId)` — tương đương RPC `p.store_id = p_store_id`.
+- `.or(\`and(created_at…),and(transaction_type.eq.payment,…)\`)` — **không** thêm `is_deleted = false` trên nhánh `created_at` (giống mục 0.2 / RPC).
+
+**2) Logic mới — `fetchNewPawnHistory`**
+
+- `supabase.rpc('rpc_pawn_history_grouped', { p_store_id, p_start_date, p_end_date })`.
+- Map row → item giống tín chấp / trả góp; prefix `id` so sánh: `cam-do-`.
+
+**3) Chạy**
+
+- `TEST_RPC_TARGET=pawn npx tsx scripts/test-rpc-queries.ts` hoặc `npx tsx scripts/test-rpc-pawn-queries.ts`.
+
+**4) Checklist**
+
+- [x] **Step:** Thêm `fetchOldPawnHistory` + `fetchNewPawnHistory` vào `scripts/test-rpc-queries.ts`
+- [ ] **Step:** Chạy parity trên project đã `supabase db push` / migration có `rpc_pawn_history_grouped` — mong đợi `KẾT QUẢ: GIỐNG NHAU`
 
 ---
 

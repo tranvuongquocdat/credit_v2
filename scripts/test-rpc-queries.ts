@@ -4,13 +4,15 @@
  * Chạy:
  *   npx tsx scripts/test-rpc-queries.ts
  *   TEST_RPC_TARGET=installment npx tsx scripts/test-rpc-queries.ts
+ *   TEST_RPC_TARGET=pawn npx tsx scripts/test-rpc-queries.ts
  *   TEST_RPC_TARGET=all npx tsx scripts/test-rpc-queries.ts
  *
  * Hoặc: npx tsx scripts/test-rpc-installment-queries.ts (chỉ trả góp)
+ *        npx tsx scripts/test-rpc-pawn-queries.ts (chỉ cầm đồ)
  *
  * Biến môi trường: `.env.local` (NEXT_PUBLIC_SUPABASE_URL, key, TEST_STORE_ID, …)
  *
- * TEST_RPC_TARGET: `credit` (mặc định) | `installment` | `all`
+ * TEST_RPC_TARGET: `credit` (mặc định) | `installment` | `pawn` | `all`
  *
  * Script này:
  * 1. Chạy RPC function mới (GROUP BY)
@@ -40,8 +42,14 @@ loadEnvConfig(projectDir);
 // CONFIG — sửa các giá trị này trước khi chạy
 // ─────────────────────────────────────────────
 const rawTarget = (process.env.TEST_RPC_TARGET ?? 'credit').toLowerCase();
-const testRpcTarget: 'credit' | 'installment' | 'all' =
-  rawTarget === 'installment' ? 'installment' : rawTarget === 'all' ? 'all' : 'credit';
+const testRpcTarget: 'credit' | 'installment' | 'pawn' | 'all' =
+  rawTarget === 'installment'
+    ? 'installment'
+    : rawTarget === 'pawn'
+      ? 'pawn'
+      : rawTarget === 'all'
+        ? 'all'
+        : 'credit';
 
 const CONFIG = {
   supabaseUrl:   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -134,6 +142,7 @@ function translateTransactionType(tx: string): string {
 // Prefix id so sánh trong script (khác id trong UI `processItems`)
 const ID_PREFIX_CREDIT = 'tin-chap';
 const ID_PREFIX_INSTALLMENT = 'tra-gop';
+const ID_PREFIX_PAWN = 'cam-do';
 
 // ─────────────────────────────────────────────
 // LOGIC CŨ: credit_history → FundHistoryItem[]
@@ -417,6 +426,149 @@ async function fetchNewInstallmentHistory(startDateISO: string, endDateISO: stri
 }
 
 // ─────────────────────────────────────────────
+// LOGIC CŨ: pawn_history → FundHistoryItem[]
+// (tương đương processItems với source = 'Cầm đồ'; filter giống useTransactionSummary.ts)
+// ─────────────────────────────────────────────
+async function fetchOldPawnHistory(startDateISO: string, endDateISO: string) {
+  const rawData = await fetchAllData(
+    supabase
+      .from('pawn_history')
+      .select(`
+        id, created_at, updated_at, is_deleted, transaction_type,
+        credit_amount, debit_amount, created_by,
+        pawns!inner(
+          contract_code,
+          store_id,
+          customers(name),
+          collateral_detail
+        ),
+        profiles:created_by(username)
+      `)
+      .eq('pawns.store_id', CONFIG.storeId)
+      .or(
+        `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}),` +
+        `and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
+      )
+      .order('id'),
+  );
+
+  const items: OldFundHistoryItem[] = [];
+  const pfx = ID_PREFIX_PAWN;
+
+  (rawData as OldPawnRawRow[]).forEach((item) => {
+    if (!item.created_at) return;
+    const amount = Number(item.credit_amount ?? 0) - Number(item.debit_amount ?? 0);
+    const contractCode = (item.pawns as any)?.contract_code ?? '-';
+    const customerName = (item.pawns as any)?.customers?.name ?? '';
+    const employeeName = (item.profiles as any)?.username ?? '';
+
+    if (item.transaction_type === 'payment') {
+      items.push({
+        id: `${pfx}-${contractCode}-${item.created_at}`,
+        date: item.created_at,
+        description: 'Đóng lãi',
+        income: amount > 0 ? amount : 0,
+        expense: amount < 0 ? -amount : 0,
+        contractCode,
+        employeeName,
+        customerName,
+      });
+
+      if (item.is_deleted && item.updated_at) {
+        items.push({
+          id: `${pfx}-${contractCode}-${item.created_at}-cancel`,
+          date: item.updated_at,
+          description: 'Huỷ đóng lãi',
+          income: amount < 0 ? -amount : 0,
+          expense: amount > 0 ? amount : 0,
+          contractCode,
+          employeeName,
+          customerName,
+        });
+      }
+    } else {
+      items.push({
+        id: `${pfx}-${contractCode}-${item.created_at}`,
+        date: item.created_at,
+        description: translateTransactionType(item.transaction_type),
+        income: amount > 0 ? amount : 0,
+        expense: amount < 0 ? -amount : 0,
+        contractCode,
+        employeeName,
+        customerName,
+      });
+    }
+  });
+
+  return items;
+}
+
+// ─────────────────────────────────────────────
+// LOGIC MỚI: rpc_pawn_history_grouped → FundHistoryItem[]
+// ─────────────────────────────────────────────
+async function fetchNewPawnHistory(startDateISO: string, endDateISO: string) {
+  const { data, error } = await supabase.rpc('rpc_pawn_history_grouped', {
+    p_store_id:   CONFIG.storeId,
+    p_start_date: startDateISO,
+    p_end_date:   endDateISO,
+  });
+
+  if (error) {
+    console.error('❌ RPC error (pawn):', error);
+    return [];
+  }
+
+  const pfx = ID_PREFIX_PAWN;
+
+  return (data as NewCreditRow[]).map((row) => {
+    const amount = Number(row.credit_amount) - Number(row.debit_amount);
+
+    if (row.transaction_type === 'payment') {
+      const items: OldFundHistoryItem[] = [
+        {
+          id: `${pfx}-${row.contract_code}-${row.transaction_date}`,
+          date: `${row.transaction_date}T00:00:00`,
+          description: 'Đóng lãi',
+          income: amount > 0 ? amount : 0,
+          expense: amount < 0 ? -amount : 0,
+          contractCode: row.contract_code ?? '-',
+          employeeName: row.employee_name ?? '',
+          customerName: row.customer_name ?? '',
+        },
+      ];
+
+      if (row.is_deleted && row.cancel_date) {
+        items.push({
+          id: `${pfx}-${row.contract_code}-${row.transaction_date}-cancel`,
+          date: row.cancel_date,
+          description: 'Huỷ đóng lãi',
+          income: amount < 0 ? -amount : 0,
+          expense: amount > 0 ? amount : 0,
+          contractCode: row.contract_code ?? '-',
+          employeeName: row.employee_name ?? '',
+          customerName: row.customer_name ?? '',
+        });
+      }
+
+      return items;
+    }
+
+    return [
+      {
+        id: `${pfx}-${row.contract_code}-${row.transaction_date}`,
+        date: `${row.transaction_date}T00:00:00`,
+        description: translateTransactionType(row.transaction_type),
+        income: amount > 0 ? amount : 0,
+        expense: amount < 0 ? -amount : 0,
+        contractCode: row.contract_code ?? '-',
+        employeeName: row.employee_name ?? '',
+        customerName: row.customer_name ?? '',
+      },
+    ];
+  }).flat();
+}
+
+// ─────────────────────────────────────────────
 // So sánh 2 mảng
 // ─────────────────────────────────────────────
 interface OldFundHistoryItem {
@@ -444,6 +596,20 @@ interface OldInstallmentRawRow {
     employee_id: string;
     employees: { store_id: string };
     customers: { name: string } | null;
+  } | null;
+  profiles: { username: string } | null;
+}
+
+interface OldPawnRawRow {
+  id: string; created_at: string; updated_at: string | null;
+  is_deleted: boolean; transaction_type: string;
+  credit_amount: number | null; debit_amount: number | null;
+  created_by: string | null;
+  pawns: {
+    contract_code: string;
+    store_id: string;
+    customers: { name: string } | null;
+    collateral_detail: unknown;
   } | null;
   profiles: { username: string } | null;
 }
@@ -596,6 +762,17 @@ async function main() {
       'installment_history ↔ rpc_installment_history_grouped',
       fetchOldInstallmentHistory,
       fetchNewInstallmentHistory,
+      startDateISO,
+      endDateISO,
+    );
+    if (t === 'all') console.log('\n\n');
+  }
+
+  if (t === 'pawn' || t === 'all') {
+    await runParityTest(
+      'pawn_history ↔ rpc_pawn_history_grouped',
+      fetchOldPawnHistory,
+      fetchNewPawnHistory,
       startDateISO,
       endDateISO,
     );
