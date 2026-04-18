@@ -623,7 +623,7 @@ export function CreditCreateModal({
           
           <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
             <Label htmlFor="loanAmount" className="text-left sm:text-right font-medium">
-              Tổng số tiền vay <span className="text-red-500">*</span>
+              {getDisplayLabelByBuild('tong_so_tien_vay')} <span className="text-red-500">*</span>
             </Label>
             <div>
               <MoneyInput 

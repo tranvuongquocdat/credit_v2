@@ -16,6 +16,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { DatePicker } from '@/components/ui/date-picker';
 import { createPawn } from '@/lib/pawn';
+import { getExpectedMoney } from '@/lib/Pawns/get_expected_money';
+import { getCurrentUser } from '@/lib/auth';
+import { supabase } from '@/lib/supabase';
 import { getCustomers, createCustomer } from '@/lib/customer';
 import { getCollateralsByStore } from '@/lib/collateral';
 import { Customer } from '@/models/customer';
@@ -466,7 +469,51 @@ export function PawnCreateModal({
       if (!data) {
         throw new Error('Không thể tạo hợp đồng cầm đồ');
       }
-      
+
+      if (advancePayment) {
+        const { id: userId } = await getCurrentUser();
+        const interestPeriodDays = convertInterestPeriodForStorage(interestPeriod, interestType);
+        const loanDateObj = new Date(loanDate);
+        const endDateObj = new Date(loanDateObj);
+        endDateObj.setDate(loanDateObj.getDate() + interestPeriodDays - 1);
+
+        const dailyAmounts = await getExpectedMoney(data.id);
+        const dates: string[] = [];
+        const cur = new Date(loanDateObj);
+        while (cur <= endDateObj) {
+          dates.push(cur.toISOString().split('T')[0]);
+          cur.setDate(cur.getDate() + 1);
+        }
+
+        const paymentRecords = dates.map((dateStr, index) => {
+          const dayIndex = Math.floor((new Date(dateStr).getTime() - loanDateObj.getTime()) / (1000 * 60 * 60 * 24));
+          let dateStatus: string | null = null;
+          if (dates.length === 1) dateStatus = 'only';
+          else if (index === 0) dateStatus = 'start';
+          else if (index === dates.length - 1) dateStatus = 'end';
+          return {
+            pawn_id: data.id,
+            transaction_type: 'payment' as const,
+            effective_date: new Date(dateStr).toISOString(),
+            date_status: dateStatus,
+            credit_amount: dayIndex < dailyAmounts.length ? dailyAmounts[dayIndex] : 0,
+            debit_amount: 0,
+            description: `Thu lãi trước ngày ${index + 1}/${dates.length}`,
+            is_deleted: false,
+            is_created_from_contract_closure: false,
+            created_by: userId,
+          };
+        });
+
+        await supabase.from('pawn_history').insert(paymentRecords);
+
+        const initialLoanPeriod = convertLoanPeriodToDays(interestPeriod, interestType);
+        await supabase
+          .from('pawns')
+          .update({ loan_period: initialLoanPeriod + interestPeriodDays })
+          .eq('id', data.id);
+      }
+
       // Show success message
       toast({
         title: 'Thành công',
@@ -719,7 +766,7 @@ export function PawnCreateModal({
           
           <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
             <Label htmlFor="loanAmount" className="text-left sm:text-right font-medium">
-              Tổng số tiền vay <span className="text-red-500">*</span>
+              {getDisplayLabelByBuild('tong_so_tien_vay')} <span className="text-red-500">*</span>
             </Label>
             <div>
               <MoneyInput 
@@ -769,7 +816,7 @@ export function PawnCreateModal({
           
           <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
             <Label htmlFor="interestValue" className="text-left sm:text-right font-medium">
-              Lãi suất <span className="text-red-500">*</span>
+              {getDisplayLabelByBuild('lai_suat')} <span className="text-red-500">*</span>
             </Label>
             <div>
               <div className="space-y-3 sm:space-y-0 sm:flex sm:gap-2 sm:items-center">
@@ -887,7 +934,7 @@ export function PawnCreateModal({
           
           <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
             <Label htmlFor="interestPeriod" className="text-left sm:text-right font-medium">
-              Kỳ lãi phí <span className="text-red-500">*</span>
+              {getDisplayLabelByBuild('ky_lai_phi')} <span className="text-red-500">*</span>
             </Label>
             <div className="space-y-2 sm:space-y-0 sm:flex sm:items-center sm:gap-2">
               <Input 
@@ -911,7 +958,7 @@ export function PawnCreateModal({
           </div>
           
           <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
-            <Label htmlFor="loanDate" className="text-left sm:text-right font-medium">Ngày vay</Label>
+            <Label htmlFor="loanDate" className="text-left sm:text-right font-medium">{getDisplayLabelByBuild('ngay_vay')} <span className="text-red-500">*</span></Label>
             <DatePicker
               value={loanDate}
               onChange={(value) => setLoanDate(value)}

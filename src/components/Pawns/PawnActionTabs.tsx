@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { getDisplayLabelByBuild } from '@/utils/nav-display-labels';
 
 // Định nghĩa các loại tab có thể có cho pawns
 export type PawnTabId = 
@@ -76,7 +77,7 @@ export const DEFAULT_PAWN_TABS: PawnTab[] = [
   { id: 'payment', label: 'Đóng lãi phí' },
   { id: 'principal-repayment', label: 'Trả bớt gốc' },
   { id: 'additional-loan', label: 'Vay thêm' },
-  { id: 'redeem', label: 'Chuộc đồ' },
+  { id: 'redeem', label: getDisplayLabelByBuild('chuoc_do') }, // Sử dụng nhãn tùy theo build
   { id: 'documents', label: 'Chứng từ' },
   { id: 'history', label: 'Lịch sử' },
   { id: 'bad-credit', label: 'Báo xấu khách hàng' },

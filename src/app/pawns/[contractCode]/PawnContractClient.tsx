@@ -28,10 +28,11 @@ import { toast } from '@/components/ui/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { updatePawnStatus } from '@/lib/pawn-payment';
 import { isSameDay, addDays } from 'date-fns';
+import { getDisplayLabelByBuild } from '@/utils/nav-display-labels';
 
 // Map trạng thái thành nhãn và màu sắc
 const statusMap: Record<string, { label: string, color: string }> = {
-  [PawnStatus.ON_TIME]: { label: 'Đang vay', color: 'bg-green-100 text-green-800' },
+  [PawnStatus.ON_TIME]: { label: getDisplayLabelByBuild('dang_vay'), color: 'bg-green-100 text-green-800' },
   [PawnStatus.OVERDUE]: { label: 'Quá hạn', color: 'bg-red-100 text-red-800' },
   [PawnStatus.LATE_INTEREST]: { label: 'Chậm lãi', color: 'bg-yellow-100 text-yellow-800' },
   [PawnStatus.BAD_DEBT]: { label: 'Nợ xấu', color: 'bg-purple-100 text-purple-800' },

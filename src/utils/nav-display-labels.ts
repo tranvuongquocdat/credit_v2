@@ -11,7 +11,7 @@ export type NavLabelRow = { default: string } & Record<string, string>;
 
 const LABELS = {
   pawns: {
-    nuvoras_v2: 'Mượn tài sản',
+    nuvoras_v2: 'Thuê tài sản',
     default: 'Cầm đồ',
   },
   credits: {
@@ -47,11 +47,11 @@ const LABELS = {
     default: 'Quản trị hệ thống',
   },
   pawn_contract_label: {
-    nuvoras_v2: 'Hợp đồng mượn tài sản',
+    nuvoras_v2: 'Hợp đồng thuê tài sản',
     default: 'Hợp đồng cầm đồ',
   },
   collateral_for_pawn: {
-    nuvoras_v2: 'Tài sản cho mượn',
+    nuvoras_v2: 'Tài sản cho thuê',
     default: 'Tài sản thế chấp',
   },
   tien_cam: {
@@ -59,17 +59,59 @@ const LABELS = {
     default: 'Tiền cầm',
   },
   cam_tu_ngay: {
-    nuvoras_v2: 'Ngày mượn',
+    nuvoras_v2: 'Ngày thuê',
     default: 'Cầm từ ngày',
   },
   quan_ly_hop_dong_cam_do: {
-    nuvoras_v2: 'Quản lý hợp đồng mượn tài sản',
+    nuvoras_v2: 'Quản lý hợp đồng thuê tài sản',
     default: 'Quản lý hợp đồng cầm đồ',
   },
   title_build:{
     nuvoras_v2: 'Ubosa',
     default: 'Nuvoras',
   },
+  chuoc_do: {
+    nuvoras_v2: 'Thanh lý',
+    default: 'Chuộc đồ',
+  },
+  da_chuoc_do: {
+    nuvoras_v2: 'Đã thanh lý',
+    default: 'Đã chuộc đồ',
+  },
+  dang_chuoc_do: {
+    nuvoras_v2: 'Đang thanh lý',
+    default: 'Đang chuộc đồ',
+  },
+  thanh_ly_va_tra_no: {
+    nuvoras_v2: 'Thanh lý và trả nợ',
+    default: 'Chuộc đồ và trả nợ',
+  },
+  thanh_ly_khong_tra_no: {
+    nuvoras_v2: 'Thanh lý không trả nợ',
+    default: 'Chuộc đồ và không trả nợ',
+  },
+  tong_so_tien_vay: {
+    nuvoras_v2: 'Tổng giá trị tài sản',
+    default: 'Tổng số tiền vay',
+  },
+  ky_lai_phi: {
+    nuvoras_v2: 'Kỳ phí thuê',
+    default: 'Kỳ lãi phí',
+  },
+  ngay_vay: {
+    nuvoras_v2: 'Ngày thuê',
+    default: 'Ngày vay',
+   },
+  lai_suat: {
+    nuvoras_v2: 'Phí thuê',
+    default: 'Lãi suất',
+  },
+  dang_vay: {
+    nuvoras_v2: 'Đang thuê',
+    default: 'Đang vay',
+  },
+  
+  
 } as const satisfies Record<string, NavLabelRow>;
 
 export type NavDisplayLabelKey = keyof typeof LABELS;
