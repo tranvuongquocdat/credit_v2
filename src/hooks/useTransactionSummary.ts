@@ -156,6 +156,35 @@ const fetchPawnHistoryByRpc = async (
   }));
 };
 
+type StoreFundGroupedRpcRow = {
+  transaction_date: string;
+  transaction_type: string;
+  fund_amount: number | string | null;
+  customer_name: string | null;
+};
+
+const fetchStoreFundHistoryByRpc = async (
+  storeId: string,
+  startDateISO: string,
+  endDateISO: string
+) => {
+  const { data, error } = await (supabase as any).rpc('rpc_store_fund_history_grouped', {
+    p_store_id: storeId,
+    p_start_date: startDateISO,
+    p_end_date: endDateISO,
+  });
+
+  if (error) throw error;
+
+  return (((data || []) as unknown) as StoreFundGroupedRpcRow[]).map((row, index) => ({
+    id: `store-fund-rpc-${index}`,
+    created_at: `${String(row.transaction_date)}T00:00:00`,
+    transaction_type: row.transaction_type,
+    fund_amount: Number(row.fund_amount ?? 0),
+    name: row.customer_name ?? '',
+  }));
+};
+
 // Fetch opening balance from store_total_fund for the start date
 const fetchOpeningBalance = async (storeId: string, startDate: string): Promise<number> => {
   try {
@@ -522,15 +551,17 @@ const fetchTransactionData = async (
     const installmentHistoryData = await fetchInstallmentHistoryByRpc(storeId, startDateISO, endDateISO);
     if (installmentHistoryData) processItems(installmentHistoryData as any[], 'Trả góp');
 
-    const storeFundData = await fetchAllData(
-      supabase
-        .from('store_fund_history')
-        .select('*')
-        .eq('store_id', storeId)
-        .gte('created_at', startDateISO)
-        .lte('created_at', endDateISO)
-        .order('id')
-    );
+    // Logic cũ để đối chiếu:
+    // const storeFundData = await fetchAllData(
+    //   supabase
+    //     .from('store_fund_history')
+    //     .select('*')
+    //     .eq('store_id', storeId)
+    //     .gte('created_at', startDateISO)
+    //     .lte('created_at', endDateISO)
+    //     .order('id')
+    // );
+    const storeFundData = await fetchStoreFundHistoryByRpc(storeId, startDateISO, endDateISO);
     if (storeFundData) processItems(storeFundData as any[], 'Nguồn vốn');
 
     const allTransactionsData = await fetchAllData(
@@ -897,15 +928,17 @@ const fetchTransactionDetails = async (
     const installmentHistoryData = await fetchInstallmentHistoryByRpc(storeId, startDateISO, endDateISO);
     if (installmentHistoryData) processItems(installmentHistoryData as any[], 'Trả góp');
 
-    const storeFundData = await fetchAllData(
-      supabase
-        .from('store_fund_history')
-        .select('*')
-        .eq('store_id', storeId)
-        .gte('created_at', startDateISO)
-        .lte('created_at', endDateISO)
-        .order('id')
-    );
+    // Logic cũ để đối chiếu:
+    // const storeFundData = await fetchAllData(
+    //   supabase
+    //     .from('store_fund_history')
+    //     .select('*')
+    //     .eq('store_id', storeId)
+    //     .gte('created_at', startDateISO)
+    //     .lte('created_at', endDateISO)
+    //     .order('id')
+    // );
+    const storeFundData = await fetchStoreFundHistoryByRpc(storeId, startDateISO, endDateISO);
     if (storeFundData) processItems(storeFundData as any[], 'Nguồn vốn');
 
     const allTransactionsData = await fetchAllData(

@@ -167,38 +167,19 @@ ORDER BY
 
 ### 0.4. Verify `store_fund_history` — Nguồn vốn
 
-```sql
-SELECT
-  sfh.created_at::date                            AS transaction_date,
-  sfh.transaction_type,
-  sfh.fund_amount,
-  sfh.name                                        AS customer_name,
-  sfh.id
-FROM store_fund_history sfh
-WHERE sfh.store_id = $1
-  AND sfh.created_at BETWEEN $2 AND $3
-GROUP BY
-  sfh.id,
-  sfh.created_at::date,
-  sfh.transaction_type,
-  sfh.fund_amount,
-  sfh.name
-ORDER BY
-  transaction_date DESC;
-```
+Phiên bản dùng cho báo cáo tổng hợp (gom theo ngày + loại giao dịch + tên hiển thị). `fund_amount` trong DB là độ lớn dương; loại `withdrawal` được đảo dấu khi map sang thu/chi trong `processItems` (hook). Trong SQL chỉ **SUM** theo nhóm — khi map sang UI, mỗi nhóm vẫn chỉ có một `transaction_type`, nên cộng `fund_amount` trong nhóm `withdrawal` vẫn tương ứng tổng chi.
 
-**Lưu ý:** `store_fund_history` mỗi row là 1 transaction, không có nhiều row trùng key (trừ khi 2 row cùng id — không thể). Nếu muốn GROUP BY theo ngày + loại, dùng:
+`name` NULL được gom chung bằng `COALESCE(sfh.name, '')` (khớp RPC).
 
 ```sql
 SELECT
   sfh.created_at::date                            AS transaction_date,
   sfh.transaction_type,
   COALESCE(SUM(sfh.fund_amount), 0)               AS fund_amount,
-  sfh.name                                        AS customer_name,
-  MAX(sfh.id)                                     AS latest_id
+  sfh.name                                        AS customer_name
 FROM store_fund_history sfh
-WHERE sfh.store_id = $1
-  AND sfh.created_at BETWEEN $2 AND $3
+WHERE sfh.store_id = $store_id
+  AND sfh.created_at BETWEEN $1 AND $2
 GROUP BY
   sfh.created_at::date,
   sfh.transaction_type,
@@ -207,8 +188,21 @@ ORDER BY
   transaction_date DESC;
 ```
 
-- [ ] **Verify:** Chạy trong SQL Editor. Chọn version phù hợp (group hay không group tùy data thực tế).
-- [ ] **Check:** `fund_amount` là positive always, cần xử lý `withdrawal → expense` ở TypeScript.
+Ở Postgres, nếu muốn gom `NULL` name với chuỗi rỗng, thay nhóm/sửa select:
+
+```sql
+-- ...
+  COALESCE(SUM(sfh.fund_amount), 0)               AS fund_amount,
+  COALESCE(sfh.name, '')                         AS customer_name
+-- ...
+GROUP BY
+  sfh.created_at::date,
+  sfh.transaction_type,
+  COALESCE(sfh.name, '')
+```
+
+- [ ] **Verify:** Chạy trong SQL Editor với `$1`, `$2`, `$store_id` thực tế.
+- [ ] **Check:** Map `withdrawal` → chi (`expense`) và các loại khác → thu (`income`) giữ nguyên trong transform TypeScript — đối chiếu script parity `scripts/test-rpc-queries.ts` (`TEST_RPC_TARGET=fund`).
 
 ---
 
@@ -461,6 +455,8 @@ $$;
 
 ### 1.4. RPC: `rpc_store_fund_history_grouped`
 
+Khớp **0.4** (đã thêm vào `supabase/migrations/20260418120000_rpc_credit_installment_history_grouped.sql`). Không trả `id` từng dòng — một nhóm là tổng nhiều bản ghi.
+
 ```sql
 CREATE OR REPLACE FUNCTION rpc_store_fund_history_grouped(
   p_store_id   UUID,
@@ -468,11 +464,10 @@ CREATE OR REPLACE FUNCTION rpc_store_fund_history_grouped(
   p_end_date   TIMESTAMPTZ
 )
 RETURNS TABLE (
-  transaction_date DATE,
-  transaction_type TEXT,
-  fund_amount     NUMERIC,
-  customer_name   TEXT,
-  id              UUID
+  transaction_date   DATE,
+  transaction_type   TEXT,
+  fund_amount        NUMERIC,
+  customer_name      TEXT
 )
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
@@ -481,25 +476,22 @@ BEGIN
   SELECT
     sfh.created_at::date                            AS transaction_date,
     sfh.transaction_type::TEXT,
-    sfh.fund_amount,
-    COALESCE(sfh.name, '')::TEXT                   AS customer_name,
-    sfh.id
+    COALESCE(SUM(sfh.fund_amount), 0)::NUMERIC      AS fund_amount,
+    COALESCE(sfh.name, '')::TEXT                    AS customer_name
   FROM store_fund_history sfh
   WHERE sfh.store_id = p_store_id
     AND sfh.created_at BETWEEN p_start_date AND p_end_date
   GROUP BY
-    sfh.id,
     sfh.created_at::date,
     sfh.transaction_type,
-    sfh.fund_amount,
-    sfh.name
+    COALESCE(sfh.name, '')
   ORDER BY
     transaction_date DESC;
 END;
 $$;
 ```
 
-- [ ] **Step:** Thêm function trên vào file migration
+- [x] **Step:** Đã thêm function vào migration `20260418120000_rpc_credit_installment_history_grouped.sql`
 
 ### 1.5. RPC: `rpc_transactions_grouped`
 
@@ -593,12 +585,13 @@ npx tsx scripts/test-rpc-queries.ts
 - ✅ `KẾT QUẢ: GIỐNG NHAU` — RPC chính xác
 - ❌ `KẾT QUẢ: KHÁC NHAU` — có bug, đọc diff chi tiết
 
-**Trạng thái script:** `scripts/test-rpc-queries.ts` — env `.env.local` (`@next/env`). Đã có nhánh **tín chấp**, **trả góp**, **cầm đồ** (`TEST_RPC_TARGET=credit` | `installment` | `pawn` | `all`). Wrapper: `scripts/test-rpc-installment-queries.ts`, `scripts/test-rpc-pawn-queries.ts`.
+**Trạng thái script:** `scripts/test-rpc-queries.ts` — env `.env.local` (`@next/env`). Đã có nhánh **tín chấp**, **trả góp**, **cầm đồ**, **nguồn vốn** (`TEST_RPC_TARGET=credit` | `installment` | `pawn` | `fund` | `all`). Wrapper: `scripts/test-rpc-installment-queries.ts`, `scripts/test-rpc-pawn-queries.ts`, `scripts/test-rpc-fund-queries.ts`.
 
 - [x] **Step:** Chạy script cho `credit_history` — đảm bảo kết quả giống nhau với logic cũ
 - [x] **Step:** Thêm và chạy parity cho `installment_history` ↔ `rpc_installment_history_grouped` (mục 1.6.1) — đã xong
 - [x] **Step:** Parity `pawn_history` ↔ `rpc_pawn_history_grouped` (mục 1.6.2) — đã thêm code + wrapper; cần chạy trên DB đã apply migration
-- [ ] **Step:** Mở rộng script cho `store_fund_history`, `transactions`
+- [x] **Step:** Parity `store_fund_history` ↔ `rpc_store_fund_history_grouped` (mục 1.6.3) — logic cũ gom nhóm trong JS khớp `SUM` RPC
+- [ ] **Step:** Mở rộng script cho `transactions`
 
 ### 1.6.1. Test `rpc_installment_history_grouped` (cùng pattern `test-rpc-queries.ts`)
 
@@ -633,7 +626,7 @@ const { data, error } = await supabase.rpc('rpc_installment_history_grouped', {
 
 **3) `main()`**
 
-- Đã tích hợp: `CONFIG.testRpcTarget` từ env `TEST_RPC_TARGET` (`credit` | `installment` | `pawn` | `all`) + `runParityTest` gọi `fetchOldInstallmentHistory` / `fetchNewInstallmentHistory` / `compare`.
+- Đã tích hợp: `CONFIG.testRpcTarget` từ env `TEST_RPC_TARGET` (`credit` | `installment` | `pawn` | `fund` | `all`) + `runParityTest` gọi `fetchOldInstallmentHistory` / `fetchNewInstallmentHistory` / `compare`.
 
 **4) Checklist**
 
@@ -663,6 +656,30 @@ const { data, error } = await supabase.rpc('rpc_installment_history_grouped', {
 
 - [x] **Step:** Thêm `fetchOldPawnHistory` + `fetchNewPawnHistory` vào `scripts/test-rpc-queries.ts`
 - [ ] **Step:** Chạy parity trên project đã `supabase db push` / migration có `rpc_pawn_history_grouped` — mong đợi `KẾT QUẢ: GIỐNG NHAU`
+
+### 1.6.3. Test `rpc_store_fund_history_grouped`
+
+RPC **gom nhóm** theo `created_at::date`, `transaction_type`, `COALESCE(name,'')` và `SUM(fund_amount)`. Logic cũ trong hook xử lý **từng dòng** rồi báo cáo còn gom thêm ở `Map` phía client — để so sánh trực tiếp với RPC, script **gom trong JS** sau khi áp cùng quy tắc `withdrawal` (`processItems` / `translateTransactionType`).
+
+**1) Logic cũ — `fetchOldStoreFundGrouped`**
+
+- `fetchAllData` trên `store_fund_history` giống hook: `.eq('store_id')`, `.gte/.lte` `created_at`.
+- Với mỗi dòng: `signed = withdrawal ? -fund_amount : fund_amount` → tách `income` / `expense`.
+- Gom theo khóa `nguon-von-${YYYY-MM-DD}-${transaction_type}-${encodeURIComponent(name)}` (name rỗng khi `NULL`) và **cộng dồn** income/expense — tương đương `SUM` + `GROUP BY` trong SQL.
+
+**2) Logic mới — `fetchNewStoreFundGrouped`**
+
+- `supabase.rpc('rpc_store_fund_history_grouped', { … })`.
+- Map `fund_amount` + `transaction_type` → income/expense như trên.
+
+**3) Chạy**
+
+- `TEST_RPC_TARGET=fund npx tsx scripts/test-rpc-queries.ts` hoặc `npx tsx scripts/test-rpc-fund-queries.ts`.
+
+**4) Checklist**
+
+- [x] **Step:** Thêm `fetchOldStoreFundGrouped` + `fetchNewStoreFundGrouped` vào `scripts/test-rpc-queries.ts`
+- [ ] **Step:** Chạy parity sau khi migration có `rpc_store_fund_history_grouped` — mong đợi `KẾT QUẢ: GIỐNG NHAU`
 
 ---
 
@@ -694,8 +711,7 @@ export interface StoreFundHistoryGroupedRow {
   transaction_date: string;
   transaction_type: string;
   fund_amount: number;
-  customer_name: string; // = name field trong store_fund_history
-  id: string;
+  customer_name: string; // = COALESCE(name, '') sau khi group
 }
 
 export interface TransactionsGroupedRow {
@@ -1004,7 +1020,7 @@ function transformStoreFundHistoryToItems(rows: StoreFundHistoryGroupedRow[]): F
       : Number(row.fund_amount);
 
     return {
-      id: `nguon-von-${row.id}`,
+      id: `nguon-von-${row.transaction_date}-${row.transaction_type}-${encodeURIComponent(row.customer_name || '')}`,
       date: `${row.transaction_date}T00:00:00Z`,
       description: translateTransactionType(row.transaction_type),
       transactionType: row.transaction_type,

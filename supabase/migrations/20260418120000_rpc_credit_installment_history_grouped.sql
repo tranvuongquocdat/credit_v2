@@ -179,3 +179,35 @@ BEGIN
     contract_code;
 END;
 $$;
+
+CREATE OR REPLACE FUNCTION rpc_store_fund_history_grouped(
+  p_store_id   UUID,
+  p_start_date TIMESTAMPTZ,
+  p_end_date   TIMESTAMPTZ
+)
+RETURNS TABLE (
+  transaction_date   DATE,
+  transaction_type   TEXT,
+  fund_amount        NUMERIC,
+  customer_name      TEXT
+)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    sfh.created_at::date                            AS transaction_date,
+    sfh.transaction_type::TEXT,
+    COALESCE(SUM(sfh.fund_amount), 0)::NUMERIC      AS fund_amount,
+    COALESCE(sfh.name, '')::TEXT                    AS customer_name
+  FROM store_fund_history sfh
+  WHERE sfh.store_id = p_store_id
+    AND sfh.created_at BETWEEN p_start_date AND p_end_date
+  GROUP BY
+    sfh.created_at::date,
+    sfh.transaction_type,
+    COALESCE(sfh.name, '')
+  ORDER BY
+    transaction_date DESC;
+END;
+$$;

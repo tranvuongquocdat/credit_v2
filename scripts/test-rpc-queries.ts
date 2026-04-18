@@ -5,14 +5,16 @@
  *   npx tsx scripts/test-rpc-queries.ts
  *   TEST_RPC_TARGET=installment npx tsx scripts/test-rpc-queries.ts
  *   TEST_RPC_TARGET=pawn npx tsx scripts/test-rpc-queries.ts
+ *   TEST_RPC_TARGET=fund npx tsx scripts/test-rpc-queries.ts
  *   TEST_RPC_TARGET=all npx tsx scripts/test-rpc-queries.ts
  *
  * Hoặc: npx tsx scripts/test-rpc-installment-queries.ts (chỉ trả góp)
  *        npx tsx scripts/test-rpc-pawn-queries.ts (chỉ cầm đồ)
+ *        npx tsx scripts/test-rpc-fund-queries.ts (chỉ nguồn vốn)
  *
  * Biến môi trường: `.env.local` (NEXT_PUBLIC_SUPABASE_URL, key, TEST_STORE_ID, …)
  *
- * TEST_RPC_TARGET: `credit` (mặc định) | `installment` | `pawn` | `all`
+ * TEST_RPC_TARGET: `credit` (mặc định) | `installment` | `pawn` | `fund` | `all`
  *
  * Script này:
  * 1. Chạy RPC function mới (GROUP BY)
@@ -42,22 +44,24 @@ loadEnvConfig(projectDir);
 // CONFIG — sửa các giá trị này trước khi chạy
 // ─────────────────────────────────────────────
 const rawTarget = (process.env.TEST_RPC_TARGET ?? 'credit').toLowerCase();
-const testRpcTarget: 'credit' | 'installment' | 'pawn' | 'all' =
+const testRpcTarget: 'credit' | 'installment' | 'pawn' | 'fund' | 'all' =
   rawTarget === 'installment'
     ? 'installment'
     : rawTarget === 'pawn'
       ? 'pawn'
-      : rawTarget === 'all'
-        ? 'all'
-        : 'credit';
+      : rawTarget === 'fund'
+        ? 'fund'
+        : rawTarget === 'all'
+          ? 'all'
+          : 'credit';
 
 const CONFIG = {
   supabaseUrl:   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   supabaseKey:   process.env.SUPABASE_SERVICE_ROLE_KEY
     ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   storeId:       process.env.TEST_STORE_ID ?? '729a9ee8-e0b5-436f-8a59-706395b11646',
-  startDate:     process.env.TEST_START_DATE ?? '2026-04-15',  // yyyy-MM-dd
-  endDate:       process.env.TEST_END_DATE   ?? '2026-04-15',  // yyyy-MM-dd
+  startDate:     process.env.TEST_START_DATE ?? '2026-04-18',  // yyyy-MM-dd
+  endDate:       process.env.TEST_END_DATE   ?? '2026-04-18',  // yyyy-MM-dd
   // Bật true để so sánh với logic cũ (fetchAllData + processItems)
   // Bật false để chỉ chạy RPC và in kết quả
   compareWithOldLogic: true,
@@ -143,6 +147,20 @@ function translateTransactionType(tx: string): string {
 const ID_PREFIX_CREDIT = 'tin-chap';
 const ID_PREFIX_INSTALLMENT = 'tra-gop';
 const ID_PREFIX_PAWN = 'cam-do';
+const ID_PREFIX_STORE_FUND = 'nguon-von';
+
+function storeFundComparableId(
+  dateYmd: string,
+  transactionType: string,
+  customerName: string,
+): string {
+  return `${ID_PREFIX_STORE_FUND}-${dateYmd}-${transactionType}-${encodeURIComponent(customerName)}`;
+}
+
+function normalizeRpcDateOnly(v: string): string {
+  if (!v) return v;
+  return v.includes('T') ? v.slice(0, 10) : v;
+}
 
 // ─────────────────────────────────────────────
 // LOGIC CŨ: credit_history → FundHistoryItem[]
@@ -569,6 +587,93 @@ async function fetchNewPawnHistory(startDateISO: string, endDateISO: string) {
 }
 
 // ─────────────────────────────────────────────
+// LOGIC CŨ: store_fund_history — gom nhóm như RPC (ngày + loại + name)
+// Khớp processItems « Nguồn vốn »: withdrawal → chi, còn lại → thu theo fund_amount
+// ─────────────────────────────────────────────
+async function fetchOldStoreFundGrouped(startDateISO: string, endDateISO: string) {
+  const rawData = await fetchAllData(
+    supabase
+      .from('store_fund_history')
+      .select('id, created_at, transaction_type, fund_amount, name')
+      .eq('store_id', CONFIG.storeId)
+      .gte('created_at', startDateISO)
+      .lte('created_at', endDateISO)
+      .order('id'),
+  );
+
+  type Agg = { income: number; expense: number; txType: string; dateYmd: string; cust: string };
+  const byId = new Map<string, Agg>();
+
+  for (const item of rawData as OldStoreFundRawRow[]) {
+    if (!item.created_at) continue;
+    const rawAmt = Number(item.fund_amount ?? 0);
+    const tx = item.transaction_type ?? '';
+    const signed = tx === 'withdrawal' ? -rawAmt : rawAmt;
+    const income = signed > 0 ? signed : 0;
+    const expense = signed < 0 ? -signed : 0;
+    const cust = item.name ?? '';
+    const dateYmd = item.created_at.slice(0, 10);
+    const id = storeFundComparableId(dateYmd, tx, cust);
+    const cur = byId.get(id);
+    if (cur) {
+      cur.income += income;
+      cur.expense += expense;
+    } else {
+      byId.set(id, { income, expense, txType: tx, dateYmd, cust });
+    }
+  }
+
+  const items: OldFundHistoryItem[] = [];
+  for (const [id, v] of byId) {
+    items.push({
+      id,
+      date: `${v.dateYmd}T00:00:00`,
+      description: translateTransactionType(v.txType),
+      income: v.income,
+      expense: v.expense,
+      contractCode: '-',
+      employeeName: '',
+      customerName: v.cust,
+    });
+  }
+  return items;
+}
+
+// ─────────────────────────────────────────────
+// LOGIC MỚI: rpc_store_fund_history_grouped
+// ─────────────────────────────────────────────
+async function fetchNewStoreFundGrouped(startDateISO: string, endDateISO: string) {
+  const { data, error } = await supabase.rpc('rpc_store_fund_history_grouped', {
+    p_store_id:   CONFIG.storeId,
+    p_start_date: startDateISO,
+    p_end_date:   endDateISO,
+  });
+
+  if (error) {
+    console.error('❌ RPC error (store_fund):', error);
+    return [];
+  }
+
+  return (data as StoreFundGroupedRow[]).map((row) => {
+    const dateStr = normalizeRpcDateOnly(String(row.transaction_date));
+    const tx = row.transaction_type ?? '';
+    const cust = row.customer_name ?? '';
+    const raw = Number(row.fund_amount ?? 0);
+    const signed = tx === 'withdrawal' ? -raw : raw;
+    return {
+      id: storeFundComparableId(dateStr, tx, cust),
+      date: `${dateStr}T00:00:00`,
+      description: translateTransactionType(tx),
+      income: signed > 0 ? signed : 0,
+      expense: signed < 0 ? -signed : 0,
+      contractCode: '-',
+      employeeName: '',
+      customerName: cust,
+    };
+  });
+}
+
+// ─────────────────────────────────────────────
 // So sánh 2 mảng
 // ─────────────────────────────────────────────
 interface OldFundHistoryItem {
@@ -612,6 +717,21 @@ interface OldPawnRawRow {
     collateral_detail: unknown;
   } | null;
   profiles: { username: string } | null;
+}
+
+interface OldStoreFundRawRow {
+  id: string;
+  created_at: string;
+  transaction_type: string | null;
+  fund_amount: number | string | null;
+  name: string | null;
+}
+
+interface StoreFundGroupedRow {
+  transaction_date: string;
+  transaction_type: string;
+  fund_amount: number;
+  customer_name: string;
 }
 
 interface NewCreditRow {
@@ -773,6 +893,17 @@ async function main() {
       'pawn_history ↔ rpc_pawn_history_grouped',
       fetchOldPawnHistory,
       fetchNewPawnHistory,
+      startDateISO,
+      endDateISO,
+    );
+    if (t === 'all') console.log('\n\n');
+  }
+
+  if (t === 'fund' || t === 'all') {
+    await runParityTest(
+      'store_fund_history (grouped) ↔ rpc_store_fund_history_grouped',
+      fetchOldStoreFundGrouped,
+      fetchNewStoreFundGrouped,
       startDateISO,
       endDateISO,
     );
