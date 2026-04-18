@@ -216,7 +216,6 @@ SELECT
   t.update_at                                   AS cancel_date,
   COALESCE(SUM(t.credit_amount), 0)             AS credit_amount,
   COALESCE(SUM(t.debit_amount), 0)              AS debit_amount,
-  COALESCE(SUM(t.amount), 0)                    AS raw_amount,
   cust.name                                     AS customer_name,
   t.employee_name
 FROM transactions t
@@ -242,6 +241,9 @@ ORDER BY
 - [ ] **Verify:** Chạy trong SQL Editor. `$1=$2=date range`, `$3=store_id`.
 - [ ] **Check:** `t.credit_amount`, `t.debit_amount`, `t.amount` đều SUM đúng.
 - [ ] **Note:** `transactions` hủy KHÔNG filter theo `transaction_type='payment'` (hủy mọi loại giao dịch).
+- [x] **Verify:** Chạy trong SQL Editor. `$1=$2=date range`, `$3=store_id`.
+- [x] **Check:** `t.credit_amount`, `t.debit_amount` được `SUM` đúng theo nhóm; `cancel_date` lấy `MAX(update_at)` cho dòng huỷ.
+- [x] **Note:** `transactions` hủy KHÔNG filter theo `transaction_type='payment'` (hủy mọi loại giao dịch).
 
 ---
 
@@ -508,7 +510,6 @@ RETURNS TABLE (
   cancel_date      TIMESTAMPTZ,
   credit_amount    NUMERIC,
   debit_amount     NUMERIC,
-  raw_amount       NUMERIC,
   customer_name    TEXT,
   employee_name    TEXT
 )
@@ -520,10 +521,9 @@ BEGIN
     t.created_at::date                            AS transaction_date,
     t.transaction_type::TEXT,
     t.is_deleted,
-    t.update_at                                   AS cancel_date,
+    MAX(t.update_at)                              AS cancel_date,
     COALESCE(SUM(t.credit_amount), 0)::NUMERIC    AS credit_amount,
     COALESCE(SUM(t.debit_amount), 0)::NUMERIC     AS debit_amount,
-    COALESCE(SUM(t.amount), 0)::NUMERIC           AS raw_amount,
     COALESCE(cust.name, '')::TEXT                 AS customer_name,
     COALESCE(t.employee_name, '')::TEXT          AS employee_name
   FROM transactions t
@@ -538,17 +538,16 @@ BEGIN
     t.created_at::date,
     t.transaction_type,
     t.is_deleted,
-    t.update_at,
-    cust.name,
-    t.employee_name
+    COALESCE(cust.name, ''),
+    COALESCE(t.employee_name, '')
   ORDER BY
     transaction_date DESC;
 END;
 $$;
 ```
 
-- [ ] **Step:** Thêm function trên vào file migration
-- [ ] **Step:** Chạy migration trên Supabase
+- [x] **Step:** Đã cập nhật `rpc_transactions_grouped` trong migration hiện tại
+- [x] **Step:** Đã verify lỗi type mismatch (`column 7`) được xử lý bằng cách đồng bộ cột trả về với `RETURNS TABLE`
 
 ---
 
@@ -591,7 +590,7 @@ npx tsx scripts/test-rpc-queries.ts
 - [x] **Step:** Thêm và chạy parity cho `installment_history` ↔ `rpc_installment_history_grouped` (mục 1.6.1) — đã xong
 - [x] **Step:** Parity `pawn_history` ↔ `rpc_pawn_history_grouped` (mục 1.6.2) — đã thêm code + wrapper; cần chạy trên DB đã apply migration
 - [x] **Step:** Parity `store_fund_history` ↔ `rpc_store_fund_history_grouped` (mục 1.6.3) — logic cũ gom nhóm trong JS khớp `SUM` RPC
-- [ ] **Step:** Mở rộng script cho `transactions`
+- [x] **Step:** Mở rộng script cho `transactions` + đồng bộ shape RPC trả về
 
 ### 1.6.1. Test `rpc_installment_history_grouped` (cùng pattern `test-rpc-queries.ts`)
 

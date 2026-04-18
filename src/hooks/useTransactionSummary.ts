@@ -185,6 +185,89 @@ const fetchStoreFundHistoryByRpc = async (
   }));
 };
 
+type TransactionsGroupedRpcRow = {
+  transaction_date: string;
+  transaction_type: string | null;
+  is_deleted: boolean;
+  cancel_date: string | null;
+  credit_amount: number | string | null;
+  debit_amount: number | string | null;
+  customer_name: string | null;
+  employee_name: string | null;
+};
+
+/** RPC đã group; map sang dòng giống sau transformTransactionsForDisplay — không gọi transform thêm. */
+function expandTransactionsGroupedRpcToDisplayRows(rows: TransactionsGroupedRpcRow[]): any[] {
+  const result: any[] = [];
+  rows.forEach((r, i) => {
+    const dateOnly = String(r.transaction_date).includes('T')
+      ? String(r.transaction_date).slice(0, 10)
+      : String(r.transaction_date);
+    const baseCreated = `${dateOnly}T00:00:00`;
+    const ca = Number(r.credit_amount ?? 0);
+    const da = Number(r.debit_amount ?? 0);
+    const cust = r.customer_name ?? '';
+    const emp = r.employee_name ?? '';
+
+    if (!r.is_deleted) {
+      result.push({
+        id: `transactions-rpc-${i}`,
+        created_at: baseCreated,
+        transaction_type: r.transaction_type,
+        credit_amount: ca,
+        debit_amount: da,
+        employee_name: emp,
+        customers: { name: cust },
+        is_deleted: false,
+      });
+      return;
+    }
+
+    const cancelTs = r.cancel_date ?? baseCreated;
+    result.push({
+      id: `transactions-rpc-${i}`,
+      created_at: baseCreated,
+      update_at: cancelTs,
+      transaction_type: r.transaction_type,
+      credit_amount: ca,
+      debit_amount: da,
+      employee_name: emp,
+      customers: { name: cust },
+      is_deleted: true,
+    });
+    result.push({
+      id: `transactions-rpc-${i}_cancel`,
+      created_at: cancelTs,
+      transaction_type: r.transaction_type,
+      credit_amount: ca ? -ca : null,
+      debit_amount: da ? -da : null,
+      employee_name: emp,
+      customers: { name: cust },
+      is_deleted: true,
+      is_cancellation: true,
+    });
+  });
+  return result;
+}
+
+const fetchTransactionsGroupedByRpc = async (
+  storeId: string,
+  startDateISO: string,
+  endDateISO: string
+) => {
+  const { data, error } = await (supabase as any).rpc('rpc_transactions_grouped', {
+    p_store_id: storeId,
+    p_start_date: startDateISO,
+    p_end_date: endDateISO,
+  });
+
+  if (error) throw error;
+
+  return expandTransactionsGroupedRpcToDisplayRows(
+    ((data || []) as unknown) as TransactionsGroupedRpcRow[]
+  );
+};
+
 // Fetch opening balance from store_total_fund for the start date
 const fetchOpeningBalance = async (storeId: string, startDate: string): Promise<number> => {
   try {
@@ -564,43 +647,44 @@ const fetchTransactionData = async (
     const storeFundData = await fetchStoreFundHistoryByRpc(storeId, startDateISO, endDateISO);
     if (storeFundData) processItems(storeFundData as any[], 'Nguồn vốn');
 
-    const allTransactionsData = await fetchAllData(
-      supabase
-        .from('transactions')
-        .select('*, customers:customer_id(name)')
-        .eq('store_id', storeId)
-        .gte('created_at', startDateISO)
-        .lte('created_at', endDateISO)
-        .order('id')
-    );
-
-    const transformTransactionsForDisplay = (rawTransactions: any[]) => {
-      const displayTransactions: any[] = [];
-      rawTransactions.forEach((transaction) => {
-        if (transaction.is_deleted) {
-          displayTransactions.push({
-            ...transaction,
-            is_cancellation: false,
-          });
-          displayTransactions.push({
-            ...transaction,
-            id: `${transaction.id}_cancel`,
-            is_cancellation: true,
-            created_at: transaction.update_at || transaction.created_at,
-            credit_amount: transaction.credit_amount ? -transaction.credit_amount : null,
-            debit_amount: transaction.debit_amount ? -transaction.debit_amount : null,
-            description: transaction.credit_amount > 0 ? 'Huỷ thu' : 'Huỷ chi',
-          });
-        } else {
-          displayTransactions.push({
-            ...transaction,
-            is_cancellation: false,
-          });
-        }
-      });
-      return displayTransactions;
-    };
-    const displayTransactionsData = transformTransactionsForDisplay(allTransactionsData);
+    // Logic cũ để đối chiếu:
+    // const allTransactionsData = await fetchAllData(
+    //   supabase
+    //     .from('transactions')
+    //     .select('*, customers:customer_id(name)')
+    //     .eq('store_id', storeId)
+    //     .gte('created_at', startDateISO)
+    //     .lte('created_at', endDateISO)
+    //     .order('id')
+    // );
+    // const transformTransactionsForDisplay = (rawTransactions: any[]) => {
+    //   const displayTransactions: any[] = [];
+    //   rawTransactions.forEach((transaction) => {
+    //     if (transaction.is_deleted) {
+    //       displayTransactions.push({
+    //         ...transaction,
+    //         is_cancellation: false,
+    //       });
+    //       displayTransactions.push({
+    //         ...transaction,
+    //         id: `${transaction.id}_cancel`,
+    //         is_cancellation: true,
+    //         created_at: transaction.update_at || transaction.created_at,
+    //         credit_amount: transaction.credit_amount ? -transaction.credit_amount : null,
+    //         debit_amount: transaction.debit_amount ? -transaction.debit_amount : null,
+    //         description: transaction.credit_amount > 0 ? 'Huỷ thu' : 'Huỷ chi',
+    //       });
+    //     } else {
+    //       displayTransactions.push({
+    //         ...transaction,
+    //         is_cancellation: false,
+    //       });
+    //     }
+    //   });
+    //   return displayTransactions;
+    // };
+    // const displayTransactionsData = transformTransactionsForDisplay(allTransactionsData);
+    const displayTransactionsData = await fetchTransactionsGroupedByRpc(storeId, startDateISO, endDateISO);
     if (displayTransactionsData) processItems(displayTransactionsData, 'Thu chi');
 
     // Group by contract/date/type/source/description to aggregate as in details
@@ -941,43 +1025,44 @@ const fetchTransactionDetails = async (
     const storeFundData = await fetchStoreFundHistoryByRpc(storeId, startDateISO, endDateISO);
     if (storeFundData) processItems(storeFundData as any[], 'Nguồn vốn');
 
-    const allTransactionsData = await fetchAllData(
-      supabase
-        .from('transactions')
-        .select('*, customers:customer_id(name)')
-        .eq('store_id', storeId)
-        .gte('created_at', startDateISO)
-        .lte('created_at', endDateISO)
-        .order('id')
-    );
-
-    const transformTransactionsForDisplay = (rawTransactions: any[]) => {
-      const displayTransactions: any[] = [];
-      rawTransactions.forEach((transaction) => {
-        if (transaction.is_deleted) {
-          displayTransactions.push({
-            ...transaction,
-            is_cancellation: false,
-          });
-          displayTransactions.push({
-            ...transaction,
-            id: `${transaction.id}_cancel`,
-            is_cancellation: true,
-            created_at: transaction.update_at || transaction.created_at,
-            credit_amount: transaction.credit_amount ? -transaction.credit_amount : null,
-            debit_amount: transaction.debit_amount ? -transaction.debit_amount : null,
-            description: transaction.credit_amount > 0 ? 'Huỷ thu' : 'Huỷ chi',
-          });
-        } else {
-          displayTransactions.push({
-            ...transaction,
-            is_cancellation: false,
-          });
-        }
-      });
-      return displayTransactions;
-    };
-    const displayTransactionsData = transformTransactionsForDisplay(allTransactionsData);
+    // Logic cũ để đối chiếu:
+    // const allTransactionsData = await fetchAllData(
+    //   supabase
+    //     .from('transactions')
+    //     .select('*, customers:customer_id(name)')
+    //     .eq('store_id', storeId)
+    //     .gte('created_at', startDateISO)
+    //     .lte('created_at', endDateISO)
+    //     .order('id')
+    // );
+    // const transformTransactionsForDisplay = (rawTransactions: any[]) => {
+    //   const displayTransactions: any[] = [];
+    //   rawTransactions.forEach((transaction) => {
+    //     if (transaction.is_deleted) {
+    //       displayTransactions.push({
+    //         ...transaction,
+    //         is_cancellation: false,
+    //       });
+    //       displayTransactions.push({
+    //         ...transaction,
+    //         id: `${transaction.id}_cancel`,
+    //         is_cancellation: true,
+    //         created_at: transaction.update_at || transaction.created_at,
+    //         credit_amount: transaction.credit_amount ? -transaction.credit_amount : null,
+    //         debit_amount: transaction.debit_amount ? -transaction.debit_amount : null,
+    //         description: transaction.credit_amount > 0 ? 'Huỷ thu' : 'Huỷ chi',
+    //       });
+    //     } else {
+    //       displayTransactions.push({
+    //         ...transaction,
+    //         is_cancellation: false,
+    //       });
+    //     }
+    //   });
+    //   return displayTransactions;
+    // };
+    // const displayTransactionsData = transformTransactionsForDisplay(allTransactionsData);
+    const displayTransactionsData = await fetchTransactionsGroupedByRpc(storeId, startDateISO, endDateISO);
     if (displayTransactionsData) processItems(displayTransactionsData, 'Thu chi');
 
     // Group by contract/date/type/source/description to aggregate as in details

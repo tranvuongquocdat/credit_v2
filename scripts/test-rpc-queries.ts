@@ -6,15 +6,17 @@
  *   TEST_RPC_TARGET=installment npx tsx scripts/test-rpc-queries.ts
  *   TEST_RPC_TARGET=pawn npx tsx scripts/test-rpc-queries.ts
  *   TEST_RPC_TARGET=fund npx tsx scripts/test-rpc-queries.ts
+ *   TEST_RPC_TARGET=transactions npx tsx scripts/test-rpc-queries.ts
  *   TEST_RPC_TARGET=all npx tsx scripts/test-rpc-queries.ts
  *
  * Hoặc: npx tsx scripts/test-rpc-installment-queries.ts (chỉ trả góp)
  *        npx tsx scripts/test-rpc-pawn-queries.ts (chỉ cầm đồ)
  *        npx tsx scripts/test-rpc-fund-queries.ts (chỉ nguồn vốn)
+ *        npx tsx scripts/test-rpc-transactions-queries.ts (chỉ thu chi — mặc định 2025-08-01 → 2025-08-31 nếu không set TEST_START_DATE / TEST_END_DATE)
  *
  * Biến môi trường: `.env.local` (NEXT_PUBLIC_SUPABASE_URL, key, TEST_STORE_ID, …)
  *
- * TEST_RPC_TARGET: `credit` (mặc định) | `installment` | `pawn` | `fund` | `all`
+ * TEST_RPC_TARGET: `credit` (mặc định) | `installment` | `pawn` | `fund` | `transactions` | `all`
  *
  * Script này:
  * 1. Chạy RPC function mới (GROUP BY)
@@ -44,16 +46,24 @@ loadEnvConfig(projectDir);
 // CONFIG — sửa các giá trị này trước khi chạy
 // ─────────────────────────────────────────────
 const rawTarget = (process.env.TEST_RPC_TARGET ?? 'credit').toLowerCase();
-const testRpcTarget: 'credit' | 'installment' | 'pawn' | 'fund' | 'all' =
+const testRpcTarget:
+  | 'credit'
+  | 'installment'
+  | 'pawn'
+  | 'fund'
+  | 'transactions'
+  | 'all' =
   rawTarget === 'installment'
     ? 'installment'
     : rawTarget === 'pawn'
       ? 'pawn'
       : rawTarget === 'fund'
         ? 'fund'
-        : rawTarget === 'all'
-          ? 'all'
-          : 'credit';
+        : rawTarget === 'transactions'
+          ? 'transactions'
+          : rawTarget === 'all'
+            ? 'all'
+            : 'credit';
 
 const CONFIG = {
   supabaseUrl:   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -674,6 +684,155 @@ async function fetchNewStoreFundGrouped(startDateISO: string, endDateISO: string
 }
 
 // ─────────────────────────────────────────────
+// Thu chi (transactions): RPC rpc_transactions_grouped ↔ fetch + transform (filter khớp WHERE của RPC)
+// ─────────────────────────────────────────────
+
+interface TransactionsGroupedRpcRow {
+  transaction_date: string;
+  transaction_type: string | null;
+  is_deleted: boolean;
+  cancel_date: string | null;
+  credit_amount: number | string | null;
+  debit_amount: number | string | null;
+  raw_amount: number | string | null;
+  customer_name: string | null;
+  employee_name: string | null;
+}
+
+function expandTransactionsGroupedRpcToDisplayRows(rows: TransactionsGroupedRpcRow[]): any[] {
+  const result: any[] = [];
+  rows.forEach((r, i) => {
+    const dateOnly = String(r.transaction_date).includes('T')
+      ? String(r.transaction_date).slice(0, 10)
+      : String(r.transaction_date);
+    const baseCreated = `${dateOnly}T00:00:00`;
+    const ca = Number(r.credit_amount ?? 0);
+    const da = Number(r.debit_amount ?? 0);
+    const cust = r.customer_name ?? '';
+    const emp = r.employee_name ?? '';
+
+    if (!r.is_deleted) {
+      result.push({
+        id: `transactions-rpc-${i}`,
+        created_at: baseCreated,
+        transaction_type: r.transaction_type,
+        credit_amount: ca,
+        debit_amount: da,
+        employee_name: emp,
+        customers: { name: cust },
+        is_deleted: false,
+      });
+      return;
+    }
+
+    const cancelTs = r.cancel_date ?? baseCreated;
+    result.push({
+      id: `transactions-rpc-${i}`,
+      created_at: baseCreated,
+      update_at: cancelTs,
+      transaction_type: r.transaction_type,
+      credit_amount: ca,
+      debit_amount: da,
+      employee_name: emp,
+      customers: { name: cust },
+      is_deleted: true,
+    });
+    result.push({
+      id: `transactions-rpc-${i}_cancel`,
+      created_at: cancelTs,
+      transaction_type: r.transaction_type,
+      credit_amount: ca ? -ca : null,
+      debit_amount: da ? -da : null,
+      employee_name: emp,
+      customers: { name: cust },
+      is_deleted: true,
+      is_cancellation: true,
+    });
+  });
+  return result;
+}
+
+function transformTransactionsForDisplay(rawTransactions: any[]): any[] {
+  const displayTransactions: any[] = [];
+  rawTransactions.forEach((transaction) => {
+    if (transaction.is_deleted) {
+      displayTransactions.push({
+        ...transaction,
+        is_cancellation: false,
+      });
+      displayTransactions.push({
+        ...transaction,
+        id: `${transaction.id}_cancel`,
+        is_cancellation: true,
+        created_at: transaction.update_at || transaction.created_at,
+        credit_amount: transaction.credit_amount ? -transaction.credit_amount : null,
+        debit_amount: transaction.debit_amount ? -transaction.debit_amount : null,
+        description: transaction.credit_amount > 0 ? 'Huỷ thu' : 'Huỷ chi',
+      });
+    } else {
+      displayTransactions.push({
+        ...transaction,
+        is_cancellation: false,
+      });
+    }
+  });
+  return displayTransactions;
+}
+
+function mapThuChiRowToComparable(item: any): OldFundHistoryItem {
+  let amount = (Number(item.credit_amount) || 0) - (Number(item.debit_amount) || 0);
+  if (amount === 0) {
+    amount =
+      item.transaction_type === 'expense'
+        ? -Number(item.amount ?? 0)
+        : Number(item.amount ?? 0);
+  }
+  return {
+    id: `thu chi-${item.id}`,
+    date: item.created_at,
+    description: translateTransactionType(item.transaction_type || ''),
+    income: amount > 0 ? amount : 0,
+    expense: amount < 0 ? -amount : 0,
+    contractCode: '-',
+    employeeName: item.employee_name || '',
+    customerName: item.customers?.name || '',
+  };
+}
+
+async function fetchOldThuChiComparable(startDateISO: string, endDateISO: string) {
+  const rawData = await fetchAllData(
+    supabase
+      .from('transactions')
+      .select('*, customers:customer_id(name)')
+      .eq('store_id', CONFIG.storeId)
+      .or(
+        `and(is_deleted.eq.false,and(created_at.gte.${startDateISO},created_at.lte.${endDateISO})),` +
+        `and(is_deleted.eq.true,and(update_at.gte.${startDateISO},update_at.lte.${endDateISO}))`
+      )
+      .order('id'),
+  );
+
+  const expanded = transformTransactionsForDisplay(rawData as any[]);
+  return expanded.map(mapThuChiRowToComparable);
+}
+
+async function fetchNewThuChiComparable(startDateISO: string, endDateISO: string) {
+  const { data, error } = await supabase.rpc('rpc_transactions_grouped', {
+    p_store_id:   CONFIG.storeId,
+    p_start_date: startDateISO,
+    p_end_date:   endDateISO,
+  });
+
+  if (error) {
+    console.error('❌ RPC error (transactions):', error);
+    return [];
+  }
+
+  const expanded = expandTransactionsGroupedRpcToDisplayRows((data || []) as TransactionsGroupedRpcRow[]);
+  return expanded.map(mapThuChiRowToComparable);
+}
+
+// ─────────────────────────────────────────────
 // So sánh 2 mảng
 // ─────────────────────────────────────────────
 interface OldFundHistoryItem {
@@ -786,11 +945,13 @@ async function runParityTest(
   fetchNew: (start: string, end: string) => Promise<OldFundHistoryItem[]>,
   startDateISO: string,
   endDateISO: string,
+  labelDates?: { start: string; end: string },
 ) {
+  const ds = labelDates ?? { start: CONFIG.startDate, end: CONFIG.endDate };
   console.log('═══════════════════════════════════════');
   console.log(`  Test: ${title}`);
   console.log(`  Store: ${CONFIG.storeId}`);
-  console.log(`  Date:  ${CONFIG.startDate} → ${CONFIG.endDate}`);
+  console.log(`  Date:  ${ds.start} → ${ds.end}`);
   console.log(`  TEST_RPC_TARGET: ${CONFIG.testRpcTarget}`);
   console.log('═══════════════════════════════════════\n');
 
@@ -863,8 +1024,19 @@ async function runParityTest(
 // MAIN
 // ─────────────────────────────────────────────
 async function main() {
-  const { startDateISO, endDateISO } = getDateRange(CONFIG.startDate, CONFIG.endDate);
   const t = CONFIG.testRpcTarget;
+  let effStart = CONFIG.startDate;
+  let effEnd = CONFIG.endDate;
+  if (
+    t === 'transactions' &&
+    process.env.TEST_START_DATE === undefined &&
+    process.env.TEST_END_DATE === undefined
+  ) {
+    effStart = '2025-08-01';
+    effEnd = '2025-08-31';
+  }
+  const { startDateISO, endDateISO } = getDateRange(effStart, effEnd);
+  const labelDates = { start: effStart, end: effEnd };
 
   if (t === 'credit' || t === 'all') {
     await runParityTest(
@@ -873,6 +1045,7 @@ async function main() {
       fetchNewCreditHistory,
       startDateISO,
       endDateISO,
+      labelDates,
     );
     if (t === 'all') console.log('\n\n');
   }
@@ -884,6 +1057,7 @@ async function main() {
       fetchNewInstallmentHistory,
       startDateISO,
       endDateISO,
+      labelDates,
     );
     if (t === 'all') console.log('\n\n');
   }
@@ -895,6 +1069,7 @@ async function main() {
       fetchNewPawnHistory,
       startDateISO,
       endDateISO,
+      labelDates,
     );
     if (t === 'all') console.log('\n\n');
   }
@@ -906,6 +1081,19 @@ async function main() {
       fetchNewStoreFundGrouped,
       startDateISO,
       endDateISO,
+      labelDates,
+    );
+    if (t === 'all') console.log('\n\n');
+  }
+
+  if (t === 'transactions' || t === 'all') {
+    await runParityTest(
+      'transactions ↔ rpc_transactions_grouped',
+      fetchOldThuChiComparable,
+      fetchNewThuChiComparable,
+      startDateISO,
+      endDateISO,
+      labelDates,
     );
   }
 }

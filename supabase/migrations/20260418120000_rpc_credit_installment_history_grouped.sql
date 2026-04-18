@@ -211,3 +211,50 @@ BEGIN
     transaction_date DESC;
 END;
 $$;
+
+CREATE OR REPLACE FUNCTION rpc_transactions_grouped(
+  p_store_id   UUID,
+  p_start_date TIMESTAMPTZ,
+  p_end_date   TIMESTAMPTZ
+)
+RETURNS TABLE (
+  transaction_date   DATE,
+  transaction_type   TEXT,
+  is_deleted         BOOLEAN,
+  cancel_date        TIMESTAMPTZ,
+  credit_amount      NUMERIC,
+  debit_amount       NUMERIC,
+  customer_name      TEXT,
+  employee_name      TEXT
+)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    t.created_at::date                              AS transaction_date,
+    t.transaction_type::TEXT,
+    t.is_deleted,
+    MAX(t.update_at)                                AS cancel_date,
+    COALESCE(SUM(t.credit_amount), 0)::NUMERIC      AS credit_amount,
+    COALESCE(SUM(t.debit_amount), 0)::NUMERIC       AS debit_amount,
+    COALESCE(cust.name, '')::TEXT                   AS customer_name,
+    COALESCE(t.employee_name, '')::TEXT             AS employee_name
+  FROM transactions t
+  LEFT JOIN customers cust ON t.customer_id = cust.id
+  WHERE (
+      (t.is_deleted = false AND t.created_at BETWEEN p_start_date AND p_end_date)
+      OR
+      (t.is_deleted = true AND t.update_at BETWEEN p_start_date AND p_end_date)
+    )
+    AND t.store_id = p_store_id
+  GROUP BY
+    t.created_at::date,
+    t.transaction_type,
+    t.is_deleted,
+    COALESCE(cust.name, ''),
+    COALESCE(t.employee_name, '')
+  ORDER BY
+    transaction_date DESC;
+END;
+$$;
