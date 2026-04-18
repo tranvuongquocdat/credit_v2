@@ -46,6 +46,78 @@ const fetchAllData = async (query: unknown, pageSize: number = 1000): Promise<un
   return allData;
 };
 
+type GroupedHistoryRpcRow = {
+  contract_code: string | null;
+  transaction_date: string;
+  transaction_type: string;
+  is_deleted: boolean;
+  credit_amount: number | string | null;
+  debit_amount: number | string | null;
+  cancel_date: string | null;
+  customer_name: string | null;
+  employee_name: string | null;
+};
+
+const fetchCreditHistoryByRpc = async (
+  storeId: string,
+  startDateISO: string,
+  endDateISO: string
+) => {
+  const { data, error } = await (supabase as any).rpc('rpc_credit_history_grouped', {
+    p_store_id: storeId,
+    p_start_date: startDateISO,
+    p_end_date: endDateISO,
+  });
+
+  if (error) throw error;
+
+  return (((data || []) as unknown) as GroupedHistoryRpcRow[]).map((row, index) => ({
+    id: `credit-rpc-${index}`,
+    created_at: `${row.transaction_date}T00:00:00`,
+    updated_at: row.cancel_date,
+    is_deleted: row.is_deleted,
+    transaction_type: row.transaction_type,
+    credit_amount: Number(row.credit_amount || 0),
+    debit_amount: Number(row.debit_amount || 0),
+    contract_code: row.contract_code || null,
+    credits: {
+      contract_code: row.contract_code || null,
+      customers: { name: row.customer_name || '' },
+    },
+    profiles: { username: row.employee_name || '' },
+  }));
+};
+
+const fetchInstallmentHistoryByRpc = async (
+  storeId: string,
+  startDateISO: string,
+  endDateISO: string
+) => {
+  const { data, error } = await (supabase as any).rpc('rpc_installment_history_grouped', {
+    p_store_id: storeId,
+    p_start_date: startDateISO,
+    p_end_date: endDateISO,
+  });
+
+  if (error) throw error;
+
+  return (((data || []) as unknown) as GroupedHistoryRpcRow[]).map((row, index) => ({
+    id: `installment-rpc-${index}`,
+    created_at: `${row.transaction_date}T00:00:00`,
+    updated_at: row.cancel_date,
+    is_deleted: row.is_deleted,
+    transaction_type: row.transaction_type,
+    credit_amount: Number(row.credit_amount || 0),
+    debit_amount: Number(row.debit_amount || 0),
+    contract_code: row.contract_code || null,
+    installments: {
+      contract_code: row.contract_code || null,
+      customers: { name: row.customer_name || '' },
+    },
+    profiles: { username: row.employee_name || '' },
+  }));
+};
+
 // Fetch opening balance from store_total_fund for the start date
 const fetchOpeningBalance = async (storeId: string, startDate: string): Promise<number> => {
   try {
@@ -322,39 +394,34 @@ const fetchTransactionData = async (
     };
 
     // Fetch all relevant data (no date filter here; we filter after aggregation)
-    const creditHistoryData = await fetchAllData(
-      supabase
-        .from('credit_history')
-        .select(`
-          id,
-          created_at,
-          updated_at,
-          is_deleted,
-          transaction_type,
-          credit_amount,
-          debit_amount,
-          created_by,
-          credits!inner (
-            contract_code,
-            store_id,
-            customers (name)
-          ),
-          profiles:created_by (username)
-        `)
-        .eq('credits.store_id', storeId)
-        .or(
-          `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
-        )
-        .order('id')
-    );
-
-    if (creditHistoryData) {
-      const processedCreditData = creditHistoryData.map((item: any) => ({
-        ...item,
-        contract_code: item.credits?.contract_code || null,
-      }));
-      processItems(processedCreditData, 'Tín chấp');
-    }
+    // Logic cũ để đối chiếu:
+    // const creditHistoryData = await fetchAllData(
+    //   supabase
+    //     .from('credit_history')
+    //     .select(`
+    //       id,
+    //       created_at,
+    //       updated_at,
+    //       is_deleted,
+    //       transaction_type,
+    //       credit_amount,
+    //       debit_amount,
+    //       created_by,
+    //       credits!inner (
+    //         contract_code,
+    //         store_id,
+    //         customers (name)
+    //       ),
+    //       profiles:created_by (username)
+    //     `)
+    //     .eq('credits.store_id', storeId)
+    //     .or(
+    //       `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
+    //     )
+    //     .order('id')
+    // );
+    const creditHistoryData = await fetchCreditHistoryByRpc(storeId, startDateISO, endDateISO);
+    if (creditHistoryData) processItems(creditHistoryData as any[], 'Tín chấp');
 
     const pawnHistoryData = await fetchAllData(
       supabase
@@ -391,41 +458,36 @@ const fetchTransactionData = async (
       processItems(processedPawnData, 'Cầm đồ');
     }
 
-    const installmentHistoryData = await fetchAllData(
-      supabase
-        .from('installment_history')
-        .select(`
-          id,
-          created_at,
-          updated_at,
-          is_deleted,
-          transaction_type,
-          credit_amount,
-          debit_amount,
-          created_by,
-          installments!inner (
-            contract_code,
-            employee_id,
-            employees!inner (store_id),
-            customers (name)
-          ),
-          profiles:created_by (username)
-        `)
-        .eq('installments.employees.store_id', storeId)
-        .or(
-          `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
-        )
-        .not('transaction_type', 'in', '(contract_close,contract_rotate)')
-        .order('id')
-    );
-
-    if (installmentHistoryData) {
-      const processedInstallmentData = installmentHistoryData.map((item: any) => ({
-        ...item,
-        contract_code: item.installments?.contract_code || null,
-      }));
-      processItems(processedInstallmentData, 'Trả góp');
-    }
+    // Logic cũ để đối chiếu:
+    // const installmentHistoryData = await fetchAllData(
+    //   supabase
+    //     .from('installment_history')
+    //     .select(`
+    //       id,
+    //       created_at,
+    //       updated_at,
+    //       is_deleted,
+    //       transaction_type,
+    //       credit_amount,
+    //       debit_amount,
+    //       created_by,
+    //       installments!inner (
+    //         contract_code,
+    //         employee_id,
+    //         employees!inner (store_id),
+    //         customers (name)
+    //       ),
+    //       profiles:created_by (username)
+    //     `)
+    //     .eq('installments.employees.store_id', storeId)
+    //     .or(
+    //       `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
+    //     )
+    //     .not('transaction_type', 'in', '(contract_close,contract_rotate)')
+    //     .order('id')
+    // );
+    const installmentHistoryData = await fetchInstallmentHistoryByRpc(storeId, startDateISO, endDateISO);
+    if (installmentHistoryData) processItems(installmentHistoryData as any[], 'Trả góp');
 
     const storeFundData = await fetchAllData(
       supabase
@@ -712,40 +774,34 @@ const fetchTransactionDetails = async (
     };
 
     // Fetch all relevant data (no date filter here; we filter after aggregation)
-    const creditHistoryData = await fetchAllData(
-      supabase
-        .from('credit_history')
-        .select(`
-          id,
-          created_at,
-          updated_at,
-          is_deleted,
-          transaction_type,
-          credit_amount,
-          debit_amount,
-          created_by,
-          credits!inner (
-            contract_code,
-            store_id,
-            customers (name)
-          ),
-          profiles:created_by (username)
-        `)
-        .eq('credits.store_id', storeId)
-        .or(
-          `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
-        )
-        .order('id')
-    );
-    console.log('query history credit', storeId, startDateISO, endDateISO);
-
-    if (creditHistoryData) {
-      const processedCreditData = creditHistoryData.map((item: any) => ({
-        ...item,
-        contract_code: item.credits?.contract_code || null,
-      }));
-      processItems(processedCreditData, 'Tín chấp');
-    }
+    // Logic cũ để đối chiếu:
+    // const creditHistoryData = await fetchAllData(
+    //   supabase
+    //     .from('credit_history')
+    //     .select(`
+    //       id,
+    //       created_at,
+    //       updated_at,
+    //       is_deleted,
+    //       transaction_type,
+    //       credit_amount,
+    //       debit_amount,
+    //       created_by,
+    //       credits!inner (
+    //         contract_code,
+    //         store_id,
+    //         customers (name)
+    //       ),
+    //       profiles:created_by (username)
+    //     `)
+    //     .eq('credits.store_id', storeId)
+    //     .or(
+    //       `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
+    //     )
+    //     .order('id')
+    // );
+    const creditHistoryData = await fetchCreditHistoryByRpc(storeId, startDateISO, endDateISO);
+    if (creditHistoryData) processItems(creditHistoryData as any[], 'Tín chấp');
 
     const pawnHistoryData = await fetchAllData(
       supabase
@@ -782,41 +838,36 @@ const fetchTransactionDetails = async (
       processItems(processedPawnData, 'Cầm đồ');
     }
 
-    const installmentHistoryData = await fetchAllData(
-      supabase
-        .from('installment_history')
-        .select(`
-          id,
-          created_at,
-          updated_at,
-          is_deleted,
-          transaction_type,
-          credit_amount,
-          debit_amount,
-          created_by,
-          installments!inner (
-            contract_code,
-            employee_id,
-            employees!inner (store_id),
-            customers (name)
-          ),
-          profiles:created_by (username)
-        `)
-        .eq('installments.employees.store_id', storeId)
-        .or(
-          `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
-        )
-        .not('transaction_type', 'in', '(contract_close,contract_rotate)')
-        .order('id')
-    );
-
-    if (installmentHistoryData) {
-      const processedInstallmentData = installmentHistoryData.map((item: any) => ({
-        ...item,
-        contract_code: item.installments?.contract_code || null,
-      }));
-      processItems(processedInstallmentData, 'Trả góp');
-    }
+    // Logic cũ để đối chiếu:
+    // const installmentHistoryData = await fetchAllData(
+    //   supabase
+    //     .from('installment_history')
+    //     .select(`
+    //       id,
+    //       created_at,
+    //       updated_at,
+    //       is_deleted,
+    //       transaction_type,
+    //       credit_amount,
+    //       debit_amount,
+    //       created_by,
+    //       installments!inner (
+    //         contract_code,
+    //         employee_id,
+    //         employees!inner (store_id),
+    //         customers (name)
+    //       ),
+    //       profiles:created_by (username)
+    //     `)
+    //     .eq('installments.employees.store_id', storeId)
+    //     .or(
+    //       `and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}), and(transaction_type.eq.payment,is_deleted.eq.true,updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`
+    //     )
+    //     .not('transaction_type', 'in', '(contract_close,contract_rotate)')
+    //     .order('id')
+    // );
+    const installmentHistoryData = await fetchInstallmentHistoryByRpc(storeId, startDateISO, endDateISO);
+    if (installmentHistoryData) processItems(installmentHistoryData as any[], 'Trả góp');
 
     const storeFundData = await fetchAllData(
       supabase
