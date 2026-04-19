@@ -383,7 +383,7 @@ const fetchTransactionData = async (
       const translations: { [key: string]: string } = {
         payment: isDeleted ? 'Huỷ đóng lãi' : 'Đóng lãi',
         loan: 'Cho vay',
-        additional_loan: 'Vay thêm',
+        additional_loan: isDeleted ? 'Huỷ vay thêm' : 'Vay thêm',
         principal_repayment: 'Trả gốc',
         contract_close: 'Đóng HĐ',
         contract_reopen: 'Mở lại HĐ',
@@ -571,6 +571,11 @@ const fetchTransactionData = async (
     //     .order('id')
     // );
     const creditHistoryData = await fetchCreditHistoryByRpc(storeId, startDateISO, endDateISO);
+    console.log('creditHistoryData', creditHistoryData);
+    console.log('creditHistoryData length', creditHistoryData?.length);
+    console.log('storeId', storeId);
+    console.log('startDateISO', startDateISO);
+    console.log('endDateISO', endDateISO);
     if (creditHistoryData) processItems(creditHistoryData as any[], 'Tín chấp');
 
     // Logic cũ để đối chiếu:
@@ -774,7 +779,7 @@ const fetchTransactionDetails = async (
       const translations: { [key: string]: string } = {
         payment: isDeleted ? 'Huỷ đóng lãi' : 'Đóng lãi',
         loan: 'Cho vay',
-        additional_loan: 'Vay thêm',
+        additional_loan: isDeleted ? 'Huỷ vay thêm' : 'Vay thêm',
         principal_repayment: 'Trả gốc',
         contract_close: 'Đóng HĐ',
         contract_reopen: 'Mở lại HĐ',
@@ -856,7 +861,7 @@ const fetchTransactionDetails = async (
           return { employeeName, customerName, itemName };
         };
 
-        if ((source === 'Cầm đồ' || source === 'Tín chấp' || source === 'Trả góp') && item.transaction_type === 'payment') {
+        if ((source === 'Cầm đồ' || source === 'Tín chấp' || source === 'Trả góp') && ['payment', 'additional_loan'].includes(item.transaction_type)) {
           const { employeeName, customerName, itemName } = getCommonData();
           const amount = (item.credit_amount || 0) - (item.debit_amount || 0);
 
@@ -950,6 +955,7 @@ const fetchTransactionDetails = async (
     // );
     const creditHistoryData = await fetchCreditHistoryByRpc(storeId, startDateISO, endDateISO);
     if (creditHistoryData) processItems(creditHistoryData as any[], 'Tín chấp');
+    console.log('detail creditHistoryData ', creditHistoryData);
 
     // Logic cũ để đối chiếu:
     // const pawnHistoryData = await fetchAllData(
@@ -1081,6 +1087,8 @@ const fetchTransactionDetails = async (
         groupedData.set(groupKey, { ...item });
       }
     });
+    console.log('groupedData', groupedData);
+    console.log('allHistoryItems', allHistoryItems);
 
     // Convert to array, sort by date desc
     let aggregatedTransactions = Array.from(groupedData.values()).sort(

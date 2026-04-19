@@ -291,7 +291,7 @@ BEGIN
   WHERE (
       (ch.is_deleted = false AND ch.created_at BETWEEN p_start_date AND p_end_date)
       OR
-      (ch.is_deleted = true  AND ch.transaction_type = 'payment'
+      (ch.is_deleted = true  AND ch.transaction_type in ('payment', 'additional_loan')
        AND ch.updated_at BETWEEN p_start_date AND p_end_date)
     )
     AND c.store_id = p_store_id
