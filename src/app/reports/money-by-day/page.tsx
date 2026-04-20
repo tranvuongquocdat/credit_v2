@@ -330,61 +330,111 @@ export default function MoneyFlowByDayPage() {
         allStoreFundHistory
       ] = await Promise.all([
         // Pawn history for entire range
-        fetchAllData(
-          supabase
-            .from('pawn_history')
-            .select('created_at, credit_amount, debit_amount, pawns!inner(store_id)')
-            .eq('pawns.store_id', storeId)
-            .or('is_deleted.is.null,is_deleted.eq.false')
-            .gte('created_at', startRangeISO)
-            .lte('created_at', endRangeISO)
-            .order('id')
-        ),
+        (supabase as any)
+          .rpc('rpc_pawn_history_grouped', {
+            p_start_date: startRangeISO,
+            p_end_date: endRangeISO,
+            p_store_id: storeId,
+          })
+          .then(({ data, error }: { data: unknown; error: unknown }) => {
+            if (error) console.error(error);
+            const rows = Array.isArray(data) ? data : [];
+            return rows.map((row: Record<string, unknown>) => ({
+              ...row,
+              created_at: row.transaction_date
+                ? startOfDay(
+                    parse(String(row.transaction_date), 'yyyy-MM-dd', new Date())
+                  ).toISOString()
+                : '',
+            }));
+          }),
 
         // Credit history for entire range
-        fetchAllData(
-          supabase
-            .from('credit_history')
-            .select('created_at, credit_amount, debit_amount, credits!inner(store_id)')
-            .eq('credits.store_id', storeId)
-            .or('is_deleted.is.null,is_deleted.eq.false')
-            .gte('created_at', startRangeISO)
-            .lte('created_at', endRangeISO)
-            .order('id')
-        ),
-        
+        (supabase as any)
+          .rpc('rpc_credit_history_grouped', {
+            p_start_date: startRangeISO,
+            p_end_date: endRangeISO,
+            p_store_id: storeId,
+          })
+          .then(({ data, error }: { data: unknown; error: unknown }) => {
+            if (error) console.error(error);
+            const rows = Array.isArray(data) ? data : [];
+            return rows.map((row: Record<string, unknown>) => ({
+              ...row,
+              created_at: row.transaction_date
+                ? startOfDay(
+                    parse(String(row.transaction_date), 'yyyy-MM-dd', new Date())
+                  ).toISOString()
+                : '',
+            }));
+          }),
+
         // Installment history for entire range
-        supabase
-          .from('installment_history')
-          .select('created_at, credit_amount, debit_amount, installments!inner(employee_id, employees!inner(store_id))')
-          .eq('installments.employees.store_id', storeId)
-          .or('is_deleted.is.null,is_deleted.eq.false')
-          .gte('created_at', startRangeISO)
-          .lte('created_at', endRangeISO)
-          .limit(50000)
-          .then(({ data }) => data || []),
-        
-                 // Transactions for entire range
-         supabase
-           .from('transactions')
-           .select('created_at, credit_amount, debit_amount, transaction_type')
-           .eq('store_id', storeId)
-           .eq('is_deleted', false)
-           .gte('created_at', startRangeISO)
-           .lte('created_at', endRangeISO)
-           .limit(50000)
-           .then(({ data }) => data || []),
-        
+        (supabase as any)
+          .rpc('rpc_installment_history_grouped', {
+            p_start_date: startRangeISO,
+            p_end_date: endRangeISO,
+            p_store_id: storeId,
+          })
+          .then(({ data, error }: { data: unknown; error: unknown }) => {
+            if (error) console.error(error);
+            const rows = Array.isArray(data) ? data : [];
+            return rows.map((row: Record<string, unknown>) => ({
+              ...row,
+              created_at: row.transaction_date
+                ? startOfDay(
+                    parse(String(row.transaction_date), 'yyyy-MM-dd', new Date())
+                  ).toISOString()
+                : '',
+            }));
+          }),
+
+        // Transactions for entire range
+        (supabase as any)
+          .rpc('rpc_transactions_grouped', {
+            p_start_date: startRangeISO,
+            p_end_date: endRangeISO,
+            p_store_id: storeId,
+          })
+          .then(({ data, error }: { data: unknown; error: unknown }) => {
+            if (error) console.error(error);
+            const rows = Array.isArray(data) ? data : [];
+            return rows.map((row: Record<string, unknown>) => ({
+              ...row,
+              created_at: row.transaction_date
+                ? startOfDay(
+                    parse(String(row.transaction_date), 'yyyy-MM-dd', new Date())
+                  ).toISOString()
+                : '',
+            }));
+          }),
+
         // Store fund history for entire range
-        supabase
-          .from('store_fund_history')
-          .select('created_at, fund_amount, transaction_type')
-          .eq('store_id', storeId)
-          .gte('created_at', startRangeISO)
-          .lte('created_at', endRangeISO)
-          .limit(50000)
-          .then(({ data }) => data || [])
-      ]);
+        (supabase as any)
+          .rpc('rpc_store_fund_history_grouped', {
+            p_start_date: startRangeISO,
+            p_end_date: endRangeISO,
+            p_store_id: storeId,
+          })
+          .then(({ data, error }: { data: unknown; error: unknown }) => {
+            if (error) console.error(error);
+            const rows = Array.isArray(data) ? data : [];
+            return rows.map((row: Record<string, unknown>) => ({
+              ...row,
+              created_at: row.transaction_date
+                ? startOfDay(
+                    parse(String(row.transaction_date), 'yyyy-MM-dd', new Date())
+                  ).toISOString()
+                : '',
+            }));
+          })
+      ]) as [
+        DatabaseRecord[],
+        DatabaseRecord[],
+        DatabaseRecord[],
+        DatabaseRecord[],
+        DatabaseRecord[],
+      ];
 
       console.log('All data fetched, processing days in parallel...');
 
@@ -393,31 +443,38 @@ export default function MoneyFlowByDayPage() {
         const dayStart = startOfDay(date);
         const dayEnd = endOfDay(date);
         
-                 // OPTIMIZATION 3: Filter data in memory instead of additional DB queries
-         const dayPawnData = allPawnHistory.filter(item => {
-           const itemDate = new Date(item.created_at as string);
-           return itemDate >= dayStart && itemDate <= dayEnd;
-         });
-         
-         const dayCreditData = allCreditHistory.filter(item => {
-           const itemDate = new Date(item.created_at as string);
-           return itemDate >= dayStart && itemDate <= dayEnd;
-         });
-         
-         const dayInstallmentData = allInstallmentHistory.filter(item => {
-           const itemDate = new Date(item.created_at as string);
-           return itemDate >= dayStart && itemDate <= dayEnd;
-         });
-         
-         const dayTransactionData = allTransactions.filter(item => {
-           const itemDate = new Date(item.created_at as string);
-           return itemDate >= dayStart && itemDate <= dayEnd;
-         });
-         
-         const dayFundData = allStoreFundHistory.filter(item => {
-           const itemDate = new Date(item.created_at as string);
-           return itemDate >= dayStart && itemDate <= dayEnd;
-         });
+        // OPTIMIZATION 3: Filter data in memory instead of additional DB queries
+        const dayPawnData = allPawnHistory.filter(item => {
+          if (item.is_deleted) return false;
+          const itemDate = new Date(item.created_at as string);
+          return itemDate >= dayStart && itemDate <= dayEnd;
+        });
+        
+        const dayCreditData = allCreditHistory.filter(item => {
+          if (item.is_deleted) return false;
+          const itemDate = new Date(item.created_at as string);
+          return itemDate >= dayStart && itemDate <= dayEnd;
+        });
+        
+        const dayInstallmentData = allInstallmentHistory.filter(item => {
+          if (item.is_deleted) return false;
+          const itemDate = new Date(item.created_at as string);
+          return itemDate >= dayStart && itemDate <= dayEnd;
+        });
+        
+        const dayTransactionData = allTransactions.filter(item => {
+          // if (item.is_deleted) return false;
+          const itemDate = new Date(item.created_at as string);
+          return itemDate >= dayStart && itemDate <= dayEnd;
+        });
+        
+        const dayFundData = allStoreFundHistory.filter(item => {
+          if (item.is_deleted) return false;
+          const itemDate = new Date(item.created_at as string);
+          return itemDate >= dayStart && itemDate <= dayEnd;
+        });
+        
+
 
         // Calculate activities for the day
         const pawnActivity = dayPawnData.reduce((sum, item) => 
@@ -429,7 +486,7 @@ export default function MoneyFlowByDayPage() {
         const installmentActivity = dayInstallmentData.reduce((sum, item: any) => 
           sum + (item.credit_amount || 0) - (item.debit_amount || 0), 0);
         
-                 const incomeExpenseActivity = dayTransactionData.reduce((sum, item: any) => {
+        const incomeExpenseActivity = dayTransactionData.reduce((sum, item: any) => {
            const amount = (item.credit_amount || 0) - (item.debit_amount || 0);
            return sum + amount;
          }, 0);
