@@ -1,0 +1,3 @@
+- Thứ tự đang bị sai so với gốc, các giao dịch ở phần chi tiết sắp xếp sai thời gian -> khó trace
+- Case bị lệch: tạo hợp đồng tín chấp -> vay thêm -> xoá vay thêm -> bảng tổng bị lệch
+- 

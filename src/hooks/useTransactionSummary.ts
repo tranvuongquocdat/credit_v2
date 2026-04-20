@@ -54,6 +54,7 @@ type GroupedHistoryRpcRow = {
   credit_amount: number | string | null;
   debit_amount: number | string | null;
   cancel_date: string | null;
+  group_ts: string | null;
   customer_name: string | null;
   employee_name: string | null;
 };
@@ -61,6 +62,9 @@ type GroupedHistoryRpcRow = {
 type GroupedPawnHistoryRpcRow = GroupedHistoryRpcRow & {
   item_name: string | null;
 };
+
+const resolveGroupTs = (groupTs: string | null, transactionDate: string): string =>
+  groupTs ?? `${transactionDate}T00:00:00`;
 
 const fetchCreditHistoryByRpc = async (
   storeId: string,
@@ -77,7 +81,7 @@ const fetchCreditHistoryByRpc = async (
 
   return (((data || []) as unknown) as GroupedHistoryRpcRow[]).map((row, index) => ({
     id: `credit-rpc-${index}`,
-    created_at: `${row.transaction_date}T00:00:00`,
+    created_at: resolveGroupTs(row.group_ts, row.transaction_date),
     updated_at: row.cancel_date,
     is_deleted: row.is_deleted,
     transaction_type: row.transaction_type,
@@ -107,7 +111,7 @@ const fetchInstallmentHistoryByRpc = async (
 
   return (((data || []) as unknown) as GroupedHistoryRpcRow[]).map((row, index) => ({
     id: `installment-rpc-${index}`,
-    created_at: `${row.transaction_date}T00:00:00`,
+    created_at: resolveGroupTs(row.group_ts, row.transaction_date),
     updated_at: row.cancel_date,
     is_deleted: row.is_deleted,
     transaction_type: row.transaction_type,
@@ -137,7 +141,7 @@ const fetchPawnHistoryByRpc = async (
 
   return (((data || []) as unknown) as GroupedPawnHistoryRpcRow[]).map((row, index) => ({
     id: `pawn-rpc-${index}`,
-    created_at: `${row.transaction_date}T00:00:00`,
+    created_at: resolveGroupTs(row.group_ts, row.transaction_date),
     updated_at: row.cancel_date,
     is_deleted: row.is_deleted,
     transaction_type: row.transaction_type,
@@ -160,6 +164,7 @@ type StoreFundGroupedRpcRow = {
   transaction_date: string;
   transaction_type: string;
   fund_amount: number | string | null;
+  group_ts: string | null;
   customer_name: string | null;
 };
 
@@ -178,7 +183,7 @@ const fetchStoreFundHistoryByRpc = async (
 
   return (((data || []) as unknown) as StoreFundGroupedRpcRow[]).map((row, index) => ({
     id: `store-fund-rpc-${index}`,
-    created_at: `${String(row.transaction_date)}T00:00:00`,
+    created_at: resolveGroupTs(row.group_ts, String(row.transaction_date)),
     transaction_type: row.transaction_type,
     fund_amount: Number(row.fund_amount ?? 0),
     name: row.customer_name ?? '',
@@ -190,6 +195,7 @@ type TransactionsGroupedRpcRow = {
   transaction_type: string | null;
   is_deleted: boolean;
   cancel_date: string | null;
+  group_ts: string | null;
   credit_amount: number | string | null;
   debit_amount: number | string | null;
   customer_name: string | null;
@@ -203,7 +209,7 @@ function expandTransactionsGroupedRpcToDisplayRows(rows: TransactionsGroupedRpcR
     const dateOnly = String(r.transaction_date).includes('T')
       ? String(r.transaction_date).slice(0, 10)
       : String(r.transaction_date);
-    const baseCreated = `${dateOnly}T00:00:00`;
+    const baseCreated = resolveGroupTs(r.group_ts, dateOnly);
     const ca = Number(r.credit_amount ?? 0);
     const da = Number(r.debit_amount ?? 0);
     const cust = r.customer_name ?? '';
@@ -381,9 +387,9 @@ const fetchTransactionData = async (
     // Helper similar to TransactionDetailsTable
     const translateTransactionType = (transactionType: string, isDeleted: boolean = false): string => {
       const translations: { [key: string]: string } = {
-        payment: isDeleted ? 'Huỷ đóng lãi' : 'Đóng lãi',
+        payment: 'Đóng lãi',
         loan: 'Cho vay',
-        additional_loan: isDeleted ? 'Huỷ vay thêm' : 'Vay thêm',
+        additional_loan: 'Vay thêm',
         principal_repayment: 'Trả gốc',
         contract_close: 'Đóng HĐ',
         contract_reopen: 'Mở lại HĐ',
@@ -419,7 +425,12 @@ const fetchTransactionData = async (
         chi_van_phong: 'Chi văn phòng',
         chi_khac: 'Chi khác',
       };
-      return translations[transactionType] || transactionType;
+      const base = translations[transactionType] || transactionType;
+      if (isDeleted) {
+        if (transactionType === 'payment') return 'Huỷ đóng lãi';
+        return `Huỷ ${base}`;
+      }
+      return base;
     };
 
     type FundHistoryItem = {
@@ -479,7 +490,7 @@ const fetchTransactionData = async (
           return { employeeName, customerName, itemName };
         };
 
-        if ((source === 'Cầm đồ' || source === 'Tín chấp' || source === 'Trả góp') && item.transaction_type === 'payment') {
+        if (source === 'Cầm đồ' || source === 'Tín chấp' || source === 'Trả góp') {
           const { employeeName, customerName, itemName } = getCommonData();
           const amount = (item.credit_amount || 0) - (item.debit_amount || 0);
 
@@ -571,11 +582,6 @@ const fetchTransactionData = async (
     //     .order('id')
     // );
     const creditHistoryData = await fetchCreditHistoryByRpc(storeId, startDateISO, endDateISO);
-    console.log('creditHistoryData', creditHistoryData);
-    console.log('creditHistoryData length', creditHistoryData?.length);
-    console.log('storeId', storeId);
-    console.log('startDateISO', startDateISO);
-    console.log('endDateISO', endDateISO);
     if (creditHistoryData) processItems(creditHistoryData as any[], 'Tín chấp');
 
     // Logic cũ để đối chiếu:
@@ -777,9 +783,9 @@ const fetchTransactionDetails = async (
     // Helper similar to TransactionDetailsTable
     const translateTransactionType = (transactionType: string, isDeleted: boolean = false): string => {
       const translations: { [key: string]: string } = {
-        payment: isDeleted ? 'Huỷ đóng lãi' : 'Đóng lãi',
+        payment: 'Đóng lãi',
         loan: 'Cho vay',
-        additional_loan: isDeleted ? 'Huỷ vay thêm' : 'Vay thêm',
+        additional_loan: 'Vay thêm',
         principal_repayment: 'Trả gốc',
         contract_close: 'Đóng HĐ',
         contract_reopen: 'Mở lại HĐ',
@@ -815,7 +821,12 @@ const fetchTransactionDetails = async (
         chi_van_phong: 'Chi văn phòng',
         chi_khac: 'Chi khác'
       };
-      return translations[transactionType] || transactionType;
+      const base = translations[transactionType] || transactionType;
+      if (isDeleted) {
+        if (transactionType === 'payment') return 'Huỷ đóng lãi';
+        return `Huỷ ${base}`;
+      }
+      return base;
     };
 
     const allHistoryItems: FundHistoryItem[] = [];
@@ -861,7 +872,7 @@ const fetchTransactionDetails = async (
           return { employeeName, customerName, itemName };
         };
 
-        if ((source === 'Cầm đồ' || source === 'Tín chấp' || source === 'Trả góp') && ['payment', 'additional_loan'].includes(item.transaction_type)) {
+        if (source === 'Cầm đồ' || source === 'Tín chấp' || source === 'Trả góp') {
           const { employeeName, customerName, itemName } = getCommonData();
           const amount = (item.credit_amount || 0) - (item.debit_amount || 0);
 
@@ -955,7 +966,6 @@ const fetchTransactionDetails = async (
     // );
     const creditHistoryData = await fetchCreditHistoryByRpc(storeId, startDateISO, endDateISO);
     if (creditHistoryData) processItems(creditHistoryData as any[], 'Tín chấp');
-    console.log('detail creditHistoryData ', creditHistoryData);
 
     // Logic cũ để đối chiếu:
     // const pawnHistoryData = await fetchAllData(
@@ -1087,8 +1097,6 @@ const fetchTransactionDetails = async (
         groupedData.set(groupKey, { ...item });
       }
     });
-    console.log('groupedData', groupedData);
-    console.log('allHistoryItems', allHistoryItems);
 
     // Convert to array, sort by date desc
     let aggregatedTransactions = Array.from(groupedData.values()).sort(

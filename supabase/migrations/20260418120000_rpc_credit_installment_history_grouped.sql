@@ -1,5 +1,12 @@
 -- RPC báo cáo tổng hợp lịch sử tín chấp / trả góp (đã parity với scripts/test-rpc-queries.ts)
 
+-- Drop trước khi tạo lại vì RETURNS TABLE đổi (thêm cột group_ts)
+DROP FUNCTION IF EXISTS rpc_credit_history_grouped(UUID, TIMESTAMPTZ, TIMESTAMPTZ);
+DROP FUNCTION IF EXISTS rpc_installment_history_grouped(UUID, TIMESTAMPTZ, TIMESTAMPTZ);
+DROP FUNCTION IF EXISTS rpc_pawn_history_grouped(UUID, TIMESTAMPTZ, TIMESTAMPTZ);
+DROP FUNCTION IF EXISTS rpc_store_fund_history_grouped(UUID, TIMESTAMPTZ, TIMESTAMPTZ);
+DROP FUNCTION IF EXISTS rpc_transactions_grouped(UUID, TIMESTAMPTZ, TIMESTAMPTZ);
+
 CREATE OR REPLACE FUNCTION rpc_credit_history_grouped(
   p_store_id   UUID,
   p_start_date TIMESTAMPTZ,
@@ -13,6 +20,7 @@ RETURNS TABLE (
   credit_amount    NUMERIC,
   debit_amount     NUMERIC,
   cancel_date      TIMESTAMPTZ,
+  group_ts         TIMESTAMPTZ,
   customer_name    TEXT,
   employee_name    TEXT
 )
@@ -27,7 +35,11 @@ BEGIN
     ch.is_deleted,
     COALESCE(SUM(ch.credit_amount), 0)::NUMERIC    AS credit_amount,
     COALESCE(SUM(ch.debit_amount), 0)::NUMERIC     AS debit_amount,
-    MAX(ch.updated_at) FILTER (WHERE ch.is_deleted = true) AS cancel_date,
+    MAX(ch.updated_at) FILTER (
+      WHERE ch.is_deleted = true
+        AND ch.updated_at BETWEEN p_start_date AND p_end_date
+    ) AS cancel_date,
+    MAX(ch.created_at)                             AS group_ts,
     cust.name,
     COALESCE(prof.username, '')                    AS employee_name
   FROM credit_history ch
@@ -35,9 +47,9 @@ BEGIN
   JOIN customers cust ON c.customer_id = cust.id
   LEFT JOIN profiles prof ON prof.id = ch.created_by
   WHERE (
-      (ch.is_deleted = false AND ch.created_at BETWEEN p_start_date AND p_end_date)
+      (ch.created_at BETWEEN p_start_date AND p_end_date)
       OR
-      (ch.is_deleted = true  AND ch.transaction_type in ('payment', 'additional_loan')
+      (ch.is_deleted = true
        AND ch.updated_at BETWEEN p_start_date AND p_end_date)
     )
     AND c.store_id = p_store_id
@@ -67,6 +79,7 @@ RETURNS TABLE (
   credit_amount    NUMERIC,
   debit_amount     NUMERIC,
   cancel_date      TIMESTAMPTZ,
+  group_ts         TIMESTAMPTZ,
   customer_name    TEXT,
   employee_name    TEXT
 )
@@ -81,7 +94,11 @@ BEGIN
     ih.is_deleted,
     COALESCE(SUM(ih.credit_amount), 0)::NUMERIC,
     COALESCE(SUM(ih.debit_amount), 0)::NUMERIC,
-    MAX(ih.updated_at) FILTER (WHERE ih.is_deleted = true) AS cancel_date,
+    MAX(ih.updated_at) FILTER (
+      WHERE ih.is_deleted = true
+        AND ih.updated_at BETWEEN p_start_date AND p_end_date
+    ) AS cancel_date,
+    MAX(ih.created_at)                             AS group_ts,
     cust.name,
     COALESCE(prof.username, '')
   FROM installment_history ih
@@ -89,9 +106,9 @@ BEGIN
   JOIN customers cust ON i.customer_id = cust.id
   LEFT JOIN profiles prof ON prof.id = ih.created_by
   WHERE (
-      (ih.is_deleted = false AND ih.created_at BETWEEN p_start_date AND p_end_date)
+      (ih.created_at BETWEEN p_start_date AND p_end_date)
       OR
-      (ih.is_deleted = true  AND ih.transaction_type = 'payment'
+      (ih.is_deleted = true
        AND ih.updated_at BETWEEN p_start_date AND p_end_date)
     )
     AND i.employee_id IN (
@@ -124,6 +141,7 @@ RETURNS TABLE (
   credit_amount      NUMERIC,
   debit_amount       NUMERIC,
   cancel_date        TIMESTAMPTZ,
+  group_ts           TIMESTAMPTZ,
   customer_name      TEXT,
   employee_name      TEXT,
   item_name          TEXT
@@ -139,7 +157,11 @@ BEGIN
     ph.is_deleted,
     COALESCE(SUM(ph.credit_amount), 0)::NUMERIC,
     COALESCE(SUM(ph.debit_amount), 0)::NUMERIC,
-    MAX(ph.updated_at) FILTER (WHERE ph.is_deleted = true) AS cancel_date,
+    MAX(ph.updated_at) FILTER (
+      WHERE ph.is_deleted = true
+        AND ph.updated_at BETWEEN p_start_date AND p_end_date
+    ) AS cancel_date,
+    MAX(ph.created_at)                             AS group_ts,
     cust.name,
     COALESCE(prof.username, ''),
     COALESCE(
@@ -156,8 +178,7 @@ BEGIN
       (ph.created_at BETWEEN p_start_date AND p_end_date)
       OR
       (
-        ph.transaction_type = 'payment'
-        AND ph.is_deleted = true
+        ph.is_deleted = true
         AND ph.updated_at BETWEEN p_start_date AND p_end_date
       )
     )
@@ -189,6 +210,7 @@ RETURNS TABLE (
   transaction_date   DATE,
   transaction_type   TEXT,
   fund_amount        NUMERIC,
+  group_ts           TIMESTAMPTZ,
   customer_name      TEXT
 )
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
@@ -199,6 +221,7 @@ BEGIN
     sfh.created_at::date                            AS transaction_date,
     sfh.transaction_type::TEXT,
     COALESCE(SUM(sfh.fund_amount), 0)::NUMERIC      AS fund_amount,
+    MAX(sfh.created_at)                             AS group_ts,
     COALESCE(sfh.name, '')::TEXT                    AS customer_name
   FROM store_fund_history sfh
   WHERE sfh.store_id = p_store_id
@@ -222,6 +245,7 @@ RETURNS TABLE (
   transaction_type   TEXT,
   is_deleted         BOOLEAN,
   cancel_date        TIMESTAMPTZ,
+  group_ts           TIMESTAMPTZ,
   credit_amount      NUMERIC,
   debit_amount       NUMERIC,
   customer_name      TEXT,
@@ -236,6 +260,7 @@ BEGIN
     t.transaction_type::TEXT,
     t.is_deleted,
     MAX(t.update_at)                                AS cancel_date,
+    MAX(t.created_at)                               AS group_ts,
     COALESCE(SUM(t.credit_amount), 0)::NUMERIC      AS credit_amount,
     COALESCE(SUM(t.debit_amount), 0)::NUMERIC       AS debit_amount,
     COALESCE(cust.name, '')::TEXT                   AS customer_name,
