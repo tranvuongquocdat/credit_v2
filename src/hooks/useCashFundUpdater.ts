@@ -46,9 +46,10 @@ export function useAutoUpdateCashFund(options: UseCashFundUpdaterOptions = {}) {
   // Hàm wrapper để gọi sau khi thực hiện CRUD operations
   const triggerUpdate = async (delay: number = 1000) => {
     // Delay một chút để đảm bảo transaction đã được commit
+
     setTimeout(() => {
       updateCashFund();
-    }, delay);
+    }, 500);
   };
 
   return {
