@@ -396,26 +396,32 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
                       <span className="block text-xs font-normal text-gray-500 mt-0.5">{customNote}</span>
                     )}
                   </td>
-                  <td className={`px-4 py-2 text-right border ${customAmountNumber < 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <td className={`px-4 py-2 text-right border ${customAmountNumber < 0 ? 'text-red-600' : 'text-green-600'}`}>
                     {customAmountNumber > 0 ? '+' : ''}{formatCurrency(customAmountNumber)}
                   </td>
                 </tr>
               )}
-              <tr className="bg-red-50">
-                <td className="px-4 py-3 font-medium border text-red-700">
-                  Tổng cần thanh toán để chuộc đồ
-                </td>
-                <td className="px-4 py-3 text-right border font-bold text-red-700 text-lg">
-                  {isCalculating ? (
-                    <div className="flex items-center justify-end">
-                      <div className="h-4 w-4 rounded-full border-2 border-green-400 border-t-transparent animate-spin mr-2"></div>
-                      <span className="text-green-500">Đang tính...</span>
-                    </div>
-                  ) : (
-                    formatCurrency(actualLoanAmount + oldDebt + remainingAmount + customAmountNumber)
-                  )}
-                </td>
-              </tr>
+              {(() => {
+                const totalRedeem = actualLoanAmount + oldDebt + remainingAmount + customAmountNumber;
+                const isNegative = totalRedeem < 0;
+                return (
+                  <tr className={isNegative ? 'bg-red-50' : 'bg-green-50'}>
+                    <td className={`px-4 py-3 font-medium border ${isNegative ? 'text-red-700' : 'text-green-700'}`}>
+                      Tổng cần thanh toán để chuộc đồ
+                    </td>
+                    <td className={`px-4 py-3 text-right border font-bold text-lg ${isNegative ? 'text-red-700' : 'text-green-700'}`}>
+                      {isCalculating ? (
+                        <div className="flex items-center justify-end">
+                          <div className="h-4 w-4 rounded-full border-2 border-green-400 border-t-transparent animate-spin mr-2"></div>
+                          <span className="text-green-500">Đang tính...</span>
+                        </div>
+                      ) : (
+                        formatCurrency(totalRedeem)
+                      )}
+                    </td>
+                  </tr>
+                );
+              })()}
             </tbody>
           </table>
             </div>
