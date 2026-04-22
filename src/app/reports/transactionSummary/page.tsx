@@ -94,6 +94,8 @@ export default function TransactionSummaryPage() {
     selectedEmployee
   );
 
+  console.log('transactionDetails', transactionDetails);
+
   // Function to format currency
   const formatCurrency = (value: number | null | undefined) => {
     if (value === null || value === undefined) return '0';
