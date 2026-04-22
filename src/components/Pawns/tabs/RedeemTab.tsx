@@ -34,6 +34,27 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [actualLoanAmount, setActualLoanAmount] = useState(0);
   const [payDebt, setPayDebt] = useState(true); // Track whether to pay debt or not
+
+  // Tiền tùy chỉnh khi chuộc đồ (có thể âm). Note optional.
+  // customAmount lưu dạng string số nguyên: "50000", "-50000", hoặc "" / "-" (trung gian)
+  const [customAmount, setCustomAmount] = useState<string>('');
+  const [formattedCustomAmount, setFormattedCustomAmount] = useState<string>('');
+  const [customNote, setCustomNote] = useState<string>('');
+
+  // Parse customAmount string sang number an toàn (các trạng thái trung gian "", "-" → 0)
+  const customAmountNumber = Number(customAmount) || 0;
+
+  // Handler nhập tiền tùy chỉnh — hỗ trợ dấu "-" đầu, format dấu chấm hàng nghìn.
+  // Tái sử dụng pattern từ PawnPaymentForm.handleOtherAmountChange.
+  const handleCustomAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target.value;
+    const isNegative = input.startsWith('-');
+    const digits = input.replace(/[^0-9]/g, '');
+    const rawValue = isNegative ? (digits ? `-${digits}` : '-') : digits;
+    setCustomAmount(rawValue);
+    const formattedDigits = digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    setFormattedCustomAmount(isNegative ? (digits ? `-${formattedDigits}` : '-') : formattedDigits);
+  };
   const today = useMemo(() => new Date().toISOString().split('T')[0], []); // Ngày hôm nay
   const { hasPermission } = usePermissions();
   const isClosed = pawn?.status === PawnStatus.CLOSED || pawn?.status === PawnStatus.DELETED;
@@ -106,7 +127,7 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
   };
 
   const handleRedeemPawn = async (pawnId: string, shouldPayDebt: boolean = true) => {
-    console.log('Redeeming pawn:', pawnId, 'Pay debt:', shouldPayDebt);
+    console.log('Redeeming pawn:', pawnId, 'Pay debt:', shouldPayDebt, 'Custom amount:', customAmountNumber);
     
     setIsRedeeming(true);
     
@@ -187,9 +208,26 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
             transaction_type: 'debt_payment',
             credit_amount: oldDebt > 0 ? Math.abs(oldDebt) : 0,
             debit_amount: oldDebt < 0 ? Math.abs(oldDebt) : 0,
-            description: oldDebt > 0 
-              ? 'Thanh toán nợ cũ khi chuộc đồ' 
+            description: oldDebt > 0
+              ? 'Thanh toán nợ cũ khi chuộc đồ'
               : 'Hoàn trả tiền thừa khi chuộc đồ',
+            is_created_from_contract_closure: true,
+            created_by: userId
+          } as any);
+      }
+
+      // Ghi lịch sử Tiền tùy chỉnh khi đóng HĐ (nếu nhân viên có nhập).
+      // Dương ⇒ credit_amount (nạp quỹ). Âm ⇒ debit_amount (rút quỹ).
+      // Cờ is_created_from_contract_closure=true để reopen revert được.
+      if (customAmountNumber !== 0) {
+        await supabase
+          .from('pawn_history')
+          .insert({
+            pawn_id: pawnId,
+            transaction_type: 'contract_close_adjustment',
+            credit_amount: customAmountNumber > 0 ? customAmountNumber : 0,
+            debit_amount: customAmountNumber < 0 ? Math.abs(customAmountNumber) : 0,
+            description: customNote,
             is_created_from_contract_closure: true,
             created_by: userId
           } as any);
@@ -350,6 +388,19 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
                   )}
                 </td>
               </tr>
+              {customAmountNumber !== 0 && (
+                <tr>
+                  <td className="px-4 py-2 border font-bold">
+                    Tiền tùy chỉnh
+                    {customNote.trim() && (
+                      <span className="block text-xs font-normal text-gray-500 mt-0.5">{customNote}</span>
+                    )}
+                  </td>
+                  <td className={`px-4 py-2 text-right border ${customAmountNumber < 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {customAmountNumber > 0 ? '+' : ''}{formatCurrency(customAmountNumber)}
+                  </td>
+                </tr>
+              )}
               <tr className="bg-red-50">
                 <td className="px-4 py-3 font-medium border text-red-700">
                   Tổng cần thanh toán để chuộc đồ
@@ -361,13 +412,44 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
                       <span className="text-green-500">Đang tính...</span>
                     </div>
                   ) : (
-                    formatCurrency(actualLoanAmount + oldDebt + remainingAmount)
+                    formatCurrency(actualLoanAmount + oldDebt + remainingAmount + customAmountNumber)
                   )}
                 </td>
               </tr>
             </tbody>
           </table>
             </div>
+
+        {/* Tiền tùy chỉnh — dương cộng vào quỹ, âm trừ khỏi quỹ. Note optional. */}
+        <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-sm font-medium text-gray-700 block mb-1">
+              Tiền tùy chỉnh
+            </label>
+            <input
+              type="text"
+              inputMode="text"
+              value={formattedCustomAmount}
+              onChange={handleCustomAmountChange}
+              placeholder="VNĐ (có thể âm, VD: -50.000)"
+              disabled={isClosed || isRedeeming}
+              className="w-full border rounded px-3 py-2 text-sm disabled:bg-gray-100"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-700 block mb-1">
+              Ghi chú (tùy chọn)
+            </label>
+            <input
+              type="text"
+              value={customNote}
+              onChange={(e) => setCustomNote(e.target.value)}
+              placeholder="Ghi chú về khoản tiền tùy chỉnh"
+              disabled={isClosed || isRedeeming}
+              className="w-full border rounded px-3 py-2 text-sm disabled:bg-gray-100"
+            />
+          </div>
+        </div>
 
         <div className="mt-6 flex justify-center">
           {/* Show single button if no old debt or contract is already closed */}
@@ -426,9 +508,15 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
               </p>
               {oldDebt !== 0 && (
                 <p className="text-sm mt-1">
-                  <strong>Nợ cũ:</strong> {payDebt 
-                    ? `Sẽ thanh toán nợ cũ ${formatCurrency(Math.abs(oldDebt))}` 
+                  <strong>Nợ cũ:</strong> {payDebt
+                    ? `Sẽ thanh toán nợ cũ ${formatCurrency(Math.abs(oldDebt))}`
                     : `Sẽ giữ nguyên nợ cũ ${formatCurrency(Math.abs(oldDebt))}`}
+                </p>
+              )}
+              {customAmountNumber !== 0 && (
+                <p className="text-sm mt-1">
+                  <strong>Tiền tùy chỉnh:</strong> {customAmountNumber > 0 ? '+' : ''}{formatCurrency(customAmountNumber)}
+                  {customNote.trim() && ` — ${customNote}`}
                 </p>
               )}
             </div>

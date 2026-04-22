@@ -13,6 +13,7 @@ export enum PawnTransactionType {
   CANCEL_ADDITIONAL_LOAN = 'cancel_additional_loan',
   CONTRACT_DELETE = 'contract_delete',
   DEBT_PAYMENT = 'debt_payment',
+  CONTRACT_CLOSE_ADJUSTMENT = 'contract_close_adjustment',
 }
 
 // Updated interface to match the new database schema
@@ -172,7 +173,7 @@ export async function recordCancelInterestPayment(
         credit_amount: 0,
         description: description || 'Hủy đóng lãi phí',
         created_by: userId
-      } as any)
+      } as PawnAmountHistoryInsert)
       .select()
       .single();
 
@@ -206,7 +207,7 @@ export async function recordContractClosure(
         description: description || 'Đóng hợp đồng',
         created_by: userId
         // transaction_date field is no longer used, created_at is set automatically
-      } as any)
+      } as PawnAmountHistoryInsert)
       .select()
       .single();
 
@@ -260,7 +261,7 @@ export async function recordContractReopening(
         description: description || 'Mở lại hợp đồng',
         created_by: userId
         // transaction_date field is no longer used, created_at is set automatically
-      } as any)
+      } as PawnAmountHistoryInsert)
       .select()
       .single();
 
@@ -292,7 +293,7 @@ export async function recordContractDeletion(
         debit_amount: 0,
         description: description || 'Xóa hợp đồng',
         created_by: userId
-      } as any)
+      } as PawnAmountHistoryInsert)
       .select()
       .single();
 

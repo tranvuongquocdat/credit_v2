@@ -14,6 +14,7 @@ import {
   Transaction,
   CapitalTransaction
 } from '@/app/reports/cashbook/components/types';
+import { mergePawnCloseAdjustment } from '@/lib/Pawns/mergeCloseAdjustment';
 
 // Type definitions for database records
 interface PawnHistoryRecord {
@@ -218,8 +219,11 @@ const fetchTransactionData = async (
         .order('created_at', { ascending: false })
     );
 
+    // Gộp contract_close_adjustment vào contract_close (cùng pawn_id + cùng ngày) để hiển thị 1 dòng
+    const mergedPawnHistory = mergePawnCloseAdjustment(pawnHistoryData as any as PawnHistoryRecord[]);
+
     // Format pawn data for transaction list
-    const formattedPawnData: PawnTransaction[] = (pawnHistoryData as PawnHistoryRecord[]).map((item: PawnHistoryRecord) => ({
+    const formattedPawnData: PawnTransaction[] = (mergedPawnHistory as PawnHistoryRecord[]).map((item: PawnHistoryRecord) => ({
       id: item.id,
       date: format(parseISO(item.created_at), 'dd/MM/yyyy HH:mm'),
       contractCode: item.pawns?.contract_code || 'N/A',

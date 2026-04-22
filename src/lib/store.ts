@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { Store, StoreFormData } from '@/models/store';
 import { getCurrentUser } from './auth';
+import { mergePawnCloseAdjustment } from './Pawns/mergeCloseAdjustment';
 
 // Interface cho dữ liệu tài chính cửa hàng
 export interface StoreFinancialData {
@@ -484,7 +485,7 @@ export async function updateCashFundFromAllSources(storeId: string) {
         ...item,
         contract_code: item.pawns?.contract_code || null
       }));
-      processItems(processedPawnData, 'Cầm đồ');
+      processItems(mergePawnCloseAdjustment(processedPawnData), 'Cầm đồ');
     }
 
     // Fetch installment history

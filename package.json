@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "update-types": "npx supabase gen types typescript --project-id YOUR_PROJECT_ID > src/types/database.types.ts"
+    "update-types": "npx supabase gen types typescript --project-id sosqrmbowgwxxyynzntw > src/types/database.types.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",
