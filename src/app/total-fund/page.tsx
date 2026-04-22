@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, type UIEvent } from 'react';
 import Link from 'next/link';
 import { Layout } from '@/components/Layout';
 import { FinancialSummary } from '@/components/common/FinancialSummary';
@@ -9,7 +9,7 @@ import { useStore } from '@/contexts/StoreContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DatePickerWithControls } from '@/components/ui/date-picker-with-controls';
-import { format, startOfDay } from 'date-fns';
+import { format, startOfDay, endOfDay } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import {
@@ -65,10 +65,14 @@ interface DailyFundRecord {
   total_fund: number;
 }
 
+const DAILY_FUND_PAGE_SIZE = 10;
+/** Kích thước trang khi gọi fetchAllData cho installment_history (join nặng, giữ nhỏ hơn mặc định). */
+const INSTALLMENT_HISTORY_PAGE_SIZE = 100;
+
 export default function TotalFundPage() {
   const router = useRouter();
   const { currentStore } = useStore();
-  const [loading, setLoading] = useState(true);
+  const [isFundHistoryLoading, setIsFundHistoryLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [financialSummary, setFinancialSummary] = useState<StoreFinancialData>({
@@ -81,6 +85,10 @@ export default function TotalFundPage() {
   });
   const [fundHistory, setFundHistory] = useState<FundHistoryItem[]>([]);
   const [dailyFundHistory, setDailyFundHistory] = useState<DailyFundRecord[]>([]);
+  const [dailyFundOffset, setDailyFundOffset] = useState(0);
+  const [dailyFundHasMore, setDailyFundHasMore] = useState(true);
+  const [isDailyFundLoading, setIsDailyFundLoading] = useState(true);
+  const [isDailyFundLoadingMore, setIsDailyFundLoadingMore] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
   
   // Date range for filtering
@@ -145,30 +153,68 @@ export default function TotalFundPage() {
     }
   };
 
-  const fetchDailyFundHistory = async () => {
+  const fetchDailyFundHistory = async (
+    offset: number = 0,
+    append: boolean = false,
+    options?: { silent?: boolean }
+  ) => {
     if (!currentStore?.id) return;
+
+    if (append && (isDailyFundLoadingMore || !dailyFundHasMore)) {
+      return;
+    }
+
+    const silent = Boolean(options?.silent);
+    if (!append && !silent) {
+      setIsDailyFundLoading(true);
+    } else if (append) {
+      setIsDailyFundLoadingMore(true);
+    }
+
     try {
       const { data, error } = await supabase
         .from('store_total_fund')
         .select('created_at, total_fund')
         .eq('store_id', currentStore.id)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: false })
+        .range(offset, offset + DAILY_FUND_PAGE_SIZE - 1);
 
       if (error) throw error;
       
       const dailySummary: { [key: string]: number } = {};
-      data.forEach(record => {
+      (data || []).forEach(record => {
         const day = format(new Date(record.created_at), 'yyyy-MM-dd');
         dailySummary[day] = record.total_fund;
       });
 
       const formattedHistory = Object.entries(dailySummary)
-        .map(([day, total_fund]) => ({ day, total_fund }))
-        .sort((a, b) => new Date(b.day).getTime() - new Date(a.day).getTime());
+        .map(([day, total_fund]) => ({ day, total_fund }));
 
-      setDailyFundHistory(formattedHistory);
+      if (!append) {
+        setDailyFundHistory(formattedHistory);
+      } else {
+        setDailyFundHistory(prev => {
+          const mapByDay = new Map(prev.map(item => [item.day, item.total_fund]));
+          formattedHistory.forEach(item => {
+            if (!mapByDay.has(item.day)) {
+              mapByDay.set(item.day, item.total_fund);
+            }
+          });
+          return Array.from(mapByDay.entries()).map(([day, total_fund]) => ({ day, total_fund }));
+        });
+      }
+
+      const fetchedCount = data?.length || 0;
+      setDailyFundOffset(offset + fetchedCount);
+      setDailyFundHasMore(fetchedCount === DAILY_FUND_PAGE_SIZE);
     } catch (error) {
       console.error('Error fetching daily fund history:', error);
+    } finally {
+      if (!append && !silent) {
+        setIsDailyFundLoading(false);
+      } else if (append) {
+        setIsDailyFundLoadingMore(false);
+      }
     }
   };
 
@@ -177,6 +223,7 @@ export default function TotalFundPage() {
       if (!currentStore?.id) return;
 
       const grandTotal = allItems.reduce((sum, item) => sum + item.income - item.expense, 0);
+      console.log("-----------", grandTotal)
 
       const { data: existingRecord } = await supabase
         .from('store_total_fund')
@@ -184,23 +231,24 @@ export default function TotalFundPage() {
         .eq('store_id', currentStore.id)
         .limit(1)
         .single();
-
-      if (existingRecord) {
-        await supabase
-          .from('store_total_fund')
-          .update({
-            total_fund: grandTotal,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingRecord.id);
-      } else {
-        await supabase
-          .from('store_total_fund')
-          .insert({
-            store_id: currentStore.id,
-            total_fund: grandTotal
-          });
-      }
+      console.log('record', existingRecord)
+      // todo: need to check this point
+      // if (existingRecord) {
+      //   await supabase
+      //     .from('store_total_fund')
+      //     .update({
+      //       total_fund: grandTotal,
+      //       updated_at: new Date().toISOString()
+      //     })
+      //     .eq('id', existingRecord.id);
+      // } else {
+      //   await supabase
+      //     .from('store_total_fund')
+      //     .insert({
+      //       store_id: currentStore.id,
+      //       total_fund: grandTotal
+      //     });
+      // }
 
       await supabase
         .from('stores')
@@ -208,7 +256,7 @@ export default function TotalFundPage() {
         .eq('id', currentStore.id);
       
       await fetchFinancialSummary();
-      await fetchDailyFundHistory();
+      await fetchDailyFundHistory(0, false, { silent: true });
 
     } catch (error) {
       console.error('Error updating total fund:', error);
@@ -242,12 +290,14 @@ export default function TotalFundPage() {
 
   // Fetch all fund history
   const fetchAndProcessHistory = async () => {
-    setLoading(true);
+    setIsFundHistoryLoading(true);
     try {
       if (!currentStore?.id) return;
       
       const allHistoryItems: FundHistoryItem[] = [];
       const storeId = currentStore.id;
+      const queryStartIso = new Date(`${startDate}T00:00:00`).toISOString();
+      const queryEndIso = new Date(`${endDate}T23:59:59.999`).toISOString();
       
       const processItems = (data: GenericHistoryItem[], source: string) => {
         if (data && data.length > 0) {
@@ -281,19 +331,78 @@ export default function TotalFundPage() {
         }
       };
 
-      // Sử dụng fetchAllData cho credit history
-      const creditHistoryData = await fetchAllData(
-        supabase
-          .from('credit_history')
-          .select(`
-            *,
-            credits!inner (contract_code, store_id)
-          `)
-          .eq('credits.store_id', storeId)
-          .or('is_deleted.is.null,is_deleted.eq.false')
-          .order('id')
-      );
-      
+      const [
+        creditHistoryData,
+        pawnHistoryData,
+        installmentHistoryData,
+        storeFundData,
+        transactionsData,
+      ] = await Promise.all([
+        fetchAllData(
+          supabase
+            .from('credit_history')
+            .select(`
+              *,
+              credits!inner (contract_code, store_id)
+            `)
+            .eq('credits.store_id', storeId)
+            .or('is_deleted.is.null,is_deleted.eq.false')
+            // .gte('created_at', queryStartIso)
+            // .lte('created_at', queryEndIso)
+            .order('created_at', { ascending: false })
+        ),
+        fetchAllData(
+          supabase
+            .from('pawn_history')
+            .select(`
+              *,
+              pawns!inner (contract_code, store_id)
+            `)
+            .eq('pawns.store_id', storeId)
+            .or('is_deleted.is.null,is_deleted.eq.false')
+            // .gte('created_at', queryStartIso)
+            // .lte('created_at', queryEndIso)
+            .order('created_at', { ascending: false })
+        ),
+        fetchAllData(
+          supabase
+            .from('installment_history')
+            .select(`
+              *,
+              installments!inner (
+                contract_code,
+                employee_id,
+                employees!inner (store_id)
+              )
+            `)
+            .eq('installments.employees.store_id', storeId)
+            .or('is_deleted.is.null,is_deleted.eq.false')
+            // .gte('created_at', queryStartIso)
+            // .lte('created_at', queryEndIso)
+            .order('created_at', { ascending: false }),
+          INSTALLMENT_HISTORY_PAGE_SIZE
+        ),
+        fetchAllData(
+          supabase
+            .from('store_fund_history')
+            .select('*')
+            .eq('store_id', storeId)
+            // .gte('created_at', queryStartIso)
+            // .lte('created_at', queryEndIso)
+            .order('created_at', { ascending: false })
+        ),
+        fetchAllData(
+          supabase
+            .from('transactions')
+            .select('*')
+            .eq('store_id', storeId)
+            .or('is_deleted.is.null,is_deleted.eq.false')
+            // .gte('created_at', queryStartIso)
+            // .lte('created_at', queryEndIso)
+            .order('created_at', { ascending: false })
+        ),
+      ]);
+
       if (creditHistoryData) {
         const processedCreditData = creditHistoryData.map(item => ({
           ...item,
@@ -302,19 +411,6 @@ export default function TotalFundPage() {
         processItems(processedCreditData, 'Tín chấp');
       }
 
-      // Tương tự cho các truy vấn khác...
-      const pawnHistoryData = await fetchAllData(
-        supabase
-          .from('pawn_history')
-          .select(`
-            *,
-            pawns!inner (contract_code, store_id)
-          `)
-          .eq('pawns.store_id', storeId)
-          .or('is_deleted.is.null,is_deleted.eq.false')
-          .order('id')
-      );
-      
       if (pawnHistoryData) {
         const processedPawnData = pawnHistoryData.map(item => ({
           ...item,
@@ -323,23 +419,6 @@ export default function TotalFundPage() {
         processItems(processedPawnData, 'Cầm đồ');
       }
 
-      // For installment history
-      const installmentHistoryData = await fetchAllData(
-        supabase
-          .from('installment_history')
-          .select(`
-            *,
-            installments!inner (
-              contract_code,
-              employee_id,
-              employees!inner (store_id)
-            )
-          `)
-          .eq('installments.employees.store_id', storeId)
-          .or('is_deleted.is.null,is_deleted.eq.false')
-          .order('id')
-      );
-      
       if (installmentHistoryData) {
         // Prepare data for processing
         const processedInstallmentData = installmentHistoryData.map(item => ({
@@ -349,29 +428,13 @@ export default function TotalFundPage() {
         processItems(processedInstallmentData, 'Trả góp');
       }
       
-      // For fund history
-      const { data: storeFundData } = await supabase
-        .from('store_fund_history')
-        .select('*')
-        .eq('store_id', storeId)
-        .limit(10000);
-      
       if (storeFundData) processItems(storeFundData, 'Nguồn vốn');
-      
-      // For transactions
-      const { data: transactionsData } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('store_id', storeId)
-        .or('is_deleted.is.null,is_deleted.eq.false')
-        .limit(10000);
-      
+
       if (transactionsData) processItems(transactionsData, 'Thu chi');
       
       allHistoryItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       
       await updateTotalFund(allHistoryItems);
-
       const start = startOfDay(new Date(startDate));
       const end = startOfDay(new Date(endDate));
       end.setHours(23, 59, 59, 999);
@@ -382,11 +445,12 @@ export default function TotalFundPage() {
       });
 
       setFundHistory(filteredForDisplay);
+      // setFundHistory(allHistoryItems);
 
     } catch (error) {
       console.error('Error fetching fund history:', error);
     } finally {
-      setLoading(false);
+      setIsFundHistoryLoading(false);
     }
   };
 
@@ -431,9 +495,28 @@ export default function TotalFundPage() {
     if(currentStore?.id) {
       fetchFinancialSummary();
       fetchAndProcessHistory();
-      fetchDailyFundHistory();
     }
   }, [currentStore?.id, startDate, endDate]);
+
+  // fetch fund history
+  useEffect(() => {
+    if(currentStore?.id) {
+      setDailyFundOffset(0);
+      setDailyFundHasMore(true);
+      fetchDailyFundHistory(0, false);
+    }
+  }, [currentStore?.id]);
+
+  const handleDailyFundHistoryScroll = async (event: UIEvent<HTMLDivElement>) => {
+    if (isDailyFundLoadingMore || !dailyFundHasMore) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = event.currentTarget;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 80;
+
+    if (isNearBottom) {
+      await fetchDailyFundHistory(dailyFundOffset, true);
+    }
+  };
   
   const handleRefresh = () => {
     if(currentStore?.id) {
@@ -467,7 +550,7 @@ export default function TotalFundPage() {
                 <DatePickerWithControls value={endDate} onChange={handleEndDateChange} placeholder="Chọn ngày kết thúc" className="px-3 py-2" />
               </div>
               <Button onClick={handleRefresh}>
-                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Làm mới'}
+                {isFundHistoryLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Làm mới'}
               </Button>
             </div>
           </CardHeader>
@@ -486,7 +569,7 @@ export default function TotalFundPage() {
               </div>
             </div>
 
-            {loading ? (
+            {isFundHistoryLoading ? (
               <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>
             ) : (
               <Table>
@@ -577,29 +660,58 @@ export default function TotalFundPage() {
             <CardTitle>Lịch sử tổng quỹ</CardTitle>
           </CardHeader>
           <CardContent>
-             {loading ? (
+             {isDailyFundLoading ? (
               <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Ngày</TableHead>
-                    <TableHead className="text-right">Tổng quỹ cuối ngày</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {dailyFundHistory.length > 0 ? (
-                    dailyFundHistory.map((item) => (
-                      <TableRow key={item.day}>
-                        <TableCell>{new Date(item.day).toLocaleDateString('vi-VN')}</TableCell>
-                        <TableCell className="text-right font-medium">{item.total_fund.toLocaleString()} VND</TableCell>
+              <div
+                className="h-[320px] overflow-y-auto rounded-md border"
+                onScroll={handleDailyFundHistoryScroll}
+              >
+                <Table
+                  className="table-fixed"
+                  containerClassName="relative w-full overflow-visible"
+                >
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="sticky top-0 z-10 w-1/2 bg-background">
+                        Ngày
+                      </TableHead>
+                      <TableHead className="sticky top-0 z-10 w-1/2 bg-background text-right">
+                        Tổng quỹ cuối ngày
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {dailyFundHistory.length > 0 ? (
+                      dailyFundHistory.map((item, index) => (
+                        <TableRow key={`${item.day}-${index}`}>
+                          <TableCell className="w-1/2">{new Date(`${item.day}T00:00:00`).toLocaleDateString('vi-VN')}</TableCell>
+                          <TableCell className="w-1/2 text-right font-medium">{item.total_fund.toLocaleString()} VND</TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                       <TableRow><TableCell colSpan={2} className="text-center py-4">Không có dữ liệu</TableCell></TableRow>
+                    )}
+                    {isDailyFundLoadingMore && (
+                      <TableRow>
+                        <TableCell colSpan={2} className="text-center py-4">
+                          <div className="flex items-center justify-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Đang tải thêm dữ liệu...
+                          </div>
+                        </TableCell>
                       </TableRow>
-                    ))
-                  ) : (
-                     <TableRow><TableCell colSpan={2} className="text-center py-4">Không có dữ liệu</TableCell></TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                    )}
+                    {!isDailyFundLoading && !isDailyFundLoadingMore && dailyFundHistory.length > 0 && !dailyFundHasMore && (
+                      <TableRow>
+                        <TableCell colSpan={2} className="text-center py-4 text-muted-foreground">
+                          Đã hiển thị hết dữ liệu
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
