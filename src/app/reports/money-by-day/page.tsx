@@ -463,33 +463,29 @@ export default function MoneyFlowByDayPage() {
         });
         
         const dayTransactionData = allTransactions.filter(item => {
-          // if (item.is_deleted) return false;
-          const itemDate = new Date(item.created_at as string);
-          return itemDate >= dayStart && itemDate <= dayEnd;
-        });
-        
-        const dayFundData = allStoreFundHistory.filter(item => {
           if (item.is_deleted) return false;
           const itemDate = new Date(item.created_at as string);
           return itemDate >= dayStart && itemDate <= dayEnd;
         });
-        
 
+        const dayFundData = allStoreFundHistory.filter(item => {
+          const itemDate = new Date(item.created_at as string);
+          return itemDate >= dayStart && itemDate <= dayEnd;
+        });
 
-        // Calculate activities for the day
-        const pawnActivity = dayPawnData.reduce((sum, item) => 
-          sum + (item.credit_amount as number || 0) - (item.debit_amount as number || 0), 0);
-        
-        const creditActivity = dayCreditData.reduce((sum, item) => 
-          sum + (item.credit_amount as number || 0) - (item.debit_amount as number || 0), 0);
-        
-        const installmentActivity = dayInstallmentData.reduce((sum, item: any) => 
-          sum + (item.credit_amount || 0) - (item.debit_amount || 0), 0);
-        
-        const incomeExpenseActivity = dayTransactionData.reduce((sum, item: any) => {
-           const amount = (item.credit_amount || 0) - (item.debit_amount || 0);
-           return sum + amount;
-         }, 0);
+        // RPC trả SUM()::NUMERIC → PostgREST serialize thành string.
+        // Phải Number() trước khi cộng, nếu không `sum + "x"` sẽ concat.
+        const pawnActivity = dayPawnData.reduce((sum, item: any) =>
+          sum + (Number(item.credit_amount) || 0) - (Number(item.debit_amount) || 0), 0);
+
+        const creditActivity = dayCreditData.reduce((sum, item: any) =>
+          sum + (Number(item.credit_amount) || 0) - (Number(item.debit_amount) || 0), 0);
+
+        const installmentActivity = dayInstallmentData.reduce((sum, item: any) =>
+          sum + (Number(item.credit_amount) || 0) - (Number(item.debit_amount) || 0), 0);
+
+        const incomeExpenseActivity = dayTransactionData.reduce((sum, item: any) =>
+          sum + (Number(item.credit_amount) || 0) - (Number(item.debit_amount) || 0), 0);
         
         const capitalActivity = dayFundData.reduce((sum, item: any) => {
           const amount = item.transaction_type === 'withdrawal' ? 
