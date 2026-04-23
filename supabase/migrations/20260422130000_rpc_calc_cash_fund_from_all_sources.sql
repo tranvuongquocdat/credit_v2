@@ -22,21 +22,21 @@ SET search_path = public
 AS $$
   WITH
   credit AS (
-    SELECT COALESCE(SUM(ch.credit_amount - ch.debit_amount), 0)::numeric AS total
+    SELECT COALESCE(SUM(COALESCE(ch.credit_amount, 0) - COALESCE(ch.debit_amount, 0)), 0)::numeric AS total
     FROM credit_history ch
     JOIN credits c ON c.id = ch.credit_id
     WHERE c.store_id = p_store_id
       AND ch.is_deleted = false
   ),
   pawn AS (
-    SELECT COALESCE(SUM(ph.credit_amount - ph.debit_amount), 0)::numeric AS total
+    SELECT COALESCE(SUM(COALESCE(ph.credit_amount, 0) - COALESCE(ph.debit_amount, 0)), 0)::numeric AS total
     FROM pawn_history ph
     JOIN pawns p ON p.id = ph.pawn_id
     WHERE p.store_id = p_store_id
       AND ph.is_deleted = false
   ),
   installment AS (
-    SELECT COALESCE(SUM(ih.credit_amount - ih.debit_amount), 0)::numeric AS total
+    SELECT COALESCE(SUM(COALESCE(ih.credit_amount, 0) - COALESCE(ih.debit_amount, 0)), 0)::numeric AS total
     FROM installment_history ih
     JOIN installments i ON i.id = ih.installment_id
     JOIN employees    e ON e.id = i.employee_id
@@ -53,7 +53,7 @@ AS $$
     WHERE sfh.store_id = p_store_id
   ),
   trans AS (
-    SELECT COALESCE(SUM(t.credit_amount - t.debit_amount), 0)::numeric AS total
+    SELECT COALESCE(SUM(COALESCE(t.credit_amount, 0) - COALESCE(t.debit_amount, 0)), 0)::numeric AS total
     FROM transactions t
     WHERE t.store_id = p_store_id
       AND t.is_deleted = false
