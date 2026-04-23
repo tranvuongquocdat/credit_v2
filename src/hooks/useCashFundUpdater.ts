@@ -44,12 +44,11 @@ export function useAutoUpdateCashFund(options: UseCashFundUpdaterOptions = {}) {
   const { updateCashFund } = useCashFundUpdater(options);
 
   // Hàm wrapper để gọi sau khi thực hiện CRUD operations
-  const triggerUpdate = async (delay: number = 1000) => {
+  const triggerUpdate = async (delay: number = 500) => {
     // Delay một chút để đảm bảo transaction đã được commit
-
     setTimeout(() => {
       updateCashFund();
-    }, 500);
+    }, delay);
   };
 
   return {
