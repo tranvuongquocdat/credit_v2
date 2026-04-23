@@ -361,180 +361,25 @@ export async function updateStoreCashFundOnly(storeId: string, amount: number) {
 // Update cash fund based on all sources (similar to total-fund page logic)
 export async function updateCashFundFromAllSources(storeId: string) {
   try {
-    // Interface tương tự total-fund page
-    interface GenericHistoryItem {
-      id: string;
-      created_at: string | null;
-      description?: string | null;
-      note?: string | null;
-      transaction_type?: string | null;
-      debit_amount?: number | null;
-      credit_amount?: number | null;
-      fund_amount?: number | null;
-      amount?: number | null;
-      contract_code?: string | null;
+    const { data, error } = await supabase
+      .rpc('calc_cash_fund_from_all_sources', { p_store_id: storeId })
+      .single();
+
+    if (error) throw error;
+
+    const grandTotal = Number(data?.grand_total ?? 0);
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[cash_fund] breakdown', {
+        storeId,
+        credit: Number(data?.credit_total ?? 0),
+        pawn: Number(data?.pawn_total ?? 0),
+        installment: Number(data?.installment_total ?? 0),
+        fund: Number(data?.fund_total ?? 0),
+        transaction: Number(data?.transaction_total ?? 0),
+        grandTotal,
+      });
     }
-
-    interface FundHistoryItem {
-      id: string;
-      date: string;
-      description: string;
-      transactionType: string;
-      source: string;
-      income: number;
-      expense: number;
-      contractCode?: string;
-    }
-
-    const allHistoryItems: FundHistoryItem[] = [];
-
-    const processItems = (data: GenericHistoryItem[], source: string) => {
-      if (data && data.length > 0) {
-        data.forEach((item) => {
-          if (!item.created_at) return;
-
-          let amount = 0;
-          if(source === 'Nguồn vốn'){
-            amount = item.transaction_type === 'withdrawal' ? -Number(item.fund_amount || 0) : Number(item.fund_amount || 0);
-          } else if(source === 'Thu chi'){
-            amount = (item.credit_amount || 0) - (item.debit_amount || 0);
-            if(amount === 0){
-              amount = item.transaction_type === 'expense' ? -Number(item.amount || 0) : Number(item.amount || 0);
-            }
-          }
-          else {
-            amount = (item.credit_amount || 0) - (item.debit_amount || 0);
-          }
-
-          allHistoryItems.push({
-            id: `${source.toLowerCase()}-${item.id}`,
-            date: item.created_at,
-            description: item.description || item.note || `Giao dịch ${source}`,
-            transactionType: item.transaction_type || '',
-            source,
-            income: amount > 0 ? amount : 0,
-            expense: amount < 0 ? -amount : 0,
-            contractCode: item.contract_code || '-'
-          });
-        });
-      }
-    };
-
-    const fetchAllData = async (query: any, pageSize: number = 1000) => {
-      let allData: any[] = [];
-      let from = 0;
-      let hasMore = true;
-
-      while (hasMore) {
-        const { data, error } = await query.range(from, from + pageSize - 1);
-        
-        if (error) {
-          console.error('Error fetching data:', error);
-          break;
-        }
-
-        if (data && data.length > 0) {
-          allData = [...allData, ...data];
-          from += pageSize;
-          hasMore = data.length === pageSize;
-        } else {
-          hasMore = false;
-        }
-      }
-
-      return allData;
-    };
-
-    // Fetch credit history
-    const creditHistoryData = await fetchAllData(
-      supabase
-        .from('credit_history')
-        .select(`
-          *,
-          credits!inner (contract_code, store_id)
-        `)
-        .eq('credits.store_id', storeId)
-        .or('is_deleted.is.null,is_deleted.eq.false')
-        .order('id')
-    );
-    
-    if (creditHistoryData) {
-      const processedCreditData = creditHistoryData.map(item => ({
-        ...item,
-        contract_code: item.credits?.contract_code || null
-      }));
-      processItems(processedCreditData, 'Tín chấp');
-    }
-
-    // Fetch pawn history
-    const pawnHistoryData = await fetchAllData(
-      supabase
-        .from('pawn_history')
-        .select(`
-          *,
-          pawns!inner (contract_code, store_id)
-        `)
-        .eq('pawns.store_id', storeId)
-        .or('is_deleted.is.null,is_deleted.eq.false')
-        .order('id')
-    );
-    
-    if (pawnHistoryData) {
-      const processedPawnData = pawnHistoryData.map(item => ({
-        ...item,
-        contract_code: item.pawns?.contract_code || null
-      }));
-      processItems(processedPawnData, 'Cầm đồ');
-    }
-
-    // Fetch installment history
-    const installmentHistoryData = await fetchAllData(
-      supabase
-        .from('installment_history')
-        .select(`
-          *,
-          installments!inner (
-            contract_code,
-            employee_id,
-            employees!inner (store_id)
-          )
-        `)
-        .eq('installments.employees.store_id', storeId)
-        .or('is_deleted.is.null,is_deleted.eq.false')
-        .order('id')
-    );
-    
-    if (installmentHistoryData) {
-      const processedInstallmentData = installmentHistoryData.map(item => ({
-        ...item,
-        contract_code: item.installments?.contract_code || null
-      }));
-      processItems(processedInstallmentData, 'Trả góp');
-    }
-
-    // Fetch store fund history
-    const { data: storeFundData } = await supabase
-      .from('store_fund_history')
-      .select('*')
-      .eq('store_id', storeId);
-    
-    if (storeFundData) {
-      processItems(storeFundData, 'Nguồn vốn');
-    }
-
-    // Fetch income/expense from transactions table
-    const { data: transactionData } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('store_id', storeId)
-      .or('is_deleted.is.null,is_deleted.eq.false');
-    
-    if (transactionData) {
-      processItems(transactionData, 'Thu chi');
-    }
-
-    // Calculate grand total
-    const grandTotal = allHistoryItems.reduce((sum, item) => sum + item.income - item.expense, 0);
 
     // Update store_total_fund table
     const { data: existingRecord } = await supabase
@@ -570,6 +415,6 @@ export async function updateCashFundFromAllSources(storeId: string) {
     return { success: true, error: null, newCashFund: grandTotal };
   } catch (error) {
     console.error('Error updating cash fund from all sources:', error);
-    return { success: false, error };
+    return { success: false, error, newCashFund: undefined as number | undefined };
   }
 }

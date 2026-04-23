@@ -66,9 +66,9 @@ export function FinancialSummary({
         console.error('Error updating cash fund:', result.error);
       }
 
-      // Sau khi cập nhật xong, refresh dữ liệu
+      // Sau khi cập nhật xong, refresh dữ liệu (chờ xong mới tắt skeleton)
       if (externalOnRefresh) {
-        externalOnRefresh();
+        await Promise.resolve(externalOnRefresh());
       } else {
         await fetchData();
       }
@@ -76,7 +76,7 @@ export function FinancialSummary({
       console.error('Error updating cash fund from all sources:', error);
       // Vẫn refresh dữ liệu ngay cả khi có lỗi
       if (externalOnRefresh) {
-        externalOnRefresh();
+        await Promise.resolve(externalOnRefresh());
       } else {
         await fetchData();
       }
