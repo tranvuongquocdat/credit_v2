@@ -106,18 +106,30 @@ export default function InstallmentsPage() {
   
   // Sử dụng custom hook để lấy dữ liệu tài chính
   const { data: financialSummary, refresh: refreshFinancial } = useInstallmentsSummary();
+  const [summaryRefreshing, setSummaryRefreshing] = useState(false);
+
+  // Trigger loading cục bộ cho FinancialSummary khi refetch dữ liệu
+  const triggerFinancialRefresh = async () => {
+    setSummaryRefreshing(true);
+    try {
+      await Promise.resolve(refreshFinancial());
+    } finally {
+      setSummaryRefreshing(false);
+    }
+  };
   
   // Use auto update cash fund hook
   const { triggerUpdate } = useAutoUpdateCashFund({
     onUpdate: (newCashFund) => {
       console.log('Cash fund updated to:', newCashFund);
-      refreshFinancial(); // Refresh financial data after cash fund update
+      void newCashFund;
+      void triggerFinancialRefresh(); // Refresh financial data after cash fund update
     }
   });
   
   // Refresh financial data when store changes
   useEffect(() => {
-    refreshFinancial();
+    void triggerFinancialRefresh();
   }, [currentStore?.id]);
   
   // State for dialogs
@@ -316,7 +328,7 @@ export default function InstallmentsPage() {
       // Trigger cash fund update
       triggerUpdate();
       refetch();
-      refreshFinancial();
+      void triggerFinancialRefresh();
     } else {
       console.error('Error deleting installment:', error);
     }
@@ -338,7 +350,7 @@ export default function InstallmentsPage() {
       // Thêm độ trễ để đảm bảo database đã xử lý xong
       setTimeout(() => {
         refetch();
-        refreshFinancial();
+        void triggerFinancialRefresh();
         triggerUpdate();
       }, 500); // 500ms delay
     }
@@ -391,9 +403,10 @@ export default function InstallmentsPage() {
         ) : hasPermission('xem_thong_tin_tra_gop') ? (
         <FinancialSummary
           fundStatus={financialSummary || undefined}
-          onRefresh={refreshFinancial}
+          onRefresh={triggerFinancialRefresh}
           autoFetch={false}
           enableCashFundUpdate={true}
+          externalLoading={summaryRefreshing}
         />
         ) : null}
         {/* Search and filters */}
@@ -435,7 +448,7 @@ export default function InstallmentsPage() {
           totals={totals ?? undefined}
           onRefresh={() => {
             refetch();
-            refreshFinancial();
+            void triggerFinancialRefresh();
             triggerUpdate();
             fetchTotals(filters);
           }}
@@ -449,7 +462,7 @@ export default function InstallmentsPage() {
           onSuccess={() => {
             setIsInstallmentCreateModalOpen(false);
             refetch();
-            refreshFinancial();
+            void triggerFinancialRefresh();
             triggerUpdate(); // Trigger cash fund update
           }}
         />
@@ -480,7 +493,7 @@ export default function InstallmentsPage() {
               refetch();
               handleClosePaymentHistory(true);
             }}
-            onPaymentUpdate={refreshFinancial}
+            onPaymentUpdate={triggerFinancialRefresh}
           />
         )}
         
