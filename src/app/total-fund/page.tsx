@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/table';
 import { Loader2 } from 'lucide-react';
 import { StoreFinancialData } from '@/hooks/useCreditCalculation';
+import { mergePawnCloseAdjustment } from '@/lib/Pawns/mergeCloseAdjustment';
 
 // Define a simple interface for our display data
 interface FundHistoryItem {
@@ -320,7 +321,7 @@ export default function TotalFundPage() {
           ...item,
           contract_code: item.pawns?.contract_code || null
         }));
-        processItems(processedPawnData, 'Cầm đồ');
+        processItems(mergePawnCloseAdjustment(processedPawnData), 'Cầm đồ');
       }
 
       // For installment history

@@ -11,6 +11,7 @@ export enum PawnTransactionType {
   CONTRACT_REOPEN = 'contract_reopen', // mở lại hợp đồng
   CANCEL_ADDITIONAL_LOAN = 'cancel_additional_loan', // hủy vay thêm
   CANCEL_PRINCIPAL_REPAYMENT = 'cancel_principal_repayment', // hủy trả bớt gốc
+  CONTRACT_CLOSE_ADJUSTMENT = 'contract_close_adjustment', // tiền tùy chỉnh khi đóng HĐ
 }
 
 // Interface for pawn_amount_history table
