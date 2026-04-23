@@ -1172,6 +1172,17 @@ export type Database = {
       }
     }
     Functions: {
+      calc_cash_fund_from_all_sources: {
+        Args: { p_store_id: string }
+        Returns: {
+          credit_total: number
+          fund_total: number
+          grand_total: number
+          installment_total: number
+          pawn_total: number
+          transaction_total: number
+        }[]
+      }
       calc_expected_until: {
         Args: { p_credit_id: string; p_end_date: string }
         Returns: number
