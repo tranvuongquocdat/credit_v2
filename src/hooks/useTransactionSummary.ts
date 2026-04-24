@@ -1086,7 +1086,14 @@ const fetchTransactionDetails = async (
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
 
-    // Apply filters consistent with details table
+    // Filter theo date range (xem comment ở fetchTransactionData).
+    const rangeStart = new Date(`${startDate}T00:00:00+07:00`).getTime();
+    const rangeEnd = new Date(`${endDate}T23:59:59.999+07:00`).getTime();
+    aggregatedTransactions = aggregatedTransactions.filter((item) => {
+      const t = new Date(item.date).getTime();
+      return t >= rangeStart && t <= rangeEnd;
+    });
+
     if (selectedTransactionType !== 'all') {
       aggregatedTransactions = aggregatedTransactions.filter(
         (item) => item.source === selectedTransactionType

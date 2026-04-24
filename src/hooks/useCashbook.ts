@@ -381,34 +381,41 @@ const fetchTransactionData = async (
       };
     });
 
-    // Process data the same way as in total-fund page
-    // Calculate pawn activity
-    let pawnNet = 0;
-    if (pawnHistoryData) {
-      (pawnHistoryData as PawnHistoryRecord[]).forEach((item: PawnHistoryRecord) => {
+    // Event-sourced activity: mỗi row tạo +delta tại created_at, row deleted
+    // tạo thêm -delta tại updated_at. Filter theo range để chỉ lấy events
+    // xảy ra trong khoảng xem. Đảm bảo closing − opening = SUM(activities).
+    const rangeStart = startDateObj.getTime();
+    const rangeEnd = endDateObj.getTime();
+    const sumEventSourced = (items: Array<{
+      created_at: string;
+      updated_at?: string | null;
+      is_deleted?: boolean | null;
+      credit_amount: number | null;
+      debit_amount: number | null;
+    }>) => {
+      let total = 0;
+      items.forEach((item) => {
+        const delta = (item.credit_amount || 0) - (item.debit_amount || 0);
+        const createdInRange = (() => {
+          const t = new Date(item.created_at).getTime();
+          return t >= rangeStart && t <= rangeEnd;
+        })();
         if (!item.is_deleted) {
-          pawnNet += (item.credit_amount || 0) - (item.debit_amount || 0);
+          if (createdInRange) total += delta;
+        } else {
+          if (createdInRange) total += delta;
+          if (item.updated_at) {
+            const u = new Date(item.updated_at).getTime();
+            if (u >= rangeStart && u <= rangeEnd) total -= delta;
+          }
         }
       });
-    }
+      return total;
+    };
 
-    // Calculate credit activity
-    let creditNet = 0;
-    if (creditHistoryData) {
-      (creditHistoryData as CreditHistoryRecord[]).forEach((item: CreditHistoryRecord) => {
-        if (!item.is_deleted) {
-          creditNet += (item.credit_amount || 0) - (item.debit_amount || 0);
-        }
-      });
-    }
-
-    // Calculate installment activity
-    let installmentNet = 0;
-    (installmentHistoryData as InstallmentHistoryRecord[]).forEach((item: InstallmentHistoryRecord) => {
-      if (!item.is_deleted) {
-        installmentNet += (item.credit_amount || 0) - (item.debit_amount || 0);
-      }
-    });
+    const pawnNet = sumEventSourced((pawnHistoryData as PawnHistoryRecord[]) || []);
+    const creditNet = sumEventSourced((creditHistoryData as CreditHistoryRecord[]) || []);
+    const installmentNet = sumEventSourced((installmentHistoryData as InstallmentHistoryRecord[]) || []);
 
     // Calculate income/expense (Thu chi)
     let incomeExpenseNet = 0;
