@@ -562,6 +562,7 @@ export function PaymentTab({
 
       setShowPaymentForm(false);
       if (onDataChange) onDataChange();
+      window.dispatchEvent(new Event('warnings-refresh'));
     } catch (error) {
       console.error('Error submitting custom payment:', error);
       toast({

@@ -230,7 +230,7 @@ export function PawnsTable({
                     today.setHours(0,0,0,0);
                     nextDate.setHours(0,0,0,0);
                     const diff = (nextDate.getTime()-today.getTime())/(24*3600*1000);
-                    const cls = diff<0 ? 'text-red-600 font-medium text-xs lg:text-sm' : diff===0 ? 'text-amber-600 font-medium text-xs lg:text-sm' : diff===1 ? 'text-xs lg:text-sm' : 'text-xs lg:text-sm';
+                    const cls = diff<0 ? 'text-red-600 font-medium text-xs lg:text-sm' : (diff===0 || diff===1) ? 'text-amber-600 font-medium text-xs lg:text-sm' : 'text-xs lg:text-sm';
                     const label = diff===0 ? 'Hôm nay' : diff===1 ? 'Ngày mai' : formatDate(det.nextPayment);
                     return <span className={cls}>{label}</span>;
                   })()}
@@ -475,7 +475,7 @@ export function PawnsTable({
                     nextDate.setHours(0,0,0,0);
                     const diff = (nextDate.getTime()-today.getTime())/(24*3600*1000);
                     const label = diff===0 ? 'Hôm nay' : diff===1 ? 'Ngày mai' : formatDate(financialDetail.nextPayment);
-                    const cls = diff<0 ? 'font-medium text-red-500' : diff===0 ? 'font-medium text-amber-500' : 'font-medium text-gray-900';
+                    const cls = diff<0 ? 'font-medium text-red-500' : (diff===0 || diff===1) ? 'font-medium text-amber-500' : 'font-medium text-gray-900';
                     return <span className={cls}>{label}</span>;
                   })()}
                 </div>
