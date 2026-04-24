@@ -46,13 +46,12 @@ export function useCreditCalculations() {
       
       const storeId = currentStore?.id || '1';
       
-      // 1. Lấy thông tin store
+      // 1. investment tĩnh từ stores; cash fund event-sourced qua RPC.
       const endStoreQuery = startPerfTimer('useCreditCalculations.fetchAllData.queryStore');
-      const { data: storeData } = await supabase
-        .from('stores')
-        .select('investment, cash_fund')
-        .eq('id', storeId)
-        .single();
+      const [{ data: storeData }, { data: cashFundData }] = await Promise.all([
+        supabase.from('stores').select('investment').eq('id', storeId).single(),
+        (supabase as any).rpc('calc_cash_fund_as_of', { p_store_id: storeId }),
+      ]);
       endStoreQuery();
       
       // 2. Lấy danh sách credits đang hoạt động từ view (bao gồm ON_TIME, OVERDUE, LATE_INTEREST)
@@ -252,7 +251,7 @@ export function useCreditCalculations() {
       // 7. Set results
       setSummary({
         totalFund: storeData?.investment || 0,
-        availableFund: storeData?.cash_fund || 0,
+        availableFund: Number(cashFundData) || 0,
         totalLoan: Math.round(totalLoan),
         oldDebt: Math.round(totalOldDebt),
         profit: Math.round(totalProfit),

@@ -26,13 +26,12 @@ export function useCreditsSummary() {
     try {
       const storeId = currentStore.id;
 
-      // store cash fund / investment
+      // investment tĩnh từ stores; cash fund derive từ history qua RPC event-sourced.
       const endStoreQuery = startPerfTimer('useCreditsSummary.fetchSummary.queryStore');
-      const { data: storeData } = await supabase
-        .from('stores')
-        .select('investment, cash_fund')
-        .eq('id', storeId)
-        .single();
+      const [{ data: storeData }, { data: cashFundData }] = await Promise.all([
+        supabase.from('stores').select('investment').eq('id', storeId).single(),
+        (supabase as any).rpc('calc_cash_fund_as_of', { p_store_id: storeId }),
+      ]);
       endStoreQuery();
 
       // active + closed ids using credits_by_store view
@@ -110,7 +109,7 @@ export function useCreditsSummary() {
 
       setSummary({
         totalFund: storeData?.investment || 0,
-        availableFund: storeData?.cash_fund || 0,
+        availableFund: Number(cashFundData) || 0,
         totalLoan: Math.round(totalLoan),
         oldDebt: Math.round(totalOldDebt),
         profit: Math.round(totalProfit),

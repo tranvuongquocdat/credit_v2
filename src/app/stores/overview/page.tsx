@@ -77,11 +77,11 @@ export default function OverviewPage() {
       if (role === 'admin') {
         const { data, error } = await supabase
           .from('stores')
-          .select('id, name, cash_fund, investment')
+          .select('id, name, investment')
           .eq('created_by', userId as string)
           .order('name', { ascending: true });
-          
-        storesData = data as StoreData[] || [];
+
+        storesData = (data as any[] as StoreData[]) || [];
         storesError = error;
       } else {
         // If user is employee, show store belong to that employee ( get store id in employee table)
@@ -99,18 +99,28 @@ export default function OverviewPage() {
         }
         const { data, error } = await supabase
           .from('stores')
-          .select('id, name, cash_fund, investment')
+          .select('id, name, investment')
           .eq('id', storeId)
           .order('name', { ascending: true });
-          
-        storesData = data as StoreData[] || [];
+
+        storesData = (data as any[] as StoreData[]) || [];
         storesError = error;
       }
-      
+
       if (storesError) {
         throw new Error(storesError.message);
       }
-      
+
+      // cash_fund event-sourced qua RPC (parallel per store).
+      const funds = await Promise.all(
+        storesData.map((s) =>
+          (supabase as any)
+            .rpc('calc_cash_fund_as_of', { p_store_id: s.id })
+            .then((r: { data: unknown }) => Number(r.data) || 0)
+        )
+      );
+      storesData = storesData.map((s, i) => ({ ...s, cash_fund: funds[i] }));
+
       setStores(storesData);
 
       const summaries: Record<string, StoreSummary> = {};

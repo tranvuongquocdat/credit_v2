@@ -87,18 +87,17 @@ export default function StoreDetailPage() {
       setIsLoading(true);
       setError(null);
 
-      // Fetch store details
-      const { data: store, error: storeError } = await supabase
-        .from('stores')
-        .select('id, name, phone, address, cash_fund, investment')
-        .eq('id', currentStore.id)
-        .single();
+      // Fetch store details + cash_fund event-sourced qua RPC song song.
+      const [{ data: store, error: storeError }, { data: cashFundData }] = await Promise.all([
+        supabase.from('stores').select('id, name, phone, address, investment').eq('id', currentStore.id).single(),
+        (supabase as any).rpc('calc_cash_fund_as_of', { p_store_id: currentStore.id }),
+      ]);
 
       if (storeError) {
         throw storeError;
       }
 
-      setStoreData(store);
+      setStoreData({ ...(store as any), cash_fund: Number(cashFundData) || 0 });
 
       // Fetch financial summaries
       const [pawn, credit, installment] = await Promise.all([
