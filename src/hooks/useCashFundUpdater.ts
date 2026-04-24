@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { updateCashFundFromAllSources } from '@/lib/store';
+// DEPRECATED sau PR3: cash_fund không còn là state nữa, fund luôn event-sourced
+// từ history qua RPC calc_cash_fund_as_of. Hook này giữ lại dưới dạng no-op để
+// các callers (capital/page.tsx, installments/page.tsx) không phải sửa ngay.
+// Có thể gỡ hoàn toàn trong PR dọn code sau.
 import { useStore } from '@/contexts/StoreContext';
 
 interface UseCashFundUpdaterOptions {
@@ -8,51 +10,18 @@ interface UseCashFundUpdaterOptions {
   onError?: (error: string | Error) => void;
 }
 
-export function useCashFundUpdater(options: UseCashFundUpdaterOptions = {}) {
+export function useCashFundUpdater(_options: UseCashFundUpdaterOptions = {}) {
   const { currentStore } = useStore();
-  const { enabled = true, onUpdate, onError } = options;
-
   const updateCashFund = async () => {
-    if (!enabled || !currentStore?.id) return;
-
-    try {
-      const result = await updateCashFundFromAllSources(currentStore.id);
-      
-      if (result.success && result.newCashFund !== undefined) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log('Cash fund updated successfully:', result.newCashFund);
-        }
-        onUpdate?.(result.newCashFund);
-      } else {
-        console.error('Error updating cash fund:', result.error);
-        onError?.(result.error instanceof Error ? result.error : new Error(String(result.error)));
-      }
-    } catch (error) {
-      console.error('Error updating cash fund from all sources:', error);
-      onError?.(error instanceof Error ? error : new Error(String(error)));
-    }
+    // no-op
   };
-
-  return {
-    updateCashFund,
-    storeId: currentStore?.id
-  };
+  return { updateCashFund, storeId: currentStore?.id };
 }
 
-// Hook để tự động cập nhật cash_fund sau khi thực hiện các thao tác CRUD
 export function useAutoUpdateCashFund(options: UseCashFundUpdaterOptions = {}) {
   const { updateCashFund } = useCashFundUpdater(options);
-
-  // Hàm wrapper để gọi sau khi thực hiện CRUD operations
-  const triggerUpdate = async (delay: number = 500) => {
-    // Delay một chút để đảm bảo transaction đã được commit
-    setTimeout(() => {
-      updateCashFund();
-    }, delay);
+  const triggerUpdate = async (_delay: number = 500) => {
+    // no-op
   };
-
-  return {
-    triggerUpdate,
-    updateCashFund
-  };
-} 
+  return { triggerUpdate, updateCashFund };
+}

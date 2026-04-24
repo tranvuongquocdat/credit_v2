@@ -47,11 +47,6 @@ export function StoreFundHistoryForm({
   // Form validation
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Format currency for display only
-  const formatCurrency = (value: number): string => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
-  };
-
   // Handle form field changes
   const handleChange = (field: keyof StoreFundHistoryFormData, value: string | number | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -85,15 +80,10 @@ export function StoreFundHistoryForm({
       newErrors.transaction_type = 'Loại giao dịch là bắt buộc';
     }
     
-    // Validate withdrawal amount doesn't exceed current cash fund
-    if (
-      formData.transaction_type === TransactionType.WITHDRAWAL && 
-      currentStore?.cash_fund !== undefined && 
-      formData.fund_amount > currentStore.cash_fund
-    ) {
-      newErrors.fund_amount = `Số tiền rút không thể vượt quá quỹ tiền mặt hiện tại (${formatCurrency(currentStore.cash_fund)})`;
-    }
-    
+    // Validation chặn rút quá quỹ đã bị gỡ trong PR3: currentStore.cash_fund
+    // không còn có sẵn trong StoreContext, fund phải derive từ RPC. Nếu sau này
+    // muốn có validation này, fetch RPC calc_cash_fund_as_of ở đây.
+
     // If there are errors, show them and don't submit
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -157,11 +147,6 @@ export function StoreFundHistoryForm({
           error={errors.fund_amount}
           disabled={isSubmitting}
         />
-        {formData.transaction_type === TransactionType.WITHDRAWAL && currentStore?.cash_fund !== undefined && (
-          <p className="text-xs text-gray-500 mt-1">
-            Quỹ tiền mặt hiện tại: {formatCurrency(currentStore.cash_fund)}
-          </p>
-        )}
       </div>
       {/* Date */}
       <div>

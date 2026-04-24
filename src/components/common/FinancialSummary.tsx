@@ -1,40 +1,35 @@
 import { RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { getStoreFinancialData, StoreFinancialData, updateCashFundFromAllSources } from '@/lib/store';
+import { getStoreFinancialData, StoreFinancialData } from '@/lib/store';
 import { useStore } from '@/contexts/StoreContext';
 
 interface FinancialSummaryProps {
-  fundStatus?: StoreFinancialData; // Optional: cho phép truyền từ ngoài vào
-  onRefresh?: () => void;          // Optional: cho phép truyền từ ngoài vào
+  fundStatus?: StoreFinancialData;
+  onRefresh?: () => void;
   /** Khi parent đang fetch lại fundStatus (vd. React Query / hook), hiển thị skeleton */
   externalLoading?: boolean;
-  storeId?: string;                // ID của cửa hàng (nếu không truyền, lấy từ context)
-  autoFetch?: boolean;             // Có tự động lấy dữ liệu không (mặc định là true)
-  enableCashFundUpdate?: boolean;  // Có cho phép cập nhật cash_fund không (mặc định là false)
+  storeId?: string;
+  autoFetch?: boolean;
+  /** @deprecated PR3 đã bỏ cash_fund state, fund luôn event-sourced. Prop này không còn tác dụng. */
+  enableCashFundUpdate?: boolean;
 }
 
-export function FinancialSummary({ 
-  fundStatus: externalFundStatus, 
+export function FinancialSummary({
+  fundStatus: externalFundStatus,
   onRefresh: externalOnRefresh,
   externalLoading = false,
   storeId,
   autoFetch = true,
-  enableCashFundUpdate = false
 }: FinancialSummaryProps) {
-  // Get current store from context
   const { currentStore } = useStore();
-  
-  // Use storeId from props if provided, otherwise use it from context
   const currentStoreId = storeId || currentStore?.id || '1';
-  
-  // State nội bộ khi không có dữ liệu từ ngoài vào
+
   const [internalFundStatus, setInternalFundStatus] = useState<StoreFinancialData | null>(null);
   const [loading, setLoading] = useState(false);
-  
-  // Hàm fetch dữ liệu
+
   const fetchData = async () => {
-    if (externalFundStatus) return; // Không fetch nếu đã có dữ liệu từ props
-    
+    if (externalFundStatus) return;
+
     setLoading(true);
     try {
       const data = await getStoreFinancialData(currentStoreId);
@@ -46,63 +41,16 @@ export function FinancialSummary({
     }
   };
 
-  // Hàm cập nhật cash_fund từ tất cả nguồn
-  const updateCashFund = async () => {
-    if (!enableCashFundUpdate) {
-      // Nếu không cho phép cập nhật cash_fund, chỉ refresh dữ liệu
-      if (externalOnRefresh) {
-        externalOnRefresh();
-      } else {
-        fetchData();
-      }
-      return;
-    }
-
-    setLoading(true);
-    try {
-      // Cập nhật cash_fund từ tất cả nguồn
-      const result = await updateCashFundFromAllSources(currentStoreId);
-      
-      if (result.success) {
-        console.log('Cash fund updated successfully:', result.newCashFund);
-      } else {
-        console.error('Error updating cash fund:', result.error);
-      }
-
-      // Sau khi cập nhật xong, refresh dữ liệu (chờ xong mới tắt skeleton)
-      if (externalOnRefresh) {
-        await Promise.resolve(externalOnRefresh());
-      } else {
-        await fetchData();
-      }
-    } catch (error) {
-      console.error('Error updating cash fund from all sources:', error);
-      // Vẫn refresh dữ liệu ngay cả khi có lỗi
-      if (externalOnRefresh) {
-        await Promise.resolve(externalOnRefresh());
-      } else {
-        await fetchData();
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  // Gọi API khi component mount hoặc storeId thay đổi
   useEffect(() => {
     if (autoFetch && !externalFundStatus) {
       fetchData();
     }
   }, [currentStoreId, autoFetch, externalFundStatus]);
-  
-  // Sử dụng dữ liệu từ props nếu có, nếu không thì dùng state nội bộ
+
   const fundStatus = externalFundStatus || internalFundStatus;
-  
-  // Sử dụng callback từ props nếu có, nếu không thì dùng hàm fetch nội bộ
+
   const onRefresh = () => {
-    if (enableCashFundUpdate) {
-      updateCashFund();
-    } else if (externalOnRefresh) {
+    if (externalOnRefresh) {
       externalOnRefresh();
     } else {
       fetchData();
