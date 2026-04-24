@@ -57,6 +57,22 @@ interface InterestDetailItem {
   type: 'Cầm đồ' | 'Tín chấp' | 'Trả góp';
 }
 
+/** Số bản ghi mỗi lần gọi .range() khi tải lịch sử trả góp (có thể chỉnh nếu cần tối ưu batch). */
+const INSTALLMENT_HISTORY_FETCH_PAGE_SIZE = 500;
+
+const INSTALLMENT_HISTORY_SELECT = `
+  *,
+  installments!inner (
+    id,
+    contract_code,
+    down_payment,
+    installment_amount,
+    employee_id,
+    employees!inner (store_id),
+    customers (name)
+  )
+`;
+
 export default function InterestDetailPage() {
   const { currentStore } = useStore();
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -823,22 +839,12 @@ export default function InterestDetailPage() {
           fetchAllData(
             supabase
               .from('installment_history')
-              .select(`
-                *,
-                installments!inner (
-                  id,
-                  contract_code,
-                  down_payment,
-                  installment_amount,
-                  employee_id,
-                  employees!inner (store_id),
-                  customers (name)
-                )
-              `)
+              .select(INSTALLMENT_HISTORY_SELECT)
               .eq('installments.employees.store_id', storeId)
               .eq('transaction_type', 'payment')
               .or('is_deleted.is.null,is_deleted.eq.false')
-              .order('id')
+              .order('id'),
+            INSTALLMENT_HISTORY_FETCH_PAGE_SIZE
           ).then((installmentHistoryData) => {
             if (installmentHistoryData && installmentHistoryData.length > 0) {
               // Group by contract to calculate interest per contract (as-of selected end date)

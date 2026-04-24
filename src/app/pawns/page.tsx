@@ -80,7 +80,7 @@ export default function PawnsPage() {
   const canViewPawnsList = hasPermission('xem_danh_sach_hop_dong_cam_do');
   
   // Lấy dữ liệu tài chính tổng hợp (summary only)
-  const { summary: financialSummary, refresh: refreshSummary } = usePawnsSummary();
+  const { summary: financialSummary, refresh: refreshSummary, loading: summaryLoading } = usePawnsSummary();
   
   // Tính toán chi tiết tài chính bằng hook
   const { details: pawnDetails, loading: calcLoading, refresh: refreshPawnDetails } = usePawnCalculations();
@@ -410,7 +410,8 @@ export default function PawnsPage() {
     if (hasDataChanged) {
       // Thêm độ trễ để đảm bảo database đã xử lý xong
       setTimeout(() => {
-        handleRefresh();
+        // summary and pawn details are already refreshed in triggerUpdate
+        handleRefresh({ skipSummary: true, skipPawnDetails: true });
         // Trigger cash fund update when payment history changes
         triggerUpdate();
       }, 500); // 500ms delay
@@ -418,10 +419,14 @@ export default function PawnsPage() {
   };
   
   // Handle refresh after contract operations
-  const handleRefresh = () => {
+  const handleRefresh = ({ skipSummary = false, skipPawnDetails = false }: { skipSummary?: boolean; skipPawnDetails?: boolean } = {}) => {
     refetch();
-    refreshSummary();
-    refreshPawnDetails();
+    if (!skipSummary) {
+      refreshSummary();
+    }
+    if (!skipPawnDetails) {
+      refreshPawnDetails();
+    }
     fetchTotals(filters);
   };
   
@@ -445,11 +450,13 @@ export default function PawnsPage() {
           <FinancialSummary 
             fundStatus={financialSummary || undefined}
             onRefresh={() => {
-              handleRefresh();
+              // skip summary and pawn details because they are already refreshed in triggerUpdate
+              handleRefresh({ skipSummary: true, skipPawnDetails: true });
               triggerUpdate();
             }}
             autoFetch={false}
             enableCashFundUpdate={true}
+            externalLoading={summaryLoading}
         />
         ) : null}
         
