@@ -46,6 +46,7 @@ export default function TransactionDetailsTable({
       'additional_loan': 'Vay thêm',
       'principal_repayment': 'Trả gốc',
       'contract_close': 'Đóng HĐ',
+      'contract_close_adjustment': 'Điều chỉnh khi đóng HĐ',
       'contract_reopen': 'Mở lại HĐ',
       'debt_payment': 'Trả nợ',
       'extension': 'Gia hạn',

@@ -61,6 +61,25 @@ export async function reopenContract(pawnId: string): Promise<void> {
       throw new Error(`Lỗi khi cập nhật lịch sử payment: ${updatePaymentError.message}`);
     }
 
+    // 2.1. Revert row Tiền tùy chỉnh (contract_close_adjustment) nếu có.
+    // Set cả is_deleted=true và is_created_from_contract_closure=false để lần close/reopen
+    // sau không đụng lại row cũ (match pattern step 4 của payment).
+    const { error: updateAdjustmentError } = await supabase
+      .from('pawn_history')
+      .update({
+        is_deleted: true,
+        is_created_from_contract_closure: false,
+        updated_by: userId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('pawn_id', pawnId)
+      .eq('transaction_type', 'contract_close_adjustment' as any)
+      .eq('is_created_from_contract_closure', true);
+
+    if (updateAdjustmentError) {
+      throw new Error(`Lỗi khi cập nhật lịch sử tiền tùy chỉnh: ${updateAdjustmentError.message}`);
+    }
+
     // 3. Ghi lịch sử mở lại hợp đồng với debit_amount = contract_close + payment
     const { error: insertReopenError } = await supabase
       .from('pawn_history')

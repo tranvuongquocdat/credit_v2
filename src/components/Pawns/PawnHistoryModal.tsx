@@ -227,6 +227,8 @@ export function PawnHistoryModal({
         return 'Đóng lãi phí';
       case PawnTransactionType.CONTRACT_CLOSE:
         return 'Đóng hợp đồng';
+      case PawnTransactionType.CONTRACT_CLOSE_ADJUSTMENT:
+        return 'Điều chỉnh khi đóng HĐ';
       case PawnTransactionType.PAYMENT_CANCEL:
         return 'Hủy đóng lãi phí';
       case PawnTransactionType.CONTRACT_REOPEN:
