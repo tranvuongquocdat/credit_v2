@@ -6,6 +6,8 @@ import { useStore } from '@/contexts/StoreContext';
 interface FinancialSummaryProps {
   fundStatus?: StoreFinancialData; // Optional: cho phép truyền từ ngoài vào
   onRefresh?: () => void;          // Optional: cho phép truyền từ ngoài vào
+  /** Khi parent đang fetch lại fundStatus (vd. React Query / hook), hiển thị skeleton */
+  externalLoading?: boolean;
   storeId?: string;                // ID của cửa hàng (nếu không truyền, lấy từ context)
   autoFetch?: boolean;             // Có tự động lấy dữ liệu không (mặc định là true)
   enableCashFundUpdate?: boolean;  // Có cho phép cập nhật cash_fund không (mặc định là false)
@@ -14,6 +16,7 @@ interface FinancialSummaryProps {
 export function FinancialSummary({ 
   fundStatus: externalFundStatus, 
   onRefresh: externalOnRefresh,
+  externalLoading = false,
   storeId,
   autoFetch = true,
   enableCashFundUpdate = false
@@ -106,8 +109,8 @@ export function FinancialSummary({
     }
   };
   
-  // Hiển thị skeleton khi đang tải dữ liệu
-  if (loading || !fundStatus) {
+  // Hiển thị skeleton khi đang tải dữ liệu (nội bộ hoặc từ parent khi refetch fundStatus)
+  if (loading || externalLoading || !fundStatus) {
     return (
       <div className="mb-4 flex py-1 animate-pulse">
         {[1, 2, 3, 4, 5].map((item) => (
