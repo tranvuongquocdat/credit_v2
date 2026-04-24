@@ -1,6 +1,5 @@
 import { supabase } from './supabase';
 import { StoreFundHistory, StoreFundHistoryFormData } from '@/models/storeFundHistory';
-import { updateStoreCashFund } from './store';
 
 const TABLE_NAME = 'store_fund_history';
 
@@ -89,15 +88,8 @@ export async function createStoreFundHistory(data: StoreFundHistoryFormData) {
 
     if (error) throw error;
 
-    // Update store cash fund based on transaction type
-    // For deposits, add to cash fund; for withdrawals, subtract from cash fund
-    let amountChange = data.fund_amount;
-    if (data.transaction_type === 'withdrawal' || 
-        data.transaction_type === 'expense') {
-      amountChange = -data.fund_amount; // Negative for withdrawals and expenses
-    }
-
-    await updateStoreCashFund(data.store_id, amountChange);
+    // KHÔNG cần update stores.cash_fund — RPC calc_cash_fund_as_of tự derive
+    // từ store_fund_history (đã được insert ở trên).
 
     return {
       data: newRecord as StoreFundHistory,
@@ -143,27 +135,7 @@ export async function updateStoreFundHistory(id: string, newData: StoreFundHisto
 
     if (error) throw error;
 
-    // Calculate adjustment to the store cash fund
-    let adjustment = 0;
-
-    // Reverse the old transaction effect
-    if (oldType === 'withdrawal' || oldType === 'expense') {
-      adjustment += oldAmount; // Add back what was withdrawn
-    } else if (oldType === 'deposit' || oldType === 'interest') {
-      adjustment -= oldAmount; // Subtract what was deposited
-    }
-
-    // Apply the new transaction effect
-    if (newData.transaction_type === 'withdrawal' || newData.transaction_type === 'expense') {
-      adjustment -= newData.fund_amount; // Subtract the new withdrawal
-    } else if (newData.transaction_type === 'deposit' || newData.transaction_type === 'interest') {
-      adjustment += newData.fund_amount; // Add the new deposit
-    }
-
-    // Only update the cash fund if there's an actual adjustment
-    if (adjustment !== 0) {
-      await updateStoreCashFund(newData.store_id, adjustment);
-    }
+    // KHÔNG cần update stores.cash_fund — RPC derive từ store_fund_history.
 
     return {
       data: updatedRecord as StoreFundHistory,
@@ -201,17 +173,7 @@ export async function deleteStoreFundHistory(id: string) {
 
     if (error) throw error;
 
-    // Adjust the store cash fund based on the deleted transaction type
-    let adjustment = 0;
-    if (record.transaction_type === 'withdrawal' || record.transaction_type === 'expense') {
-      adjustment = record.fund_amount; // Add back what was withdrawn
-    } else if (record.transaction_type === 'deposit' || record.transaction_type === 'interest') {
-      adjustment = -record.fund_amount; // Subtract what was deposited
-    }
-
-    if (adjustment !== 0) {
-      await updateStoreCashFund(record.store_id, adjustment);
-    }
+    // KHÔNG cần update stores.cash_fund — RPC derive từ store_fund_history.
 
     return {
       success: true,
@@ -264,11 +226,7 @@ export async function recordInstallmentPaymentFundTransaction(
 
     if (error) throw error;
 
-    // Update store cash fund based on transaction type
-    // If adding funds (payment), add to cash fund; if removing (uncheck), subtract from cash fund
-    const amountChange = isAddingFunds ? Math.abs(amount) : -Math.abs(amount);
-
-    await updateStoreCashFund(storeId, amountChange);
+    // KHÔNG cần update stores.cash_fund — RPC derive từ store_fund_history.
 
     return {
       data: newRecord as StoreFundHistory,
@@ -318,8 +276,7 @@ export async function recordNewInstallmentFundTransaction(
 
     if (error) throw error;
 
-    // Update store cash fund - deduct the amount given to customer
-    await updateStoreCashFund(storeId, -Math.abs(amount));
+    // KHÔNG cần update stores.cash_fund — RPC derive từ store_fund_history.
 
     return {
       data: newRecord as StoreFundHistory,
