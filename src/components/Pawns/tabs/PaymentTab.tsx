@@ -437,7 +437,10 @@ export function PaymentTab({
       
       // Trigger data change to regenerate periods
       if (onDataChange) onDataChange();
-      
+
+      // Badge warnings trên TopNavbar re-fetch ngay (không chờ poll 60s).
+      window.dispatchEvent(new Event('warnings-refresh'));
+
       // Thêm delay để đảm bảo database đã xử lý xong
       setTimeout(() => {
         // Gọi callback để cập nhật financial summary ngay lập tức

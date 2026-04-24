@@ -297,7 +297,7 @@ export function CreditsTable({
                     today.setHours(0,0,0,0);
                     nextDate.setHours(0,0,0,0);
                     const diff = (nextDate.getTime()-today.getTime())/(24*3600*1000);
-                    const cls = diff<0 ? 'text-red-600 font-medium text-xs lg:text-sm' : diff===0 ? 'text-amber-600 font-medium text-xs lg:text-sm' : 'text-xs lg:text-sm';
+                    const cls = diff<0 ? 'text-red-600 font-medium text-xs lg:text-sm' : (diff===0 || diff===1) ? 'text-amber-600 font-medium text-xs lg:text-sm' : 'text-xs lg:text-sm';
                     return <span className={cls}>{formatDate(det.nextPayment)}</span>;
                   })()}
                 </TableCell>
@@ -533,8 +533,8 @@ export function CreditsTable({
                 <div className="mb-3 text-sm">
                   <span className="text-gray-600">Ngày phải đóng lãi phí: </span>
                   <span className={`font-medium ${
-                    financialDetail?.nextPayment === 'Hôm nay' ? 'text-amber-500' :
-                    financialDetail?.nextPayment === 'Quá hạn' ? 'text-red-500' : 
+                    (financialDetail?.nextPayment === 'Hôm nay' || financialDetail?.nextPayment === 'Ngày mai') ? 'text-amber-500' :
+                    financialDetail?.nextPayment === 'Quá hạn' ? 'text-red-500' :
                     'text-gray-900'
                   }`}>
                     {formatDate(financialDetail?.nextPayment) || 'N/A'}

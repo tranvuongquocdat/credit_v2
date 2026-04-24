@@ -282,6 +282,7 @@ export function PaymentTabFast({
         return n;
       });
       setTimeout(() => handleBackgroundSync(), 100);
+      window.dispatchEvent(new Event('warnings-refresh'));
     } catch (err: any) {
       // rollback
       setOptimisticUpdates((prev) => {

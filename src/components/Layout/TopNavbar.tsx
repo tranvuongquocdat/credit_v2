@@ -217,6 +217,19 @@ export function TopNavbar() {
       };
       
       fetchNotificationsForStore();
+
+      // Auto-reload: poll mỗi 5s để badge tự cập nhật kể cả khi không có user action.
+      const pollId = setInterval(fetchNotificationsForStore, 30_000);
+
+      // Instant refresh: các trang khác (đóng lãi, huỷ lãi, tạo hợp đồng…) dispatch
+      // event 'warnings-refresh' → TopNavbar re-fetch ngay, không phải chờ 60s.
+      const handler = () => fetchNotificationsForStore();
+      window.addEventListener('warnings-refresh', handler);
+
+      return () => {
+        clearInterval(pollId);
+        window.removeEventListener('warnings-refresh', handler);
+      };
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStore, storeVersion]); // Removed hasPermission from dependencies

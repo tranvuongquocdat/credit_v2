@@ -162,12 +162,17 @@ export async function countPawnWarnings(storeId: string): Promise<{ count: numbe
       return { count: 0, error: "Không có cửa hàng" };
     }
 
-    // Use pawns_by_store view to get status_code directly
+    // Đồng bộ với getPawnWarnings: tính cả ON_TIME sắp đến hạn (next_payment_date <= tomorrow).
+    // Nếu chỉ đếm OVERDUE + LATE_INTEREST, badge sẽ lệch với số hợp đồng hiện trong list.
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
     const { data: pawns, error: pawnsError } = await supabase
       .from('pawns_by_store')
       .select('id, status_code')
       .eq('store_id', storeId)
-      .in('status_code', ['OVERDUE', 'LATE_INTEREST']);
+      .or(`status_code.in.(OVERDUE,LATE_INTEREST),and(status_code.eq.ON_TIME,next_payment_date.lte.${tomorrowStr})`);
 
     if (pawnsError) {
       console.error('Error fetching pawns for count:', pawnsError);
