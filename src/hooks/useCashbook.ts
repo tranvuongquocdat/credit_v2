@@ -116,61 +116,30 @@ const fetchAllData = async (query: unknown, pageSize: number = 1000): Promise<un
   return allData;
 };
 
-// Fetch opening balance from store_total_fund for the start date
+// Event-sourced: fund tại 00:00 đầu ngày startDate (giờ VN).
 const fetchOpeningBalance = async (storeId: string, startDate: string): Promise<number> => {
   try {
-    // Get the date at 00:00 of the start date in UTC+7
-    const startDateObj = parse(startDate, 'yyyy-MM-dd', new Date());
-    const utcDate = format(startDateObj, 'yyyy-MM-dd');
-
-    // Fetch store creation date to check if this is the first day
-    const { data: storeData, error: storeError } = await supabase
-      .from('stores')
-      .select('created_at')
-      .eq('id', storeId)
-      .single();
-
-    if (storeError) throw storeError;
-
-    // Check if the date being viewed is the store creation date
-    if (storeData && storeData.created_at) {
-      const storeCreationDate = format(new Date(storeData.created_at), 'yyyy-MM-dd');
-      // If the date we're checking is the store creation date, opening balance should be 0
-      if (storeCreationDate === utcDate) {
-        return 0;
-      }
-    }
-
-    // Fetch the closest record before or on the start date
-    const { data, error } = await supabase
-      .from('store_total_fund')
-      .select('total_fund, created_at')
-      .eq('store_id', storeId)
-      .lte('created_at', `${utcDate}T17:00:00Z`) // 00:00 UTC+7 is 17:00 UTC of the previous day
-      .order('created_at', { ascending: false })
-      .limit(1);
-
+    const asOf = `${startDate}T00:00:00+07:00`;
+    const { data, error } = await (supabase as any).rpc('calc_cash_fund_as_of', {
+      p_store_id: storeId,
+      p_as_of: asOf,
+    });
     if (error) throw error;
-
-    return data && data.length > 0 ? data[0].total_fund : 0;
+    return Number(data) || 0;
   } catch (err) {
     console.error('Error fetching opening balance:', err);
     return 0;
   }
 };
 
-// Fetch current cash_fund from stores table (closing balance)
+// Event-sourced: fund hiện tại.
 const fetchClosingBalance = async (storeId: string): Promise<number> => {
   try {
-    const { data, error } = await supabase
-      .from('stores')
-      .select('cash_fund')
-      .eq('id', storeId)
-      .single();
-
+    const { data, error } = await (supabase as any).rpc('calc_cash_fund_as_of', {
+      p_store_id: storeId,
+    });
     if (error) throw error;
-
-    return data?.cash_fund || 0;
+    return Number(data) || 0;
   } catch (err) {
     console.error('Error fetching closing balance:', err);
     return 0;

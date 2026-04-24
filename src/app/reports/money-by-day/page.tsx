@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Layout } from '@/components/Layout';
 import { supabase } from '@/lib/supabase';
 import { useStore } from '@/contexts/StoreContext';
-import { format, startOfDay, endOfDay, parse, subDays } from 'date-fns';
+import { format, endOfDay, parse } from 'date-fns';
 import { RefreshCw } from 'lucide-react';
 import { useInstallmentsSummary } from '@/hooks/useInstallmentsSummary';
 import { DatePickerWithControls } from '@/components/ui/date-picker-with-controls';
@@ -22,7 +22,6 @@ import {
   TableFooter,
 } from "@/components/ui/table";
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useCreditsSummary } from '@/hooks/useCreditsSummary';
 import { usePawnsSummary } from '@/hooks/usePawnsSummary';
@@ -63,38 +62,16 @@ interface DailyCashFlow {
   totalAssets: number;
 }
 
-// Interface for database record with flexible keys
-interface DatabaseRecord {
-  id: string;
-  created_at: string;
-  [key: string]: unknown;
+// RPC row returned by rpc_money_by_day_series
+interface MoneyByDayRow {
+  as_of_date: string;
+  pawn_activity: string | number;
+  credit_activity: string | number;
+  installment_activity: string | number;
+  transaction_activity: string | number;
+  fund_activity: string | number;
+  fund_total: string | number;
 }
-
-// Function to fetch all data from a query with pagination
-const fetchAllData = async (query: any, pageSize: number = 1000) => {
-  let allData: DatabaseRecord[] = [];
-  let from = 0;
-  let hasMore = true;
-
-  while (hasMore) {
-    const { data, error } = await query.range(from, from + pageSize - 1);
-    
-    if (error) {
-      console.error('Error fetching data:', error);
-      break;
-    }
-
-    if (data && data.length > 0) {
-      allData = [...allData, ...data];
-      from += pageSize;
-      hasMore = data.length === pageSize;
-    } else {
-      hasMore = false;
-    }
-  }
-
-  return allData;
-};
 
 export default function MoneyFlowByDayPage() {
   const { currentStore } = useStore();
@@ -133,50 +110,6 @@ export default function MoneyFlowByDayPage() {
       router.push('/');
     }
   }, [permissionsLoading, canAccessReport, router]);
-  
-  // Fetch opening balance from store_total_fund for a specific date
-  const fetchOpeningBalanceForDate = async (date: Date): Promise<number> => {
-    if (!currentStore?.id) return 0;
-    
-    try {
-      // Get the date at 00:00 of the start date in UTC+7
-      const utcDate = format(date, 'yyyy-MM-dd');
-      
-      // Fetch store creation date to check if this is the first day
-      const { data: storeData, error: storeError } = await supabase
-        .from('stores')
-        .select('created_at')
-        .eq('id', currentStore.id)
-        .single();
-      
-      if (storeError) throw storeError;
-      
-      // Check if the date being viewed is the store creation date
-      if (storeData && storeData.created_at) {
-        const storeCreationDate = format(new Date(storeData.created_at), 'yyyy-MM-dd');
-        // If the date we're checking is the store creation date, opening balance should be 0
-        if (storeCreationDate === utcDate) {
-          return 0;
-        }
-      }
-      
-      // Fetch the closest record before or on the start date
-      const { data, error } = await supabase
-        .from('store_total_fund')
-        .select('total_fund, created_at')
-        .eq('store_id', currentStore.id)
-        .lte('created_at', `${utcDate}T17:00:00Z`) // 00:00 UTC+7 is 17:00 UTC of the previous day
-        .order('created_at', { ascending: false })
-        .limit(1);
-      
-      if (error) throw error;
-      
-      return data && data.length > 0 ? data[0].total_fund : 0;
-    } catch (err) {
-      console.error('Error fetching opening balance:', err);
-      return 0;
-    }
-  };
   
   // Fetch current loans for a specific date
   const fetchLoansForDate = async (date: Date) => {
@@ -292,236 +225,63 @@ export default function MoneyFlowByDayPage() {
     }
   };
   
-  // Optimized: Fetch daily cash flow data with parallel processing
+  // Event-sourced: 1 RPC call trả hết activity + fund_total cho mỗi ngày.
+  // Ngày start-1 trong response = opening balance của ngày start.
   const fetchDailyCashFlow = async () => {
     if (!currentStore?.id) return;
 
-    // Increment request ID to track this request
     const currentRequestId = ++requestIdRef.current;
-
     setIsLoading(true);
     setError(null);
 
     try {
       const storeId = currentStore.id;
-      const startDateObj = startOfDay(parse(startDate, 'yyyy-MM-dd', new Date()));
-      const endDateObj = endOfDay(parse(endDate, 'yyyy-MM-dd', new Date()));
 
-      // Get all dates in the range
-      const dates: Date[] = [];
-      const currentDate = new Date(startDateObj);
-      
-      while (currentDate <= endDateObj) {
-        dates.push(new Date(currentDate));
-        currentDate.setDate(currentDate.getDate() + 1);
+      const { data: seriesData, error: rpcError } = await (supabase as any).rpc(
+        'rpc_money_by_day_series',
+        {
+          p_store_id: storeId,
+          p_start_date: startDate,
+          p_end_date: endDate,
+        }
+      );
+
+      if (rpcError) throw rpcError;
+
+      const rows: MoneyByDayRow[] = Array.isArray(seriesData) ? seriesData : [];
+      if (rows.length < 2) {
+        if (currentRequestId === requestIdRef.current) setCashFlowData([]);
+        return;
       }
 
-      // OPTIMIZATION 1: Fetch ALL data for the entire date range in one go (parallel queries)
-      const startRangeISO = startDateObj.toISOString();
-      const endRangeISO = endDateObj.toISOString();
+      // rows[0] là ngày start-1 (chỉ dùng làm opening cho ngày đầu tiên).
+      // Đi từ index 1 trở đi là các ngày trong range.
+      const dates: Date[] = rows.slice(1).map((r) =>
+        parse(r.as_of_date, 'yyyy-MM-dd', new Date())
+      );
+      const loansByDate = await Promise.all(dates.map((d) => fetchLoansForDate(d)));
 
-      console.log('Fetching all transaction data in parallel...');
-      
-      const [
-        allPawnHistory,
-        allCreditHistory,
-        allInstallmentHistory,
-        allTransactions,
-        allStoreFundHistory
-      ] = await Promise.all([
-        // Pawn history for entire range
-        (supabase as any)
-          .rpc('rpc_pawn_history_grouped', {
-            p_start_date: startRangeISO,
-            p_end_date: endRangeISO,
-            p_store_id: storeId,
-          })
-          .then(({ data, error }: { data: unknown; error: unknown }) => {
-            if (error) console.error(error);
-            const rows = Array.isArray(data) ? data : [];
-            return rows.map((row: Record<string, unknown>) => ({
-              ...row,
-              created_at: row.transaction_date
-                ? startOfDay(
-                    parse(String(row.transaction_date), 'yyyy-MM-dd', new Date())
-                  ).toISOString()
-                : '',
-            }));
-          }),
-
-        // Credit history for entire range
-        (supabase as any)
-          .rpc('rpc_credit_history_grouped', {
-            p_start_date: startRangeISO,
-            p_end_date: endRangeISO,
-            p_store_id: storeId,
-          })
-          .then(({ data, error }: { data: unknown; error: unknown }) => {
-            if (error) console.error(error);
-            const rows = Array.isArray(data) ? data : [];
-            return rows.map((row: Record<string, unknown>) => ({
-              ...row,
-              created_at: row.transaction_date
-                ? startOfDay(
-                    parse(String(row.transaction_date), 'yyyy-MM-dd', new Date())
-                  ).toISOString()
-                : '',
-            }));
-          }),
-
-        // Installment history for entire range
-        (supabase as any)
-          .rpc('rpc_installment_history_grouped', {
-            p_start_date: startRangeISO,
-            p_end_date: endRangeISO,
-            p_store_id: storeId,
-          })
-          .then(({ data, error }: { data: unknown; error: unknown }) => {
-            if (error) console.error(error);
-            const rows = Array.isArray(data) ? data : [];
-            return rows.map((row: Record<string, unknown>) => ({
-              ...row,
-              created_at: row.transaction_date
-                ? startOfDay(
-                    parse(String(row.transaction_date), 'yyyy-MM-dd', new Date())
-                  ).toISOString()
-                : '',
-            }));
-          }),
-
-        // Transactions for entire range
-        (supabase as any)
-          .rpc('rpc_transactions_grouped', {
-            p_start_date: startRangeISO,
-            p_end_date: endRangeISO,
-            p_store_id: storeId,
-          })
-          .then(({ data, error }: { data: unknown; error: unknown }) => {
-            if (error) console.error(error);
-            const rows = Array.isArray(data) ? data : [];
-            return rows.map((row: Record<string, unknown>) => ({
-              ...row,
-              created_at: row.transaction_date
-                ? startOfDay(
-                    parse(String(row.transaction_date), 'yyyy-MM-dd', new Date())
-                  ).toISOString()
-                : '',
-            }));
-          }),
-
-        // Store fund history for entire range
-        (supabase as any)
-          .rpc('rpc_store_fund_history_grouped', {
-            p_start_date: startRangeISO,
-            p_end_date: endRangeISO,
-            p_store_id: storeId,
-          })
-          .then(({ data, error }: { data: unknown; error: unknown }) => {
-            if (error) console.error(error);
-            const rows = Array.isArray(data) ? data : [];
-            return rows.map((row: Record<string, unknown>) => ({
-              ...row,
-              created_at: row.transaction_date
-                ? startOfDay(
-                    parse(String(row.transaction_date), 'yyyy-MM-dd', new Date())
-                  ).toISOString()
-                : '',
-            }));
-          })
-      ]) as [
-        DatabaseRecord[],
-        DatabaseRecord[],
-        DatabaseRecord[],
-        DatabaseRecord[],
-        DatabaseRecord[],
-      ];
-
-      console.log('All data fetched, processing days in parallel...');
-
-      // OPTIMIZATION 2: Process all days in parallel instead of sequential
-      const dailyDataPromises = dates.map(async (date) => {
-        const dayStart = startOfDay(date);
-        const dayEnd = endOfDay(date);
-        
-        // OPTIMIZATION 3: Filter data in memory instead of additional DB queries
-        const dayPawnData = allPawnHistory.filter(item => {
-          if (item.is_deleted) return false;
-          const itemDate = new Date(item.created_at as string);
-          return itemDate >= dayStart && itemDate <= dayEnd;
-        });
-        
-        const dayCreditData = allCreditHistory.filter(item => {
-          if (item.is_deleted) return false;
-          const itemDate = new Date(item.created_at as string);
-          return itemDate >= dayStart && itemDate <= dayEnd;
-        });
-        
-        const dayInstallmentData = allInstallmentHistory.filter(item => {
-          if (item.is_deleted) return false;
-          const itemDate = new Date(item.created_at as string);
-          return itemDate >= dayStart && itemDate <= dayEnd;
-        });
-        
-        const dayTransactionData = allTransactions.filter(item => {
-          if (item.is_deleted) return false;
-          const itemDate = new Date(item.created_at as string);
-          return itemDate >= dayStart && itemDate <= dayEnd;
-        });
-
-        const dayFundData = allStoreFundHistory.filter(item => {
-          const itemDate = new Date(item.created_at as string);
-          return itemDate >= dayStart && itemDate <= dayEnd;
-        });
-
-        // RPC trả SUM()::NUMERIC → PostgREST serialize thành string.
-        // Phải Number() trước khi cộng, nếu không `sum + "x"` sẽ concat.
-        const pawnActivity = dayPawnData.reduce((sum, item: any) =>
-          sum + (Number(item.credit_amount) || 0) - (Number(item.debit_amount) || 0), 0);
-
-        const creditActivity = dayCreditData.reduce((sum, item: any) =>
-          sum + (Number(item.credit_amount) || 0) - (Number(item.debit_amount) || 0), 0);
-
-        const installmentActivity = dayInstallmentData.reduce((sum, item: any) =>
-          sum + (Number(item.credit_amount) || 0) - (Number(item.debit_amount) || 0), 0);
-
-        const incomeExpenseActivity = dayTransactionData.reduce((sum, item: any) =>
-          sum + (Number(item.credit_amount) || 0) - (Number(item.debit_amount) || 0), 0);
-        
-        const capitalActivity = dayFundData.reduce((sum, item: any) => {
-          const amount = item.transaction_type === 'withdrawal' ? 
-            -Number(item.fund_amount || 0) : 
-            Number(item.fund_amount || 0);
-          return sum + amount;
-        }, 0);
-
-        // Get opening balance and loans in parallel
-        const [openingBalance, loans] = await Promise.all([
-          fetchOpeningBalanceForDate(date),
-          fetchLoansForDate(date)
-        ]);
-        
-        // Calculate closing balance
-        const closingBalance = openingBalance + pawnActivity + creditActivity + 
-          installmentActivity + incomeExpenseActivity + capitalActivity;
-        
-        // Borrowed capital is assumed to be 0 as per requirement
+      const dailyData: DailyCashFlow[] = rows.slice(1).map((r, i) => {
+        const openingBalance = Number(rows[i].fund_total) || 0;
+        const closingBalance = Number(r.fund_total) || 0;
+        const loans = loansByDate[i];
         const borrowedCapital = 0;
-        
-        // Calculate total assets
-        const totalAssets = closingBalance + 
-          (loans.pawn + loans.pawnDebt) + 
-          (loans.credit + loans.creditDebt) + 
-          (loans.installment + loans.installmentDebt) - 
+
+        const totalAssets =
+          closingBalance +
+          (loans.pawn + loans.pawnDebt) +
+          (loans.credit + loans.creditDebt) +
+          (loans.installment + loans.installmentDebt) -
           borrowedCapital;
-        
+
         return {
-          date,
+          date: dates[i],
           openingBalance,
-          pawnActivity,
-          creditActivity,
-          installmentActivity,
-          incomeExpense: incomeExpenseActivity,
-          capital: capitalActivity,
+          pawnActivity: Number(r.pawn_activity) || 0,
+          creditActivity: Number(r.credit_activity) || 0,
+          installmentActivity: Number(r.installment_activity) || 0,
+          incomeExpense: Number(r.transaction_activity) || 0,
+          capital: Number(r.fund_activity) || 0,
           closingBalance,
           pawnLoans: loans.pawn,
           pawnDebts: loans.pawnDebt,
@@ -530,32 +290,19 @@ export default function MoneyFlowByDayPage() {
           installmentLoans: loans.installment,
           installmentDebts: loans.installmentDebt,
           borrowedCapital,
-          totalAssets
+          totalAssets,
         };
       });
 
-      // Wait for all days to be processed
-      const dailyData = await Promise.all(dailyDataPromises);
-      
-      // Sort by date descending
       dailyData.sort((a, b) => b.date.getTime() - a.date.getTime());
 
-      // Check if this request is still the latest one before setting state
-      if (currentRequestId !== requestIdRef.current) {
-        return; // A newer request was made, discard this result
-      }
-
+      if (currentRequestId !== requestIdRef.current) return;
       setCashFlowData(dailyData);
-      console.log('All processing completed!');
     } catch (err) {
-      // Only set error if this is still the latest request
-      if (currentRequestId !== requestIdRef.current) {
-        return;
-      }
+      if (currentRequestId !== requestIdRef.current) return;
       console.error('Error fetching cash flow data:', err);
       setError('Đã xảy ra lỗi khi tải dữ liệu');
     } finally {
-      // Only set loading false if this is still the latest request
       if (currentRequestId === requestIdRef.current) {
         setIsLoading(false);
       }
