@@ -172,49 +172,6 @@ export default function TotalFundPage() {
     }
   };
 
-  const updateTotalFund = async (allItems: FundHistoryItem[]) => {
-    try {
-      if (!currentStore?.id) return;
-
-      const grandTotal = allItems.reduce((sum, item) => sum + item.income - item.expense, 0);
-
-      const { data: existingRecord } = await supabase
-        .from('store_total_fund')
-        .select('id')
-        .eq('store_id', currentStore.id)
-        .limit(1)
-        .single();
-
-      if (existingRecord) {
-        await supabase
-          .from('store_total_fund')
-          .update({
-            total_fund: grandTotal,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingRecord.id);
-      } else {
-        await supabase
-          .from('store_total_fund')
-          .insert({
-            store_id: currentStore.id,
-            total_fund: grandTotal
-          });
-      }
-
-      await supabase
-        .from('stores')
-        .update({ cash_fund: grandTotal })
-        .eq('id', currentStore.id);
-      
-      await fetchFinancialSummary();
-      await fetchDailyFundHistory();
-
-    } catch (error) {
-      console.error('Error updating total fund:', error);
-    }
-  };
-
   const fetchAllData = async (query: any, pageSize: number = 1000) => {
     let allData: any[] = [];
     let from = 0;
@@ -369,8 +326,6 @@ export default function TotalFundPage() {
       if (transactionsData) processItems(transactionsData, 'Thu chi');
       
       allHistoryItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      
-      await updateTotalFund(allHistoryItems);
 
       const start = startOfDay(new Date(startDate));
       const end = startOfDay(new Date(endDate));
