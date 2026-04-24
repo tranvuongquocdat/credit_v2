@@ -8,7 +8,7 @@
 1. **PR1** — Money-by-day báo cáo event-sourced (deployed)
 2. **PR2** — Tất cả readers UI chuyển sang RPC event-sourced (deployed)
 3. **Calibration** — Đã insert 15 record vào `store_fund_history` để RPC khớp `stores.cash_fund` hiện tại. UI không thấy số nhảy
-4. **Cron `daily_fund_snapshot`** — Đã gỡ thủ công (ngừng snapshot `store_total_fund` hàng ngày)
+4. **Cron `daily_total_fund`** — Đã toggle **inactive** qua Supabase Dashboard → Integrations → Cron → Jobs (ngừng snapshot `store_total_fund` hàng ngày). Job vẫn tồn tại trong DB, chưa xóa — khi làm PR3 migration sẽ xóa hẳn
 
 ### ⏸ Đã code nhưng CHƯA deploy (PR3)
 
