@@ -116,61 +116,30 @@ const fetchAllData = async (query: unknown, pageSize: number = 1000): Promise<un
   return allData;
 };
 
-// Fetch opening balance from store_total_fund for the start date
+// Event-sourced: fund tại 00:00 đầu ngày startDate (giờ VN).
 const fetchOpeningBalance = async (storeId: string, startDate: string): Promise<number> => {
   try {
-    // Get the date at 00:00 of the start date in UTC+7
-    const startDateObj = parse(startDate, 'yyyy-MM-dd', new Date());
-    const utcDate = format(startDateObj, 'yyyy-MM-dd');
-
-    // Fetch store creation date to check if this is the first day
-    const { data: storeData, error: storeError } = await supabase
-      .from('stores')
-      .select('created_at')
-      .eq('id', storeId)
-      .single();
-
-    if (storeError) throw storeError;
-
-    // Check if the date being viewed is the store creation date
-    if (storeData && storeData.created_at) {
-      const storeCreationDate = format(new Date(storeData.created_at), 'yyyy-MM-dd');
-      // If the date we're checking is the store creation date, opening balance should be 0
-      if (storeCreationDate === utcDate) {
-        return 0;
-      }
-    }
-
-    // Fetch the closest record before or on the start date
-    const { data, error } = await supabase
-      .from('store_total_fund')
-      .select('total_fund, created_at')
-      .eq('store_id', storeId)
-      .lte('created_at', `${utcDate}T17:00:00Z`) // 00:00 UTC+7 is 17:00 UTC of the previous day
-      .order('created_at', { ascending: false })
-      .limit(1);
-
+    const asOf = `${startDate}T00:00:00+07:00`;
+    const { data, error } = await (supabase as any).rpc('calc_cash_fund_as_of', {
+      p_store_id: storeId,
+      p_as_of: asOf,
+    });
     if (error) throw error;
-
-    return data && data.length > 0 ? data[0].total_fund : 0;
+    return Number(data) || 0;
   } catch (err) {
     console.error('Error fetching opening balance:', err);
     return 0;
   }
 };
 
-// Fetch current cash_fund from stores table (closing balance)
+// Event-sourced: fund hiện tại.
 const fetchClosingBalance = async (storeId: string): Promise<number> => {
   try {
-    const { data, error } = await supabase
-      .from('stores')
-      .select('cash_fund')
-      .eq('id', storeId)
-      .single();
-
+    const { data, error } = await (supabase as any).rpc('calc_cash_fund_as_of', {
+      p_store_id: storeId,
+    });
     if (error) throw error;
-
-    return data?.cash_fund || 0;
+    return Number(data) || 0;
   } catch (err) {
     console.error('Error fetching closing balance:', err);
     return 0;
@@ -412,34 +381,41 @@ const fetchTransactionData = async (
       };
     });
 
-    // Process data the same way as in total-fund page
-    // Calculate pawn activity
-    let pawnNet = 0;
-    if (pawnHistoryData) {
-      (pawnHistoryData as PawnHistoryRecord[]).forEach((item: PawnHistoryRecord) => {
+    // Event-sourced activity: mỗi row tạo +delta tại created_at, row deleted
+    // tạo thêm -delta tại updated_at. Filter theo range để chỉ lấy events
+    // xảy ra trong khoảng xem. Đảm bảo closing − opening = SUM(activities).
+    const rangeStart = startDateObj.getTime();
+    const rangeEnd = endDateObj.getTime();
+    const sumEventSourced = (items: Array<{
+      created_at: string;
+      updated_at?: string | null;
+      is_deleted?: boolean | null;
+      credit_amount: number | null;
+      debit_amount: number | null;
+    }>) => {
+      let total = 0;
+      items.forEach((item) => {
+        const delta = (item.credit_amount || 0) - (item.debit_amount || 0);
+        const createdInRange = (() => {
+          const t = new Date(item.created_at).getTime();
+          return t >= rangeStart && t <= rangeEnd;
+        })();
         if (!item.is_deleted) {
-          pawnNet += (item.credit_amount || 0) - (item.debit_amount || 0);
+          if (createdInRange) total += delta;
+        } else {
+          if (createdInRange) total += delta;
+          if (item.updated_at) {
+            const u = new Date(item.updated_at).getTime();
+            if (u >= rangeStart && u <= rangeEnd) total -= delta;
+          }
         }
       });
-    }
+      return total;
+    };
 
-    // Calculate credit activity
-    let creditNet = 0;
-    if (creditHistoryData) {
-      (creditHistoryData as CreditHistoryRecord[]).forEach((item: CreditHistoryRecord) => {
-        if (!item.is_deleted) {
-          creditNet += (item.credit_amount || 0) - (item.debit_amount || 0);
-        }
-      });
-    }
-
-    // Calculate installment activity
-    let installmentNet = 0;
-    (installmentHistoryData as InstallmentHistoryRecord[]).forEach((item: InstallmentHistoryRecord) => {
-      if (!item.is_deleted) {
-        installmentNet += (item.credit_amount || 0) - (item.debit_amount || 0);
-      }
-    });
+    const pawnNet = sumEventSourced((pawnHistoryData as PawnHistoryRecord[]) || []);
+    const creditNet = sumEventSourced((creditHistoryData as CreditHistoryRecord[]) || []);
+    const installmentNet = sumEventSourced((installmentHistoryData as InstallmentHistoryRecord[]) || []);
 
     // Calculate income/expense (Thu chi)
     let incomeExpenseNet = 0;

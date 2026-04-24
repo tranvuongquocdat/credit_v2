@@ -119,23 +119,15 @@ export default function TotalFundPage() {
     try {
       if (!currentStore?.id) return;
 
-      const { data: totalFundData } = await supabase
-        .from('store_total_fund')
-        .select('total_fund')
-        .eq('store_id', currentStore.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-        
-      const { data: storeData } = await supabase
-        .from('stores')
-        .select('investment, cash_fund')
-        .eq('id', currentStore.id)
-        .single();
+      // availableFund event-sourced qua RPC; totalFund = investment tĩnh.
+      const [{ data: storeData }, { data: cashFundData }] = await Promise.all([
+        supabase.from('stores').select('investment').eq('id', currentStore.id).single(),
+        (supabase as any).rpc('calc_cash_fund_as_of', { p_store_id: currentStore.id }),
+      ]);
 
       setFinancialSummary({
-        totalFund: totalFundData?.total_fund || storeData?.investment || 0,
-        availableFund: storeData?.cash_fund || 0,
+        totalFund: storeData?.investment || 0,
+        availableFund: Number(cashFundData) || 0,
         totalLoan: 0,
         oldDebt: 0,
         profit: 0,
@@ -149,23 +141,30 @@ export default function TotalFundPage() {
   const fetchDailyFundHistory = async () => {
     if (!currentStore?.id) return;
     try {
-      const { data, error } = await supabase
-        .from('store_total_fund')
-        .select('created_at, total_fund')
-        .eq('store_id', currentStore.id)
-        .order('created_at', { ascending: true });
+      // Lấy ngày tạo store làm mốc bắt đầu chuỗi ngày.
+      const { data: storeMeta } = await supabase
+        .from('stores')
+        .select('created_at')
+        .eq('id', currentStore.id)
+        .single();
 
-      if (error) throw error;
-      
-      const dailySummary: { [key: string]: number } = {};
-      data.forEach(record => {
-        const day = format(new Date(record.created_at), 'yyyy-MM-dd');
-        dailySummary[day] = record.total_fund;
+      const startDay = storeMeta?.created_at
+        ? format(new Date(storeMeta.created_at as string), 'yyyy-MM-dd')
+        : format(new Date(), 'yyyy-MM-dd');
+      const endDay = format(new Date(), 'yyyy-MM-dd');
+
+      const { data, error } = await (supabase as any).rpc('calc_cash_fund_series', {
+        p_store_id: currentStore.id,
+        p_start_date: startDay,
+        p_end_date: endDay,
       });
 
-      const formattedHistory = Object.entries(dailySummary)
-        .map(([day, total_fund]) => ({ day, total_fund }))
-        .sort((a, b) => new Date(b.day).getTime() - new Date(a.day).getTime());
+      if (error) throw error;
+
+      const rows = Array.isArray(data) ? data : [];
+      const formattedHistory: DailyFundRecord[] = rows
+        .map((r: any) => ({ day: String(r.as_of_date), total_fund: Number(r.fund_total) || 0 }))
+        .sort((a: DailyFundRecord, b: DailyFundRecord) => new Date(b.day).getTime() - new Date(a.day).getTime());
 
       setDailyFundHistory(formattedHistory);
     } catch (error) {

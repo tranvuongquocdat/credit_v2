@@ -89,15 +89,29 @@ export async function getStores(
     const from = (page - 1) * limit;
     const to = from + limit - 1;
     const { data, error, count } = await query.range(from, to);
-    
+
     if (error) {
       throw error;
     }
 
-    console.log(data);
-    return { 
-      data: data as Store[], 
-      error: null, 
+    // Thay cash_fund (bị drift do Bug A) bằng RPC event-sourced. Parallel N
+    // calls — N ≤ limit (mặc định 10) → ~400ms warm, chấp nhận được.
+    const stores = (data || []) as Store[];
+    const funds = await Promise.all(
+      stores.map((s) =>
+        (supabase as any)
+          .rpc('calc_cash_fund_as_of', { p_store_id: s.id })
+          .then((r: { data: unknown }) => Number(r.data) || 0)
+      )
+    );
+    const storesWithFund: Store[] = stores.map((s, i) => ({
+      ...s,
+      cash_fund: funds[i],
+    }));
+
+    return {
+      data: storesWithFund,
+      error: null,
       count,
       totalPages: count ? Math.ceil(count / limit) : 0
     };
@@ -184,27 +198,21 @@ export async function deleteStore(id: string) {
   return { data, error };
 }
 
-// Lấy thông tin tài chính của cửa hàng
+// Lấy thông tin tài chính của cửa hàng (cash_fund event-sourced qua RPC).
 export async function getStoreFinancialData(storeId: string = '1'): Promise<StoreFinancialData> {
   try {
-    const { data, error } = await supabase
-      .from(TABLE_NAME)
-      .select('investment, cash_fund')
-      .eq('id', storeId)
-      .single();
+    const [{ data, error }, { data: cashFundData }] = await Promise.all([
+      supabase.from(TABLE_NAME).select('investment').eq('id', storeId).single(),
+      (supabase as any).rpc('calc_cash_fund_as_of', { p_store_id: storeId }),
+    ]);
 
     if (error) throw error;
 
-    // Type assertion to handle the type mismatch
-    const storeData = data as unknown as {
-      investment?: number;
-      cash_fund?: number;
-    };
+    const storeData = data as unknown as { investment?: number };
 
-    // Access properties safely with the correct type
     return {
       totalFund: storeData.investment ?? 0,
-      availableFund: storeData.cash_fund ?? 0,
+      availableFund: Number(cashFundData) || 0,
       totalLoan: 0,
       oldDebt: 0,
       profit: 0,

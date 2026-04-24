@@ -41,12 +41,11 @@ export function usePawnCalculations() {
       
       const storeId = currentStore?.id || '1';
       
-      // 1. Lấy thông tin store
-      const { data: storeData } = await supabase
-        .from('stores')
-        .select('investment, cash_fund')
-        .eq('id', storeId)
-        .single();
+      // 1. investment tĩnh từ stores; cash fund event-sourced qua RPC.
+      const [{ data: storeData }, { data: cashFundData }] = await Promise.all([
+        supabase.from('stores').select('investment').eq('id', storeId).single(),
+        (supabase as any).rpc('calc_cash_fund_as_of', { p_store_id: storeId }),
+      ]);
       
       // 2. Lấy danh sách pawns ON_TIME - using optimized view
       const { data: activeCreditsData } = await supabase
@@ -194,7 +193,7 @@ export function usePawnCalculations() {
       // 7. Set results
       setSummary({
         totalFund: storeData?.investment || 0,
-        availableFund: storeData?.cash_fund || 0,
+        availableFund: Number(cashFundData) || 0,
         totalLoan: Math.round(totalLoan),
         oldDebt: Math.round(totalOldDebt),
         profit: Math.round(totalProfit),
