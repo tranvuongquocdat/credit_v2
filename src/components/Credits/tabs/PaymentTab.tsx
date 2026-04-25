@@ -212,7 +212,7 @@ export function PaymentTab({
     try {
       onDataChange();
       // Add delay to ensure sync completes and show feedback
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 220));
     } finally {
       setIsBackgroundSyncing(false);
     }
@@ -503,8 +503,8 @@ export function PaymentTab({
         setTimeout(() => {
           // Gọi callback để cập nhật financial summary ngay lập tức
           onPaymentUpdate?.();
-        }, 500);
-      }, 100);
+        }, 220);
+      }, 220);
       
     } catch (error) {
       console.error('Error handling payment records:', error);

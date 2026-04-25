@@ -445,7 +445,7 @@ export function PaymentTab({
       setTimeout(() => {
         // Gọi callback để cập nhật financial summary ngay lập tức
         onPaymentUpdate?.();
-      }, 500);
+      }, 220);
       
     } catch (error) {
       console.error('Error handling payment records:', error);
