@@ -235,14 +235,14 @@ BEGIN
   SELECT
     p.id,
     /* cả kỳ: loan_date + loan_period - 1 ngày */
-    public.calc_expected_until(
+    public.calc_pawn_expected_until(
         p.id,
         (p.loan_date::date + (p.loan_period - 1))
     )                                                  AS expected_profit,
     /* tới hôm nay (nếu sau ngày vay) */
     CASE
       WHEN CURRENT_DATE >= p.loan_date::date
-      THEN public.calc_expected_until(p.id, CURRENT_DATE)
+      THEN public.calc_pawn_expected_until(p.id, CURRENT_DATE)
       ELSE 0
     END                                                AS interest_today
   FROM public.pawns p
@@ -291,7 +291,7 @@ debt_pay as (
 expected as (
   select
     lp.pawn_id,
-    calc_expected_until(lp.pawn_id, lp.last_paid_date::date) as expected_amount
+    calc_pawn_expected_until(lp.pawn_id, lp.last_paid_date::date) as expected_amount
   from last_pay lp
 )
 select
