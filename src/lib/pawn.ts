@@ -517,6 +517,9 @@ export async function updatePawn(id: string, params: UpdatePawnParams) {
     if (params.interest_notation !== undefined) {
       updateData.interest_notation = params.interest_notation;
     }
+    if (params.is_advance_payment !== undefined) {
+      updateData.is_advance_payment = params.is_advance_payment;
+    }
 
     // Cập nhật pawn record
     const { data, error } = await supabase
