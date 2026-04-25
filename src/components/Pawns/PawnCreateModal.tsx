@@ -29,6 +29,7 @@ import { AlertCircle } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { MoneyInput } from '@/components/ui/money-input';
 import { getDisplayLabelByBuild } from '@/utils/nav-display-labels';
+import { CollateralNameInput } from '@/components/Pawns/CollateralNameInput';
 
 interface PawnCreateModalProps {
   isOpen: boolean;
@@ -703,10 +704,12 @@ export function PawnCreateModal({
             <Label htmlFor="collateralName" className="text-left sm:text-right font-medium">
               Tên tài sản <span className="text-red-500">*</span>
             </Label>
-            <Input
+            <CollateralNameInput
               id="collateralName"
               value={collateralName}
-              onChange={(e) => setCollateralName(e.target.value)}
+              onChange={setCollateralName}
+              storeId={currentStore?.id}
+              collateralId={collateralId}
               placeholder="Ví dụ: Xe máy Honda Wave, Nhẫn vàng 18k..."
               required
             />

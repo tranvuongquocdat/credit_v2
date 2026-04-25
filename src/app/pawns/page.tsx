@@ -49,7 +49,11 @@ interface PawnTotals {
   total_paid_interest: number;
   total_old_debt: number;
   total_interest_today: number;
+  collateral_breakdown: Array<{ name: string; count: number }> | null;
 }
+
+export type CollateralCountMode = 'contracts' | 'quantity';
+const COUNT_MODE_KEY = 'pawn_collateral_count_mode';
 
 export default function PawnsPage() {
   const screenLoadTimerRef = useRef<(() => void) | null>(null);
@@ -114,6 +118,20 @@ export default function PawnsPage() {
   // Totals state
   const [totals, setTotals] = useState<PawnTotals | null>(null);
 
+  // Count mode for collateral breakdown (persist localStorage)
+  const [countMode, setCountMode] = useState<CollateralCountMode>('contracts');
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const saved = window.localStorage.getItem(COUNT_MODE_KEY);
+    if (saved === 'contracts' || saved === 'quantity') setCountMode(saved);
+  }, []);
+  const handleChangeCountMode = (mode: CollateralCountMode) => {
+    setCountMode(mode);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(COUNT_MODE_KEY, mode);
+    }
+  };
+
   // Current store context
   const { currentStore } = useStore();
 
@@ -135,12 +153,13 @@ export default function PawnsPage() {
     }
   }, [currentStore?.id, loading, permissionsLoading, calcLoading]);
 
-  const fetchTotals = async (f = filters) => {
+  const fetchTotals = async (f = filters, mode: CollateralCountMode = countMode) => {
     if (!currentStore?.id) return;
     try {
       const { data, error } = await (supabase as any).rpc('pawn_get_totals', {
-        p_store_id: currentStore.id,
-        p_filters : f ?? null,
+        p_store_id  : currentStore.id,
+        p_filters   : f ?? null,
+        p_count_mode: mode,
       });
       if (!error) {
         setTotals((data as any)?.[0] ?? null);
@@ -150,10 +169,10 @@ export default function PawnsPage() {
     }
   };
 
-  // Fetch totals when filters or store change
+  // Fetch totals when filters / store / countMode change
   useEffect(() => {
-    fetchTotals(filters);
-  }, [JSON.stringify(filters), currentStore?.id]);
+    fetchTotals(filters, countMode);
+  }, [JSON.stringify(filters), currentStore?.id, countMode]);
   // Removed: Status calculation now handled by pawns_by_store view directly
 
   // No client-side filtering needed - all filtering now handled server-side by pawns_by_store view
@@ -479,6 +498,8 @@ export default function PawnsPage() {
               initialFilters={initialFilters}
               itemsPerPage={itemsPerPage}
               onPageSizeChange={handlePageSizeChange}
+              countMode={countMode}
+              onChangeCountMode={handleChangeCountMode}
             />
 
             {/* Bảng dữ liệu hợp đồng */}

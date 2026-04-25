@@ -51,6 +51,7 @@ interface PawnsTableProps {
     total_paid_interest: number;
     total_old_debt: number;
     total_interest_today: number;
+    collateral_breakdown?: Array<{ name: string; count: number }> | null;
   };
 }
 
@@ -67,6 +68,14 @@ export function PawnsTable({
   itemsPerPage = 30,
   totals,
 }: PawnsTableProps) {
+  // Per-row Tài sản: luôn hiện `name (xN)` (qty default 1 nếu thiếu)
+  const renderCollateralName = (
+    detail: { name?: string | null; quantity?: number | null } | null | undefined
+  ): string => {
+    if (!detail?.name) return '-';
+    const qty = detail.quantity && detail.quantity > 0 ? detail.quantity : 1;
+    return `${detail.name} (x${qty})`;
+  };
   // Toast hook
   const { toast } = useToast();
   
@@ -183,9 +192,7 @@ export function PawnsTable({
                   </div>
                 </TableCell>
                 <TableCell className="py-3 px-3 text-center border-b border-r border-gray-200 hidden lg:table-cell">
-                {pawn.collateral_detail?.name
-                  ? `${pawn.collateral_detail.name}${pawn.collateral_detail.quantity ? ` (x${pawn.collateral_detail.quantity})` : ''}`
-                  : '-'}
+                  {renderCollateralName(pawn.collateral_detail as any)}
                 </TableCell>
                 <TableCell className="py-3 px-1 lg:px-3 text-center border-b border-r border-gray-200 text-xs lg:text-sm">
                   <div className="flex flex-col items-center">
@@ -357,8 +364,16 @@ export function PawnsTable({
               {/* Mã HĐ, Tên KH - visible on mobile */}
               <TableCell className="py-2 px-1 lg:px-3 text-center font-bold lg:hidden" colSpan={2}>Tổng</TableCell>
               <TableCell className="py-2 px-3 text-center font-bold hidden lg:table-cell" colSpan={2}></TableCell>
-              {/* Tài sản - hidden on mobile */}
-              <TableCell className="py-2 px-3 hidden lg:table-cell"></TableCell>
+              {/* Tài sản - hidden on mobile - breakdown by collateral name */}
+              <TableCell className="py-2 px-3 hidden lg:table-cell align-top">
+                {totals.collateral_breakdown && totals.collateral_breakdown.length > 0 && (
+                  <div className="text-xs lg:text-sm space-y-0.5 text-center">
+                    {totals.collateral_breakdown.map((item, i) => (
+                      <div key={i}>{item.name} (x{item.count})</div>
+                    ))}
+                  </div>
+                )}
+              </TableCell>
               {/* Số tiền - visible on mobile */}
               <TableCell className="py-2 px-1 lg:px-3 text-center text-rose-600 font-bold text-xs lg:text-sm">{formatCurrency(totals.total_loan_amount)}</TableCell>
               {/* Ngày vay - hidden on mobile */}
@@ -419,7 +434,7 @@ export function PawnsTable({
                   </div>
                   {pawn.collateral_detail?.name && (
                     <div className="text-sm text-gray-600">
-                      Tài sản: {pawn.collateral_detail.name}{pawn.collateral_detail.quantity ? ` (x${pawn.collateral_detail.quantity})` : ''}
+                      Tài sản: {renderCollateralName(pawn.collateral_detail as any)}
                     </div>
                   )}
                 </div>
@@ -561,6 +576,18 @@ export function PawnsTable({
                 <div className="font-bold text-rose-600">{formatCurrency(totals.total_interest_today)}</div>
               </div>
             </div>
+
+            {/* Collateral breakdown */}
+            {totals.collateral_breakdown && totals.collateral_breakdown.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-yellow-300">
+                <div className="text-gray-700 text-sm font-semibold mb-2">Tài sản</div>
+                <div className="text-sm space-y-0.5">
+                  {totals.collateral_breakdown.map((item, i) => (
+                    <div key={i}>{item.name} (x{item.count})</div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
