@@ -410,11 +410,12 @@ export default function PawnsPage() {
     if (hasDataChanged) {
       // Thêm độ trễ để đảm bảo database đã xử lý xong
       setTimeout(() => {
-        // summary and pawn details are already refreshed in triggerUpdate
-        handleRefresh({ skipSummary: true, skipPawnDetails: true });
-        // Trigger cash fund update when payment history changes
+        // Refresh đầy đủ: list + totals + summary + pawn details.
+        // Không dựa vào triggerUpdate vì onUpdate chỉ fire khi quỹ đổi
+        // (tick đóng lãi không làm quỹ đổi → summary/details sẽ stale).
+        handleRefresh();
         triggerUpdate();
-      }, 500); // 500ms delay
+      }, 220);
     }
   };
   
@@ -450,8 +451,9 @@ export default function PawnsPage() {
           <FinancialSummary 
             fundStatus={financialSummary || undefined}
             onRefresh={() => {
-              // skip summary and pawn details because they are already refreshed in triggerUpdate
-              handleRefresh({ skipSummary: true, skipPawnDetails: true });
+              // Refresh đầy đủ: triggerUpdate chỉ fire onUpdate khi quỹ đổi,
+              // không thể dựa vào nó để refresh summary/details.
+              handleRefresh();
               triggerUpdate();
             }}
             autoFetch={false}
