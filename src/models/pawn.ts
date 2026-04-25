@@ -86,6 +86,7 @@ export interface UpdatePawnParams {
   loan_date?: string | Date;
   notes?: string;
   status?: PawnStatus;
+  is_advance_payment?: boolean;
 }
 
 // Thông tin hợp đồng với dữ liệu khách hàng và tài sản

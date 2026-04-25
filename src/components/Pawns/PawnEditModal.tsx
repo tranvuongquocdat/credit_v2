@@ -58,6 +58,7 @@ export function PawnEditModal({
   const [interestNotation, setInterestNotation] = useState<string>('k_per_million');
   const [interestValue, setInterestValue] = useState<string>('');
   const [interestPeriod, setInterestPeriod] = useState<string>('30');
+  const [isAdvancePayment, setIsAdvancePayment] = useState(false);
   const [loanDate, setLoanDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState<PawnStatus>(PawnStatus.ON_TIME);
@@ -236,6 +237,7 @@ export function PawnEditModal({
         setFormattedLoanAmount(formatNumber(loanAmountStr));
         setInterestValue(pawnData.interest_value?.toString() || '');
         setInterestPeriod(pawnData.interest_period?.toString() || '30');
+        setIsAdvancePayment(pawnData.is_advance_payment ?? false);
         setLoanDate(pawnData.loan_date ? format(new Date(pawnData.loan_date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
         setNotes(pawnData.notes || '');
         setStatus(pawnData.status as PawnStatus || PawnStatus.ON_TIME);
@@ -373,7 +375,8 @@ export function PawnEditModal({
         notes: notes,
         status,
         store_id: currentStore.id,
-        collateral_detail: collateralDetailJson
+        collateral_detail: collateralDetailJson,
+        is_advance_payment: isAdvancePayment,
       };
       
       // Call API to update pawn
@@ -730,7 +733,23 @@ export function PawnEditModal({
                 </span>
               </div>
             </div>
-            
+
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <div className="hidden sm:block"></div>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="isAdvancePayment"
+                  checked={isAdvancePayment}
+                  onChange={(e) => setIsAdvancePayment(e.target.checked)}
+                  className="mr-2"
+                />
+                <label htmlFor="isAdvancePayment" className="text-sm sm:text-base">
+                  Thu lãi trước
+                </label>
+              </div>
+            </div>
+
             <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
               <Label htmlFor="loanDate" className="text-left sm:text-right font-medium">{getDisplayLabelByBuild('ngay_vay')} <span className="text-red-500">*</span></Label>
               <DatePicker
