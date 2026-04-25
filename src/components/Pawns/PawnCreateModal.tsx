@@ -457,6 +457,7 @@ export function PawnCreateModal({
         status: PawnStatus.ON_TIME,
         notes: notes,
         store_id: currentStore.id, // Use store ID from context
+        is_advance_payment: advancePayment,
       };
       
       // Create pawn

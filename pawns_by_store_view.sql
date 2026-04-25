@@ -2,7 +2,11 @@
 -- This view mirrors the logic from get_pawn_statuses RPC function
 -- Unlike installments/credits, pawns have direct store_id relationship (no employee join needed)
 
-CREATE OR REPLACE VIEW pawns_by_store AS
+-- DROP trước vì p.* sẽ tự thêm cột mới (is_advance_payment) làm thay đổi thứ tự column,
+-- Postgres không cho CREATE OR REPLACE khi structure thay đổi.
+DROP VIEW IF EXISTS pawns_by_store;
+
+CREATE VIEW pawns_by_store AS
 SELECT 
   p.*,
   -- Calculate status_code based on the same logic as get_pawn_statuses RPC
@@ -21,23 +25,36 @@ SELECT
     --   'FINISHED'
     
     -- 4. Late interest check - next payment date has passed
+    --    Hợp đồng thu lãi trước (đã có thanh toán): hạn đóng = latest_paid + 1
+    --    → trễ khi today >= latest_paid + 2 (1 ngày sau hạn)
+    WHEN p.is_advance_payment AND lp.latest_payment_date IS NOT NULL AND (
+      lp.latest_payment_date + INTERVAL '2 day'
+    )::date <= CURRENT_DATE THEN
+      'LATE_INTEREST'
+    --    Còn lại (hợp đồng thường, hoặc advance nhưng chưa có payment record):
+    --    giữ nguyên logic cũ
     WHEN (
-      COALESCE(lp.latest_payment_date, p.loan_date::date) 
+      COALESCE(lp.latest_payment_date, p.loan_date::date)
       + (COALESCE(p.interest_period, 30) * INTERVAL '1 day')
     )::date <= CURRENT_DATE THEN
       'LATE_INTEREST'
-    
+
     -- 5. Default: On time
     ELSE 'ON_TIME'
   END AS status_code,
 
   -- Calculate next_payment_date based on get_pawn_next_payment_info RPC logic
   CASE
+    -- Hợp đồng thu lãi trước (đã có thanh toán): hạn đóng = ngày đầu kỳ lãi tiếp theo
+    WHEN p.is_advance_payment AND lp.latest_payment_date IS NOT NULL THEN
+      (lp.latest_payment_date + INTERVAL '1 day')::date
+
+    -- Còn lại (giữ nguyên logic cũ): hạn đóng = ngày cuối kỳ
     WHEN lp.latest_payment_date IS NULL THEN
       -- No payments yet: loan_date + (interest_period - 1) days
       (p.loan_date::date + (COALESCE(p.interest_period, 30) - 1) * INTERVAL '1 day')::date
     ELSE
-      -- Has payments: last_paid + interest_period days  
+      -- Has payments: last_paid + interest_period days
       (lp.latest_payment_date + COALESCE(p.interest_period, 30) * INTERVAL '1 day')::date
   END AS next_payment_date,
 

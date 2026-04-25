@@ -683,6 +683,7 @@ export type Database = {
           interest_type: Database["public"]["Enums"]["interest_type"]
           interest_ui_type: string | null
           interest_value: number
+          is_advance_payment: boolean
           loan_amount: number
           loan_date: string
           loan_period: number
@@ -704,6 +705,7 @@ export type Database = {
           interest_type: Database["public"]["Enums"]["interest_type"]
           interest_ui_type?: string | null
           interest_value: number
+          is_advance_payment?: boolean
           loan_amount: number
           loan_date: string
           loan_period: number
@@ -725,6 +727,7 @@ export type Database = {
           interest_type?: Database["public"]["Enums"]["interest_type"]
           interest_ui_type?: string | null
           interest_value?: number
+          is_advance_payment?: boolean
           loan_amount?: number
           loan_date?: string
           loan_period?: number
@@ -1135,6 +1138,7 @@ export type Database = {
           interest_type: Database["public"]["Enums"]["interest_type"] | null
           interest_ui_type: string | null
           interest_value: number | null
+          is_advance_payment: boolean | null
           is_completed: boolean | null
           loan_amount: number | null
           loan_date: string | null
@@ -1172,6 +1176,10 @@ export type Database = {
       }
     }
     Functions: {
+      calc_cash_fund_as_of: {
+        Args: { p_as_of?: string; p_store_id: string }
+        Returns: number
+      }
       calc_cash_fund_from_all_sources: {
         Args: { p_store_id: string }
         Returns: {
@@ -1181,6 +1189,13 @@ export type Database = {
           installment_total: number
           pawn_total: number
           transaction_total: number
+        }[]
+      }
+      calc_cash_fund_series: {
+        Args: { p_end_date: string; p_start_date: string; p_store_id: string }
+        Returns: {
+          as_of_date: string
+          fund_total: number
         }[]
       }
       calc_expected_until: {
@@ -1485,6 +1500,18 @@ export type Database = {
           is_deleted: boolean
           transaction_date: string
           transaction_type: string
+        }[]
+      }
+      rpc_money_by_day_series: {
+        Args: { p_end_date: string; p_start_date: string; p_store_id: string }
+        Returns: {
+          as_of_date: string
+          credit_activity: number
+          fund_activity: number
+          fund_total: number
+          installment_activity: number
+          pawn_activity: number
+          transaction_activity: number
         }[]
       }
       rpc_pawn_history_grouped: {
