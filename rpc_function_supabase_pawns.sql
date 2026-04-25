@@ -434,14 +434,16 @@ end;
 $$;
 
 create or replace function public.pawn_get_totals(
-  p_store_id uuid,
-  p_filters  jsonb default null
+  p_store_id   uuid,
+  p_filters    jsonb default null,
+  p_count_mode text  default 'contracts'   -- 'contracts' | 'quantity'
 )
 returns table (
   total_loan_amount    numeric,   -- số tiền đang cho vay thực tế
   total_paid_interest  numeric,   -- lãi phí đã đóng
   total_old_debt       numeric,   -- nợ cũ
-  total_interest_today numeric    -- lãi phí tính đến hôm nay
+  total_interest_today numeric,   -- lãi phí tính đến hôm nay
+  collateral_breakdown jsonb      -- [{name, count}] sort desc by count
 )
 language sql
 as $$
@@ -572,6 +574,48 @@ today_int as (
   select e.pawn_id, e.interest_today
   from   ids
   join   lateral get_pawn_expected_interest(arr_ids) e on true
+),
+
+/* 4.5 Collateral breakdown — handle both jsonb 'object' (mới) và 'string' (legacy) */
+collateral_raw as (
+  select
+    b.id,
+    case
+      when json_typeof(b.collateral_detail) = 'object' then b.collateral_detail->>'name'
+      when json_typeof(b.collateral_detail) = 'string' then b.collateral_detail #>> '{}'
+      else null
+    end as raw_name,
+    case
+      when json_typeof(b.collateral_detail) = 'object'
+        then coalesce((b.collateral_detail->>'quantity')::numeric, 1)
+      else 1
+    end as qty
+  from base2 b
+),
+collateral_norm as (
+  select
+    id,
+    nullif(lower(trim(coalesce(raw_name, ''))), '') as norm_key,
+    coalesce(nullif(trim(coalesce(raw_name, '')), ''), 'Không tên') as display_name,
+    qty
+  from collateral_raw
+),
+collateral_grouped as (
+  select
+    (array_agg(display_name order by id))[1] as name,
+    case
+      when p_count_mode = 'quantity' then sum(qty)
+      else count(*)::numeric
+    end as cnt
+  from collateral_norm
+  group by norm_key
+),
+collateral_json as (
+  select jsonb_agg(
+           jsonb_build_object('name', name, 'count', cnt)
+           order by cnt desc, name asc
+         ) as breakdown
+  from collateral_grouped
 )
 
 /* 5. SUM kết quả ------------------------------------------------------ */
@@ -579,7 +623,8 @@ select
   sum(coalesce(pr.current_principal, b.loan_amount)) as total_loan_amount,
   sum(coalesce(pi.paid_interest,0))                 as total_paid_interest,
   sum(coalesce(od.old_debt,0))                      as total_old_debt,
-  sum(coalesce(ti.interest_today,0))                as total_interest_today
+  sum(coalesce(ti.interest_today,0))                as total_interest_today,
+  (select breakdown from collateral_json)           as collateral_breakdown
 from base2 b
 left join principal pr on pr.pawn_id = b.id
 left join paid_int  pi on pi.pawn_id = b.id

@@ -31,6 +31,8 @@ interface SearchFiltersProps {
   initialFilters?: Partial<SearchFilters>; // Thêm prop để pre-fill form
   itemsPerPage: number;
   onPageSizeChange: (pageSize: number) => void;
+  countMode?: 'contracts' | 'quantity';
+  onChangeCountMode?: (mode: 'contracts' | 'quantity') => void;
 }
 
 export interface SearchFilters {
@@ -50,7 +52,9 @@ export function SearchFilters({
   exporting,
   initialFilters,
   itemsPerPage,
-  onPageSizeChange
+  onPageSizeChange,
+  countMode,
+  onChangeCountMode,
 }: SearchFiltersProps) {
   const statusMap = {
     [PawnStatus.ON_TIME]: { label: getDisplayLabelByBuild('dang_vay'), color: 'bg-green-100 text-green-800' },
@@ -245,7 +249,7 @@ export function SearchFilters({
 
   return (
     <>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-3 mb-4">
         <div>
           <label htmlFor="contractCode" className="block text-xs font-medium text-gray-700 mb-1 truncate">
             Mã HD
@@ -421,6 +425,26 @@ export function SearchFilters({
             </SelectContent>
           </Select>
         </div>
+
+        {onChangeCountMode && (
+          <div>
+            <label htmlFor="countMode" className="block text-xs font-medium text-gray-700 mb-1 truncate">
+              Đếm tài sản
+            </label>
+            <Select
+              value={countMode ?? 'contracts'}
+              onValueChange={(v) => onChangeCountMode(v as 'contracts' | 'quantity')}
+            >
+              <SelectTrigger id="countMode" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="contracts">Theo hợp đồng</SelectItem>
+                <SelectItem value="quantity">Theo số lượng</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
       
       <div className="flex flex-col sm:flex-row justify-between gap-2 mb-4">
