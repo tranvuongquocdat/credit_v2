@@ -413,7 +413,7 @@ export default function CreditsPage() {
         handleRefresh();
         fetchTotals(filters);
         triggerUpdate();
-      }, 1000);
+      }, 220);
     }
   };
   
