@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Layout } from '@/components/Layout';
 import { useAuth } from '@/contexts/AuthContext';
+import { buildAuthEmail } from '@/lib/auth-email';
 import { useStore } from '@/contexts/StoreContext';
 import { supabase } from '@/lib/supabase';
 import { formatDate, formatDateTime } from '@/lib/utils';
@@ -122,7 +123,7 @@ export default function ProfilePage() {
       const profileWithEmployee: UserProfileData = {
         id: profileData.id,
         username: profileData.username,
-        email: user.email || `${profileData.username}@creditapp.local`,
+        email: user.email || buildAuthEmail(profileData.username),
         role: profileData.role,
         is_banned: profileData.is_banned || false,
         created_at: profileData.created_at,

@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { buildAuthEmail } from './auth-email';
 import { Employee, EmployeeWithProfile, EmployeeStatus, CreateEmployeeParams, UpdateEmployeeParams } from '@/models/employee';
 
 /**
@@ -134,7 +135,7 @@ export async function getEmployeeById(id: string) {
  */
 export async function createEmployee(params: CreateEmployeeParams) {
   try {
-    const email = `${params.username}@creditapp.local`;
+    const email = buildAuthEmail(params.username);
 
     // 1. Tạo auth user với username và password
     const { data: authData, error: authError } = await supabase.auth.signUp({

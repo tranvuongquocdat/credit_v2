@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { buildAuthEmail } from '@/lib/auth-email';
 import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
@@ -6,8 +7,7 @@ export async function POST(request: Request) {
     const { username, password, action, role } = await request.json();
 
     if (action === 'signup') {
-      // Tạo email giả từ username
-      const email = `${username}@creditapp.local`;
+      const email = buildAuthEmail(username);
       const { data, error } = await supabase.auth.signUp({ email, password });
       // Nếu đăng ký thành công, lưu username vào bảng profiles
       if (data && data.user) {
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
       if (error) throw error;
       return NextResponse.json({ data });
     } else if (action === 'signin') {
-      const { data, error } = await supabase.auth.signInWithPassword({ email: `${username}@creditapp.local`, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email: buildAuthEmail(username), password });
       if (error) throw error;
       return NextResponse.json({ data });
     } else if (action === 'signout') {
