@@ -20,6 +20,27 @@ import {
 import { AdminFormData, AdminStatus } from '@/models/admin';
 import { toast } from '@/components/ui/use-toast';
 
+// Map các thông báo lỗi tiếng Anh từ Supabase → tiếng Việt thân thiện
+const VN_ERROR_PATTERNS: Array<{ match: RegExp; vn: string }> = [
+  {
+    match: /already.*registered|already.*exists/i,
+    vn: 'Tên người dùng này đã được sử dụng. Vui lòng chọn tên khác.',
+  },
+  {
+    match: /password.*should be at least|password.*too short/i,
+    vn: 'Mật khẩu quá ngắn. Vui lòng nhập ít nhất 6 ký tự.',
+  },
+  {
+    match: /invalid email/i,
+    vn: 'Email không hợp lệ.',
+  },
+];
+
+function localizeError(raw: string): string {
+  const found = VN_ERROR_PATTERNS.find((p) => p.match.test(raw));
+  return found?.vn ?? raw;
+}
+
 interface AdminCreateModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -108,9 +129,10 @@ export function AdminCreateModal({ isOpen, onClose, onSuccess }: AdminCreateModa
       onSuccess();
       onClose();
     } catch (err) {
+      const raw = err instanceof Error ? err.message : 'Đã xảy ra lỗi khi tạo admin';
       toast({
         title: 'Lỗi',
-        description: err instanceof Error ? err.message : 'Đã xảy ra lỗi khi tạo admin',
+        description: localizeError(raw),
         variant: 'destructive',
       });
     } finally {

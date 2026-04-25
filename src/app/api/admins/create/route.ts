@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { buildAuthEmail } from '@/lib/auth-email';
 
 export async function POST(request: Request) {
   try {
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
 
     // 1. Tạo tài khoản auth user
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: `${username}@creditapp.local`,
+      email: buildAuthEmail(username),
       password,
       email_confirm: true,
     });
