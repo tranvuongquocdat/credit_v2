@@ -40,6 +40,7 @@ export interface Pawn {
   loan_date: string;            // Ngày vay
   notes?: string | null;
   status?: PawnStatus | null;
+  is_advance_payment?: boolean;  // true = hợp đồng thu lãi trước (ngày đóng tính theo đầu kỳ kế)
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -63,6 +64,7 @@ export interface CreatePawnParams {
   loan_date: string | Date;
   notes?: string;
   status?: PawnStatus;
+  is_advance_payment?: boolean;
 }
 
 export interface UpdatePawnParams {

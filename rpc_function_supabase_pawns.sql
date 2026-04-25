@@ -320,7 +320,8 @@ with base as (
   select id,
          loan_date,
          loan_period,
-         interest_period
+         interest_period,
+         is_advance_payment
   from pawns
   where id = any(p_pawn_ids)
 ),
@@ -336,6 +337,10 @@ latest_pay as (
 select
   b.id as pawn_id,
   case
+    -- Hợp đồng thu lãi trước (đã có thanh toán): hạn = ngày đầu kỳ kế (last_paid + 1)
+    when b.is_advance_payment and lp.last_paid is not null
+      then lp.last_paid + INTERVAL '1 day'
+    -- Còn lại: giữ logic cũ (ngày cuối kỳ)
     when lp.last_paid is null
       then b.loan_date + ((b.interest_period - 1) * INTERVAL '1 day')
     else lp.last_paid + (b.interest_period * INTERVAL '1 day')
@@ -373,7 +378,8 @@ begin
             p.status::text,          -- enum pawn_status
             p.loan_date,
             p.loan_period,
-            coalesce(p.interest_period,30) as int_period
+            coalesce(p.interest_period,30) as int_period,
+            p.is_advance_payment
     from    pawns p
     where   p.id = any (p_pawn_ids)
   loop
@@ -405,9 +411,15 @@ begin
 
     -- 4.  Tính hạn đóng lãi kế tiếp → chậm lãi?
     iperiod := r.int_period;
-    next_interest_date :=
-      coalesce(latest_payment_date, r.loan_date)
-      + iperiod * interval '1 day';
+    if r.is_advance_payment and latest_payment_date is not null then
+      -- Hợp đồng thu lãi trước: hạn = ngày đầu kỳ kế (last_paid + 1)
+      -- → trễ khi today >= last_paid + 2 (1 ngày sau hạn)
+      next_interest_date := latest_payment_date + interval '2 day';
+    else
+      next_interest_date :=
+        coalesce(latest_payment_date, r.loan_date)
+        + iperiod * interval '1 day';
+    end if;
 
     if next_interest_date <= today then
       status_code := 'LATE_INTEREST';

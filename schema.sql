@@ -2473,7 +2473,8 @@ CREATE TABLE IF NOT EXISTS "public"."pawns" (
     "interest_ui_type" "text",
     "interest_notation" "text",
     "debt_amount" numeric DEFAULT '0'::numeric NOT NULL,
-    "collateral_detail" "json"
+    "collateral_detail" "json",
+    "is_advance_payment" boolean DEFAULT false NOT NULL
 );
 
 
