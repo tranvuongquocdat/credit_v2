@@ -47,7 +47,8 @@ export default function AdminsPage() {
         currentPage,
         10,
         searchQuery,
-        statusFilter
+        statusFilter,
+        currentUser?.id
       );
       
       if (error) {

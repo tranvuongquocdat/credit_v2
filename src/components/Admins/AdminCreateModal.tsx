@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { getCurrentUser } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,6 +34,14 @@ export function AdminCreateModal({ isOpen, onClose, onSuccess }: AdminCreateModa
     status: AdminStatus.ACTIVE,
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    getCurrentUser()
+      .then((u) => setCurrentUserId(u?.id ?? null))
+      .catch(() => setCurrentUserId(null));
+  }, [isOpen]);
 
   const handleInputChange = (field: keyof AdminFormData, value: string) => {
     setFormData(prev => ({
@@ -53,8 +62,17 @@ export function AdminCreateModal({ isOpen, onClose, onSuccess }: AdminCreateModa
       return;
     }
 
+    if (!currentUserId) {
+      toast({
+        title: 'Lỗi',
+        description: 'Không xác định được tài khoản super admin hiện tại',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsLoading(true);
-    
+
     try {
       const resp = await fetch('/api/admins/create', {
         method: 'POST',
@@ -64,6 +82,7 @@ export function AdminCreateModal({ isOpen, onClose, onSuccess }: AdminCreateModa
           email: formData.email?.trim() || undefined,
           password: formData.password,
           status: formData.status,
+          createdBySuperadminId: currentUserId,
         }),
       });
 

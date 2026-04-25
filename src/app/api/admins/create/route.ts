@@ -3,10 +3,14 @@ import { NextResponse } from 'next/server';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { username, email, password, status } = body || {};
+    const { username, email, password, status, createdBySuperadminId } = body || {};
 
     if (!username || !password) {
       return NextResponse.json({ error: 'Thiếu dữ liệu bắt buộc' }, { status: 400 });
+    }
+
+    if (!createdBySuperadminId) {
+      return NextResponse.json({ error: 'Thiếu thông tin super admin' }, { status: 400 });
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
@@ -41,7 +45,8 @@ export async function POST(request: Request) {
       id: authData.user.id,
       username,
       email: email || null,
-      role: 'admin'
+      role: 'admin',
+      created_by_superadmin_id: createdBySuperadminId,
     });
 
     if (profileError) {
