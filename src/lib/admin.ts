@@ -20,13 +20,19 @@ export async function getAdmins(
   page: number = 1,
   limit: number = 10,
   searchQuery: string = '',
-  statusFilter: string = ''
+  statusFilter: string = '',
+  currentSuperadminId?: string
 ) {
   try {
     let query = supabase
       .from('profiles')
       .select('*', { count: 'exact' })
       .eq('role', 'admin'); // Only get admin role users
+
+    // Tenant isolation: chỉ list admin được tạo bởi super admin hiện tại
+    if (currentSuperadminId) {
+      query = query.eq('created_by_superadmin_id', currentSuperadminId);
+    }
 
     // Apply search filter
     if (searchQuery.trim()) {

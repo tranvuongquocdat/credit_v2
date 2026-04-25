@@ -99,7 +99,7 @@ export default function TotalFundPage() {
         const user = await getCurrentUser();
         setCurrentUser(user);
         
-        if (!user || !['admin', 'superadmin'].includes(user.role)) {
+        if (!user || user.role !== 'admin') {
           router.push('/dashboard');
           return;
         }
@@ -396,8 +396,8 @@ export default function TotalFundPage() {
     }
   }
 
-  // Don't render if still checking auth or not admin/superadmin
-  if (isCheckingAuth || !currentUser || !['admin', 'superadmin'].includes(currentUser.role)) {
+  // Don't render if still checking auth or not admin
+  if (isCheckingAuth || !currentUser || currentUser.role !== 'admin') {
     return null;
   }
 
