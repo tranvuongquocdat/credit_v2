@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { buildAuthEmail } from './auth-email';
 import { AdminDB, Admin, AdminWithProfile, CreateAdminParams, UpdateAdminParams, AdminStatus } from '@/models/admin';
 
 // Convert database admin to UI admin
@@ -79,7 +80,7 @@ export async function createAdmin(adminData: CreateAdminParams) {
   try {
     // First create the auth user
     const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: `${adminData.username}@creditapp.local`,
+      email: buildAuthEmail(adminData.username),
       password: adminData.password,
     });
 

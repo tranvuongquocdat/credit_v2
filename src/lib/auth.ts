@@ -1,9 +1,10 @@
 import { supabase } from './supabase';
+import { buildAuthEmail } from './auth-email';
 
 // Hàm đăng ký người dùng
 export async function signUp(username: string, password: string, role: string = 'user') {
-  // Tạo email giả từ username
-  const email = `${username}@creditapp.local`;
+  // Tạo email theo deploy env (v1: @creditapp.local, v2: @creditappc2.local)
+  const email = buildAuthEmail(username);
   const { data, error } = await supabase.auth.signUp({ email, password });
   
   // Nếu đăng ký thành công, lưu username vào bảng profiles

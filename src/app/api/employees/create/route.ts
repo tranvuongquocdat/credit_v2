@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { buildAuthEmail } from '@/lib/auth-email';
 
 export async function POST(request: Request) {
   try {
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
 
     // 1. Tạo user auth bằng admin API (không trả session)
     const { data: userData, error: userError } = await supabaseAdmin.auth.admin.createUser({
-      email: `${username}@creditapp.local`,
+      email: buildAuthEmail(username),
       password,
       email_confirm: true
     });

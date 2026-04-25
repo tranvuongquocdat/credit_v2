@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import { useState, Suspense } from 'react';
 import { signIn, getCurrentUser } from '../../lib/auth';
+import { buildAuthEmail } from '../../lib/auth-email';
 import { useRouter } from 'next/navigation';
 
 function LoginForm() {
@@ -19,7 +20,7 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      const { error } = await signIn(`${username}@creditapp.local`, password);
+      const { error } = await signIn(buildAuthEmail(username), password);
       if (error) {
         // Kiểm tra nếu là lỗi banned
         if (error.message.includes('banned') || error.message.includes('deactivated')) {
