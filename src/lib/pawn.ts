@@ -428,7 +428,8 @@ export async function createPawn(params: CreatePawnParams) {
       interest_period: params.interest_period,
       loan_date: loanDate,
       notes: params.notes,
-      status: params.status || PawnStatus.ON_TIME
+      status: params.status || PawnStatus.ON_TIME,
+      is_advance_payment: params.is_advance_payment ?? false
     };
 
     // Only add these fields if they are provided (for backward compatibility)
