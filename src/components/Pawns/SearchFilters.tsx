@@ -31,6 +31,8 @@ interface SearchFiltersProps {
   initialFilters?: Partial<SearchFilters>; // Thêm prop để pre-fill form
   itemsPerPage: number;
   onPageSizeChange: (pageSize: number) => void;
+  countMode?: 'contracts' | 'quantity';
+  onChangeCountMode?: (mode: 'contracts' | 'quantity') => void;
 }
 
 export interface SearchFilters {
@@ -50,7 +52,9 @@ export function SearchFilters({
   exporting,
   initialFilters,
   itemsPerPage,
-  onPageSizeChange
+  onPageSizeChange,
+  countMode,
+  onChangeCountMode,
 }: SearchFiltersProps) {
   const statusMap = {
     [PawnStatus.ON_TIME]: { label: getDisplayLabelByBuild('dang_vay'), color: 'bg-green-100 text-green-800' },
@@ -201,36 +205,53 @@ export function SearchFilters({
   const handleSearch = () => {
     onSearch(filters);
   };
+  const PRESET_DURATIONS = [7, 14, 30, 50, 60, 90, 100];
+  const isPresetDuration = (d?: number) =>
+    d !== undefined && PRESET_DURATIONS.includes(d);
+
+  const [customDurationMode, setCustomDurationMode] = useState<boolean>(
+    () => filters.duration !== undefined && !isPresetDuration(filters.duration)
+  );
+
+  // Sync khi initialFilters đẩy vào duration không thuộc preset
+  useEffect(() => {
+    if (filters.duration !== undefined && !isPresetDuration(filters.duration)) {
+      setCustomDurationMode(true);
+    }
+  }, [filters.duration]);
+
   const handleDurationChange = (value: string) => {
+    if (value === 'custom') {
+      setCustomDurationMode(true);
+      // Reset duration cho user nhập mới
+      const newFilters = { ...filters, duration: undefined };
+      setFilters(newFilters);
+      onSearch(newFilters);
+      return;
+    }
+    setCustomDurationMode(false);
     const newFilters = {
       ...filters,
       duration: value === 'all' ? undefined : parseInt(value)
     };
-    
     setFilters(newFilters);
-    
-    // Auto-search when duration changes
     onSearch(newFilters);
   };
 
   const handleCustomDurationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     const numValue = value === '' ? undefined : parseInt(value);
-    
-    const newFilters = {
-      ...filters,
-      duration: numValue
-    };
-    
+
+    const newFilters = { ...filters, duration: numValue };
     setFilters(newFilters);
-    
-    // Auto-search when custom duration changes (with debounce effect)
+
     if (value === '' || (!isNaN(numValue!) && numValue! > 0)) {
       onSearch(newFilters);
     }
   };
 
   const handleReset = () => {
+    setCustomDurationMode(false);
     setFilters({
       contractCode: '',
       customerName: '',
@@ -245,7 +266,7 @@ export function SearchFilters({
 
   return (
     <>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-3 mb-4">
         <div>
           <label htmlFor="contractCode" className="block text-xs font-medium text-gray-700 mb-1 truncate">
             Mã HD
@@ -353,39 +374,43 @@ export function SearchFilters({
           <label htmlFor="duration" className="block text-xs font-medium text-gray-700 mb-1 truncate">
             Thời gian vay
           </label>
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <Select 
-                onValueChange={handleDurationChange} 
-                value={filters.duration?.toString() || 'all'}
-              >
-                <SelectTrigger id="duration" className="w-full">
-                  <SelectValue placeholder="Chọn nhanh" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tất cả</SelectItem>
-                  <SelectItem value="7">7 ngày</SelectItem>
-                  <SelectItem value="14">14 ngày</SelectItem>
-                  <SelectItem value="30">30 ngày</SelectItem>
-                  <SelectItem value="50">50 ngày</SelectItem>
-                  <SelectItem value="60">60 ngày</SelectItem>
-                  <SelectItem value="90">90 ngày</SelectItem>
-                  <SelectItem value="100">100 ngày</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex-1">
-              <Input
-                type="number"
-                placeholder="Nhập số ngày"
-                className="w-full"
-                value={filters.duration?.toString() || ''}
-                onChange={handleCustomDurationChange}
-                min="1"
-                max="9999"
-              />
-            </div>
-          </div>
+          <Select
+            onValueChange={handleDurationChange}
+            value={
+              customDurationMode
+                ? 'custom'
+                : filters.duration !== undefined
+                  ? filters.duration.toString()
+                  : 'all'
+            }
+          >
+            <SelectTrigger id="duration" className="w-full">
+              <SelectValue placeholder="Chọn nhanh" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả</SelectItem>
+              <SelectItem value="7">7 ngày</SelectItem>
+              <SelectItem value="14">14 ngày</SelectItem>
+              <SelectItem value="30">30 ngày</SelectItem>
+              <SelectItem value="50">50 ngày</SelectItem>
+              <SelectItem value="60">60 ngày</SelectItem>
+              <SelectItem value="90">90 ngày</SelectItem>
+              <SelectItem value="100">100 ngày</SelectItem>
+              <SelectItem value="custom">Tùy chỉnh…</SelectItem>
+            </SelectContent>
+          </Select>
+          {customDurationMode && (
+            <Input
+              type="number"
+              placeholder="Số ngày"
+              className="w-full mt-2"
+              value={filters.duration?.toString() || ''}
+              onChange={handleCustomDurationChange}
+              min="1"
+              max="9999"
+              autoFocus
+            />
+          )}
         </div>
 
         <div>
@@ -421,6 +446,26 @@ export function SearchFilters({
             </SelectContent>
           </Select>
         </div>
+
+        {onChangeCountMode && (
+          <div>
+            <label htmlFor="countMode" className="block text-xs font-medium text-gray-700 mb-1 truncate">
+              Đếm tài sản
+            </label>
+            <Select
+              value={countMode ?? 'contracts'}
+              onValueChange={(v) => onChangeCountMode(v as 'contracts' | 'quantity')}
+            >
+              <SelectTrigger id="countMode" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="contracts">Theo hợp đồng</SelectItem>
+                <SelectItem value="quantity">Theo số lượng</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
       
       <div className="flex flex-col sm:flex-row justify-between gap-2 mb-4">

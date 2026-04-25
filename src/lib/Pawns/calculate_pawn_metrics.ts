@@ -56,10 +56,9 @@ export async function calculatePawnMetrics(
       /* expected profit */ (async () => {
         const cached = options?.expectedMap?.get(pawn.id);
         if (typeof cached === 'number') return cached;
-        // Fallback: call calc_expected_until to loan end
         const loanStart = new Date(pawn.loan_date);
         const loanEnd = new Date(loanStart.getTime() + (pawn.loan_period - 1) * 86400000);
-        const { data } = await (supabase.rpc as any)('calc_expected_until', {
+        const { data } = await (supabase.rpc as any)('calc_pawn_expected_until', {
           p_pawn_id: pawn.id,
           p_end_date: loanEnd.toISOString().slice(0, 10),
         });
@@ -68,7 +67,7 @@ export async function calculatePawnMetrics(
       /* interest today */ (async () => {
         const cached = options?.todayMap?.get(pawn.id);
         if (typeof cached === 'number') return cached;
-        const { data } = await (supabase.rpc as any)('calc_expected_until', {
+        const { data } = await (supabase.rpc as any)('calc_pawn_expected_until', {
           p_pawn_id: pawn.id,
           p_end_date: new Date().toISOString().slice(0, 10),
         });

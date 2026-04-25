@@ -25,6 +25,7 @@ import { MoneyInput } from '@/components/ui/money-input';
 import { Collateral } from '@/models/collateral';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getDisplayLabelByBuild } from '@/utils/nav-display-labels';
+import { CollateralNameInput } from '@/components/Pawns/CollateralNameInput';
 
 interface PawnEditModalProps {
   isOpen: boolean;
@@ -511,10 +512,12 @@ export function PawnEditModal({
               <Label htmlFor="collateralName" className="text-left sm:text-right font-medium">
                 Tên tài sản <span className="text-red-500">*</span>
               </Label>
-              <Input
+              <CollateralNameInput
                 id="collateralName"
                 value={collateralName}
-                onChange={(e) => setCollateralName(e.target.value)}
+                onChange={setCollateralName}
+                storeId={currentStore?.id}
+                collateralId={collateralId}
                 placeholder="Ví dụ: Xe máy Honda Wave, Nhẫn vàng 18k..."
                 required
               />
