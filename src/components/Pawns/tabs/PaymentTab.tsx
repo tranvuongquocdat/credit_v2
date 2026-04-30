@@ -47,10 +47,13 @@ export function PaymentTab({
   // Add loading state for checkbox operations
   const [loadingPeriods, setLoadingPeriods] = useState<Record<string, boolean>>({});
   const [isProcessingCheckbox, setIsProcessingCheckbox] = useState(false);
-  
+
   // State for generated periods from getExpectedMoney
   const [generatedPeriods, setGeneratedPeriods] = useState<PawnPaymentPeriod[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Optimistic updates để checkbox flip ngay, tránh nháy khi chờ DB+regen.
+  const [optimisticUpdates, setOptimisticUpdates] = useState<Record<string, boolean>>({});
   
   // Get user permissions
   const { hasPermission } = usePermissions();
@@ -172,6 +175,15 @@ export function PaymentTab({
   // Use generated periods for display
   const periodsToDisplay = generatedPeriods;
 
+  // Áp optimistic update lên trạng thái checked nếu có
+  const getEffectiveCheckedState = (period: PawnPaymentPeriod) => {
+    const periodId = period.id || `temp-${period.period_number}`;
+    if (periodId in optimisticUpdates) {
+      return optimisticUpdates[periodId];
+    }
+    return Boolean(period.id && period.id.startsWith('db-') && (period.actual_amount || 0) > 0);
+  };
+
   // Updated checkbox handler - simplified using cycles like Credit and Installment
   const handleCheckboxChange = async (period: PawnPaymentPeriod, checked: boolean, index: number) => {
     if (!pawn?.id || isProcessingCheckbox) return;
@@ -212,14 +224,17 @@ export function PaymentTab({
     }
     
     const { id: userId } = await getCurrentUser();
-    
+
     // Set global loading state
     setIsProcessingCheckbox(true);
-    
+
     // Set loading state for this period
     const periodId = period.id || `temp-${period.period_number}`;
     setLoadingPeriods(prev => ({ ...prev, [periodId]: true }));
-    
+
+    // Optimistic flip ngay để UI không phải chờ DB
+    setOptimisticUpdates(prev => ({ ...prev, [periodId]: checked }));
+
     try {
       if (checked) {
         // 1. Get latest payment date
@@ -374,17 +389,27 @@ export function PaymentTab({
           const latestPaidDateObj = new Date(latestPaidDate);
           const endDate = new Date(period.end_date.split('T')[0]);
           if (endDate.getTime() < latestPaidDateObj.getTime()) {
+            setOptimisticUpdates(prev => {
+              const next = { ...prev };
+              delete next[periodId];
+              return next;
+            });
             toast({ variant: 'destructive', title: 'Ngày này đã được đóng lãi. Bạn có thể tải lại bảng để xem lại' });
             return;
           }
         }
-        const checkedPeriods = periodsToDisplay.filter(p => 
+        const checkedPeriods = periodsToDisplay.filter(p =>
           p.id && p.id.startsWith('db-') && (p.actual_amount || 0) > 0
         );
-        
+
         checkedPeriods.sort((a, b) => b.period_number - a.period_number);
-        
+
         if (checkedPeriods.length > 0 && checkedPeriods[0].period_number !== period.period_number) {
+          setOptimisticUpdates(prev => {
+            const next = { ...prev };
+            delete next[periodId];
+            return next;
+          });
           toast({
             variant: "destructive",
             title: "Không thể bỏ đánh dấu",
@@ -435,20 +460,31 @@ export function PaymentTab({
         });
       }
       
+      // Clear optimistic update sau khi DB op thành công
+      setOptimisticUpdates(prev => {
+        const next = { ...prev };
+        delete next[periodId];
+        return next;
+      });
+
       // Trigger data change to regenerate periods
       if (onDataChange) onDataChange();
 
       // Badge warnings trên TopNavbar re-fetch ngay (không chờ poll 60s).
       window.dispatchEvent(new Event('warnings-refresh'));
 
-      // Thêm delay để đảm bảo database đã xử lý xong
-      setTimeout(() => {
-        // Gọi callback để cập nhật financial summary ngay lập tức
-        onPaymentUpdate?.();
-      }, 220);
-      
+      // Cập nhật financial summary ngay lập tức
+      onPaymentUpdate?.();
+
+
     } catch (error) {
       console.error('Error handling payment records:', error);
+      // Revert optimistic update khi có lỗi
+      setOptimisticUpdates(prev => {
+        const next = { ...prev };
+        delete next[periodId];
+        return next;
+      });
       toast({
         title: 'Lỗi',
         description: error instanceof Error ? error.message : 'Không thể xử lý bản ghi thanh toán',
@@ -529,8 +565,8 @@ export function PaymentTab({
 
   return (
     <div className="relative">
-      {/* Processing overlay */}
-      {isProcessingCheckbox && (
+      {/* Processing overlay - chỉ hiện khi không có optimistic update để tránh nháy */}
+      {isProcessingCheckbox && Object.keys(optimisticUpdates).length === 0 && (
         <div className="absolute inset-0 bg-white bg-opacity-70 z-10 flex items-center justify-center">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 shadow-lg">
             <div className="flex items-center">
@@ -540,9 +576,9 @@ export function PaymentTab({
           </div>
         </div>
       )}
-      
-      {/* Loading indicators */}
-      {isGenerating && (
+
+      {/* Loading indicator - chỉ hiện khi chưa có data nào (lần đầu load) */}
+      {isGenerating && periodsToDisplay.length === 0 && (
         <div className="flex items-center justify-center p-4 mb-4 bg-blue-50 border border-blue-200 rounded">
           <div className="h-4 w-4 rounded-full border-2 border-t-transparent border-blue-600 animate-spin mr-2"></div>
           <span className="text-blue-700">Đang tải...</span>
@@ -627,8 +663,8 @@ export function PaymentTab({
                 const other = period.other_amount || 0;
               const total = expected + other;
               
-              // Updated logic to determine if period has payments in DB
-              const hasPayments = Boolean(period.id && period.id.startsWith('db-') && actual > 0);
+              // Hiệu chỉnh trạng thái checked theo optimistic update để tránh nháy
+              const hasPayments = getEffectiveCheckedState(period);
                 const periodId = period.id || `temp-${period.period_number}`;
                 const isLoading = loadingPeriods[periodId];
                 const isDisabled = pawn?.status === PawnStatus.CLOSED || pawn?.status === PawnStatus.DELETED;

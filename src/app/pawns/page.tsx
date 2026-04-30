@@ -119,7 +119,7 @@ export default function PawnsPage() {
   const [totals, setTotals] = useState<PawnTotals | null>(null);
 
   // Count mode for collateral breakdown (persist localStorage)
-  const [countMode, setCountMode] = useState<CollateralCountMode>('contracts');
+  const [countMode, setCountMode] = useState<CollateralCountMode>('quantity');
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const saved = window.localStorage.getItem(COUNT_MODE_KEY);
@@ -425,16 +425,12 @@ export default function PawnsPage() {
   const handleClosePaymentHistory = (hasDataChanged?: boolean) => {
     setIsPaymentHistoryModalOpen(false);
     setPaymentHistoryPawn(null);
-    // Only refresh data if there were actual changes
     if (hasDataChanged) {
-      // Thêm độ trễ để đảm bảo database đã xử lý xong
-      setTimeout(() => {
-        // Refresh đầy đủ: list + totals + summary + pawn details.
-        // Không dựa vào triggerUpdate vì onUpdate chỉ fire khi quỹ đổi
-        // (tick đóng lãi không làm quỹ đổi → summary/details sẽ stale).
-        handleRefresh();
-        triggerUpdate();
-      }, 220);
+      // Refresh đầy đủ: list + totals + summary + pawn details.
+      // Không dựa vào triggerUpdate vì onUpdate chỉ fire khi quỹ đổi
+      // (tick đóng lãi không làm quỹ đổi → summary/details sẽ stale).
+      handleRefresh();
+      triggerUpdate();
     }
   };
   
@@ -448,6 +444,7 @@ export default function PawnsPage() {
       refreshPawnDetails();
     }
     fetchTotals(filters);
+    window.dispatchEvent(new Event('warnings-refresh')); // Badge cảnh báo trên TopNavbar cập nhật ngay
   };
   
 

@@ -453,7 +453,7 @@ export function SearchFilters({
               Đếm tài sản
             </label>
             <Select
-              value={countMode ?? 'contracts'}
+              value={countMode ?? 'quantity'}
               onValueChange={(v) => onChangeCountMode(v as 'contracts' | 'quantity')}
             >
               <SelectTrigger id="countMode" className="w-full">
