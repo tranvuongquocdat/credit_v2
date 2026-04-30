@@ -495,16 +495,12 @@ export function PaymentTab({
         delete newUpdates[periodId];
         return newUpdates;
       });
-      
-      // 3. Background sync without disrupting UI
-      setTimeout(() => {
-        handleBackgroundSync();
-        // Thêm delay để đảm bảo database đã xử lý xong
-        setTimeout(() => {
-          // Gọi callback để cập nhật financial summary ngay lập tức
-          onPaymentUpdate?.();
-        }, 220);
-      }, 220);
+
+      // 3. Refresh ngay lập tức (giống pattern Pawn): cập nhật ngày đóng kế tiếp,
+      //    badge cảnh báo trên TopNavbar và financial summary mà không chờ delay.
+      handleBackgroundSync();
+      window.dispatchEvent(new Event('warnings-refresh'));
+      onPaymentUpdate?.();
       
     } catch (error) {
       console.error('Error handling payment records:', error);

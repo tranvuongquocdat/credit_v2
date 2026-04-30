@@ -95,7 +95,7 @@ export default function CreditsPage() {
   const { summary: financialSummary, refresh: refreshSummary, loading: summaryLoading } = useCreditsSummary();
   
   // Lấy chi tiết tài chính & summary qua hook chung
-  const { details: creditDetails, loading: creditCalcLoading } = useCreditCalculations();
+  const { details: creditDetails, loading: creditCalcLoading, refresh: refreshCreditDetails } = useCreditCalculations();
   
   // Status codes are now available directly in credits data from credits_by_store view
   // Use auto update cash fund hook
@@ -409,18 +409,18 @@ export default function CreditsPage() {
     setIsPaymentHistoryModalOpen(false);
     setPaymentHistoryCredit(null);
     if (hasDataChanged) {
-      setTimeout(() => {
-        handleRefresh();
-        fetchTotals(filters);
-        triggerUpdate();
-      }, 220);
+      handleRefresh();
+      fetchTotals(filters);
+      triggerUpdate();
     }
   };
-  
+
   // Handle refresh after contract operations
   const handleRefresh = () => {
     refetch(); // Refresh credits list
-    refreshSummary(); // Refresh financial data
+    refreshSummary(); // Refresh financial summary
+    refreshCreditDetails(); // Refresh nextPayment / paidInterest cho cột "Ngày phải đóng lãi phí"
+    window.dispatchEvent(new Event('warnings-refresh')); // Badge cảnh báo trên TopNavbar cập nhật ngay
   };
   
   return (
