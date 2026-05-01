@@ -566,11 +566,11 @@ export default function PawnsPage() {
           onClose={() => setIsPawnCreateModalOpen(false)}
           onSuccess={() => {
             setIsPawnCreateModalOpen(false);
-            refetch(); // Refresh danh sách hợp đồng sau khi tạo mới
-            triggerUpdate(); // Trigger cash fund update
+            handleRefresh(); // Refresh full: list + summary + pawnDetails (nextPayment) + totals + warnings badge
+            triggerUpdate();
           }}
         />
-        
+
         {/* Modal chỉnh sửa hợp đồng */}
         {editPawnId && (
           <PawnEditModal
@@ -579,8 +579,8 @@ export default function PawnsPage() {
             pawnId={editPawnId}
             onSuccess={() => {
               setIsPawnEditModalOpen(false);
-              refetch(); // Refresh danh sách hợp đồng sau khi cập nhật
-              triggerUpdate(); // Trigger cash fund update
+              handleRefresh();
+              triggerUpdate();
             }}
           />
         )}

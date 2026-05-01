@@ -538,11 +538,12 @@ export default function CreditsPage() {
           onClose={() => setIsCreditCreateModalOpen(false)}
           onSuccess={() => {
             setIsCreditCreateModalOpen(false);
-            refetch(); // Refresh danh sách hợp đồng sau khi tạo mới
-            triggerUpdate(); // Trigger cash fund update
+            handleRefresh(); // Refresh full: list + summary + creditDetails (nextPayment) + warnings badge
+            fetchTotals(filters);
+            triggerUpdate();
           }}
         />
-        
+
         {/* Modal chỉnh sửa hợp đồng */}
         {editCreditId && (
           <CreditEditModal
@@ -551,8 +552,9 @@ export default function CreditsPage() {
             creditId={editCreditId}
             onSuccess={() => {
               setIsCreditEditModalOpen(false);
-              refetch(); // Refresh danh sách hợp đồng sau khi cập nhật
-              triggerUpdate(); // Trigger cash fund update
+              handleRefresh();
+              fetchTotals(filters);
+              triggerUpdate();
             }}
           />
         )}
