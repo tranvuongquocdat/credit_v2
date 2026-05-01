@@ -192,10 +192,10 @@ export function PawnWarningsTable({
             <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-24 sm:w-28">Tên KH</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28 hidden lg:table-cell">Số điện thoại</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-48 hidden lg:table-cell">Địa chỉ</th>
-            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-18 sm:w-24">Mã TS</th>
+            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-18 sm:w-24">SL</th>
             <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-20 sm:w-24">Tên TS</th>
             <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-14 sm:w-16">Tiền gốc</th>
-            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-14 sm:w-16">Tổng lãi</th>
+            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-14 sm:w-16">Tiền phí thuê</th>
             <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-16 sm:w-20">Tổng tiền</th>
             <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-24 sm:w-32">Lý do</th>
             <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm w-12 sm:w-16">Thao tác</th>
@@ -222,19 +222,29 @@ export function PawnWarningsTable({
               <td className="py-3 px-3 border-r border-gray-200 text-center hidden lg:table-cell">
                 {pawn.address || ""}
               </td>
-              <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center text-xs sm:text-sm">
-                {pawn.collateral_asset?.code || 'N/A'}
-              </td>
-              <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center text-xs sm:text-sm">
-                {(() => {
-                  const name = pawn.collateral_asset?.name ||
-                    (pawn.collateral_detail && typeof pawn.collateral_detail === 'object'
-                      ? pawn.collateral_detail.name
-                      : typeof pawn.collateral_detail === 'string' ? pawn.collateral_detail : null) || 'N/A';
-                  const qty = pawn.collateral_detail?.quantity;
-                  return qty ? `${name} (x${qty})` : name;
-                })()}
-              </td>
+              {(() => {
+                let detail: { name?: string | null; quantity?: number | null } | null = null;
+                const raw = pawn.collateral_detail;
+                if (raw) {
+                  if (typeof raw === 'string') {
+                    try { detail = JSON.parse(raw); } catch { detail = { name: raw }; }
+                  } else if (typeof raw === 'object') {
+                    detail = raw as any;
+                  }
+                }
+                const qty = detail?.quantity && detail.quantity > 0 ? detail.quantity : (detail?.name ? 1 : null);
+                const name = detail?.name || pawn.collateral_asset?.name || 'N/A';
+                return (
+                  <>
+                    <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center text-xs sm:text-sm">
+                      {qty ?? 'N/A'}
+                    </td>
+                    <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center text-xs sm:text-sm">
+                      {name}
+                    </td>
+                  </>
+                );
+              })()}
               <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center text-xs sm:text-sm">
                 {formatCurrency(pawn.loan_amount || 0)}
               </td>
@@ -268,7 +278,7 @@ export function PawnWarningsTable({
         </tbody>
         <tfoot className="bg-yellow-200 font-semibold">
           <tr>
-            <td colSpan={8} className="py-2 px-1 sm:px-3 text-center font-bold border-r border-t border-gray-200 hidden lg:table-cell text-xs sm:text-sm">
+            <td colSpan={7} className="py-2 px-1 sm:px-3 text-center font-bold border-r border-t border-gray-200 hidden lg:table-cell text-xs sm:text-sm">
               Tổng
             </td>
             <td colSpan={4} className="py-2 px-1 sm:px-3 text-center font-bold border-r border-t border-gray-200 lg:hidden text-xs sm:text-sm">

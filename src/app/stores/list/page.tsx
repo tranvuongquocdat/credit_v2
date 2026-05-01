@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react';
 import { Layout } from '@/components/Layout';
 import { StoreForm } from '@/components/Store';
-import { getStores, createStore, updateStore, deleteStore } from '@/lib/store';
+import { getStores, createStore, updateStore, deleteStore, restoreStore } from '@/lib/store';
 import { Store, StoreFormData, StoreStatus } from '@/models/store';
-import { Plus, Pencil, Trash2, RefreshCw, SearchIcon, MoreVertical, PhoneIcon } from 'lucide-react';
+import { Plus, Pencil, Trash2, RefreshCw, SearchIcon, MoreVertical, PhoneIcon, Undo2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useRouter } from 'next/navigation';
+import { useStore } from '@/contexts/StoreContext';
 
 // Shadcn UI components
 import { Button } from "@/components/ui/button";
@@ -96,17 +98,29 @@ export default function StoresPage() {
   // State cho search và filter
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  
+  const [showDeleted, setShowDeleted] = useState(false);
+
   // State cho dữ liệu và loading
   const [stores, setStores] = useState<Store[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // State cho dialog
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Counter để ép re-fetch sau mutation (Add/Update/Delete/Restore).
+  // Increment → useEffect chạy → list cập nhật ngay không cần bấm "Làm mới".
+  const [refreshKey, setRefreshKey] = useState(0);
+  const { refreshStores: refreshStoreContext } = useStore();
+  const triggerRefresh = () => {
+    setRefreshKey((k) => k + 1);
+    // Đồng bộ luôn dropdown chọn store ở Layout/sidebar và mọi component dùng useStore.
+    refreshStoreContext();
+  };
   
   // Permissions
   const { hasPermission, loading: permissionsLoading } = usePermissions();
@@ -137,7 +151,8 @@ export default function StoresPage() {
         currentPage,
         pageSize,
         searchQuery,
-        statusFilter
+        statusFilter,
+        showDeleted
       );
       
       if (error) {
@@ -159,7 +174,7 @@ export default function StoresPage() {
     if (canAccessStoresList) {
       fetchStores();
     }
-  }, [currentPage, pageSize, searchQuery, statusFilter, canAccessStoresList]);
+  }, [currentPage, pageSize, searchQuery, statusFilter, showDeleted, canAccessStoresList, refreshKey]);
 
   // Xử lý tìm kiếm
   const handleSearch = () => {
@@ -186,7 +201,7 @@ export default function StoresPage() {
       }
       
       setIsFormModalOpen(false);
-      fetchStores(); // Refresh danh sách
+      triggerRefresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể tạo cửa hàng mới');
     } finally {
@@ -209,7 +224,7 @@ export default function StoresPage() {
       
       setIsFormModalOpen(false);
       setSelectedStore(null);
-      fetchStores(); // Refresh danh sách
+      triggerRefresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể cập nhật cửa hàng');
     } finally {
@@ -232,7 +247,7 @@ export default function StoresPage() {
       
       setIsDeleteModalOpen(false);
       setSelectedStore(null);
-      fetchStores(); // Refresh danh sách
+      triggerRefresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể xóa cửa hàng');
     } finally {
@@ -250,6 +265,35 @@ export default function StoresPage() {
   const openDeleteModal = (store: Store) => {
     setSelectedStore(store);
     setIsDeleteModalOpen(true);
+  };
+
+  // Mở modal khôi phục
+  const openRestoreModal = (store: Store) => {
+    setSelectedStore(store);
+    setIsRestoreModalOpen(true);
+  };
+
+  // Xử lý khôi phục cửa hàng đã xoá mềm
+  const handleRestoreStore = async () => {
+    if (!selectedStore) return;
+
+    setIsSubmitting(true);
+
+    try {
+      const { error } = await restoreStore(selectedStore.id);
+
+      if (error) {
+        throw new Error((error as any)?.message || 'Không thể khôi phục cửa hàng');
+      }
+
+      setIsRestoreModalOpen(false);
+      setSelectedStore(null);
+      triggerRefresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Không thể khôi phục cửa hàng');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Handle page change
@@ -439,6 +483,20 @@ export default function StoresPage() {
                 </Select>
               </div>
             </div>
+
+            <div className="flex items-center gap-2 mb-4">
+              <Checkbox
+                id="showDeleted"
+                checked={showDeleted}
+                onCheckedChange={(checked) => {
+                  setShowDeleted(!!checked);
+                  setCurrentPage(1);
+                }}
+              />
+              <label htmlFor="showDeleted" className="text-sm font-medium text-gray-700 cursor-pointer">
+                Hiện cửa hàng đã xoá
+              </label>
+            </div>
             
             <div className="flex flex-col sm:flex-row justify-between gap-2 mb-4">
               <div className="flex gap-2">
@@ -508,14 +566,22 @@ export default function StoresPage() {
                   </TableHeader>
                   <TableBody>
                     {stores.map((store, index) => (
-                      <TableRow key={store.id} className="hover:bg-gray-50 transition-colors">
+                      <TableRow
+                        key={store.id}
+                        className={`hover:bg-gray-50 transition-colors ${showDeleted ? 'opacity-60 bg-gray-50' : ''}`}
+                      >
                         <TableCell className="py-3 px-3 text-gray-500 border-b border-r border-gray-200">
                           {(currentPage - 1) * pageSize + index + 1}
                         </TableCell>
                         <TableCell className="py-3 px-3 border-b border-r border-gray-200">
-                          <div className="font-medium cursor-pointer hover:text-primary" 
-                            onClick={() => openEditModal(store)}>
+                          <div
+                            className={`font-medium ${showDeleted ? '' : 'cursor-pointer hover:text-primary'}`}
+                            onClick={() => !showDeleted && openEditModal(store)}
+                          >
                             {store.name}
+                            {showDeleted && (
+                              <span className="ml-2 text-xs text-red-600 font-normal">(Đã xoá)</span>
+                            )}
                           </div>
                           <div className="text-sm text-muted-foreground">{store.phone}</div>
                         </TableCell>
@@ -540,20 +606,35 @@ export default function StoresPage() {
                         </TableCell>
                         <TableCell className="py-3 px-3 border-b border-gray-200">
                           <div className="flex justify-center space-x-1">
-                            <Button 
-                              variant="ghost" 
-                              className="h-8 w-8 p-0" 
-                              onClick={() => openEditModal(store)}
-                            >
-                              <Pencil className="h-4 w-4 text-gray-500" />
-                            </Button>
-                            {/* <Button 
-                              variant="ghost" 
-                              className="h-8 w-8 p-0" 
-                              onClick={() => openDeleteModal(store)}
-                            >
-                              <Trash2 className="h-4 w-4 text-gray-500" />
-                            </Button> */}
+                            {showDeleted ? (
+                              <Button
+                                variant="ghost"
+                                className="h-8 w-8 p-0"
+                                onClick={() => openRestoreModal(store)}
+                                title="Khôi phục cửa hàng"
+                              >
+                                <Undo2 className="h-4 w-4 text-blue-600" />
+                              </Button>
+                            ) : (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  className="h-8 w-8 p-0"
+                                  onClick={() => openEditModal(store)}
+                                  title="Chỉnh sửa"
+                                >
+                                  <Pencil className="h-4 w-4 text-gray-500" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  className="h-8 w-8 p-0"
+                                  onClick={() => openDeleteModal(store)}
+                                  title="Xoá cửa hàng"
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
+                              </>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -594,16 +675,42 @@ export default function StoresPage() {
                 <AlertDialogTitle>Xác nhận xóa</AlertDialogTitle>
                 <AlertDialogDescription>
                   Bạn có chắc chắn muốn xóa cửa hàng: <span className="font-semibold">{selectedStore?.name}</span>?
+                  <br />
+                  <span className="text-xs text-gray-500">
+                    Đây là xoá mềm. Cửa hàng có thể được khôi phục sau bằng cách tích "Hiện cửa hàng đã xoá".
+                  </span>
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel disabled={isSubmitting}>Hủy bỏ</AlertDialogCancel>
                 <AlertDialogAction
-                  onClick={handleDeleteStore} 
+                  onClick={handleDeleteStore}
                   disabled={isSubmitting}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
                   {isSubmitting ? 'Đang xử lý...' : 'Xác nhận xóa'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* Modal Khôi phục */}
+          <AlertDialog open={isRestoreModalOpen} onOpenChange={setIsRestoreModalOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Khôi phục cửa hàng</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Khôi phục cửa hàng: <span className="font-semibold">{selectedStore?.name}</span>?
+                  Cửa hàng sẽ trở lại danh sách hoạt động.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isSubmitting}>Hủy bỏ</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleRestoreStore}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Đang xử lý...' : 'Khôi phục'}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

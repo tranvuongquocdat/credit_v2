@@ -1,6 +1,6 @@
 "use client";
 import { useEffect } from 'react';
-import { Store, StoreFormData } from '@/models/store';
+import { Store, StoreFormData, StoreStatus } from '@/models/store';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface StoreFormProps {
   initialData?: Store | null;
@@ -39,6 +40,7 @@ const formSchema = z.object({
   phone: z.string()
     .min(1, { message: "Số điện thoại không được để trống" })
     .regex(/^[0-9]{10,11}$/, { message: "Số điện thoại phải có 10-11 chữ số" }),
+  status: z.nativeEnum(StoreStatus),
 });
 
 export default function StoreForm({ initialData, onSubmit, isSubmitting, hideButtons = false, onClose }: StoreFormProps) {
@@ -49,9 +51,10 @@ export default function StoreForm({ initialData, onSubmit, isSubmitting, hideBut
       name: '',
       address: '',
       phone: '',
+      status: StoreStatus.ACTIVE,
     },
   });
-  
+
   // Cập nhật giá trị form khi initialData thay đổi
   useEffect(() => {
     if (initialData) {
@@ -59,6 +62,7 @@ export default function StoreForm({ initialData, onSubmit, isSubmitting, hideBut
         name: initialData.name || '',
         address: initialData.address || '',
         phone: initialData.phone || '',
+        status: (initialData.status as StoreStatus) || StoreStatus.ACTIVE,
       });
     } else {
       // Reset form khi không có initialData (tạo mới)
@@ -66,6 +70,7 @@ export default function StoreForm({ initialData, onSubmit, isSubmitting, hideBut
         name: '',
         address: '',
         phone: '',
+        status: StoreStatus.ACTIVE,
       });
     }
   }, [initialData, form]);
@@ -130,6 +135,29 @@ export default function StoreForm({ initialData, onSubmit, isSubmitting, hideBut
                     {...field}
                   />
                 </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {/* Trạng thái */}
+          <FormField
+            control={form.control}
+            name="status"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Trạng thái <span className="text-destructive">*</span></FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Chọn trạng thái" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value={StoreStatus.ACTIVE}>Hoạt động</SelectItem>
+                    <SelectItem value={StoreStatus.INACTIVE}>Không hoạt động</SelectItem>
+                  </SelectContent>
+                </Select>
                 <FormMessage />
               </FormItem>
             )}

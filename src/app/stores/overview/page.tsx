@@ -79,6 +79,8 @@ export default function OverviewPage() {
           .from('stores')
           .select('id, name, investment')
           .eq('created_by', userId as string)
+          .eq('is_deleted', false)
+          .eq('status', 'active')
           .order('name', { ascending: true });
 
         storesData = (data as any[] as StoreData[]) || [];
@@ -101,6 +103,8 @@ export default function OverviewPage() {
           .from('stores')
           .select('id, name, investment')
           .eq('id', storeId)
+          .eq('is_deleted', false)
+          .eq('status', 'active')
           .order('name', { ascending: true });
 
         storesData = (data as any[] as StoreData[]) || [];
