@@ -19,7 +19,8 @@ export async function getStores(
   page: number = 1,
   limit: number = 10,
   searchQuery: string = '',
-  statusFilter: string = ''
+  statusFilter: string = '',
+  showDeleted: boolean = false  // true = chỉ hiện cửa hàng đã xoá mềm
 ) {
   try {
     // Đã import tĩnh ở đầu file – dùng trực tiếp để tận dụng cache của auth
@@ -39,7 +40,7 @@ export async function getStores(
     let query = supabase
       .from(TABLE_NAME)
       .select('*', { count: 'exact' })
-      .eq('is_deleted', false)
+      .eq('is_deleted', showDeleted)
       .order('created_at', { ascending: false });
 
     // Áp dụng phân quyền theo role
@@ -189,12 +190,25 @@ export async function updateStore(id: string, storeData: Partial<StoreFormData>)
 export async function deleteStore(id: string) {
   const { data, error } = await supabase
     .from(TABLE_NAME)
-    .update({ 
+    .update({
       is_deleted: true,
-      updated_at: new Date().toISOString() 
+      updated_at: new Date().toISOString()
     })
     .eq('id', id);
-  
+
+  return { data, error };
+}
+
+// Khôi phục cửa hàng đã xoá mềm
+export async function restoreStore(id: string) {
+  const { data, error } = await supabase
+    .from(TABLE_NAME)
+    .update({
+      is_deleted: false,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', id);
+
   return { data, error };
 }
 
