@@ -229,9 +229,10 @@ export function PawnEditModal({
         // Set form values from pawn data
         setContractCode(pawnData.contract_code || '');
         setOriginalContractCode(pawnData.contract_code || '');
-        setIdNumber(pawnData.id_number || '');
-        setPhone(pawnData.phone || '');
-        setAddress(pawnData.address || '');
+        // Đọc customer info từ join customers (bảng pawns không có cột id_number/phone/address).
+        setIdNumber(pawnData.customer?.id_number || '');
+        setPhone(pawnData.customer?.phone || '');
+        setAddress(pawnData.customer?.address || '');
         setCollateralId(pawnData.collateral_id || '');
         setInterestType(pawnData.interest_ui_type || 'daily');
         setInterestNotation(pawnData.interest_notation || 'k_per_million');

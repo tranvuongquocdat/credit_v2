@@ -220,7 +220,7 @@ export function PawnWarningsTable({
                 {pawn.customer?.phone || ""}
               </td>
               <td className="py-3 px-3 border-r border-gray-200 text-center hidden lg:table-cell">
-                {pawn.address || ""}
+                {pawn.customer?.address || ""}
               </td>
               {(() => {
                 let detail: { name?: string | null; quantity?: number | null } | null = null;
