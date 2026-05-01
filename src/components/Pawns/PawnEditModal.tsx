@@ -16,7 +16,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { DatePicker } from '@/components/ui/date-picker';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { getPawnById, hasPawnAnyPayments, updatePawn } from '@/lib/pawn';
-import { getCustomers } from '@/lib/customer';
+import { getCustomers, updateCustomer } from '@/lib/customer';
+import { supabase } from '@/lib/supabase';
 import { getCollateralById, getCollateralsByStore } from '@/lib/collateral';
 import { Customer } from '@/models/customer';
 import { PawnStatus, UpdatePawnParams, Pawn, InterestType, CollateralDetail } from '@/models/pawn';
@@ -49,6 +50,7 @@ export function PawnEditModal({
   // State for form values
   const [customerName, setCustomerName] = useState('');
   const [contractCode, setContractCode] = useState('');
+  const [originalContractCode, setOriginalContractCode] = useState('');
   const [idNumber, setIdNumber] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
@@ -226,6 +228,7 @@ export function PawnEditModal({
         
         // Set form values from pawn data
         setContractCode(pawnData.contract_code || '');
+        setOriginalContractCode(pawnData.contract_code || '');
         setIdNumber(pawnData.id_number || '');
         setPhone(pawnData.phone || '');
         setAddress(pawnData.address || '');
@@ -321,7 +324,33 @@ export function PawnEditModal({
       if (!currentStore?.id) {
         throw new Error('Vui lòng chọn chi nhánh trước khi cập nhật hợp đồng');
       }
-      
+
+      // Check trùng Mã HĐ nếu user đổi: cảnh báo (cho phép sau khi confirm).
+      // DB không có UNIQUE constraint nên lý do duy nhất chặn là UX (URL/search).
+      if (contractCode.trim() && contractCode.trim() !== originalContractCode.trim()) {
+        const { data: dupRows } = await supabase
+          .from('pawns')
+          .select('id, contract_code, customer_id, customers(name)')
+          .eq('store_id', currentStore.id)
+          .eq('contract_code', contractCode.trim())
+          .neq('id', pawnId)
+          .neq('status', PawnStatus.DELETED)
+          .limit(1);
+
+        if (dupRows && dupRows.length > 0) {
+          const dup = dupRows[0] as any;
+          const dupCustomerName = dup.customers?.name || 'không xác định';
+          const ok = window.confirm(
+            `Mã HĐ "${contractCode.trim()}" đã tồn tại ở 1 HĐ khác (KH: ${dupCustomerName}).\n` +
+            `Trùng mã sẽ làm khó tra cứu trên URL/search. Vẫn lưu?`
+          );
+          if (!ok) {
+            setIsLoading(false);
+            return;
+          }
+        }
+      }
+
       // Map the UI interest type to the backend interest type
       let backendInterestType = InterestType.PERCENTAGE;
       let actualInterestValue = parseFloat(interestValue || '0');
@@ -382,9 +411,27 @@ export function PawnEditModal({
       
       // Call API to update pawn
       const { data, error } = await updatePawn(pawnId, updateData);
-      
+
       if (error) throw error;
-      
+
+      // Update thông tin khách hàng (CCCD/SĐT/Địa chỉ) — áp dụng cho mọi HĐ cùng customer_id.
+      // Best-effort: nếu fail chỉ toast warning, KHÔNG rollback pawn vì dữ liệu HĐ đã đúng.
+      if (selectedCustomerId) {
+        const { error: custErr } = await updateCustomer(selectedCustomerId, {
+          id_number: idNumber.trim() || null,
+          phone: phone.trim() || null,
+          address: address.trim() || null,
+        });
+        if (custErr) {
+          console.error('updateCustomer failed:', custErr);
+          toast({
+            variant: 'destructive',
+            title: 'Đã lưu HĐ nhưng không cập nhật được thông tin khách',
+            description: (custErr as { message?: string })?.message || 'Vui lòng thử lại ở trang Khách hàng.',
+          });
+        }
+      }
+
       // Success - close modal and notify parent
       if (onSuccess) {
         onSuccess();
@@ -445,47 +492,50 @@ export function PawnEditModal({
             
             <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
               <Label htmlFor="contractCode" className="text-left sm:text-right font-medium">Mã HĐ</Label>
-              <Input 
+              <Input
                 id="contractCode"
                 value={contractCode}
                 onChange={(e) => setContractCode(e.target.value)}
                 placeholder=""
-                disabled
               />
             </div>
-            
+
             <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
               <Label htmlFor="idNumber" className="text-left sm:text-right font-medium">Số CCCD/Hộ chiếu</Label>
-              <Input 
+              <Input
                 id="idNumber"
                 value={idNumber}
                 onChange={(e) => setIdNumber(e.target.value)}
                 placeholder=""
-                disabled
               />
             </div>
-            
+
             <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
               <Label htmlFor="phone" className="text-left sm:text-right font-medium">SĐT</Label>
-              <Input 
+              <Input
                 id="phone"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder=""
-                disabled
               />
             </div>
-            
+
             <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-start">
               <Label htmlFor="address" className="text-left sm:text-right font-medium sm:mt-2">Địa chỉ</Label>
-              <Textarea 
+              <Textarea
                 id="address"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 rows={3}
                 placeholder=""
-                disabled
               />
+            </div>
+
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4">
+              <div />
+              <p className="text-xs text-gray-500 italic">
+                Thay đổi CCCD/SĐT/Địa chỉ áp dụng cho mọi HĐ của khách hàng này.
+              </p>
             </div>
             
             <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
