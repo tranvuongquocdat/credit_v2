@@ -57,15 +57,31 @@ function calculatePawnReason(pawn: any, latestPaidDate?: string | null): string 
     
     // Only calculate if there are unpaid days
     if (effectiveEndDate >= firstUnpaidDate) {
-      const unpaidDays = Math.floor(
-        (effectiveEndDate.getTime() - firstUnpaidDate.getTime()) / (1000 * 60 * 60 * 24)
-      ) + 1; // +1 to include end date
-      
-      if (unpaidDays > 0) {
-        // Use existing interest calculator for accurate calculation
-        const dailyRate = calculateDailyRateForPawn(pawn);
-        const lateAmount = Math.round(pawn.loan_amount * dailyRate * unpaidDays);
-        
+      const dailyRate = calculateDailyRateForPawn(pawn);
+      let lateAmount = 0;
+
+      if (pawn.is_advance_payment) {
+        // HĐ đóng lãi trước: nợ fixed = lãi 1 kỳ × số kỳ chưa đóng
+        const interestPeriod = pawn.interest_period || 30;
+        const daysSinceUnpaid = Math.floor(
+          (effectiveEndDate.getTime() - firstUnpaidDate.getTime()) / (1000 * 60 * 60 * 24)
+        );
+        if (daysSinceUnpaid >= 0) {
+          const cyclesUnpaid = Math.floor(daysSinceUnpaid / interestPeriod) + 1;
+          const oneCycleInterest = pawn.loan_amount * dailyRate * interestPeriod;
+          lateAmount = Math.round(cyclesUnpaid * oneCycleInterest);
+        }
+      } else {
+        // HĐ thường (đóng lãi sau): lãi tích lũy theo ngày
+        const unpaidDays = Math.floor(
+          (effectiveEndDate.getTime() - firstUnpaidDate.getTime()) / (1000 * 60 * 60 * 24)
+        ) + 1;
+        if (unpaidDays > 0) {
+          lateAmount = Math.round(pawn.loan_amount * dailyRate * unpaidDays);
+        }
+      }
+
+      if (lateAmount > 0) {
         reasons.push(`Chậm ${formatCurrency(lateAmount)}`);
       }
     }
