@@ -463,7 +463,9 @@ export default function InstallmentsPage() {
             setIsInstallmentCreateModalOpen(false);
             refetch();
             void triggerFinancialRefresh();
-            triggerUpdate(); // Trigger cash fund update
+            fetchTotals(filters);
+            window.dispatchEvent(new Event('warnings-refresh'));
+            triggerUpdate();
           }}
         />
 
@@ -476,7 +478,10 @@ export default function InstallmentsPage() {
             onSuccess={() => {
               setIsInstallmentEditModalOpen(false);
               refetch();
-              triggerUpdate(); // Trigger cash fund update
+              void triggerFinancialRefresh();
+              fetchTotals(filters);
+              window.dispatchEvent(new Event('warnings-refresh'));
+              triggerUpdate();
             }}
           />
         )}
