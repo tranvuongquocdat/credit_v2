@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { EmployeeFormData, EmployeeStatus, EmployeeWithProfile } from '@/models/employee';
 import { Store } from '@/models/store';
-import { getStores } from '@/lib/store';
+import { getAllActiveStores } from '@/lib/store';
 
 interface EmployeeFormProps {
   employee?: EmployeeWithProfile;
@@ -42,13 +42,13 @@ export default function EmployeeForm({ employee, onSubmit, isSubmitting, isEditi
     }
   }, [employee]);
 
-  // Fetch danh sách cửa hàng
+  // Fetch danh sách cửa hàng đang hoạt động (không hiện store inactive/đã xoá)
   useEffect(() => {
     const fetchStores = async () => {
       setIsLoadingStores(true);
       try {
-        const { data } = await getStores(1, 100); // Lấy tối đa 100 cửa hàng
-        setStores(data || []);
+        const { data } = await getAllActiveStores();
+        setStores((data as Store[]) || []);
       } catch (error) {
         console.error('Error fetching stores:', error);
       } finally {

@@ -78,6 +78,7 @@ async function getPawnsWithUnaccentedSearch(
         name: item.customer_name || '',
         phone: item.customer_phone || undefined,
         id_number: item.customer_id_number || undefined,
+        address: item.customer_address || undefined,
         blacklist_reason: undefined, // Not returned by RPC
       } : undefined;
       
@@ -183,6 +184,7 @@ export async function getPawns(
           name,
           phone,
           id_number,
+          address,
           blacklist_reason
         )
       `, { count: 'exact' })
@@ -357,6 +359,7 @@ export async function getPawnById(id: string, signal?: AbortSignal) {
           name,
           phone,
           id_number,
+          address,
           blacklist_reason
         )
       `)
