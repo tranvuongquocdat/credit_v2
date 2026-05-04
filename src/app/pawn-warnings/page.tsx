@@ -370,7 +370,6 @@ export default function PawnWarningsPage() {
                     <SelectItem value="tomorrow_due">Ngày mai đóng</SelectItem>
                     <SelectItem value="late">Chậm lãi</SelectItem>
                     <SelectItem value="overdue">Quá hạn</SelectItem>
-                    <SelectItem value="end_today">Kết thúc hôm nay</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
