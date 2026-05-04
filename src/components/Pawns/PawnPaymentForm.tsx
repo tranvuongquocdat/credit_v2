@@ -61,9 +61,18 @@ export function PawnPaymentForm({
     return format(new Date(), 'yyyy-MM-dd');
   });
 
-  // Mặc định số ngày = interestPeriod nếu có
-  const [days, setDays] = useState<string>((interestPeriod || pawn.interest_period || 10).toString());
-  
+  // Mặc định số ngày = interestPeriod, nhưng với HĐ quá hạn / chậm lãi → tới ngày hôm nay
+  const [days, setDays] = useState<string>(() => {
+    const defaultPeriod = interestPeriod || pawn.interest_period || 10;
+    // status_code (view) viết HOA: 'OVERDUE' | 'LATE_INTEREST' — status (enum) viết thường
+    const status = String((pawn as any).status_code || (pawn as any).status || '').toLowerCase();
+    if (status === 'overdue' || status === 'late_interest') {
+      const diffToday = differenceInDays(new Date(), new Date(startDate)) + 1;
+      if (diffToday > 0) return diffToday.toString();
+    }
+    return defaultPeriod.toString();
+  });
+
   // Tính ngày kết thúc dựa trên ngày bắt đầu và số ngày
   const [endDate, setEndDate] = useState<string>(() => {
     const start = new Date(startDate);
@@ -126,6 +135,15 @@ export function PawnPaymentForm({
     // Cho phép xóa trắng để nhập lại
     if (newDays === '' || parseInt(newDays) > 0) {
       setDays(newDays);
+    }
+  };
+
+  // Khi user chọn ngày kết thúc qua DatePicker → tính ngược ra số ngày
+  const handleEndDateChange = (newEndDate: string) => {
+    if (!newEndDate) return;
+    const diff = differenceInDays(new Date(newEndDate), new Date(startDate)) + 1;
+    if (diff > 0) {
+      setDays(diff.toString());
     }
   };
   
@@ -193,9 +211,6 @@ export function PawnPaymentForm({
     });
   };
   
-  // Format ngày để hiển thị
-  const formattedEndDate = format(new Date(endDate), 'dd/MM/yyyy');
-
   return (
     <div className="border rounded-md p-4 bg-white">
       <h3 className="font-medium mb-4">Đóng lãi phí tùy biến theo ngày</h3>
@@ -226,14 +241,20 @@ export function PawnPaymentForm({
           </div>
 
           <div className="text-right pr-2">Đến ngày :</div>
-          <div className="text-blue-600">
-            {formattedEndDate}
-            <span className="ml-3 text-gray-500">
-              {nextPaymentDate === "Hoàn thành" 
-                ? "( Đây là kỳ cuối cùng )" 
+          <div className="flex items-center gap-2">
+            <DatePicker
+              value={endDate}
+              onChange={handleEndDateChange}
+              className="w-64"
+              minDate={startDate}
+              disabled={disabled}
+            />
+            <span className="text-gray-500">
+              {nextPaymentDate === "Hoàn thành"
+                ? "( Đây là kỳ cuối cùng )"
                 : `( Ngày đóng lãi phí tiếp: ${nextPaymentDate} )`}
             </span>
-            </div>
+          </div>
 
           <div className="text-right pr-2">Tiền lãi phí :</div>
           <div className="flex items-center gap-3">
