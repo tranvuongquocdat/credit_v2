@@ -154,7 +154,7 @@ export function PawnsTable({
                 <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Ngày vay</TableHead>
                 <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Lãi đã đóng</TableHead>
                 <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Nợ cũ</TableHead>
-                <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Tiền thuê đến hôm nay</TableHead>
+                <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Phí thuê đến hôm nay</TableHead>
                 <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Ngày đóng</TableHead>
                 <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Trạng thái</TableHead>
                 <TableHead className="py-2 px-3 text-center font-medium border-b border-gray-200">Thao tác</TableHead>
@@ -403,7 +403,7 @@ export function PawnsTable({
               <TableCell className="py-2 px-1 lg:px-3 text-center text-rose-600 font-bold text-xs lg:text-sm">{formatCurrency(totals.total_paid_interest)}</TableCell>
               {/* Nợ cũ - hidden on mobile */}
               <TableCell className="py-2 px-3 text-center text-rose-600 font-bold hidden lg:table-cell">{formatCurrency(totals.total_old_debt)}</TableCell>
-              {/* Tiền thuê đến hôm nay - hidden on mobile */}
+              {/* Phí thuê đến hôm nay - hidden on mobile */}
               <TableCell className="py-2 px-3 text-center text-rose-600 font-bold hidden lg:table-cell">
                 {formatCurrency(
                   pawns.reduce((sum, p) => {
@@ -500,7 +500,7 @@ export function PawnsTable({
                     </span>
                   </div>
                   <div>
-                    <span className="text-gray-600">Tiền thuê đến hôm nay: </span>
+                    <span className="text-gray-600">Phí thuê đến hôm nay: </span>
                     <span className="font-medium text-rose-600">
                       {formatCurrency(Math.max(0, (financialDetail?.interestToday || 0) - (financialDetail?.paidInterest || 0)))}
                     </span>
@@ -610,7 +610,7 @@ export function PawnsTable({
                 <div className="font-bold text-rose-600">{formatCurrency(totals.total_old_debt)}</div>
               </div>
               <div className="text-center">
-                <div className="text-gray-600">Tiền thuê đến hôm nay</div>
+                <div className="text-gray-600">Phí thuê đến hôm nay</div>
                 <div className="font-bold text-rose-600">
                   {formatCurrency(
                     pawns.reduce((sum, p) => {

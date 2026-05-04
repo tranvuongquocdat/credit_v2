@@ -2,19 +2,19 @@ import { supabase } from '@/lib/supabase';
 import { PawnWithCustomerAndCollateral, PawnStatus } from '@/models/pawn';
 import { calculateDailyRateForPawn } from '@/lib/interest-calculator';
 import { formatCurrency } from '@/lib/utils';
+import { format } from 'date-fns';
 
 // Enhanced reason filter types
-export type PawnReasonFilter = "all" | "today_due" | "tomorrow_due" | "late" | "overdue" | "end_today";
+export type PawnReasonFilter = "all" | "today_due" | "tomorrow_due" | "late" | "overdue";
 
 export function categorizePawnReason(reason: string): PawnReasonFilter[] {
   const categories: PawnReasonFilter[] = [];
-  
+
   if (reason.includes("Hôm nay phải đóng")) categories.push("today_due");
   if (reason.includes("Ngày mai đóng")) categories.push("tomorrow_due");
-  if (reason.includes("Chậm") && (reason.includes("VND") || reason.includes("₫"))) categories.push("late");
+  if (reason.includes("Phí thuê") && (reason.includes("VND") || reason.includes("₫"))) categories.push("late");
   if (reason.includes("Quá hạn")) categories.push("overdue");
-  if (reason.includes("kết thúc hôm nay")) categories.push("end_today");
-  
+
   return categories;
 }
 
@@ -27,14 +27,15 @@ export function categorizePawnReason(reason: string): PawnReasonFilter[] {
  *   → loan × dailyRate × interestPeriod × cyclesUnpaid
  */
 export function calculateUnpaidInterestAmount(pawn: any, latestPaidDate: string | null): number {
-  const today = new Date().toISOString().split('T')[0];
+  // Local date (giờ VN) thay vì UTC để không lệch 1 ngày từ 0h–7h sáng
+  const today = format(new Date(), 'yyyy-MM-dd');
   const statusCode = pawn.status_code;
 
   // Contract end date calculation
   const contractStart = new Date(pawn.loan_date);
   const contractEnd = new Date(contractStart);
   contractEnd.setDate(contractEnd.getDate() + pawn.loan_period - 1);
-  const contractEndStr = contractEnd.toISOString().split('T')[0];
+  const contractEndStr = format(contractEnd, 'yyyy-MM-dd');
 
   // First unpaid date
   const firstUnpaidDate = latestPaidDate
@@ -83,27 +84,24 @@ export function calculateUnpaidInterestAmount(pawn: any, latestPaidDate: string 
  * Calculate enhanced pawn reason with late money amount
  */
 function calculatePawnReason(pawn: any, latestPaidDate?: string | null): string {
-  const today = new Date().toISOString().split('T')[0];
+  // Local date (giờ VN) thay vì UTC để không lệch 1 ngày từ 0h–7h sáng
+  const today = format(new Date(), 'yyyy-MM-dd');
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
-  
+  const tomorrowStr = format(tomorrow, 'yyyy-MM-dd');
+
   // Contract end date calculation
   const contractStart = new Date(pawn.loan_date);
   const contractEnd = new Date(contractStart);
   contractEnd.setDate(contractEnd.getDate() + pawn.loan_period - 1);
-  const contractEndStr = contractEnd.toISOString().split('T')[0];
+  const contractEndStr = format(contractEnd, 'yyyy-MM-dd');
   
   const nextPaymentDate = pawn.next_payment_date;
   const statusCode = pawn.status_code;
   
   let reasons: string[] = [];
-  
-  // 1. Check due dates first (can combine with status)
-  if (contractEndStr === today) {
-    reasons.push("Hợp đồng kết thúc hôm nay");
-  }
-  
+
+  // 1. Check due dates (pawn không có "kết thúc HĐ" thực sự — chỉ có hết kỳ lãi)
   if (nextPaymentDate === tomorrowStr) {
     reasons.push("Ngày mai đóng lãi");
   } else if (nextPaymentDate === today) {
@@ -154,7 +152,7 @@ function calculatePawnReason(pawn: any, latestPaidDate?: string | null): string 
       }
 
       if (lateAmount > 0) {
-        reasons.push(`Chậm ${formatCurrency(lateAmount)}`);
+        reasons.push(`Phí thuê ${formatCurrency(lateAmount)}`);
       }
     }
   }
@@ -162,12 +160,18 @@ function calculatePawnReason(pawn: any, latestPaidDate?: string | null): string 
   // 3. Add status-specific reasons
   switch (statusCode) {
     case 'OVERDUE':
-      // Contract completely expired
+      // Quá hạn = số ngày từ kỳ lãi cuối đã đóng (hoặc ngày vay) tới hôm nay,
+      // khớp với "(N ngày)" subtitle bên cột Phí thuê đến hôm nay trang Pawn.
+      const startRef = latestPaidDate ? new Date(latestPaidDate) : new Date(pawn.loan_date);
+      startRef.setHours(0, 0, 0, 0);
+      const todayMid = new Date(today);
+      todayMid.setHours(0, 0, 0, 0);
       const daysOverdue = Math.floor(
-        (new Date(today).getTime() - new Date(contractEndStr).getTime()) 
-        / (1000 * 60 * 60 * 24)
+        (todayMid.getTime() - startRef.getTime()) / (1000 * 60 * 60 * 24)
       );
-      reasons.push(`Quá hạn ${daysOverdue} ngày`);
+      if (daysOverdue > 0) {
+        reasons.push(`Quá hạn ${daysOverdue} ngày`);
+      }
       break;
       
     case 'LATE_INTEREST':
@@ -198,7 +202,7 @@ export async function countPawnWarnings(storeId: string): Promise<{ count: numbe
     // Nếu chỉ đếm OVERDUE + LATE_INTEREST, badge sẽ lệch với số hợp đồng hiện trong list.
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    const tomorrowStr = format(tomorrow, 'yyyy-MM-dd');
 
     const { data: pawns, error: pawnsError } = await supabase
       .from('pawns_by_store')
@@ -237,10 +241,10 @@ export async function getPawnWarnings(
       };
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = format(new Date(), 'yyyy-MM-dd');
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    const tomorrowStr = format(tomorrow, 'yyyy-MM-dd');
 
     let pawns: any[] = [];
     let pawnsError: any = null;

@@ -9,93 +9,95 @@ import { useRouter } from 'next/navigation';
 import { calculateUnpaidInterestAmount } from '@/lib/pawn-warnings';
 import { calculateDailyRateForPawn } from '@/lib/interest-calculator';
 import Spinner from '@/components/ui/spinner';
+import { format } from 'date-fns';
 
 // Import the enhanced reason calculation
-function calculatePawnReason(pawn: any, latestPaidDate?: string | null): string {
-  const today = new Date().toISOString().split('T')[0];
+// overrideLateAmount: nếu được truyền, dùng để in "Phí thuê N" thay vì tự tính theo công thức
+// đơn giản (loan × dailyRate × số ngày). Mục đích: khớp với giá trị cột "Tiền phí thuê".
+function calculatePawnReason(pawn: any, latestPaidDate?: string | null, overrideLateAmount?: number): string {
+  // Dùng local date (giờ VN) thay vì toISOString() (UTC) để tránh lệch 1 ngày từ 0h–7h sáng
+  const today = format(new Date(), 'yyyy-MM-dd');
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
-  
+  const tomorrowStr = format(tomorrow, 'yyyy-MM-dd');
+
   // Contract end date calculation
   const contractStart = new Date(pawn.loan_date);
   const contractEnd = new Date(contractStart);
   contractEnd.setDate(contractEnd.getDate() + pawn.loan_period - 1);
-  const contractEndStr = contractEnd.toISOString().split('T')[0];
+  const contractEndStr = format(contractEnd, 'yyyy-MM-dd');
   
   const nextPaymentDate = pawn.next_payment_date;
   const statusCode = pawn.status_code;
   
   let reasons: string[] = [];
-  
-  // 1. Check due dates first (can combine with status)
-  if (contractEndStr === today) {
-    reasons.push("Hợp đồng kết thúc hôm nay");
-  }
-  
+
+  // 1. Check due dates (pawn không có "kết thúc HĐ" thực sự — chỉ có hết kỳ lãi)
   if (nextPaymentDate === tomorrowStr) {
     reasons.push("Ngày mai đóng lãi");
   } else if (nextPaymentDate === today) {
     reasons.push("Hôm nay phải đóng lãi");
   }
   
-  // 2. Check for late interest using actual payment history
+  // 2. Phí thuê còn nợ: ưu tiên dùng overrideLateAmount (= cột Tiền phí thuê) để khớp.
+  // Fallback về công thức đơn giản nếu chưa có (data chưa load).
   if (statusCode === 'LATE_INTEREST' || statusCode === 'OVERDUE') {
-    const loanStartDate = new Date(pawn.loan_date);
-    
-    // First unpaid date: day after last payment OR loan start if no payments
-    const firstUnpaidDate = latestPaidDate 
-      ? new Date(new Date(latestPaidDate).getTime() + 24 * 60 * 60 * 1000)
-      : loanStartDate;
-    
-    // For OVERDUE: calculate late period only until contract end
-    // For LATE_INTEREST: calculate until today
-    const effectiveEndDate = statusCode === 'OVERDUE' 
-      ? new Date(contractEndStr) 
-      : new Date(today);
-    effectiveEndDate.setHours(23, 59, 59, 999);
-    
-    // Only calculate if there are unpaid days
-    if (effectiveEndDate >= firstUnpaidDate) {
-      const dailyRate = calculateDailyRateForPawn(pawn);
-      let lateAmount = 0;
+    let lateAmount = overrideLateAmount ?? 0;
 
-      if (pawn.is_advance_payment) {
-        // HĐ đóng lãi trước: nợ fixed = lãi 1 kỳ × số kỳ chưa đóng
-        const interestPeriod = pawn.interest_period || 30;
-        const daysSinceUnpaid = Math.floor(
-          (effectiveEndDate.getTime() - firstUnpaidDate.getTime()) / (1000 * 60 * 60 * 24)
-        );
-        if (daysSinceUnpaid >= 0) {
-          const cyclesUnpaid = Math.floor(daysSinceUnpaid / interestPeriod) + 1;
-          const oneCycleInterest = pawn.loan_amount * dailyRate * interestPeriod;
-          lateAmount = Math.round(cyclesUnpaid * oneCycleInterest);
-        }
-      } else {
-        // HĐ thường (đóng lãi sau): lãi tích lũy theo ngày
-        const unpaidDays = Math.floor(
-          (effectiveEndDate.getTime() - firstUnpaidDate.getTime()) / (1000 * 60 * 60 * 24)
-        ) + 1;
-        if (unpaidDays > 0) {
-          lateAmount = Math.round(pawn.loan_amount * dailyRate * unpaidDays);
+    if (overrideLateAmount === undefined) {
+      const loanStartDate = new Date(pawn.loan_date);
+      const firstUnpaidDate = latestPaidDate
+        ? new Date(new Date(latestPaidDate).getTime() + 24 * 60 * 60 * 1000)
+        : loanStartDate;
+      const effectiveEndDate = statusCode === 'OVERDUE'
+        ? new Date(contractEndStr)
+        : new Date(today);
+      effectiveEndDate.setHours(23, 59, 59, 999);
+
+      if (effectiveEndDate >= firstUnpaidDate) {
+        const dailyRate = calculateDailyRateForPawn(pawn);
+
+        if (pawn.is_advance_payment) {
+          const interestPeriod = pawn.interest_period || 30;
+          const daysSinceUnpaid = Math.floor(
+            (effectiveEndDate.getTime() - firstUnpaidDate.getTime()) / (1000 * 60 * 60 * 24)
+          );
+          if (daysSinceUnpaid >= 0) {
+            const cyclesUnpaid = Math.floor(daysSinceUnpaid / interestPeriod) + 1;
+            const oneCycleInterest = pawn.loan_amount * dailyRate * interestPeriod;
+            lateAmount = Math.round(cyclesUnpaid * oneCycleInterest);
+          }
+        } else {
+          const unpaidDays = Math.floor(
+            (effectiveEndDate.getTime() - firstUnpaidDate.getTime()) / (1000 * 60 * 60 * 24)
+          ) + 1;
+          if (unpaidDays > 0) {
+            lateAmount = Math.round(pawn.loan_amount * dailyRate * unpaidDays);
+          }
         }
       }
+    }
 
-      if (lateAmount > 0) {
-        reasons.push(`Chậm ${formatCurrency(lateAmount)}`);
-      }
+    if (lateAmount > 0) {
+      reasons.push(`Phí thuê ${formatCurrency(lateAmount)}`);
     }
   }
   
   // 3. Add status-specific reasons
   switch (statusCode) {
     case 'OVERDUE':
-      // Contract completely expired
+      // Quá hạn = số ngày từ kỳ lãi cuối đã đóng (hoặc ngày vay) tới hôm nay,
+      // khớp với "(N ngày)" subtitle bên cột Phí thuê đến hôm nay trang Pawn.
+      const startRef = latestPaidDate ? new Date(latestPaidDate) : new Date(pawn.loan_date);
+      startRef.setHours(0, 0, 0, 0);
+      const todayMid = new Date(today);
+      todayMid.setHours(0, 0, 0, 0);
       const daysOverdue = Math.floor(
-        (new Date(today).getTime() - new Date(contractEndStr).getTime()) 
-        / (1000 * 60 * 60 * 24)
+        (todayMid.getTime() - startRef.getTime()) / (1000 * 60 * 60 * 24)
       );
-      reasons.push(`Quá hạn ${daysOverdue} ngày`);
+      if (daysOverdue > 0) {
+        reasons.push(`Quá hạn ${daysOverdue} ngày`);
+      }
       break;
       
     case 'LATE_INTEREST':
@@ -145,10 +147,23 @@ export function PawnWarningsTable({
   const enhancedPawns: PawnWarning[] = pawns.map(pawn => {
     const pawnDetails = pawnCalculations?.[pawn.id];
     const latestPaidDate = pawnDetails?.latestPaidDate || null;
-    
-    const totalInterest = calculateUnpaidInterestAmount(pawn, latestPaidDate);
-    const enhancedReason = calculatePawnReason(pawn, latestPaidDate);
-    
+
+    // ON_TIME (mai đóng / hôm nay đóng) là nhắc — chưa nợ, hiện 0đ.
+    // LATE_INTEREST / OVERDUE mới có phí thuê còn nợ (= interestToday − paidInterest).
+    const isReminderOnly = pawn.status_code === 'ON_TIME';
+    const totalInterest = isReminderOnly
+      ? 0
+      : pawnDetails
+        ? Math.max(0, (pawnDetails.interestToday ?? 0) - (pawnDetails.paidInterest ?? 0))
+        : calculateUnpaidInterestAmount(pawn, latestPaidDate);
+
+    // Truyền totalInterest vào để "Phí thuê N" trong Lý do khớp với cột Tiền phí thuê
+    const enhancedReason = calculatePawnReason(
+      pawn,
+      latestPaidDate,
+      pawnDetails ? totalInterest : undefined
+    );
+
     return {
       ...pawn,
       totalInterest,
@@ -206,14 +221,14 @@ export function PawnWarningsTable({
             <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-6 sm:w-8">#</th>
             <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28 hidden lg:table-cell">Mã hợp đồng</th>
             <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-24 sm:w-28">Tên KH</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28 hidden lg:table-cell">Số điện thoại</th>
-            <th className="py-3 px-3 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-48 hidden lg:table-cell">Địa chỉ</th>
-            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-18 sm:w-24">SL</th>
+            <th className="py-3 px-2 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-24 hidden lg:table-cell">SĐT</th>
+            <th className="py-3 px-2 text-center font-medium text-gray-500 text-sm border-r border-gray-200 w-28 hidden lg:table-cell">Địa chỉ</th>
+            <th className="py-2 px-1 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-10 sm:w-12">SL</th>
             <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-20 sm:w-24">Tên TS</th>
             <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-14 sm:w-16">Tiền gốc</th>
             <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-14 sm:w-16">Tiền phí thuê</th>
             <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-16 sm:w-20">Tổng tiền</th>
-            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-24 sm:w-32">Lý do</th>
+            <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm border-r border-gray-200 w-36 sm:w-44">Lý do</th>
             <th className="py-2 px-1 sm:px-3 text-center font-medium text-gray-500 text-xs sm:text-sm w-12 sm:w-16">Thao tác</th>
           </tr>
         </thead>
@@ -232,10 +247,10 @@ export function PawnWarningsTable({
                   {pawn.customer?.name || "N/A"}
                 </span>
               </td>
-              <td className="py-3 px-3 border-r border-gray-200 text-center hidden lg:table-cell">
+              <td className="py-3 px-2 border-r border-gray-200 text-center hidden lg:table-cell text-xs truncate" title={pawn.customer?.phone || ""}>
                 {pawn.customer?.phone || ""}
               </td>
-              <td className="py-3 px-3 border-r border-gray-200 text-center hidden lg:table-cell">
+              <td className="py-3 px-2 border-r border-gray-200 text-center hidden lg:table-cell text-xs truncate" title={pawn.customer?.address || ""}>
                 {pawn.customer?.address || ""}
               </td>
               {(() => {
@@ -252,7 +267,7 @@ export function PawnWarningsTable({
                 const name = detail?.name || pawn.collateral_asset?.name || 'N/A';
                 return (
                   <>
-                    <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center text-xs sm:text-sm">
+                    <td className="py-2 px-1 border-r border-gray-200 text-center text-xs sm:text-sm">
                       {qty ?? 'N/A'}
                     </td>
                     <td className="py-2 px-1 sm:px-3 border-r border-gray-200 text-center text-xs sm:text-sm">
