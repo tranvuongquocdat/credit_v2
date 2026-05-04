@@ -26,6 +26,7 @@ export interface PawnFinancialDetail {
   nextPayment: string | null;
   isCompleted: boolean;
   hasPaid: boolean;
+  latestPaidDate: string | null;
   loading: boolean;
 }
 
@@ -126,6 +127,23 @@ export function usePawnCalculations() {
         }
       }
 
+      /* ---------- 6.1. Lấy ngày đóng lãi mới nhất cho mỗi pawn ---------- */
+      const latestPaidMap = new Map<string, string | null>();
+      if (allIds.length) {
+        const { data: paidRows } = await supabase
+          .from('pawn_history')
+          .select('pawn_id, effective_date')
+          .in('pawn_id', allIds)
+          .eq('transaction_type', 'payment')
+          .eq('is_deleted', false);
+        paidRows?.forEach((r: any) => {
+          const cur = latestPaidMap.get(r.pawn_id);
+          if (!cur || (r.effective_date && r.effective_date > cur)) {
+            latestPaidMap.set(r.pawn_id, r.effective_date);
+          }
+        });
+      }
+
       /* ---------- 7. RPC lấy thông tin kỳ thanh toán tiếp theo ---------- */
       const nextMap = new Map<string, { nextDate: string | null; isCompleted: boolean; hasPaid: boolean }>();
       if (activeIds.length) {
@@ -173,6 +191,7 @@ export function usePawnCalculations() {
             nextPayment: nextMap.get(result.pawnId)?.nextDate || null,
             isCompleted: nextMap.get(result.pawnId)?.isCompleted || false,
             hasPaid: nextMap.get(result.pawnId)?.hasPaid || false,
+            latestPaidDate: latestPaidMap.get(result.pawnId) || null,
             loading: false
           };
           

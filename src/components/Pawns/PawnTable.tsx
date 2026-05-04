@@ -154,7 +154,7 @@ export function PawnsTable({
                 <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Ngày vay</TableHead>
                 <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Lãi đã đóng</TableHead>
                 <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Nợ cũ</TableHead>
-                <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Lãi phí đến hôm nay</TableHead>
+                <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Tiền thuê đến hôm nay</TableHead>
                 <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Ngày đóng</TableHead>
                 <TableHead className="py-2 px-3 text-center font-medium border-b border-r border-gray-200">Trạng thái</TableHead>
                 <TableHead className="py-2 px-3 text-center font-medium border-b border-gray-200">Thao tác</TableHead>
@@ -223,7 +223,28 @@ export function PawnsTable({
                   {formatCurrency(calculatedDetails?.[pawn.id]?.oldDebt ?? 0)}
                 </TableCell>
                 <TableCell className="py-3 px-3 text-center text-rose-600 font-medium border-b border-r border-gray-200 hidden lg:table-cell">
-                  {formatCurrency(calculatedDetails?.[pawn.id]?.interestToday ?? 0)}
+                  {(() => {
+                    const det = calculatedDetails?.[pawn.id];
+                    const todayValue = det?.interestToday ?? 0;
+                    const paidValue = det?.paidInterest ?? 0;
+                    // Lãi còn nợ: tổng lãi tới hôm nay trừ phần đã đóng
+                    const unpaidValue = Math.max(0, todayValue - paidValue);
+
+                    const latestPaid = det?.latestPaidDate;
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const startRef = latestPaid ? new Date(latestPaid) : new Date(pawn.loan_date);
+                    startRef.setHours(0, 0, 0, 0);
+                    const diff = Math.floor((today.getTime() - startRef.getTime()) / (24 * 3600 * 1000));
+                    const daysSince = diff > 0 ? diff : 0;
+
+                    return (
+                      <div className="flex flex-col items-center text-rose-600">
+                        <span>{formatCurrency(unpaidValue)}</span>
+                        <span className="text-xs text-gray-400">{daysSince} ngày</span>
+                      </div>
+                    );
+                  })()}
                 </TableCell>
                 <TableCell className="py-3 px-1 lg:px-3 text-center border-b border-r border-gray-200 text-xs lg:text-sm">
                   {/* Ngày phải đóng lãi phí */}
@@ -382,8 +403,15 @@ export function PawnsTable({
               <TableCell className="py-2 px-1 lg:px-3 text-center text-rose-600 font-bold text-xs lg:text-sm">{formatCurrency(totals.total_paid_interest)}</TableCell>
               {/* Nợ cũ - hidden on mobile */}
               <TableCell className="py-2 px-3 text-center text-rose-600 font-bold hidden lg:table-cell">{formatCurrency(totals.total_old_debt)}</TableCell>
-              {/* Lãi phí đến hôm nay - hidden on mobile */}
-              <TableCell className="py-2 px-3 text-center text-rose-600 font-bold hidden lg:table-cell">{formatCurrency(totals.total_interest_today)}</TableCell>
+              {/* Tiền thuê đến hôm nay - hidden on mobile */}
+              <TableCell className="py-2 px-3 text-center text-rose-600 font-bold hidden lg:table-cell">
+                {formatCurrency(
+                  pawns.reduce((sum, p) => {
+                    const det = calculatedDetails?.[p.id];
+                    return sum + Math.max(0, (det?.interestToday ?? 0) - (det?.paidInterest ?? 0));
+                  }, 0)
+                )}
+              </TableCell>
               {/* Ngày đóng, Trạng thái, Thao tác - visible on mobile */}
               <TableCell className="py-2 px-1 lg:px-3" colSpan={3} />
             </TableRow>
@@ -472,10 +500,20 @@ export function PawnsTable({
                     </span>
                   </div>
                   <div>
-                    <span className="text-gray-600">Lãi hôm nay: </span>
+                    <span className="text-gray-600">Tiền thuê đến hôm nay: </span>
                     <span className="font-medium text-rose-600">
-                      {formatCurrency(financialDetail?.interestToday || 0)}
+                      {formatCurrency(Math.max(0, (financialDetail?.interestToday || 0) - (financialDetail?.paidInterest || 0)))}
                     </span>
+                    {(() => {
+                      const latestPaid = financialDetail?.latestPaidDate;
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      const startRef = latestPaid ? new Date(latestPaid) : new Date(pawn.loan_date);
+                      startRef.setHours(0, 0, 0, 0);
+                      const diff = Math.floor((today.getTime() - startRef.getTime()) / (24 * 3600 * 1000));
+                      const daysSince = diff > 0 ? diff : 0;
+                      return <span className="text-xs text-gray-400 ml-1">({daysSince} ngày)</span>;
+                    })()}
                   </div>
                 </div>
 
@@ -572,8 +610,15 @@ export function PawnsTable({
                 <div className="font-bold text-rose-600">{formatCurrency(totals.total_old_debt)}</div>
               </div>
               <div className="text-center">
-                <div className="text-gray-600">Lãi hôm nay</div>
-                <div className="font-bold text-rose-600">{formatCurrency(totals.total_interest_today)}</div>
+                <div className="text-gray-600">Tiền thuê đến hôm nay</div>
+                <div className="font-bold text-rose-600">
+                  {formatCurrency(
+                    pawns.reduce((sum, p) => {
+                      const det = calculatedDetails?.[p.id];
+                      return sum + Math.max(0, (det?.interestToday ?? 0) - (det?.paidInterest ?? 0));
+                    }, 0)
+                  )}
+                </div>
               </div>
             </div>
 
