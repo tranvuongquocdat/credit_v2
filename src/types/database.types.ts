@@ -763,6 +763,7 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string
+          created_by_superadmin_id: string | null
           email: string | null
           id: string
           is_banned: boolean | null
@@ -773,6 +774,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          created_by_superadmin_id?: string | null
           email?: string | null
           id?: string
           is_banned?: boolean | null
@@ -783,6 +785,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          created_by_superadmin_id?: string | null
           email?: string | null
           id?: string
           is_banned?: boolean | null
@@ -791,7 +794,15 @@ export type Database = {
           updated_at?: string | null
           username?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_created_by_superadmin_id_fkey"
+            columns: ["created_by_superadmin_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       store_fund_history: {
         Row: {
@@ -1017,13 +1028,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "transactions_employee_name_fkey"
-            columns: ["employee_name"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["username"]
           },
           {
             foreignKeyName: "transactions_store_id_fkey"
@@ -1460,8 +1464,9 @@ export type Database = {
         }[]
       }
       pawn_get_totals: {
-        Args: { p_filters?: Json; p_store_id: string }
+        Args: { p_count_mode?: string; p_filters?: Json; p_store_id: string }
         Returns: {
+          collateral_breakdown: Json
           total_interest_today: number
           total_loan_amount: number
           total_old_debt: number
