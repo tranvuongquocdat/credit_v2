@@ -39,10 +39,9 @@ export function PawnActionTabs({
   variant = 'default'
 }: PawnActionTabsProps) {
   return (
-    <div 
+    <div
       className={cn(
-        "border-b flex flex-wrap",
-        variant === 'scrollable' ? "overflow-y-auto max-h-36" : "",
+        "border-b flex overflow-x-auto sm:flex-wrap sm:overflow-visible scrollbar-thin",
         variant === 'compact' ? "gap-1" : "",
         className
       )}
@@ -55,9 +54,9 @@ export function PawnActionTabs({
             onClick={() => !tab.disabled && onChangeTab(tab.id)}
             disabled={tab.disabled}
             className={cn(
-              "px-4 py-2 transition-all",
-              isActive 
-                ? "border-b-2 border-blue-500 text-blue-600 font-medium" 
+              "px-3 sm:px-4 py-2 transition-all whitespace-nowrap shrink-0 text-sm sm:text-base",
+              isActive
+                ? "border-b-2 border-blue-500 text-blue-600 font-medium"
                 : "text-gray-500 hover:text-gray-700 hover:bg-gray-50",
               tab.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
               variant === 'compact' ? "text-sm" : ""

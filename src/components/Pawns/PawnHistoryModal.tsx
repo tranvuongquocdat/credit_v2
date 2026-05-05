@@ -501,20 +501,19 @@ export function PawnHistoryModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(hasDataChanged)}>
-      <DialogContent className="sm:max-w-[800px] md:max-w-[900px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-[95vw] sm:max-w-[800px] md:max-w-[900px] max-h-[90vh] overflow-x-hidden overflow-y-auto p-3 sm:p-6">
         <DialogHeader>
-          <DialogTitle>{getDisplayLabelByBuild('pawn_contract_label')}</DialogTitle>
+          <DialogTitle className="text-base sm:text-lg pr-6 truncate">{getDisplayLabelByBuild('pawn_contract_label')}</DialogTitle>
         </DialogHeader>
 
-        <div className="mt-2">
+        <div className="mt-2 min-w-0">
           {/* Customer information */}
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="font-medium">{currentPawn?.customer?.name || 'Khách hàng'}</h3>
-            <h3 className="font-medium">{getDisplayLabelByBuild('pawn_contract_label')}</h3>
+          <div className="mb-2">
+            <h3 className="font-medium text-sm sm:text-base truncate">{currentPawn?.customer?.name || 'Khách hàng'}</h3>
           </div>
-          
+
           {/* Summary details */}
-          <div className="grid grid-cols-2 gap-8 my-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-8 my-3 sm:my-4">
             <div>
               <table className="w-full border-collapse">
                 <tbody>

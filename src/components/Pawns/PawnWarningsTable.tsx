@@ -213,7 +213,8 @@ export function PawnWarningsTable({
   });
 
   return (
-    <div className="rounded-md border overflow-hidden">
+    <>
+    <div className="hidden lg:block rounded-md border overflow-hidden">
       <div className="overflow-x-auto max-w-full">
         <table className="border-collapse min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
@@ -340,5 +341,110 @@ export function PawnWarningsTable({
         </table>
       </div>
     </div>
+
+    {/* Mobile/Tablet Card View (below lg) */}
+    <div className="lg:hidden space-y-3">
+      {enhancedPawns.map((pawn, index) => {
+        // Parse collateral detail
+        let detail: { name?: string | null; quantity?: number | null } | null = null;
+        const raw = pawn.collateral_detail;
+        if (raw) {
+          if (typeof raw === 'string') {
+            try { detail = JSON.parse(raw); } catch { detail = { name: raw }; }
+          } else if (typeof raw === 'object') {
+            detail = raw as any;
+          }
+        }
+        const qty = detail?.quantity && detail.quantity > 0 ? detail.quantity : (detail?.name ? 1 : null);
+        const collateralName = detail?.name || pawn.collateral_asset?.name || 'N/A';
+
+        return (
+          <div key={pawn.id} className="bg-white border rounded-lg p-3 shadow-sm">
+            {/* Header */}
+            <div className="flex items-start justify-between mb-2 gap-2">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <span className="font-medium text-xs text-gray-500 shrink-0">
+                  #{(currentPage - 1) * itemsPerPage + index + 1}
+                </span>
+                <span
+                  className="font-bold text-base text-blue-600 cursor-pointer hover:underline truncate"
+                  onClick={() => handleCustomerClick(pawn)}
+                >
+                  {pawn.customer?.name || "N/A"}
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 shrink-0"
+                onClick={() => onViewDetail(pawn)}
+                title="Xem chi tiết"
+              >
+                <DollarSign className="h-4 w-4 text-gray-500" />
+              </Button>
+            </div>
+
+            {/* Mã HĐ + SĐT */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mb-2 text-xs text-gray-600">
+              <span><span className="text-gray-500">Mã HĐ:</span> <span className="font-medium text-gray-700">{pawn.contract_code}</span></span>
+              {pawn.customer?.phone && (
+                <span><span className="text-gray-500">SĐT:</span> <a href={`tel:${pawn.customer.phone}`} className="font-medium text-blue-600">{pawn.customer.phone}</a></span>
+              )}
+            </div>
+
+            {/* Tài sản */}
+            <div className="mb-2 text-xs">
+              <span className="text-gray-500">Tài sản: </span>
+              <span className="font-medium text-gray-800">{collateralName}</span>
+              {qty && <span className="text-gray-600"> (SL: {qty})</span>}
+            </div>
+
+            {/* Tiền */}
+            <div className="grid grid-cols-3 gap-2 mb-2 text-xs">
+              <div>
+                <div className="text-gray-500">Tiền gốc</div>
+                <div className="font-medium text-gray-800">{formatCurrency(pawn.loan_amount || 0)}</div>
+              </div>
+              <div>
+                <div className="text-gray-500">Phí thuê</div>
+                <div className="font-medium text-gray-800">{formatCurrency(pawn.totalInterest || 0)}</div>
+              </div>
+              <div>
+                <div className="text-gray-500">Tổng tiền</div>
+                <div className="font-bold text-red-600">{formatCurrency((pawn.loan_amount || 0) + (pawn.totalInterest || 0))}</div>
+              </div>
+            </div>
+
+            {/* Lý do */}
+            <div className="pt-2 border-t text-xs">
+              <span className="text-gray-500">Lý do: </span>
+              <span className="text-orange-600 font-medium">{pawn.reason}</span>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Totals card */}
+      {enhancedPawns.length > 0 && (
+        <div className="bg-yellow-100 border border-yellow-300 rounded-lg p-3">
+          <h3 className="font-bold text-center mb-2 text-sm">Tổng kết ({enhancedPawns.length} hợp đồng)</h3>
+          <div className="grid grid-cols-3 gap-2 text-xs">
+            <div className="text-center">
+              <div className="text-gray-600">Tiền gốc</div>
+              <div className="font-bold text-rose-600">{formatCurrency(totals.totalPrincipal)}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-gray-600">Phí thuê</div>
+              <div className="font-bold text-rose-600">{formatCurrency(totals.totalInterest)}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-gray-600">Tổng tiền</div>
+              <div className="font-bold text-red-600">{formatCurrency(totals.totalAmount)}</div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+    </>
   );
 }

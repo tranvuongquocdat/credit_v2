@@ -212,56 +212,56 @@ export function PawnPaymentForm({
   };
   
   return (
-    <div className="border rounded-md p-4 bg-white">
+    <div className="border rounded-md p-3 sm:p-4 bg-white">
       <h3 className="font-medium mb-4">Đóng lãi phí tùy biến theo ngày</h3>
       <form onSubmit={handleSubmit}>
-        <div className="grid grid-cols-[150px_1fr] gap-y-4 items-center">
-          <div className="text-right pr-2">Từ ngày :</div>
-          <div className="flex items-center gap-2">
-            <DatePicker 
-              value={startDate} 
+        <div className="grid grid-cols-1 sm:grid-cols-[150px_1fr] gap-y-2 sm:gap-y-4 sm:items-center">
+          <div className="text-left sm:text-right sm:pr-2 text-sm text-gray-600 sm:text-gray-900 sm:text-base">Từ ngày :</div>
+          <div className="flex flex-wrap items-center gap-2 mb-2 sm:mb-0">
+            <DatePicker
+              value={startDate}
               onChange={() => {}} // không cho phép thay đổi
-              className="w-64"
+              className="w-full sm:w-64"
               disabled={true}
             />
-            <span className="text-gray-500">(Tự động tính từ kỳ trước)</span>
+            <span className="text-gray-500 text-xs sm:text-sm">(Tự động tính từ kỳ trước)</span>
           </div>
 
-          <div className="text-right pr-2">Số ngày :</div>
-          <div className="flex items-center gap-2">
-            <Input 
-              value={days} 
+          <div className="text-left sm:text-right sm:pr-2 text-sm text-gray-600 sm:text-gray-900 sm:text-base">Số ngày :</div>
+          <div className="flex items-center gap-2 mb-2 sm:mb-0">
+            <Input
+              value={days}
               onChange={handleDaysChange}
-              className="w-64"
+              className="w-full sm:w-64"
               type="number"
               min="1"
               disabled={disabled}
             />
-            <span className="text-blue-600">Ngày</span>
+            <span className="text-blue-600 text-sm whitespace-nowrap">Ngày</span>
           </div>
 
-          <div className="text-right pr-2">Đến ngày :</div>
-          <div className="flex items-center gap-2">
+          <div className="text-left sm:text-right sm:pr-2 text-sm text-gray-600 sm:text-gray-900 sm:text-base">Đến ngày :</div>
+          <div className="flex flex-wrap items-center gap-2 mb-2 sm:mb-0">
             <DatePicker
               value={endDate}
               onChange={handleEndDateChange}
-              className="w-64"
+              className="w-full sm:w-64"
               minDate={startDate}
               disabled={disabled}
             />
-            <span className="text-gray-500">
+            <span className="text-gray-500 text-xs sm:text-sm">
               {nextPaymentDate === "Hoàn thành"
                 ? "( Đây là kỳ cuối cùng )"
                 : `( Ngày đóng lãi phí tiếp: ${nextPaymentDate} )`}
             </span>
           </div>
 
-          <div className="text-right pr-2">Tiền lãi phí :</div>
-          <div className="flex items-center gap-3">
-            <div className="relative">
+          <div className="text-left sm:text-right sm:pr-2 text-sm text-gray-600 sm:text-gray-900 sm:text-base">Tiền lãi phí :</div>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2 sm:mb-0">
+            <div className="relative w-full sm:w-auto">
               <Input
                 value={formattedInterestAmount}
-                className="w-48 bg-gray-50 cursor-not-allowed"
+                className="w-full sm:w-48 bg-gray-50 cursor-not-allowed"
                 inputMode="numeric"
                 type="text"
                 disabled={true}
@@ -272,32 +272,33 @@ export function PawnPaymentForm({
                 </div>
               )}
             </div>
-            <span className="text-gray-500 text-sm">VNĐ (Tự động tính, không thể thay đổi)</span>
+            <span className="text-gray-500 text-xs sm:text-sm">VNĐ (Tự động tính, không thể thay đổi)</span>
           </div>
 
-          <div className="text-right pr-2">Tiền tùy chỉnh :</div>
-          <div className="flex items-center gap-3">
+          <div className="text-left sm:text-right sm:pr-2 text-sm text-gray-600 sm:text-gray-900 sm:text-base">Tiền tùy chỉnh :</div>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2 sm:mb-0">
             <Input
               value={formattedOtherAmount}
               onChange={handleOtherAmountChange}
-              className="w-48"
+              className="w-full sm:w-48"
               type="text"
+              inputMode="numeric"
               disabled={disabled}
               placeholder="0"
             />
-            <span className="text-gray-500 text-sm">VNĐ (có thể âm)</span>
+            <span className="text-gray-500 text-xs sm:text-sm">VNĐ (có thể âm)</span>
           </div>
 
-          <div className="text-right pr-2">Tổng tiền lãi phí :</div>
-          <div className="text-red-600 font-bold">
+          <div className="text-left sm:text-right sm:pr-2 text-sm text-gray-600 sm:text-gray-900 sm:text-base">Tổng tiền lãi phí :</div>
+          <div className="text-red-600 font-bold text-lg sm:text-base">
             {new Intl.NumberFormat('vi-VN').format(totalAmount)} VNĐ
           </div>
 
-          <div></div>
+          <div className="hidden sm:block"></div>
           <div className="mt-3">
-            <Button 
-              type="submit" 
-              className="bg-blue-600 hover:bg-blue-700" 
+            <Button
+              type="submit"
+              className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
               disabled={disabled || isCalculating || !hasPermission('dong_lai_cam_do')}
             >
               {isCalculating ? 'Đang tính...' : 'Đóng lãi'}
