@@ -661,14 +661,14 @@ export function PaymentTab({
         <table className="w-full border-collapse">
         <thead className="bg-gray-50 sticky top-0">
           <tr>
-            <th className="px-2 py-2 text-left text-sm font-medium text-gray-500 border">STT</th>
-            <th className="px-2 py-2 text-left text-sm font-medium text-gray-500 border">Ngày</th>
-            <th className="px-2 py-2 text-center text-sm font-medium text-gray-500 border">Số ngày</th>
-            <th className="px-2 py-2 text-right text-sm font-medium text-gray-500 border">Tiền lãi phí</th>
-            <th className="px-2 py-2 text-right text-sm font-medium text-gray-500 border">Tiền khác</th>
-            <th className="px-2 py-2 text-right text-sm font-medium text-gray-500 border">Tổng lãi phí</th>
-            <th className="px-2 py-2 text-right text-sm font-medium text-gray-500 border">Tiền khách trả</th>
-            <th className="px-2 py-2 text-center text-sm font-medium text-gray-500 border w-10"></th>
+            <th className="px-1 sm:px-2 py-2 text-center text-xs sm:text-sm font-medium text-gray-500 border">STT</th>
+            <th className="px-1 sm:px-2 py-2 text-left text-xs sm:text-sm font-medium text-gray-500 border">Ngày</th>
+            <th className="px-2 py-2 text-center text-sm font-medium text-gray-500 border hidden md:table-cell">Số ngày</th>
+            <th className="px-2 py-2 text-right text-sm font-medium text-gray-500 border hidden md:table-cell">Tiền lãi phí</th>
+            <th className="px-2 py-2 text-right text-sm font-medium text-gray-500 border hidden md:table-cell">Tiền khác</th>
+            <th className="px-2 py-2 text-right text-sm font-medium text-gray-500 border hidden md:table-cell">Tổng lãi phí</th>
+            <th className="px-1 sm:px-2 py-2 text-right text-xs sm:text-sm font-medium text-gray-500 border">Tiền khách trả</th>
+            <th className="px-1 sm:px-2 py-2 text-center text-xs sm:text-sm font-medium text-gray-500 border w-8 sm:w-10"></th>
           </tr>
         </thead>
         <tbody>
@@ -702,23 +702,23 @@ export function PaymentTab({
               
               return (
                 <tr key={period.id} className="hover:bg-gray-50">
-                  <td className="px-2 py-2 text-center border">{period.period_number}</td>
-                  <td className="px-2 py-2 text-center border">
-                    {formatDate(period.start_date)} 
-                    {' → '} 
-                    {formatDate(period.end_date)}
+                  <td className="px-1 sm:px-2 py-2 text-center border text-xs sm:text-sm">{period.period_number}</td>
+                  <td className="px-1 sm:px-2 py-2 text-center border text-xs sm:text-sm">
+                    <span className="block sm:inline">{formatDate(period.start_date)}</span>
+                    <span className="hidden sm:inline">{' → '}</span>
+                    <span className="block sm:inline text-gray-500 sm:text-inherit">→ {formatDate(period.end_date)}</span>
                   </td>
-                  <td className="px-2 py-2 text-center border">
-                    {period.start_date && period.end_date ? 
+                  <td className="px-2 py-2 text-center border hidden md:table-cell">
+                    {period.start_date && period.end_date ?
                       calculateDaysBetween(new Date(period.start_date), new Date(period.end_date)) : 0
                     }
                   </td>
-                  <td className="px-2 py-2 text-right border">
+                  <td className="px-2 py-2 text-right border hidden md:table-cell">
                     {formatCurrency(expected)}
                   </td>
-                  <td className="px-2 py-2 text-right border">{formatCurrency(other)}</td>
-                  <td className="px-2 py-2 text-right border">{formatCurrency(total)}</td>
-                  <td className="px-2 py-2 text-right border">
+                  <td className="px-2 py-2 text-right border hidden md:table-cell">{formatCurrency(other)}</td>
+                  <td className="px-2 py-2 text-right border hidden md:table-cell">{formatCurrency(total)}</td>
+                  <td className="px-1 sm:px-2 py-2 text-right border text-xs sm:text-sm">
                     {isEditing ? (
                       <div className="flex items-center justify-end space-x-1">
                         <input

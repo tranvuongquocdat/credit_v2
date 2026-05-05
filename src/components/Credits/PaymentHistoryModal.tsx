@@ -531,18 +531,18 @@ export function PaymentHistoryModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose(dataChangeCounter > 0)}>
-      <DialogContent 
-        className="sm:max-w-[800px] md:max-w-[900px] max-h-[90vh] overflow-y-auto" 
+      <DialogContent
+        className="w-[95vw] max-w-[95vw] sm:max-w-[800px] md:max-w-[900px] max-h-[90vh] overflow-x-hidden overflow-y-auto p-3 sm:p-6"
       >
         <DialogHeader>
-          <DialogTitle>Hợp đồng vay tiền</DialogTitle>
+          <DialogTitle className="text-base sm:text-lg pr-6">Hợp đồng vay tiền</DialogTitle>
         </DialogHeader>
-        
-        <div className="mt-2">
+
+        <div className="mt-2 min-w-0">
           {/* Thông tin khách hàng */}
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="font-medium">{credit?.customer?.name || 'Khách hàng'}</h3>
-            <h3 className="font-medium">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 mb-2">
+            <h3 className="font-medium text-sm sm:text-base truncate">{credit?.customer?.name || 'Khách hàng'}</h3>
+            <h3 className="font-medium text-xs sm:text-base">
               {loadingFinancials ? (
                 <span className="flex items-center gap-2">
                   <div className="h-4 w-4 rounded-full border-2 border-t-transparent border-blue-600 animate-spin"></div>
@@ -553,9 +553,9 @@ export function PaymentHistoryModal({
               )}
             </h3>
           </div>
-          
+
           {/* Tổng hợp chi tiết */}
-          <div className="grid grid-cols-2 gap-8 my-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-8 my-3 sm:my-4">
             <div>
               <table className="w-full border-collapse">
                 <tbody>
