@@ -71,7 +71,7 @@ const fetchCreditHistoryByRpc = async (
   startDateISO: string,
   endDateISO: string
 ) => {
-  const { data, error } = await (supabase as any).rpc('rpc_credit_history_grouped', {
+  const { data, error } = await supabase.rpc('rpc_credit_history_grouped', {
     p_store_id: storeId,
     p_start_date: startDateISO,
     p_end_date: endDateISO,
