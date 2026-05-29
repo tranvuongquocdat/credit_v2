@@ -416,22 +416,7 @@ export function PaymentTab({
         } // end else (đóng theo lãi thực từng ngày)
 
       } else {
-        // Uncheck logic - only allow unchecking latest period
-        // Lấy ra ngày cuối cùng đã đóng tiền
-        const latestPaidDate = await getLatestPaymentPaidDate(pawn.id);
-        if (latestPaidDate) {
-          const latestPaidDateObj = new Date(latestPaidDate);
-          const endDate = new Date(period.end_date.split('T')[0]);
-          if (endDate.getTime() < latestPaidDateObj.getTime()) {
-            setOptimisticUpdates(prev => {
-              const next = { ...prev };
-              delete next[periodId];
-              return next;
-            });
-            toast({ variant: 'destructive', title: 'Ngày này đã được đóng lãi. Bạn có thể tải lại bảng để xem lại' });
-            return;
-          }
-        }
+        // Uncheck logic - chỉ cho phép bỏ đóng lãi ở kỳ gần nhất
         const checkedPeriods = periodsToDisplay.filter(p =>
           p.id && p.id.startsWith('db-') && (p.actual_amount || 0) > 0
         );
@@ -446,8 +431,8 @@ export function PaymentTab({
           });
           toast({
             variant: "destructive",
-            title: "Không thể bỏ đánh dấu",
-            description: `Bạn chỉ có thể bỏ đánh dấu kỳ ${checkedPeriods[0].period_number} (kỳ thanh toán gần nhất).`
+            title: "Không thể bỏ đóng lãi kỳ này",
+            description: `Chỉ có thể bỏ đóng lãi ở kỳ ${checkedPeriods[0].period_number} (kỳ gần nhất). Hãy bỏ lần lượt từ kỳ ${checkedPeriods[0].period_number} trở về trước.`
           });
           return;
         }
