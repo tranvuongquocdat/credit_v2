@@ -54,7 +54,16 @@ export function PaymentTab({
 
   // Optimistic updates để checkbox flip ngay, tránh nháy khi chờ DB+regen.
   const [optimisticUpdates, setOptimisticUpdates] = useState<Record<string, boolean>>({});
-  
+
+  // Sửa inline ô "Tiền khách trả": periodId đang mở sửa + chuỗi số thô theo từng kỳ.
+  // Lưu dạng chuỗi (không phải number) để giữ nguyên số 0 còn lại khi xoá và cho phép để trống.
+  const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
+  const [editedAmounts, setEditedAmounts] = useState<Record<string, string>>({});
+
+  // Format chuỗi số thô thành dạng 1.000.000; giữ nguyên số 0 đứng đầu, rỗng → rỗng.
+  const formatRawDigits = (raw: string): string =>
+    raw.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
   // Get user permissions
   const { hasPermission } = usePermissions();
 
@@ -235,6 +244,13 @@ export function PaymentTab({
     // Optimistic flip ngay để UI không phải chờ DB
     setOptimisticUpdates(prev => ({ ...prev, [periodId]: checked }));
 
+    // "Tiền khách trả" có thể được sửa tay. Nếu khác Tổng lãi phí dự kiến (và > 0) thì
+    // đóng theo đúng số tiền khách nhập, chia đều cho các ngày của kỳ (cơ chế đóng custom).
+    const expectedTotal = (period.expected_amount || 0) + (period.other_amount || 0);
+    const editedRaw = (editedAmounts[periodId] || '').replace(/\D/g, '');
+    const customAmountNum = editedRaw ? parseInt(editedRaw, 10) : NaN;
+    const useCustomAmount = checked && Number.isFinite(customAmountNum) && customAmountNum > 0 && customAmountNum !== expectedTotal;
+
     try {
       if (checked) {
         // 1. Get latest payment date
@@ -263,7 +279,24 @@ export function PaymentTab({
         if (totalDays <= 0) {
           throw new Error('Ngày này đã được đóng lãi. Bạn có thể tải lại bảng để xem lại');
         }
-        
+
+        if (useCustomAmount) {
+          // Đóng theo số tiền khách nhập: chia đều cho các ngày của kỳ (ngày cuối nhận phần dư)
+          // và cộng loan_period += số ngày — tái dùng đúng cơ chế "đóng custom".
+          const { saveCustomPaymentWithAmount } = await import('@/lib/Pawns/save_custom_payment');
+          await saveCustomPaymentWithAmount(pawn.id, {
+            startDate,
+            endDate,
+            days: totalDays,
+            interestAmount: customAmountNum,
+            totalAmount: customAmountNum,
+          });
+
+          toast({
+            title: 'Thành công',
+            description: `Đã ghi thanh toán ${formatCurrency(customAmountNum)} đến kỳ ${period.period_number}`,
+          });
+        } else {
         // 5. Get expected money for daily amounts
         const dailyAmounts = await getExpectedMoney(pawn.id);
         const loanStart = new Date(pawn.loan_date);
@@ -380,7 +413,8 @@ export function PaymentTab({
           title: 'Thành công',
           description: `Đã tạo ${allRecords.length} bản ghi thanh toán đến kỳ ${period.period_number}`,
         });
-        
+        } // end else (đóng theo lãi thực từng ngày)
+
       } else {
         // Uncheck logic - only allow unchecking latest period
         // Lấy ra ngày cuối cùng đã đóng tiền
@@ -466,6 +500,14 @@ export function PaymentTab({
         delete next[periodId];
         return next;
       });
+
+      // Xoá số "Tiền khách trả" đã sửa & thoát chế độ sửa sau khi thành công
+      setEditedAmounts(prev => {
+        const next = { ...prev };
+        delete next[periodId];
+        return next;
+      });
+      setEditingPeriodId(prev => (prev === periodId ? null : prev));
 
       // Trigger data change to regenerate periods
       if (onDataChange) onDataChange();
@@ -675,7 +717,7 @@ export function PaymentTab({
                     <td className="px-1 sm:px-2 py-2 text-center border text-xs sm:text-sm">
                       <span className="block sm:inline">{formatDate(period.start_date)}</span>
                       <span className="hidden sm:inline">{' → '}</span>
-                      <span className="block sm:inline text-gray-500 sm:text-inherit">→ {formatDate(period.end_date)}</span>
+                      <span className="block sm:inline text-gray-500 sm:text-inherit"><span className="sm:hidden">→ </span>{formatDate(period.end_date)}</span>
                     </td>
                     <td className="px-2 py-2 text-center border hidden md:table-cell">
                       {period.start_date && period.end_date ?
@@ -692,7 +734,57 @@ export function PaymentTab({
                   </td>
                     <td className="px-2 py-2 text-right border hidden md:table-cell">{formatCurrency(other)}</td>
                     <td className="px-2 py-2 text-right border hidden md:table-cell">{formatCurrency(total)}</td>
-                    <td className="px-2 py-2 text-right border hidden md:table-cell">{formatCurrency(actual)}</td>
+                    <td className="px-2 py-2 text-right border hidden md:table-cell">
+                      {(!isDisabled && !hasPayments) ? (
+                        editingPeriodId === periodId ? (
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            autoFocus
+                            className="w-28 text-right border border-blue-400 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            value={formatRawDigits(editedAmounts[periodId] ?? '')}
+                            onChange={(e) => {
+                              const raw = e.target.value.replace(/\D/g, '');
+                              setEditedAmounts(prev => ({ ...prev, [periodId]: raw }));
+                            }}
+                            onBlur={() => setEditingPeriodId(null)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                setEditingPeriodId(null);
+                              } else if (e.key === 'Escape') {
+                                setEditedAmounts(prev => {
+                                  const next = { ...prev };
+                                  delete next[periodId];
+                                  return next;
+                                });
+                                setEditingPeriodId(null);
+                              }
+                            }}
+                          />
+                        ) : (
+                          <span
+                            className="cursor-pointer hover:underline decoration-dotted"
+                            title="Bấm để sửa số tiền khách trả"
+                            onClick={() => {
+                              setEditedAmounts(prev => ({
+                                ...prev,
+                                [periodId]: prev[periodId] ?? String(total),
+                              }));
+                              setEditingPeriodId(periodId);
+                            }}
+                          >
+                            {editedAmounts[periodId]
+                              ? formatCurrency(parseInt(editedAmounts[periodId], 10))
+                              : formatCurrency(actual)}
+                          </span>
+                        )
+                      ) : (
+                        // Khi đang load đóng lãi (optimistic đã flip hasPayments) hoặc HĐ đóng:
+                        // vẫn ưu tiên số khách vừa sửa để không nháy về số gốc trong lúc chờ regen.
+                        formatCurrency(editedAmounts[periodId] ? parseInt(editedAmounts[periodId], 10) : actual)
+                      )}
+                    </td>
                     <td className="px-1 sm:px-2 py-2 text-center border">
                       {isLoading ? (
                         <div className="flex justify-center">
