@@ -336,6 +336,8 @@ export function CreditContractClient({ contractCode }: CreditContractClientProps
             isOpen={isPaymentHistoryModalOpen}
             onClose={handleClosePaymentHistory}
             credit={paymentHistoryCredit}
+            // Tick đóng lãi -> cập nhật ngay summary + paidInterest mỗi dòng (không chờ đóng modal).
+            onPaymentUpdate={refreshFinancial}
           />
         )}
 

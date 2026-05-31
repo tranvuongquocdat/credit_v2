@@ -94,7 +94,8 @@ export function useCreditsSummary() {
 
       if (allIds.length) {
         const start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-        const end   = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+        // end = CUỐI ngày cuối tháng (23:59:59.999), tránh RPC lọc created_at <= end cắt mất khoản thu ngày cuối tháng.
+        const end   = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999);
         const endPaidInterestRangeQuery = startPerfTimer('useCreditsSummary.fetchSummary.rpcPaidInterestRange', {
           context: { credits: allIds.length },
         });

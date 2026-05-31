@@ -557,6 +557,13 @@ export default function PawnsPage() {
             isOpen={isPaymentHistoryModalOpen}
             onClose={handleClosePaymentHistory}
             pawn={paymentHistoryPawn}
+            // Tick đóng lãi -> cập nhật ngay "Lãi phí đã thu" (card) + cột mỗi dòng + dòng tổng,
+            // không phải chờ đóng modal.
+            onPaymentUpdate={() => {
+              refreshSummary();
+              refreshPawnDetails();
+              fetchTotals(filters);
+            }}
           />
         )}
 
