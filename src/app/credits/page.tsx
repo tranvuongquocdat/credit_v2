@@ -529,6 +529,13 @@ export default function CreditsPage() {
             isOpen={isPaymentHistoryModalOpen}
             onClose={handleClosePaymentHistory}
             credit={paymentHistoryCredit}
+            // Tick đóng lãi -> cập nhật ngay "Lãi phí đã thu" (card) + cột mỗi dòng + dòng tổng,
+            // không phải chờ đóng modal.
+            onPaymentUpdate={() => {
+              refreshSummary();
+              refreshCreditDetails();
+              fetchTotals(filters);
+            }}
           />
         )}
 

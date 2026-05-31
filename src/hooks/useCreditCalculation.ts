@@ -91,7 +91,9 @@ export function useCreditCalculations() {
       if (allIds.length) {
         /* (a) date-range */
         const start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-        const end   = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+        // end = CUỐI ngày cuối tháng (23:59:59.999): interestRangeMap (totalCollectedInterest) lọc created_at <= end,
+        // nếu để 00:00 sẽ cắt mất khoản thu ngày cuối tháng.
+        const end   = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999);
         const endInterestRangeQuery = startPerfTimer('useCreditCalculations.fetchAllData.rpcPaidInterestRange', {
           context: { credits: allIds.length },
         });

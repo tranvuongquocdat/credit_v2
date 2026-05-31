@@ -353,6 +353,8 @@ export function PawnContractClient({ contractCode }: PawnContractClientProps) {
             isOpen={isPaymentHistoryModalOpen}
             onClose={handleClosePaymentHistory}
             pawn={paymentHistoryPawn}
+            // Tick đóng lãi -> cập nhật ngay summary + paidInterest mỗi dòng (không chờ đóng modal).
+            onPaymentUpdate={refreshFinancial}
           />
         )}
 

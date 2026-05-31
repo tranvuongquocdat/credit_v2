@@ -16,7 +16,8 @@ export async function calculateCollectedInterest(
 ): Promise<number> {
   try {
     const start = startDate || new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    const end   = endDate   || new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+    // Default end = CUỐI ngày cuối tháng (23:59:59.999), tránh RPC lọc created_at <= end cắt mất khoản thu ngày cuối tháng.
+    const end   = endDate   || new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999);
     console.log('calculateCollectedInterest', creditId, start, end);
     // Gọi function đã tạo trong DB (trả về 1-hàng với trường paid_interest)
     const { data, error } = await supabase.rpc('get_paid_interest', {

@@ -42,7 +42,8 @@ export async function getPawnFinancialsForStore(storeId: string): Promise<Financ
   
   // Chạy tất cả RPC calls song song để tối ưu hiệu suất
   const start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-  const end   = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+  // end = CUỐI ngày cuối tháng (23:59:59.999), tránh RPC lọc created_at <= end cắt mất khoản thu ngày cuối tháng.
+  const end   = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999);
 
   const [
     { data: interestRows, error: interestError },
@@ -184,7 +185,8 @@ export async function getCreditFinancialsForStore(storeId: string): Promise<Fina
   
   // Chạy tất cả RPC calls song song để tối ưu hiệu suất
   const start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-  const end   = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+  // end = CUỐI ngày cuối tháng (23:59:59.999), tránh RPC lọc created_at <= end cắt mất khoản thu ngày cuối tháng.
+  const end   = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999);
 
   const [
     { data: interestRows, error: interestError },

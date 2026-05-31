@@ -72,8 +72,11 @@ export function usePawnsSummary() {
       // 4. Collected interest (current month)
       if (allIds.length) {
         // Use current month range like credit summary
+        // end phải là CUỐI ngày cuối tháng (23:59:59.999). Nếu để 00:00 (mặc định của
+        // new Date(y, m+1, 0)) thì RPC lọc created_at <= end sẽ cắt mất trọn ngày cuối
+        // tháng → đóng lãi vào ngày cuối tháng không được cộng vào "Lãi phí đã thu".
         const start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-        const end   = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+        const end   = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999);
         const { data: paidRows } = await supabase.rpc('get_pawn_paid_interest', {
           p_pawn_ids: allIds,
           p_start_date: start.toISOString(),
