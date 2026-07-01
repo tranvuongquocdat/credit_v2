@@ -646,7 +646,7 @@ export function PawnEditModal({
               </Label>
               <div>
                 <div className="space-y-3 sm:space-y-0 sm:flex sm:gap-2 sm:items-center">
-                  <Input 
+                  <Input
                     id="interestValue"
                     type="text"
                     value={interestValue}
@@ -659,16 +659,15 @@ export function PawnEditModal({
                     placeholder="0"
                     min={0}
                     step="any"
-                    disabled={hasPayments}
                   />
                   
                   {interestType === 'daily' && (
                     <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 sm:items-center">
                       <div className="flex items-center">
-                        <input 
-                          type="radio" 
-                          id="k_per_million" 
-                          name="interestNotation" 
+                        <input
+                          type="radio"
+                          id="k_per_million"
+                          name="interestNotation"
                           value="k_per_million"
                           checked={interestNotation === 'k_per_million'}
                           onChange={() => {
@@ -676,15 +675,14 @@ export function PawnEditModal({
                             validateInterestRate(interestValue, interestType, 'k_per_million');
                           }}
                           className="mr-1"
-                          disabled={hasPayments}
                         />
                         <label htmlFor="k_per_million" className="text-xs sm:text-sm">k/1 triệu</label>
                       </div>
                       <div className="flex items-center">
-                        <input 
-                          type="radio" 
-                          id="k_per_day" 
-                          name="interestNotation" 
+                        <input
+                          type="radio"
+                          id="k_per_day"
+                          name="interestNotation"
                           value="k_per_day"
                           checked={interestNotation === 'k_per_day'}
                           onChange={() => {
@@ -692,7 +690,6 @@ export function PawnEditModal({
                             validateInterestRate(interestValue, interestType, 'k_per_day');
                           }}
                           className="mr-1"
-                          disabled={hasPayments}
                         />
                         <label htmlFor="k_per_day" className="text-xs sm:text-sm">k/ngày</label>
                       </div>
@@ -702,10 +699,10 @@ export function PawnEditModal({
                   {interestType === 'weekly_k' && (
                     <div className="flex items-center gap-2">
                       <div className="flex items-center">
-                        <input 
-                          type="radio" 
-                          id="k_per_million_weekly" 
-                          name="interestNotation" 
+                        <input
+                          type="radio"
+                          id="k_per_million_weekly"
+                          name="interestNotation"
                           value="k_per_million"
                           checked={interestNotation === 'k_per_million'}
                           onChange={() => {
@@ -713,15 +710,14 @@ export function PawnEditModal({
                             validateInterestRate(interestValue, interestType, 'k_per_million');
                           }}
                           className="mr-1"
-                          disabled={hasPayments}
                         />
                         <label htmlFor="k_per_million_weekly">k/1 triệu</label>
                       </div>
                       <div className="flex items-center">
-                        <input 
-                          type="radio" 
-                          id="k_per_week" 
-                          name="interestNotation" 
+                        <input
+                          type="radio"
+                          id="k_per_week"
+                          name="interestNotation"
                           value="k_per_week"
                           checked={interestNotation === 'k_per_week'}
                           onChange={() => {
@@ -729,7 +725,6 @@ export function PawnEditModal({
                             validateInterestRate(interestValue, interestType, 'k_per_week');
                           }}
                           className="mr-1"
-                          disabled={hasPayments}
                         />
                         <label htmlFor="k_per_week">k/tuần</label>
                       </div>

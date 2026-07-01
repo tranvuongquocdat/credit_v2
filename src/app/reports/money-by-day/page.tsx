@@ -4,9 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { Layout } from '@/components/Layout';
 import { supabase } from '@/lib/supabase';
 import { useStore } from '@/contexts/StoreContext';
-import { format, endOfDay, parse } from 'date-fns';
+import { format, parse } from 'date-fns';
 import { RefreshCw } from 'lucide-react';
-import { useInstallmentsSummary } from '@/hooks/useInstallmentsSummary';
 import { DatePickerWithControls } from '@/components/ui/date-picker-with-controls';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useRouter } from 'next/navigation';
@@ -23,8 +22,6 @@ import {
 } from "@/components/ui/table";
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useCreditsSummary } from '@/hooks/useCreditsSummary';
-import { usePawnsSummary } from '@/hooks/usePawnsSummary';
 
 // Function to format currency
 const formatCurrency = (value: number | null | undefined) => {
@@ -92,11 +89,6 @@ export default function MoneyFlowByDayPage() {
   // Request ID for race condition prevention
   const requestIdRef = useRef(0);
 
-  // Use hooks for loan calculations - these will be used for the most recent day's data
-  const { summary: pawnSummary } = usePawnsSummary();
-  const { summary: creditSummary } = useCreditsSummary();
-  const { data: installmentSummary } = useInstallmentsSummary();
-  
   // Use permissions hook
   const { hasPermission, loading: permissionsLoading } = usePermissions();
   const router = useRouter();
@@ -111,118 +103,22 @@ export default function MoneyFlowByDayPage() {
     }
   }, [permissionsLoading, canAccessReport, router]);
   
-  // Fetch current loans for a specific date
-  const fetchLoansForDate = async (date: Date) => {
-    if (!currentStore?.id) return { 
-      pawn: 0, credit: 0, installment: 0,
-      pawnDebt: 0, creditDebt: 0, installmentDebt: 0
-    };
-    
-    // If we're looking at today's data, use the hooks which are more accurate
-    const isToday = format(date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
-    
-    if (isToday) {
-      return {
-        pawn: pawnSummary?.totalLoan || 0,
-        credit: creditSummary?.totalLoan || 0,
-        installment: installmentSummary?.totalLoan || 0,
-        pawnDebt: pawnSummary?.oldDebt || 0,
-        creditDebt: creditSummary?.oldDebt || 0,
-        installmentDebt: installmentSummary?.oldDebt || 0
-      };
-    }
-    
-    try {
-      const storeId = currentStore.id;
-      const dateEndISO = endOfDay(date).toISOString();
-      
-      // Fetch pawn loans (active contracts) using the correct status filter
-      const { data: activePawns } = await supabase
-        .from('pawns')
-        .select('loan_amount, id')
-        .eq('store_id', storeId)
-        .not('status', 'in', '(closed,deleted)')
-        .lte('created_at', dateEndISO);
-      
-      const pawnLoans = activePawns ? 
-        activePawns.reduce((sum, item) => sum + (item.loan_amount || 0), 0) : 0;
-      
-      // Estimate pawn debts for historical dates (simplified approach)
-      let pawnDebt = 0;
-      if (activePawns && activePawns.length > 0) {
-        // Simple estimation for historical debt
-        pawnDebt = pawnLoans * 0.05; // Estimate debt as 5% of loan amount
-      }
-      
-      // Fetch credit loans
-      const { data: activeCredits } = await supabase
-        .from('credits')
-        .select('loan_amount, id')
-        .eq('store_id', storeId)
-        .not('status', 'in', '(closed,deleted)')
-        .lte('created_at', dateEndISO);
-      
-      const creditLoans = activeCredits ? 
-        activeCredits.reduce((sum, item) => sum + (item.loan_amount || 0), 0) : 0;
-      
-      // Estimate credit debts for historical dates (simplified approach)
-      let creditDebt = 0;
-      if (activeCredits && activeCredits.length > 0) {
-        // Simple estimation for historical debt
-        creditDebt = creditLoans * 0.05; // Estimate debt as 5% of loan amount
-      }
-      
-      // Fetch installment loans - fixed to use the correct approach
-      const { data: employeeIds } = await supabase
-        .from('employees')
-        .select('id')
-        .eq('store_id', storeId);
-      
-      if (!employeeIds || employeeIds.length === 0) {
-        return {
-          pawn: pawnLoans,
-          credit: creditLoans,
-          installment: 0,
-          pawnDebt: pawnDebt,
-          creditDebt: creditDebt,
-          installmentDebt: 0
-        };
-      }
-      
-      const employeeIdList = employeeIds.map(emp => emp.id);
-      
-      const { data: activeInstallments } = await supabase
-        .from('installments')
-        .select('installment_amount, down_payment, id')
-        .in('employee_id', employeeIdList)
-        .not('status', 'in', '(closed,deleted)')
-        .lte('created_at', dateEndISO);
-      
-      const installmentLoans = activeInstallments ? 
-        activeInstallments.reduce((sum, item) => sum + (item.installment_amount || 0) + (item.down_payment || 0), 0) : 0;
-      
-      // Estimate installment debts for historical dates (simplified approach)
-      let installmentDebt = 0;
-      if (activeInstallments && activeInstallments.length > 0) {
-        // Simple estimation for historical debt
-        installmentDebt = installmentLoans * 0.05; // Estimate debt as 5% of loan amount
-      }
-      
-      return {
-        pawn: pawnLoans,
-        credit: creditLoans,
-        installment: installmentLoans,
-        pawnDebt: pawnDebt,
-        creditDebt: creditDebt,
-        installmentDebt: installmentDebt
-      };
-    } catch (err) {
-      console.error('Error fetching loans for date:', err);
-      return { 
-        pawn: 0, credit: 0, installment: 0,
-        pawnDebt: 0, creditDebt: 0, installmentDebt: 0
-      };
-    }
+  // Cho vay + nợ cũ tái dựng đúng theo từng ngày (thay hack fetchLoansForDate + ước lượng 5%).
+  type LoanDebtRow = {
+    as_of_date: string;
+    pawn_loan: number; credit_loan: number; installment_loan: number;
+    pawn_debt: number; credit_debt: number; installment_debt: number;
+  };
+  const fetchLoansDebtSeries = async (
+    storeIdArg: string, start: string, end: string
+  ): Promise<Map<string, LoanDebtRow>> => {
+    const { data, error } = await (supabase as any).rpc('rpc_money_by_day_loans_debt', {
+      p_store_id: storeIdArg, p_start_date: start, p_end_date: end,
+    });
+    if (error) { console.error('rpc_money_by_day_loans_debt', error); return new Map(); }
+    const m = new Map<string, LoanDebtRow>();
+    (Array.isArray(data) ? data : []).forEach((r: LoanDebtRow) => m.set(r.as_of_date, r));
+    return m;
   };
   
   // Event-sourced: 1 RPC call trả hết activity + fund_total cho mỗi ngày.
@@ -259,12 +155,17 @@ export default function MoneyFlowByDayPage() {
       const dates: Date[] = rows.slice(1).map((r) =>
         parse(r.as_of_date, 'yyyy-MM-dd', new Date())
       );
-      const loansByDate = await Promise.all(dates.map((d) => fetchLoansForDate(d)));
+      const ldSeries = await fetchLoansDebtSeries(storeId, startDate, endDate);
 
       const dailyData: DailyCashFlow[] = rows.slice(1).map((r, i) => {
         const openingBalance = Number(rows[i].fund_total) || 0;
         const closingBalance = Number(r.fund_total) || 0;
-        const loans = loansByDate[i];
+        const ld = ldSeries.get(format(dates[i], 'yyyy-MM-dd'));
+        const loans = {
+          pawn: ld?.pawn_loan ?? 0, pawnDebt: ld?.pawn_debt ?? 0,
+          credit: ld?.credit_loan ?? 0, creditDebt: ld?.credit_debt ?? 0,
+          installment: ld?.installment_loan ?? 0, installmentDebt: ld?.installment_debt ?? 0,
+        };
         const borrowedCapital = 0;
 
         const totalAssets =
@@ -318,7 +219,7 @@ export default function MoneyFlowByDayPage() {
     if (currentStore?.id && canAccessReport && !permissionsLoading) {
       fetchDailyCashFlow();
     }
-  }, [currentStore?.id, pawnSummary, creditSummary, installmentSummary, canAccessReport, permissionsLoading]);
+  }, [currentStore?.id, canAccessReport, permissionsLoading]);
   
   // Loading state for permissions
   if (permissionsLoading) {
