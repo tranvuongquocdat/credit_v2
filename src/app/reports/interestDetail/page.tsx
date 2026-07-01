@@ -43,22 +43,6 @@ import { getDisplayLabelByBuild } from '@/utils/nav-display-labels';
 // Interface for interest detail data
 import type { InterestDetailItem } from './lib/types';
 
-/** Số bản ghi mỗi lần gọi .range() khi tải lịch sử trả góp (có thể chỉnh nếu cần tối ưu batch). */
-const INSTALLMENT_HISTORY_FETCH_PAGE_SIZE = 500;
-
-const INSTALLMENT_HISTORY_SELECT = `
-  *,
-  installments!inner (
-    id,
-    contract_code,
-    down_payment,
-    installment_amount,
-    employee_id,
-    employees!inner (store_id),
-    customers (name)
-  )
-`;
-
 export default function InterestDetailPage() {
   const { currentStore } = useStore();
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -227,7 +211,8 @@ export default function InterestDetailPage() {
               )
             `)
             .eq('pawns.store_id', storeId)
-            .eq('transaction_type', 'payment'),
+            .eq('transaction_type', 'payment')
+            .or(`and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}),and(updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`),
 
           // Contract close transactions query - get ALL records with updated_at for cancel tracking
           supabase
@@ -248,7 +233,8 @@ export default function InterestDetailPage() {
               )
             `)
             .eq('pawns.store_id', storeId)
-            .eq('transaction_type', 'contract_close'),
+            .eq('transaction_type', 'contract_close')
+            .or(`and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}),and(updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`),
 
           // Contract reopen transactions query - get ALL records with updated_at for cancel tracking
           supabase
@@ -269,7 +255,8 @@ export default function InterestDetailPage() {
               )
             `)
             .eq('pawns.store_id', storeId)
-            .eq('transaction_type', 'contract_reopen'),
+            .eq('transaction_type', 'contract_reopen')
+            .or(`and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}),and(updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`),
 
           // Debt payment transactions query
           supabase
@@ -572,7 +559,8 @@ export default function InterestDetailPage() {
               )
             `)
             .eq('credits.store_id', storeId)
-            .eq('transaction_type', 'payment'),
+            .eq('transaction_type', 'payment')
+            .or(`and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}),and(updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`),
 
           // Contract close transactions query - get ALL records with updated_at for cancel tracking
           supabase
@@ -592,7 +580,8 @@ export default function InterestDetailPage() {
               )
             `)
             .eq('credits.store_id', storeId)
-            .eq('transaction_type', 'contract_close'),
+            .eq('transaction_type', 'contract_close')
+            .or(`and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}),and(updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`),
 
           // Contract reopen transactions query - get ALL records with updated_at for cancel tracking
           supabase
@@ -612,7 +601,8 @@ export default function InterestDetailPage() {
               )
             `)
             .eq('credits.store_id', storeId)
-            .eq('transaction_type', 'contract_reopen'),
+            .eq('transaction_type', 'contract_reopen')
+            .or(`and(created_at.gte.${startDateISO},created_at.lte.${endDateISO}),and(updated_at.gte.${startDateISO},updated_at.lte.${endDateISO})`),
 
           // Debt payment transactions query
           supabase
@@ -822,88 +812,33 @@ export default function InterestDetailPage() {
       // Installment interest details
       if (selectedContractType === 'all' || selectedContractType === 'Trả góp') {
         queryPromises.push(
-          fetchAllData(
-            supabase
-              .from('installment_history')
-              .select(INSTALLMENT_HISTORY_SELECT)
-              .eq('installments.employees.store_id', storeId)
-              .eq('transaction_type', 'payment')
-              .or('is_deleted.is.null,is_deleted.eq.false')
-              .order('id'),
-            INSTALLMENT_HISTORY_FETCH_PAGE_SIZE
-          ).then((installmentHistoryData) => {
-            if (installmentHistoryData && installmentHistoryData.length > 0) {
-              // Group by contract to calculate interest per contract (as-of selected end date)
-              const contractsMap = new Map<string, {
-                contract: any;
-                payments: Array<{
-                  id: string;
-                  credit_amount: number;
-                  transaction_date: string | null;
-                }>;
-              }>();
-
-              installmentHistoryData.forEach((item: any) => {
-                const contractId = item.installments?.id;
-                if (!contractId) return;
-
-                if (!contractsMap.has(contractId)) {
-                  contractsMap.set(contractId, {
-                    contract: item.installments,
-                    payments: []
-                  });
-                }
-
-                contractsMap.get(contractId)!.payments.push({
-                  id: item.id,
-                  credit_amount: item.credit_amount || 0,
-                  transaction_date: item.transaction_date
+          (supabase as any)
+            .rpc('rpc_installment_interest_detail', {
+              p_store_id: storeId,
+              p_start_date: startDateObj.toISOString(),
+              p_end_date: endDateObj.toISOString(),
+            })
+            .then(({ data, error }: any) => {
+              if (error) { console.error('rpc_installment_interest_detail', error); return; }
+              const asOfTime = new Date(endDateObj);
+              (Array.isArray(data) ? data : []).forEach((r: any) => {
+                allInterestDetails.push({
+                  id: `installment-interest-${r.installment_id}-${format(asOfTime, 'yyyy-MM-dd')}`,
+                  contractId: r.installment_id,
+                  contractCode: r.contract_code || '',
+                  customerName: r.customer_name || '',
+                  itemName: 'Trả góp',
+                  loanAmount: r.installment_amount || 0,
+                  transactionDate: asOfTime.toLocaleString('vi-VN'),
+                  transactionDateTime: asOfTime.toLocaleString('vi-VN'),
+                  interestAmount: Number(r.interest_through_end) || 0,
+                  otherAmount: 0,
+                  totalAmount: Number(r.interest_through_end) || 0,
+                  transactionType: 'Lãi họ',
+                  type: 'Trả góp'
                 });
               });
-
-              // For each contract, compute cumulative interest at range start and end, include only if changed
-              for (const [contractId, contractData] of contractsMap) {
-                const contract = contractData.contract;
-                const payments = contractData.payments;
-                if (!contract || payments.length === 0) continue;
-
-                const downPayment = contract.down_payment || 0;
-
-                // Sum credits before startDate (exclusive) and up to endDate (inclusive)
-                const cumulativeCreditBeforeStart = payments
-                  .filter(p => p.transaction_date && new Date(p.transaction_date) < startDateObj)
-                  .reduce((sum: number, p: any) => sum + (p.credit_amount || 0), 0);
-
-                const cumulativeCreditThroughEnd = payments
-                  .filter(p => p.transaction_date && new Date(p.transaction_date) <= endDateObj)
-                  .reduce((sum: number, p: any) => sum + (p.credit_amount || 0), 0);
-
-                const interestAtStart = Math.max(0, cumulativeCreditBeforeStart - downPayment);
-                const interestAtEnd = Math.max(0, cumulativeCreditThroughEnd - downPayment);
-
-                // Only include if there is a change in cumulative interest in the selected range
-                if (interestAtEnd !== interestAtStart) {
-                  const asOfTime = new Date(endDateObj);
-
-                  allInterestDetails.push({
-                    id: `installment-interest-${contractId}-${format(asOfTime, 'yyyy-MM-dd')}`,
-                    contractId: contractId,
-                    contractCode: contract.contract_code || '',
-                    customerName: contract.customers?.name || '',
-                    itemName: 'Trả góp',
-                    loanAmount: contract.installment_amount || 0,
-                    transactionDate: asOfTime.toLocaleString('vi-VN'),
-                    transactionDateTime: asOfTime.toLocaleString('vi-VN'),
-                    interestAmount: interestAtEnd,
-                    otherAmount: 0,
-                    totalAmount: interestAtEnd,
-                    transactionType: 'Lãi họ',
-                    type: 'Trả góp'
-                  });
-                }
-              }
-            }
-          })
+            })
         );
       }
 
