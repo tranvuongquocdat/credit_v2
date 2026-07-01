@@ -2,6 +2,7 @@
 -- QĐ-1: mốc "tính đến ngày X" = created_at::date <= X (ngày ghi = ngày thực trả).
 -- QĐ-2: "đang chạy tại X" = loan_date<=X và sự kiện đóng/mở/xoá MỚI NHẤT (created_at<=X) không phải close/delete.
 -- ADDITIVE: không sửa RPC/hàm cũ. Chỉ ĐỌC + gọi calc_expected_until / calc_pawn_expected_until.
+-- Installment tối ưu bằng window cumulative (O(ngày×HĐ)); credit/pawn dùng lateral (số lượng nhỏ/​store).
 create or replace function public.rpc_money_by_day_loans_debt(
   p_store_id   uuid,
   p_start_date date,
@@ -36,41 +37,80 @@ pw as (
   select p.id, p.loan_date::date as ld, p.loan_amount::numeric as amt
   from pawns p where p.store_id = p_store_id
 ),
--- ================= INSTALLMENTS =================
-inst_calc as (
-  select dy.d,
-    sum(case when i.ld <= dy.d and coalesce(st.reopened, true)
-             then i.amt - coalesce(p.paid, 0) else 0 end) as loan,
-    sum(case when i.ld <= dy.d and coalesce(st.reopened, true)
-             then (case when p.maxeff is null then 0
-                        else (p.maxeff - p.mineff + 1) * i.amt / nullif(i.period, 0) end)
-                  - coalesce(p.paid, 0) - coalesce(dp.dpaid, 0)
-             else 0 end) as debt
-  from days dy cross join inst i
-  left join lateral (
-    select sum(credit_amount - coalesce(debit_amount,0)) as paid,
-           min(effective_date::date) as mineff, max(effective_date::date) as maxeff
-    from installment_history
-    where installment_id = i.id and transaction_type='payment' and is_deleted=false
-      and created_at::date <= dy.d
-  ) p on true
-  left join lateral (
-    select sum(credit_amount - coalesce(debit_amount,0)) as dpaid
-    from installment_history
-    where installment_id = i.id and transaction_type='debt_payment' and is_deleted=false
-      and created_at::date <= dy.d
-  ) dp on true
-  left join lateral (
-    select (transaction_type='contract_reopen') as reopened
-    from installment_history
-    where installment_id = i.id
-      and transaction_type in ('contract_close','contract_delete','contract_reopen')
-      and is_deleted=false and created_at::date <= dy.d
-    order by created_at desc limit 1
-  ) st on true
-  group by dy.d
+-- ================= INSTALLMENTS (window cumulative) =================
+-- payment gộp theo (HĐ, ngày ghi)
+ipay as (
+  select installment_id as id, created_at::date as cd,
+         sum(credit_amount - coalesce(debit_amount,0)) as pd,
+         min(effective_date::date) as mineff, max(effective_date::date) as maxeff
+  from installment_history
+  where transaction_type='payment' and is_deleted=false
+    and installment_id in (select id from inst)
+  group by installment_id, created_at::date
 ),
--- ================= CREDITS =================
+idp as (
+  select installment_id as id, created_at::date as cd,
+         sum(credit_amount - coalesce(debit_amount,0)) as dpd
+  from installment_history
+  where transaction_type='debt_payment' and is_deleted=false
+    and installment_id in (select id from inst)
+  group by installment_id, created_at::date
+),
+-- seed trước dải (cd < p_start_date) để cumulative không sót lịch sử cũ
+ipre as (
+  select id,
+         sum(case when cd < p_start_date then pd else 0 end) as pd0,
+         max(case when cd < p_start_date then maxeff end) as maxeff0,
+         min(case when cd < p_start_date then mineff end) as mineff0
+  from ipay group by id
+),
+idppre as (
+  select id, sum(case when cd < p_start_date then dpd else 0 end) as dpd0
+  from idp group by id
+),
+-- sự kiện đóng/mở/xoá (ít dòng/HĐ)
+istat as (
+  select installment_id as id, created_at::date as cd,
+         (transaction_type='contract_reopen') as reopened
+  from installment_history
+  where transaction_type in ('contract_close','contract_delete','contract_reopen')
+    and is_deleted=false and installment_id in (select id from inst)
+),
+inst_cum as (
+  select g.d, i.id, i.ld, i.amt, i.period,
+         coalesce(pre.pd0,0)  + sum(coalesce(ip.pd,0))  over w as paid,
+         coalesce(dpp.dpd0,0) + sum(coalesce(dp.dpd,0)) over w as dpaid,
+         greatest(pre.maxeff0, max(ip.maxeff) over w) as maxeff,
+         least(pre.mineff0,   min(ip.mineff) over w) as mineff
+  from days g
+  cross join inst i
+  left join ipay   ip  on ip.id = i.id and ip.cd = g.d
+  left join idp    dp  on dp.id = i.id and dp.cd = g.d
+  left join ipre   pre on pre.id = i.id
+  left join idppre dpp on dpp.id = i.id
+  where i.ld <= g.d
+  window w as (partition by i.id order by g.d rows between unbounded preceding and current row)
+),
+inst_calc as (
+  select x.d,
+    sum(case when active then x.amt - x.paid else 0 end) as loan,
+    sum(case when active then
+          (case when x.maxeff is null then 0
+                else (x.maxeff - x.mineff + 1) * x.amt / nullif(x.period,0) end)
+          - x.paid - x.dpaid
+        else 0 end) as debt
+  from (
+    select c.*, coalesce(st.reopened, true) as active
+    from inst_cum c
+    left join lateral (
+      select reopened from istat s
+      where s.id = c.id and s.cd <= c.d
+      order by s.cd desc limit 1
+    ) st on true
+  ) x
+  group by x.d
+),
+-- ================= CREDITS (lateral; số lượng nhỏ/​store) =================
 cr_calc as (
   select dy.d,
     sum(case when c.ld <= dy.d and coalesce(st.reopened, true)
@@ -111,7 +151,7 @@ cr_calc as (
   ) st on true
   group by dy.d
 ),
--- ================= PAWNS =================
+-- ================= PAWNS (lateral; số lượng nhỏ/​store) =================
 pw_calc as (
   select dy.d,
     sum(case when w.ld <= dy.d and coalesce(st.reopened, true)
