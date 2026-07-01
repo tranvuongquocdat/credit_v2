@@ -41,21 +41,7 @@ import ExcelExport from './components/ExcelExport';
 import { getDisplayLabelByBuild } from '@/utils/nav-display-labels';
 
 // Interface for interest detail data
-interface InterestDetailItem {
-  id: string;
-  contractId: string;
-  contractCode: string;
-  customerName: string;
-  itemName: string;
-  loanAmount: number;
-  transactionDate: string;
-  transactionDateTime: string;
-  interestAmount: number;
-  otherAmount: number;
-  totalAmount: number;
-  transactionType: string;
-  type: 'Cầm đồ' | 'Tín chấp' | 'Trả góp';
-}
+import type { InterestDetailItem } from './lib/types';
 
 /** Số bản ghi mỗi lần gọi .range() khi tải lịch sử trả góp (có thể chỉnh nếu cần tối ưu batch). */
 const INSTALLMENT_HISTORY_FETCH_PAGE_SIZE = 500;
