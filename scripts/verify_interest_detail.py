@@ -94,6 +94,35 @@ PERIODS = [
     ('2020-01-01T00:00:00+07:00','2020-01-02T23:59:59+07:00','ky rong'),
 ]
 
+def run_installment_efficient():
+    ok = True
+    for sid, name in STORES:
+        insts = get('installments_by_store', {'select':'id,down_payment','store_id':f'eq.{sid}'})
+        sample = insts if name != 'Nam sms' else insts[:150]
+        pay_cache = {}; downmap = {}
+        for it in sample:
+            pays = get('installment_history', {'select':'credit_amount,transaction_date',
+                'installment_id':f"eq.{it['id']}",'transaction_type':'eq.payment','is_deleted':'eq.false'})
+            pay_cache[it['id']] = [((p['credit_amount'] or 0), pts(p['transaction_date'])) for p in pays if p['transaction_date']]
+            downmap[it['id']] = it['down_payment'] or 0
+        for s_iso, e_iso, plabel in PERIODS:
+            start, end = pts(s_iso), pts(e_iso)
+            rpc_rows = {r['installment_id']: r for r in rpc('rpc_installment_interest_detail',
+                {'p_store_id':sid,'p_start_date':s_iso,'p_end_date':e_iso})}
+            mism = 0
+            for iid, pays in pay_cache.items():
+                down = downmap[iid]
+                cs = sum(a for a,td in pays if td <  start)
+                ce = sum(a for a,td in pays if td <= end)
+                i_start, i_end = max(0,cs-down), max(0,ce-down)
+                want = (i_end != i_start); got = rpc_rows.get(iid)
+                if want and (not got or round(float(got['interest_through_end'])) != round(i_end)): mism += 1
+                if (not want) and got: mism += 1
+            if mism: ok = False
+            print(f'  {"[ok]  " if mism==0 else "[FAIL]"} {name}/{plabel} installment (sample={len(pay_cache)}) mism={mism}')
+    print('\n' + ('OK INSTALLMENT KHOP' if ok else 'FAIL CO LECH'))
+    return ok
+
 def run(kinds=('pawn_credit','installment')):
     ok = True
     for sid, name in STORES:
