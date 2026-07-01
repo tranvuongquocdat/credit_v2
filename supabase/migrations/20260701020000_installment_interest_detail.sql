@@ -23,7 +23,7 @@ cum as (
     greatest(0, coalesce(sum(ih.credit_amount) filter (where ih.transaction_date <= p_end_date),   0) - i.down) as interest_end
   from inst i
   left join installment_history ih
-    on ih.installment_id = i.id and ih.transaction_type = 'payment' and ih.is_deleted = false
+    on ih.installment_id = i.id and ih.transaction_type = 'payment' and ih.is_deleted is not true
   group by i.id, i.down
 )
 select i.id, i.contract_code, i.customer_name, i.amt, c.interest_end
