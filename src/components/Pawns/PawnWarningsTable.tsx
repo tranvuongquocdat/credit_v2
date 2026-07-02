@@ -149,12 +149,13 @@ export function PawnWarningsTable({
     const latestPaidDate = pawnDetails?.latestPaidDate || null;
 
     // ON_TIME (mai đóng / hôm nay đóng) là nhắc — chưa nợ, hiện 0đ.
-    // LATE_INTEREST / OVERDUE mới có phí thuê còn nợ (= interestToday − paidInterest).
+    // LATE_INTEREST / OVERDUE mới có phí thuê còn nợ (= dueInterestToday:
+    // tính từ ngày đã đóng gần nhất, không bị nhảy khi đổi lãi).
     const isReminderOnly = pawn.status_code === 'ON_TIME';
     const totalInterest = isReminderOnly
       ? 0
       : pawnDetails
-        ? Math.max(0, (pawnDetails.interestToday ?? 0) - (pawnDetails.paidInterest ?? 0))
+        ? (pawnDetails.dueInterestToday ?? 0)
         : calculateUnpaidInterestAmount(pawn, latestPaidDate);
 
     // Truyền totalInterest vào để "Phí thuê N" trong Lý do khớp với cột Tiền phí thuê

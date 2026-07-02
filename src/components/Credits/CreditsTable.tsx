@@ -262,7 +262,9 @@ export function CreditsTable({
                 </TableCell>
                 <TableCell className="py-3 px-3 text-center text-rose-600 font-medium border-b border-r border-gray-200 hidden lg:table-cell">
                   {(() => {
-                    const todayValue = calculatedDetails?.[credit.id]?.interestToday ?? 0;
+                    // Lãi từ ngày đã đóng gần nhất → hôm nay (RPC get_credit_due_interest) —
+                    // khớp subtitle "(N ngày)" và không bị nhảy khi đổi lãi
+                    const todayValue = calculatedDetails?.[credit.id]?.dueInterestToday ?? 0;
                     const latestPaid = calculatedDetails?.[credit.id]?.latestPaidDate;
                     const today = new Date();
                     today.setHours(0,0,0,0);
@@ -524,7 +526,7 @@ export function CreditsTable({
                   <div>
                     <span className="text-gray-600">Lãi hôm nay: </span>
                     <span className="font-medium text-rose-600">
-                      {formatCurrency(financialDetail?.interestToday || 0)}
+                      {formatCurrency(financialDetail?.dueInterestToday || 0)}
                     </span>
                   </div>
                 </div>

@@ -24,6 +24,9 @@ export interface CreditFinancialDetail {
   expectedProfit: number;
   paidInterest: number;
   interestToday: number;
+  // Lãi phí TỪ NGÀY ĐÃ ĐÓNG gần nhất đến hôm nay (rate hiện tại chỉ áp cho
+  // khoảng chưa đóng — không bị nhảy khi đổi lãi như interestToday tính full đời HĐ)
+  dueInterestToday: number;
   nextPayment: string | null;
   isCompleted: boolean;
   hasPaid: boolean;
@@ -163,6 +166,19 @@ export function useCreditCalculations() {
         }
       }
 
+      /* ---------- 6.0. RPC lấy lãi phí từ ngày đã đóng → hôm nay ---------- */
+      const dueMap = new Map<string, number>();
+      if (allIds.length) {
+        const { data: dueRows, error: dueErr } = await (supabase.rpc as any)('get_credit_due_interest', {
+          p_credit_ids: allIds,
+        });
+        if (!dueErr && Array.isArray(dueRows)) {
+          dueRows.forEach((r: any) => {
+            dueMap.set(r.credit_id, Number(r.due_interest || 0));
+          });
+        }
+      }
+
       /* ---------- 7.1. RPC lấy latest payment paid date cho tất cả credit ---------- */
       const latestPaidMap = new Map<string, string | null>();
       if (allIds.length) {
@@ -229,6 +245,7 @@ export function useCreditCalculations() {
               expectedProfit: result.expectedProfit,
               paidInterest: result.paidInterest,
               interestToday: result.interestToday,
+              dueInterestToday: dueMap.get(result.creditId) ?? 0,
               nextPayment: nextMap.get(result.creditId)?.nextDate || null,
               isCompleted: nextMap.get(result.creditId)?.isCompleted || false,
               hasPaid: nextMap.get(result.creditId)?.hasPaid || false,

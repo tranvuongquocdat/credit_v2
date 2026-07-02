@@ -225,10 +225,10 @@ export function PawnsTable({
                 <TableCell className="py-3 px-3 text-center text-rose-600 font-medium border-b border-r border-gray-200 hidden lg:table-cell">
                   {(() => {
                     const det = calculatedDetails?.[pawn.id];
-                    const todayValue = det?.interestToday ?? 0;
-                    const paidValue = det?.paidInterest ?? 0;
-                    // Lãi còn nợ: tổng lãi tới hôm nay trừ phần đã đóng
-                    const unpaidValue = Math.max(0, todayValue - paidValue);
+                    // Lãi từ ngày đã đóng gần nhất → hôm nay (RPC get_pawn_due_interest).
+                    // Không dùng interestToday - paidInterest nữa: đổi lãi sẽ áp rate mới
+                    // ngược cả phần quá khứ đã đóng làm số nhảy loạn.
+                    const unpaidValue = det?.dueInterestToday ?? 0;
 
                     const latestPaid = det?.latestPaidDate;
                     const today = new Date();
@@ -408,7 +408,7 @@ export function PawnsTable({
                 {formatCurrency(
                   pawns.reduce((sum, p) => {
                     const det = calculatedDetails?.[p.id];
-                    return sum + Math.max(0, (det?.interestToday ?? 0) - (det?.paidInterest ?? 0));
+                    return sum + (det?.dueInterestToday ?? 0);
                   }, 0)
                 )}
               </TableCell>
@@ -502,7 +502,7 @@ export function PawnsTable({
                   <div>
                     <span className="text-gray-600">Phí thuê đến hôm nay: </span>
                     <span className="font-medium text-rose-600">
-                      {formatCurrency(Math.max(0, (financialDetail?.interestToday || 0) - (financialDetail?.paidInterest || 0)))}
+                      {formatCurrency(financialDetail?.dueInterestToday || 0)}
                     </span>
                     {(() => {
                       const latestPaid = financialDetail?.latestPaidDate;
@@ -615,7 +615,7 @@ export function PawnsTable({
                   {formatCurrency(
                     pawns.reduce((sum, p) => {
                       const det = calculatedDetails?.[p.id];
-                      return sum + Math.max(0, (det?.interestToday ?? 0) - (det?.paidInterest ?? 0));
+                      return sum + (det?.dueInterestToday ?? 0);
                     }, 0)
                   )}
                 </div>
