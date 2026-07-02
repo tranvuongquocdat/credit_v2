@@ -23,6 +23,9 @@ export interface PawnFinancialDetail {
   expectedProfit: number;
   paidInterest: number;
   interestToday: number;
+  // Tiền lãi TỪ NGÀY ĐÃ ĐÓNG gần nhất đến hôm nay (rate hiện tại chỉ áp cho
+  // khoảng chưa đóng — không bị nhảy khi đổi lãi như interestToday - paidInterest)
+  dueInterestToday: number;
   nextPayment: string | null;
   isCompleted: boolean;
   hasPaid: boolean;
@@ -127,6 +130,19 @@ export function usePawnCalculations() {
         }
       }
 
+      /* ---------- 6.0. RPC lấy tiền lãi từ ngày đã đóng → hôm nay ---------- */
+      const dueMap = new Map<string, number>();
+      if (allIds.length) {
+        const { data: dueRows, error: dueErr } = await (supabase.rpc as any)('get_pawn_due_interest', {
+          p_pawn_ids: allIds,
+        });
+        if (!dueErr && Array.isArray(dueRows)) {
+          dueRows.forEach((r: any) => {
+            dueMap.set(r.pawn_id, Number(r.due_interest || 0));
+          });
+        }
+      }
+
       /* ---------- 6.1. Lấy ngày đóng lãi mới nhất cho mỗi pawn ---------- */
       const latestPaidMap = new Map<string, string | null>();
       if (allIds.length) {
@@ -188,6 +204,7 @@ export function usePawnCalculations() {
             expectedProfit: result.expectedProfit,
             paidInterest: result.paidInterest,
             interestToday: result.interestToday,
+            dueInterestToday: dueMap.get(result.pawnId) ?? 0,
             nextPayment: nextMap.get(result.pawnId)?.nextDate || null,
             isCompleted: nextMap.get(result.pawnId)?.isCompleted || false,
             hasPaid: nextMap.get(result.pawnId)?.hasPaid || false,
