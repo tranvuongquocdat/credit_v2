@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetch-all';
 import { PawnStatus } from '@/models/pawn';
 import { CreditStatus } from '@/models/credit';
 import { InstallmentStatus } from '@/models/installment';
@@ -15,17 +16,24 @@ export interface FinancialSummary {
 
 export async function getPawnFinancialsForStore(storeId: string): Promise<FinancialSummary> {
   // 1 & 2. Lấy danh sách pawns đang hoạt động và đã đóng song song
-  const [{ data: activePawnsData }, { data: closedPawnsData }] = await Promise.all([
-    supabase
-      .from('pawns_by_store')
-      .select('id, loan_amount, loan_date, loan_period')
-      .eq('store_id', storeId)
-      .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']),
-    supabase
-      .from('pawns_by_store')
-      .select('id')
-      .eq('store_id', storeId)
-      .eq('status_code', 'CLOSED')
+  // (fetchAllRows để không bị PostgREST cắt 1000 dòng khi store lớn)
+  const [activePawnsData, closedPawnsData] = await Promise.all([
+    fetchAllRows(
+      supabase
+        .from('pawns_by_store')
+        .select('id, loan_amount, loan_date, loan_period')
+        .eq('store_id', storeId)
+        .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST'])
+        .order('id')
+    ),
+    fetchAllRows(
+      supabase
+        .from('pawns_by_store')
+        .select('id')
+        .eq('store_id', storeId)
+        .eq('status_code', 'CLOSED')
+        .order('id')
+    )
   ]);
 
   let totalLoan = 0;
@@ -45,39 +53,40 @@ export async function getPawnFinancialsForStore(storeId: string): Promise<Financ
   // end = CUỐI ngày cuối tháng (23:59:59.999), tránh RPC lọc created_at <= end cắt mất khoản thu ngày cuối tháng.
   const end   = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999);
 
+  // fetchAllRows cho cả response RPC: PostgREST cũng cắt 1000 dòng với RPC trả setof
   const [
-    { data: interestRows, error: interestError },
-    { data: principalRows },
-    { data: debtRows },
-    { data: expRows, error: expErr },
-    { data: npRows, error: npErr }
+    interestRows,
+    principalRows,
+    debtRows,
+    expRows,
+    npRows
   ] = await Promise.all([
     // RPC lấy paid interest
-    allIds.length ? supabase.rpc('get_pawn_paid_interest', {
+    allIds.length ? fetchAllRows(supabase.rpc('get_pawn_paid_interest', {
       p_pawn_ids: allIds,
       p_start_date: start.toISOString(),
       p_end_date: end.toISOString(),
-    }) : Promise.resolve({ data: null, error: null }),
+    })) : Promise.resolve([]),
     // RPC lấy current principal
-    allIds.length ? supabase.rpc('get_pawn_current_principal', {
+    allIds.length ? fetchAllRows(supabase.rpc('get_pawn_current_principal', {
       p_pawn_ids: allIds,
-    }) : Promise.resolve({ data: null }),
+    })) : Promise.resolve([]),
     // RPC lấy old debt
-    activeIds.length ? supabase.rpc('get_pawn_old_debt', {
+    activeIds.length ? fetchAllRows(supabase.rpc('get_pawn_old_debt', {
       p_pawn_ids: activeIds,
-    }) : Promise.resolve({ data: null }),
+    })) : Promise.resolve([]),
     // RPC lấy expected interest
-    allIds.length ? (supabase.rpc as any)('get_pawn_expected_interest', {
+    allIds.length ? fetchAllRows((supabase.rpc as any)('get_pawn_expected_interest', {
       p_pawn_ids: allIds,
-    }) : Promise.resolve({ data: null, error: null }),
+    })) : Promise.resolve([]),
     // RPC lấy next payment info
-    activeIds.length ? (supabase.rpc as any)('get_pawn_next_payment_info', {
+    activeIds.length ? fetchAllRows((supabase.rpc as any)('get_pawn_next_payment_info', {
       p_pawn_ids: activeIds,
-    }) : Promise.resolve({ data: null, error: null })
+    })) : Promise.resolve([])
   ]);
 
   // Process interest data
-  if (!interestError && Array.isArray(interestRows)) {
+  if (Array.isArray(interestRows)) {
     interestRows.forEach((r: any) =>
       interestMap.set(r.pawn_id, Number(r.paid_interest || 0)));
   }
@@ -97,7 +106,7 @@ export async function getPawnFinancialsForStore(storeId: string): Promise<Financ
   // Process expected interest data
   const expectedMap = new Map<string, number>();
   const todayMap = new Map<string, number>();
-  if (!expErr && Array.isArray(expRows)) {
+  if (Array.isArray(expRows)) {
     expRows.forEach((r: any) => {
       expectedMap.set(r.pawn_id, Number(r.expected_profit || 0));
       todayMap.set(r.pawn_id, Number(r.interest_today || 0));
@@ -106,7 +115,7 @@ export async function getPawnFinancialsForStore(storeId: string): Promise<Financ
 
   // Process next payment info
   const nextMap = new Map<string, { nextDate: string | null; isCompleted: boolean; hasPaid: boolean }>();
-  if (!npErr && Array.isArray(npRows)) {
+  if (Array.isArray(npRows)) {
     npRows.forEach((r: any) => {
       nextMap.set(r.pawn_id, {
         nextDate: r.next_date,
@@ -158,17 +167,24 @@ export async function getPawnFinancialsForStore(storeId: string): Promise<Financ
 
 export async function getCreditFinancialsForStore(storeId: string): Promise<FinancialSummary> {
   // 1 & 2. Lấy danh sách credits đang hoạt động và đã đóng song song
-  const [{ data: activeCreditsData }, { data: closedCreditsData }] = await Promise.all([
-    supabase
-      .from('credits_by_store')
-      .select('id, loan_amount, loan_date, loan_period')
-      .eq('store_id', storeId)
-      .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']),
-    supabase
-      .from('credits_by_store')
-      .select('id')
-      .eq('store_id', storeId)
-      .eq('status_code', 'CLOSED')
+  // (fetchAllRows để không bị PostgREST cắt 1000 dòng khi store lớn)
+  const [activeCreditsData, closedCreditsData] = await Promise.all([
+    fetchAllRows(
+      supabase
+        .from('credits_by_store')
+        .select('id, loan_amount, loan_date, loan_period')
+        .eq('store_id', storeId)
+        .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST'])
+        .order('id')
+    ),
+    fetchAllRows(
+      supabase
+        .from('credits_by_store')
+        .select('id')
+        .eq('store_id', storeId)
+        .eq('status_code', 'CLOSED')
+        .order('id')
+    )
   ]);
 
   let totalLoan = 0;
@@ -188,39 +204,40 @@ export async function getCreditFinancialsForStore(storeId: string): Promise<Fina
   // end = CUỐI ngày cuối tháng (23:59:59.999), tránh RPC lọc created_at <= end cắt mất khoản thu ngày cuối tháng.
   const end   = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999);
 
+  // fetchAllRows cho cả response RPC: PostgREST cũng cắt 1000 dòng với RPC trả setof
   const [
-    { data: interestRows, error: interestError },
-    { data: principalRows },
-    { data: debtRows },
-    { data: expRows, error: expErr },
-    { data: npRows, error: npErr }
+    interestRows,
+    principalRows,
+    debtRows,
+    expRows,
+    npRows
   ] = await Promise.all([
     // RPC lấy paid interest
-    allIds.length ? supabase.rpc('get_paid_interest', {
+    allIds.length ? fetchAllRows(supabase.rpc('get_paid_interest', {
       p_credit_ids: allIds,
       p_start_date: start.toISOString(),
       p_end_date: end.toISOString(),
-    }) : Promise.resolve({ data: null, error: null }),
+    })) : Promise.resolve([]),
     // RPC lấy current principal
-    allIds.length ? supabase.rpc('get_current_principal', {
+    allIds.length ? fetchAllRows(supabase.rpc('get_current_principal', {
       p_credit_ids: allIds,
-    }) : Promise.resolve({ data: null }),
+    })) : Promise.resolve([]),
     // RPC lấy old debt
-    activeIds.length ? supabase.rpc('get_old_debt', {
+    activeIds.length ? fetchAllRows(supabase.rpc('get_old_debt', {
       p_credit_ids: activeIds,
-    }) : Promise.resolve({ data: null }),
+    })) : Promise.resolve([]),
     // RPC lấy expected interest
-    allIds.length ? (supabase.rpc as any)('get_expected_interest', {
+    allIds.length ? fetchAllRows((supabase.rpc as any)('get_expected_interest', {
       p_credit_ids: allIds,
-    }) : Promise.resolve({ data: null, error: null }),
+    })) : Promise.resolve([]),
     // RPC lấy next payment info
-    activeIds.length ? (supabase.rpc as any)('get_next_payment_info', {
+    activeIds.length ? fetchAllRows((supabase.rpc as any)('get_next_payment_info', {
       p_credit_ids: activeIds,
-    }) : Promise.resolve({ data: null, error: null })
+    })) : Promise.resolve([])
   ]);
 
   // Process interest data
-  if (!interestError && Array.isArray(interestRows)) {
+  if (Array.isArray(interestRows)) {
     interestRows.forEach((r: any) =>
       interestMap.set(r.credit_id, Number(r.paid_interest || 0)));
   }
@@ -240,7 +257,7 @@ export async function getCreditFinancialsForStore(storeId: string): Promise<Fina
   // Process expected interest data
   const expectedMap = new Map<string, number>();
   const todayMap = new Map<string, number>();
-  if (!expErr && Array.isArray(expRows)) {
+  if (Array.isArray(expRows)) {
     expRows.forEach((r: any) => {
       expectedMap.set(r.credit_id, Number(r.expected_profit || 0));
       todayMap.set(r.credit_id, Number(r.interest_today || 0));
@@ -249,7 +266,7 @@ export async function getCreditFinancialsForStore(storeId: string): Promise<Fina
 
   // Process next payment info
   const nextMap = new Map<string, { nextDate: string | null; isCompleted: boolean; hasPaid: boolean }>();
-  if (!npErr && Array.isArray(npRows)) {
+  if (Array.isArray(npRows)) {
     npRows.forEach((r: any) => {
       nextMap.set(r.credit_id, {
         nextDate: r.next_date,
@@ -297,101 +314,65 @@ export async function getCreditFinancialsForStore(storeId: string): Promise<Fina
 }
 
 export async function getInstallmentFinancialsForStore(storeId: string): Promise<FinancialSummary> {
-  // 1 & 2. Lấy danh sách installments đang hoạt động và đã đóng song song
-  const [
-    { data: activeInstallments, error: installmentsError },
-    { data: closedInstallments }
-  ] = await Promise.all([
-    supabase
-      .from('installments_by_store')
-      .select(`
-        id,
-        contract_code,
-        down_payment,
-        installment_amount,
-        loan_date,
-        loan_period,
-        status,
-        store_id,
-        debt_amount
-      `)
-      .eq('status', InstallmentStatus.ON_TIME)
-      .eq('store_id', storeId),
-    supabase
-      .from('installments_by_store')
-      .select('id')
-      .eq('store_id', storeId)
-      .in('status', [InstallmentStatus.CLOSED, InstallmentStatus.FINISHED])
+  // 1. Lấy danh sách installments đang hoạt động (phân trang tránh cắt 1000 dòng)
+  //    + tổng "lãi phí đã thu" của TẤT CẢ hợp đồng qua RPC store-level
+  //    (thay cách cũ truyền mảng id closed — bị cắt 1000 khi store lớn, vd Nam sms 1178 HĐ closed)
+  const [activeInstallments, { data: storeProfitData }] = await Promise.all([
+    fetchAllRows(
+      supabase
+        .from('installments_by_store')
+        .select(`
+          id,
+          contract_code,
+          down_payment,
+          installment_amount,
+          loan_date,
+          loan_period,
+          status,
+          store_id,
+          debt_amount
+        `)
+        .eq('status', InstallmentStatus.ON_TIME)
+        .eq('store_id', storeId)
+        .order('id')
+    ),
+    (supabase as any).rpc('rpc_store_installment_collected_profit', { p_store_id: storeId })
   ]);
 
-  if (installmentsError) {
-    throw installmentsError;
-  }
-
-  const activeIds = activeInstallments?.map(it => it.id).filter((id): id is string => id !== null) || [];
-  const closedIds = closedInstallments?.map(it => it.id).filter((id): id is string => id !== null) || [];
-  const allIds = [...activeIds, ...closedIds];
-
-  // Nếu không có hợp đồng nào, trả về 0
-  if (allIds.length === 0) {
-    return {
-        totalLoan: 0,
-        oldDebt: 0,
-        profit: 0,
-        collectedInterest: 0,
-    };
-  }
+  const activeIds = activeInstallments?.map((it: any) => it.id).filter((id: any): id is string => id !== null) || [];
 
   let totalLoan = 0;
   let totalOldDebt = 0;
   let expectedProfit = 0;
-  let collectedProfit = 0;
+  const collectedProfit = Number(storeProfitData || 0);
 
-  // 3. Tính toán cho hợp đồng đang hoạt động
+  // 2. Tính toán cho hợp đồng đang hoạt động
   if (activeInstallments && activeInstallments.length > 0) {
-    // Chạy 3 RPC calls song song để tối ưu hiệu suất
-    const [
-      { data: debtRows },
-      { data: paidRows },
-      { data: profitRows }
-    ] = await Promise.all([
-      supabase.rpc('get_installment_old_debt', { p_installment_ids: activeIds }),
-      supabase.rpc('installment_get_paid_amount', { p_installment_ids: activeIds }),
-      supabase.rpc('installment_get_collected_profit', { p_installment_ids: activeIds })
+    // Chạy 3 RPC calls song song để tối ưu hiệu suất (phân trang response tránh cắt 1000 dòng)
+    const [debtRows, paidRows, profitRows] = await Promise.all([
+      fetchAllRows(supabase.rpc('get_installment_old_debt', { p_installment_ids: activeIds })),
+      fetchAllRows(supabase.rpc('installment_get_paid_amount', { p_installment_ids: activeIds })),
+      fetchAllRows(supabase.rpc('installment_get_collected_profit', { p_installment_ids: activeIds }))
     ]);
 
     /* xây 3 map rồi truyền xuống calculateInstallmentMetrics */
-    const debtMap   = new Map(debtRows?.map(r => [r.installment_id, Number(r.old_debt)]));
-    const paidMap   = new Map(paidRows?.map(r => [r.installment_id, Number(r.paid_amount)]));
-    const profitMap = new Map(profitRows?.map(r => [r.installment_id, Number(r.profit_collected)]));
-    
+    const debtMap   = new Map(debtRows?.map((r: any) => [r.installment_id, Number(r.old_debt)]));
+    const paidMap   = new Map(paidRows?.map((r: any) => [r.installment_id, Number(r.paid_amount)]));
+    const profitMap = new Map(profitRows?.map((r: any) => [r.installment_id, Number(r.profit_collected)]));
+
     const results = await Promise.all(
-      activeInstallments.map(installment => calculateInstallmentMetrics(installment, { debtMap, paidMap, profitMap }))
+      activeInstallments.map((installment: any) => calculateInstallmentMetrics(installment, { debtMap, paidMap, profitMap }))
     );
-    
+
     results.forEach((result, idx) => {
       const id = activeInstallments[idx].id;
       const oldDebtVal = debtMap.get(id ?? '') ?? 0;       // dùng nợ cũ lấy từ RPC
       totalOldDebt   += oldDebtVal;
 
       if (result) {
-        collectedProfit += result.profitCollected;
         totalLoan       += result.loanAmount;
         expectedProfit  += result.expectedProfitAmount;
       }
-    });
-  }
-
-  // 4. Tính collectedProfit cho TẤT CẢ hợp đồng (cả active và closed)
-  if (allIds.length > 0) {
-    const { data: allProfitRows } = await supabase.rpc(
-      'installment_get_collected_profit', { p_installment_ids: allIds }
-    );
-
-    // Reset collectedProfit và tính lại cho tất cả hợp đồng
-    collectedProfit = 0;
-    allProfitRows?.forEach((r: { installment_id: string; profit_collected: number }) => {
-      collectedProfit += Number(r.profit_collected || 0);
     });
   }
 
@@ -401,4 +382,4 @@ export async function getInstallmentFinancialsForStore(storeId: string): Promise
     profit: expectedProfit,
     collectedInterest: collectedProfit
   };
-} 
+}

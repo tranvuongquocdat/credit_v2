@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetch-all';
 import { useStore } from '@/contexts/StoreContext';
 import { startPerfTimer } from '@/lib/perf-debug';
 
@@ -34,25 +35,31 @@ export function useCreditsSummary() {
       ]);
       endStoreQuery();
 
-      // active + closed ids using credits_by_store view
+      // active + closed ids using credits_by_store view - phân trang tránh cắt 1000 dòng
       const endActiveCreditsQuery = startPerfTimer('useCreditsSummary.fetchSummary.queryActiveCredits');
-      const { data: activeCredits } = await supabase
-        .from('credits_by_store')
-        .select('id, loan_amount')
-        .eq('store_id', storeId)
-        .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']);
+      const activeCredits = await fetchAllRows(
+        supabase
+          .from('credits_by_store')
+          .select('id, loan_amount')
+          .eq('store_id', storeId)
+          .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST'])
+          .order('id')
+      );
       endActiveCreditsQuery();
 
       const endClosedCreditsQuery = startPerfTimer('useCreditsSummary.fetchSummary.queryClosedCredits');
-      const { data: closedCredits } = await supabase
-        .from('credits_by_store')
-        .select('id')
-        .eq('store_id', storeId)
-        .eq('status_code', 'CLOSED');
+      const closedCredits = await fetchAllRows(
+        supabase
+          .from('credits_by_store')
+          .select('id')
+          .eq('store_id', storeId)
+          .eq('status_code', 'CLOSED')
+          .order('id')
+      );
       endClosedCreditsQuery();
 
-      const activeIds = activeCredits?.map(c => c.id).filter((id): id is string => id !== null) ?? [];
-      const closedIds = closedCredits?.map(c => c.id).filter((id): id is string => id !== null) ?? [];
+      const activeIds = activeCredits?.map((c: any) => c.id).filter((id: any): id is string => id !== null) ?? [];
+      const closedIds = closedCredits?.map((c: any) => c.id).filter((id: any): id is string => id !== null) ?? [];
       const allIds = [...activeIds, ...closedIds];
 
       let totalLoan = 0;
@@ -65,9 +72,9 @@ export function useCreditsSummary() {
         const endPrincipalQuery = startPerfTimer('useCreditsSummary.fetchSummary.rpcCurrentPrincipal', {
           context: { credits: activeIds.length },
         });
-        const { data: prinRows } = await supabase.rpc('get_current_principal', {
+        const prinRows = await fetchAllRows(supabase.rpc('get_current_principal', {
           p_credit_ids: activeIds,
-        });
+        }));
         endPrincipalQuery();
         totalLoan = prinRows?.reduce((sum: number, r: any) => sum + Number(r.current_principal || 0), 0) ?? 0;
 
@@ -75,9 +82,9 @@ export function useCreditsSummary() {
         const endOldDebtQuery = startPerfTimer('useCreditsSummary.fetchSummary.rpcOldDebt', {
           context: { credits: activeIds.length },
         });
-        const { data: debtRows } = await supabase.rpc('get_old_debt', {
+        const debtRows = await fetchAllRows(supabase.rpc('get_old_debt', {
           p_credit_ids: activeIds,
-        });
+        }));
         endOldDebtQuery();
         totalOldDebt = debtRows?.reduce((s: number, r: any) => s + Number(r.old_debt || 0), 0) ?? 0;
 
@@ -85,9 +92,9 @@ export function useCreditsSummary() {
         const endExpectedInterestQuery = startPerfTimer('useCreditsSummary.fetchSummary.rpcExpectedInterest', {
           context: { credits: activeIds.length },
         });
-        const { data: expRows } = await (supabase.rpc as any)('get_expected_interest', {
+        const expRows = await fetchAllRows((supabase.rpc as any)('get_expected_interest', {
           p_credit_ids: activeIds,
-        });
+        }));
         endExpectedInterestQuery();
         totalProfit = expRows?.reduce((s: number, r: any) => s + Number(r.expected_profit || 0), 0) ?? 0;
       }
@@ -99,11 +106,11 @@ export function useCreditsSummary() {
         const endPaidInterestRangeQuery = startPerfTimer('useCreditsSummary.fetchSummary.rpcPaidInterestRange', {
           context: { credits: allIds.length },
         });
-        const { data: paidRows } = await supabase.rpc('get_paid_interest', {
+        const paidRows = await fetchAllRows(supabase.rpc('get_paid_interest', {
           p_credit_ids: allIds,
           p_start_date: start.toISOString(),
           p_end_date  : end.toISOString(),
-        });
+        }));
         endPaidInterestRangeQuery();
         totalCollectedInterest = paidRows?.reduce((s: number, r: any) => s + Number(r.paid_interest || 0), 0) ?? 0;
       }

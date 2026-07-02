@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetch-all';
 import { InstallmentStatus } from '@/models/installment';
 import { StoreFinancialData, getStoreFinancialData } from '@/lib/store';
 import { useStore } from '@/contexts/StoreContext';
@@ -24,40 +25,34 @@ export function useInstallmentsSummary() {
         const storeFinancialData = await getStoreFinancialData(currentStore.id);
 
         // Lấy tất cả hợp đồng chưa bị xóa, chưa đóng và thuộc cửa hàng hiện tại
-        const { data: activeInstallments, error: installmentsError } = await supabase
-          .from('installments_by_store')
-          .select(`
-            id,
-            contract_code,
-            down_payment,
-            loan_period,
-            loan_date,
-            installment_amount,
-            status,
-            store_id,
-            debt_amount
-          `)
-          .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST'])
-          .eq('store_id', currentStore.id);
+        // (fetchAllRows phân trang tránh PostgREST cắt 1000 dòng khi store lớn)
+        // + tổng "lãi phí đã thu" của TẤT CẢ hợp đồng qua RPC store-level
+        // (thay cách cũ truyền mảng id closed — Nam sms 1178 HĐ closed bị cắt còn 1000)
+        const [activeInstallments, { data: storeProfitData }] = await Promise.all([
+          fetchAllRows(
+            supabase
+              .from('installments_by_store')
+              .select(`
+                id,
+                contract_code,
+                down_payment,
+                loan_period,
+                loan_date,
+                installment_amount,
+                status,
+                store_id,
+                debt_amount
+              `)
+              .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST'])
+              .eq('store_id', currentStore.id)
+              .order('id')
+          ),
+          (supabase as any).rpc('rpc_store_installment_collected_profit', {
+            p_store_id: currentStore.id
+          })
+        ]);
 
-        if (installmentsError) {
-          throw installmentsError;
-        }
-
-        // Lấy danh sách hợp đồng đã đóng
-        const { data: closedInstallments, error: closedInstallmentsError } = await supabase
-          .from('installments_by_store')
-          .select('id')
-          .eq('status_code', 'CLOSED')
-          .eq('store_id', currentStore.id);
-
-        if (closedInstallmentsError) {
-          throw closedInstallmentsError;
-        }
-
-        const closedIds = closedInstallments
-          ?.map(it => it.id)
-          .filter((id): id is string => id !== null) || [];   // → string[]
+        const storeCollectedProfit = Number(storeProfitData || 0);
 
         // Initialize summary data with store financial data
         let summaryData: StoreFinancialData = {
@@ -66,28 +61,8 @@ export function useInstallmentsSummary() {
           totalLoan: 0,
           oldDebt: 0,
           profit: 0,
-          collectedInterest: 0
+          collectedInterest: storeCollectedProfit
         };
-
-        // Always calculate profit from closed installments, even if there are no active ones
-        if (closedIds.length > 0) {
-          const { data: closedProfitRows } = await supabase.rpc(
-            'installment_get_collected_profit', { p_installment_ids: closedIds }
-          );
-
-          if (closedProfitRows) {
-            const closedProfitMap = new Map(closedProfitRows.map(r => [r.installment_id, Number(r.profit_collected)]));
-            let collectedProfitFromClosed = 0;
-            closedIds.forEach(id => {
-              const profitVal = closedProfitMap.get(id ?? '') ?? 0;
-              collectedProfitFromClosed += profitVal;
-            });
-            // Only set this if there are no active installments to avoid double counting
-            if (!activeInstallments || activeInstallments.length === 0) {
-              summaryData.collectedInterest = collectedProfitFromClosed;
-            }
-          }
-        }
 
         // Check if there are any active installments to process
         if (!activeInstallments || activeInstallments.length === 0) {
@@ -95,31 +70,25 @@ export function useInstallmentsSummary() {
         }
 
         const ids = activeInstallments
-          .map(it => it.id)
-          .filter((id): id is string => id !== null);   // → string[]
+          .map((it: any) => it.id)
+          .filter((id: any): id is string => id !== null);   // → string[]
 
-        /* 3.1 oldDebt (đã có) */
-        const { data: debtRows } = await supabase.rpc(
-          'get_installment_old_debt', { p_installment_ids: ids }
-        );
-
-        /* 3.2 tổng paid (cho loanAmount) */
-        const { data: paidRows } = await supabase.rpc(
-          'installment_get_paid_amount', { p_installment_ids: ids }
-        );
-
-        /* 3.3 profitCollected ( tính cả hợp đồng đã đóng )  */
-        const { data: profitRows } = await supabase.rpc(
-          'installment_get_collected_profit', { p_installment_ids: [...ids, ...closedIds] }
-        );
+        /* 3.1-3.3: 3 RPC song song, fetchAllRows phân trang response (RPC cũng bị cắt 1000 dòng).
+           profitCollected chỉ cần cho HĐ active (làm map cho calculateInstallmentMetrics);
+           tổng toàn store đã có storeCollectedProfit từ RPC store-level ở trên. */
+        const [debtRows, paidRows, profitRows] = await Promise.all([
+          fetchAllRows(supabase.rpc('get_installment_old_debt', { p_installment_ids: ids })),
+          fetchAllRows(supabase.rpc('installment_get_paid_amount', { p_installment_ids: ids })),
+          fetchAllRows(supabase.rpc('installment_get_collected_profit', { p_installment_ids: ids }))
+        ]);
 
         /* xây 3 map rồi truyền xuống calculateInstallmentMetrics */
-        const debtMap   = new Map(debtRows?.map(r => [r.installment_id, Number(r.old_debt)]));
-        const paidMap   = new Map(paidRows?.map(r => [r.installment_id, Number(r.paid_amount)]));
-        const profitMap = new Map(profitRows?.map(r => [r.installment_id, Number(r.profit_collected)]));
+        const debtMap   = new Map(debtRows?.map((r: any) => [r.installment_id, Number(r.old_debt)]));
+        const paidMap   = new Map(paidRows?.map((r: any) => [r.installment_id, Number(r.paid_amount)]));
+        const profitMap = new Map(profitRows?.map((r: any) => [r.installment_id, Number(r.profit_collected)]));
 
         const results = await Promise.all(
-          activeInstallments.map(inst =>
+          activeInstallments.map((inst: any) =>
             calculateInstallmentMetrics(inst, { debtMap, paidMap, profitMap })
           )
         );
@@ -128,7 +97,6 @@ export function useInstallmentsSummary() {
         let totalLoan = 0;
         let totalOldDebt = 0;
         let expectedProfit = 0;
-        let collectedProfit = 0;
 
         results.forEach((result, idx) => {
           const id = activeInstallments[idx].id;
@@ -136,19 +104,10 @@ export function useInstallmentsSummary() {
           totalOldDebt   += oldDebtVal;
 
           if (result) {
-            collectedProfit += result.profitCollected;
             totalLoan       += result.loanAmount;
             expectedProfit  += result.expectedProfitAmount;
           }
         });
-
-        // Add profit from closed installments (already calculated above if no active installments)
-        if (closedIds.length > 0) {
-          closedIds.forEach(id => {
-            const profitVal = profitMap.get(id ?? '') ?? 0;
-            collectedProfit += profitVal;
-          });
-        }
 
         summaryData = {
           // Use the cash_fund from the store financial data
@@ -157,7 +116,8 @@ export function useInstallmentsSummary() {
           totalLoan: totalLoan,
           oldDebt: totalOldDebt,
           profit: expectedProfit,
-          collectedInterest: collectedProfit
+          // Tổng toàn store (mọi HĐ trừ deleted) từ RPC store-level — không bị cắt 1000
+          collectedInterest: storeCollectedProfit
         };
 
         return summaryData;
