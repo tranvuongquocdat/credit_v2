@@ -120,3 +120,13 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Ẩn nút hiện/ẩn mật khẩu có sẵn của trình duyệt (Edge, Cốc Cốc...) —
+   form đã có nút con mắt riêng, tránh hiện 2 con mắt trong ô mật khẩu.
+   Tách rule riêng vì selector lạ sẽ làm cả rule bị bỏ nếu gộp chung. */
+input[type='password']::-ms-reveal {
+  display: none;
+}
+input[type='password']::-ms-clear {
+  display: none;
+}

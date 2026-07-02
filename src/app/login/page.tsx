@@ -22,7 +22,8 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      const { error } = await signIn(buildAuthEmail(username), password);
+      // Trim để gõ thừa dấu cách đầu/cuối không bị báo sai tài khoản/mật khẩu
+      const { error } = await signIn(buildAuthEmail(username.trim()), password.trim());
       if (error) {
         // Kiểm tra nếu là lỗi banned
         if (error.message.includes('banned') || error.message.includes('deactivated')) {

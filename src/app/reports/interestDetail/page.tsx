@@ -809,36 +809,36 @@ export default function InterestDetailPage() {
         );
       }
 
-      // Installment interest details
+      // Installment interest details - lãi PHÁT SINH TRONG KỲ (không phải lũy kế),
+      // dùng fetchAllData để phân trang khi RPC trả > 1000 dòng
       if (selectedContractType === 'all' || selectedContractType === 'Trả góp') {
         queryPromises.push(
-          (supabase as any)
-            .rpc('rpc_installment_interest_detail', {
+          fetchAllData(
+            (supabase as any).rpc('rpc_installment_interest_detail_in_range', {
               p_store_id: storeId,
               p_start_date: startDateObj.toISOString(),
               p_end_date: endDateObj.toISOString(),
             })
-            .then(({ data, error }: any) => {
-              if (error) { console.error('rpc_installment_interest_detail', error); return; }
-              const asOfTime = new Date(endDateObj);
-              (Array.isArray(data) ? data : []).forEach((r: any) => {
-                allInterestDetails.push({
-                  id: `installment-interest-${r.installment_id}-${format(asOfTime, 'yyyy-MM-dd')}`,
-                  contractId: r.installment_id,
-                  contractCode: r.contract_code || '',
-                  customerName: r.customer_name || '',
-                  itemName: 'Trả góp',
-                  loanAmount: r.installment_amount || 0,
-                  transactionDate: asOfTime.toLocaleString('vi-VN'),
-                  transactionDateTime: asOfTime.toLocaleString('vi-VN'),
-                  interestAmount: Number(r.interest_through_end) || 0,
-                  otherAmount: 0,
-                  totalAmount: Number(r.interest_through_end) || 0,
-                  transactionType: 'Lãi họ',
-                  type: 'Trả góp'
-                });
+          ).then((data: any[]) => {
+            const asOfTime = new Date(endDateObj);
+            (data || []).forEach((r: any) => {
+              allInterestDetails.push({
+                id: `installment-interest-${r.installment_id}-${format(asOfTime, 'yyyy-MM-dd')}`,
+                contractId: r.installment_id,
+                contractCode: r.contract_code || '',
+                customerName: r.customer_name || '',
+                itemName: 'Trả góp',
+                loanAmount: r.installment_amount || 0,
+                transactionDate: asOfTime.toLocaleString('vi-VN'),
+                transactionDateTime: asOfTime.toLocaleString('vi-VN'),
+                interestAmount: Number(r.interest_in_range) || 0,
+                otherAmount: 0,
+                totalAmount: Number(r.interest_in_range) || 0,
+                transactionType: 'Lãi họ',
+                type: 'Trả góp'
               });
-            })
+            });
+          })
         );
       }
 
