@@ -104,6 +104,33 @@ export default function ProfitSummaryPage() {
     }
   }, [permissionsLoading, canAccessReport, router]);
 
+  // Lấy hết dữ liệu theo trang 1000 dòng (PostgREST chỉ trả tối đa 1000 dòng/lần,
+  // store > 1000 hợp đồng sẽ bị thiếu dữ liệu nếu không phân trang)
+  const fetchAllData = async (query: any, pageSize: number = 1000) => {
+    let allData: any[] = [];
+    let from = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const { data, error } = await query.range(from, from + pageSize - 1);
+
+      if (error) {
+        console.error('Error fetching data:', error);
+        break;
+      }
+
+      if (data && data.length > 0) {
+        allData = [...allData, ...data];
+        from += pageSize;
+        hasMore = data.length === pageSize;
+      } else {
+        hasMore = false;
+      }
+    }
+
+    return allData;
+  };
+
   // Get contracts with status calculation
   const getContractsWithStatus = async (
     contractType: 'pawns' | 'credits' | 'installments',
@@ -159,14 +186,16 @@ export default function ProfitSummaryPage() {
         .eq('store_id', storeId)
         .gte('loan_date', startDateObj.toISOString())
         .lte('loan_date', endDateObj.toISOString())
-        .order('loan_date', { ascending: false });
+        .order('loan_date', { ascending: false })
+        .order('id'); // thứ tự phụ ổn định để phân trang không trùng/sót dòng
         
       // Query for all contracts for status calculation
       allQuery = supabase
         .from('installments_by_store')
         .select(selectString + ', status_code')
         .eq('store_id', storeId)
-        .order('loan_date', { ascending: false });
+        .order('loan_date', { ascending: false })
+        .order('id'); // thứ tự phụ ổn định để phân trang không trùng/sót dòng
         // Removed limit - get all for accurate counts
     } else if (contractType === 'credits') {
       // Use credits_by_store view for credits to get status_code
@@ -179,14 +208,16 @@ export default function ProfitSummaryPage() {
         .eq('store_id', storeId)
         .gte('loan_date', startDateObj.toISOString())
         .lte('loan_date', endDateObj.toISOString())
-        .order('loan_date', { ascending: false });
+        .order('loan_date', { ascending: false })
+        .order('id'); // thứ tự phụ ổn định để phân trang không trùng/sót dòng
         
       // Query for all contracts for status calculation
       allQuery = supabase
         .from('credits_by_store')
         .select(selectWithStatus)
         .eq('store_id', storeId)
-        .order('loan_date', { ascending: false });
+        .order('loan_date', { ascending: false })
+        .order('id'); // thứ tự phụ ổn định để phân trang không trùng/sót dòng
         // Removed limit - get all for accurate counts
     } else {
       // For pawns, use pawns_by_store view to get status_code
@@ -199,31 +230,24 @@ export default function ProfitSummaryPage() {
         .eq('store_id', storeId)
         .gte('loan_date', startDateObj.toISOString())
         .lte('loan_date', endDateObj.toISOString())
-        .order('loan_date', { ascending: false });
+        .order('loan_date', { ascending: false })
+        .order('id'); // thứ tự phụ ổn định để phân trang không trùng/sót dòng
         
       // Query for all contracts for status calculation
       allQuery = supabase
         .from('pawns_by_store')
         .select(selectWithStatus)
         .eq('store_id', storeId)
-        .order('loan_date', { ascending: false });
+        .order('loan_date', { ascending: false })
+        .order('id'); // thứ tự phụ ổn định để phân trang không trùng/sót dòng
         // Removed limit - get all for accurate counts
     }
 
-    // Execute both queries in parallel
-    const [
-      { data: newContracts, error: newError },
-      { data: allContracts, error: allError }
-    ] = await Promise.all([newQuery, allQuery]);
-
-    if (newError) {
-      console.error(`Error fetching new ${contractType}:`, newError);
-    }
-    
-    if (allError) {
-      console.error(`Error fetching all ${contractType}:`, allError);
-      return { all: [], filtered: newContracts || [] };
-    }
+    // Execute both queries in parallel - phân trang để lấy đủ khi store > 1000 hợp đồng
+    const [newContracts, allContracts] = await Promise.all([
+      fetchAllData(newQuery),
+      fetchAllData(allQuery)
+    ]);
 
     // Optimized: Use RPC functions to get all statuses at once instead of individual calculations
     const contractsWithStatus: any[] = [];
@@ -305,115 +329,37 @@ export default function ProfitSummaryPage() {
     };
   };
 
-  // Get interest/profit data for date range by contract type - updated to match interestDetail logic
-  // For pawns/credits: use RPC functions for performance
-  // For installments: use detailed calculation logic from interestDetail for accurate date-range filtering
-  const getInterestDataForDateRange = async (contractType: 'pawns' | 'credits' | 'installments') => {
-    if (!currentStore?.id) return 0;
+  // Lấy lãi phát sinh trong kỳ của cả 3 loại hợp đồng bằng 1 RPC store-level.
+  // RPC gom toàn bộ hợp đồng ngay trong DB nên không dính giới hạn 1000 dòng của PostgREST
+  // (cách cũ lấy mảng id ở client bị cắt 1000 → thiếu lãi khi store > 1000 hợp đồng).
+  const getInterestDataForDateRange = async (): Promise<{ pawns: number; credits: number; installments: number }> => {
+    if (!currentStore?.id) return { pawns: 0, credits: 0, installments: 0 };
 
-    const storeId = currentStore.id;
     const startDateObj = startOfDay(parse(startDate, 'yyyy-MM-dd', new Date()));
     const endDateObj = endOfDay(parse(endDate, 'yyyy-MM-dd', new Date()));
 
-    let totalInterest = 0;
-
     try {
-      if (contractType === 'pawns') {
-        // Get all pawn IDs for this store
-        const { data: pawnContracts } = await supabase
-          .from('pawns')
-          .select('id')
-          .eq('store_id', storeId);
+      const { data, error } = await (supabase as any).rpc('rpc_store_paid_interest_in_range', {
+        p_store_id: currentStore.id,
+        p_start_date: startDateObj.toISOString(),
+        p_end_date: endDateObj.toISOString(),
+      });
 
-        if (pawnContracts && pawnContracts.length > 0) {
-          const pawnIds = pawnContracts.map(p => p.id);
-          
-          // Use RPC function to get paid interest for date range - much faster!
-          const { data, error } = await supabase.rpc('get_pawn_paid_interest', {
-            p_pawn_ids: pawnIds,
-            p_start_date: startDateObj.toISOString(),
-            p_end_date: endDateObj.toISOString(),
-          });
-
-          if (error) {
-            console.error('get_pawn_paid_interest RPC error:', error);
-            return 0;
-          }
-
-          // Sum all paid interest from RPC function result
-          if (Array.isArray(data)) {
-            totalInterest = data.reduce((sum, item) => {
-              return sum + Number(item.paid_interest || 0);
-            }, 0);
-          }
-        }
-
-      } else if (contractType === 'credits') {
-        // Get all credit IDs for this store
-        const { data: creditContracts } = await supabase
-          .from('credits')
-          .select('id')
-          .eq('store_id', storeId);
-
-        if (creditContracts && creditContracts.length > 0) {
-          const creditIds = creditContracts.map(c => c.id);
-          
-          // Use RPC function to get paid interest for date range - much faster!
-          const { data, error } = await supabase.rpc('get_paid_interest', {
-            p_credit_ids: creditIds,
-            p_start_date: startDateObj.toISOString(),
-            p_end_date: endDateObj.toISOString(),
-          });
-
-          if (error) {
-            console.error('get_paid_interest RPC error:', error);
-            return 0;
-          }
-
-          // Sum all paid interest from RPC function result
-          if (Array.isArray(data)) {
-            totalInterest = data.reduce((sum, item) => {
-              return sum + Number(item.paid_interest || 0);
-            }, 0);
-          }
-        }
-
-            } else if (contractType === 'installments') {
-        // Get all installment IDs for this store
-        const { data: installmentContracts } = await supabase
-          .from('installments_by_store')
-          .select('id')
-          .eq('store_id', storeId);
-
-        if (installmentContracts && installmentContracts.length > 0) {
-          const installmentIds = installmentContracts.map(i => i.id);
-
-          // Use RPC function to get interest for date range - much faster!
-          const { data, error } = await supabase.rpc('get_installment_interest_for_date_range', {
-            p_installment_ids: installmentIds as string[],
-            p_start_date: startDateObj.toISOString(),
-            p_end_date: endDateObj.toISOString(),
-          });
-
-          if (error) {
-            console.error('get_installment_interest_for_date_range RPC error:', error);
-            return 0;
-          }
-
-          // Sum all interest from RPC function result
-          if (Array.isArray(data)) {
-            totalInterest = data.reduce((sum, item) => {
-              return sum + Number(item.interest_collected || 0);
-            }, 0);
-          }
-        }
+      if (error) {
+        console.error('rpc_store_paid_interest_in_range RPC error:', error);
+        return { pawns: 0, credits: 0, installments: 0 };
       }
 
+      const row = Array.isArray(data) ? data[0] : data;
+      return {
+        pawns: Number(row?.pawn_interest || 0),
+        credits: Number(row?.credit_interest || 0),
+        installments: Number(row?.installment_interest || 0),
+      };
     } catch (error) {
-      console.error(`Error fetching ${contractType} interest data:`, error);
+      console.error('Error fetching interest data:', error);
+      return { pawns: 0, credits: 0, installments: 0 };
     }
-
-    return totalInterest;
   };
 
 
@@ -427,11 +373,14 @@ export default function ProfitSummaryPage() {
     const endDateObj = endOfDay(parse(endDate, 'yyyy-MM-dd', new Date()));
 
     try {
-      // Get all transactions without is_deleted filter
-      const { data: allTransactions } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('store_id', storeId);
+      // Get all transactions without is_deleted filter - phân trang để không bị cắt 1000 dòng
+      const allTransactions = await fetchAllData(
+        supabase
+          .from('transactions')
+          .select('*')
+          .eq('store_id', storeId)
+          .order('id')
+      );
 
       if (allTransactions) {
         // Transform transactions to display format (same as other reports)
@@ -579,9 +528,7 @@ export default function ProfitSummaryPage() {
         creditFinancials,
         installmentFinancials,
         transactionSummary,
-        pawnProfit,
-        creditProfit,
-        installmentProfit
+        interestData
       ] = await Promise.all([
         getContractsWithStatus('pawns', () => Promise.resolve(null)),
         getContractsWithStatus('credits', () => Promise.resolve(null)),
@@ -590,10 +537,12 @@ export default function ProfitSummaryPage() {
         getCreditFinancialsForStore(currentStore.id),
         getInstallmentFinancialsForStore(currentStore.id),
         getTransactionData(),
-        getInterestDataForDateRange('pawns'),
-        getInterestDataForDateRange('credits'),
-        getInterestDataForDateRange('installments')
+        getInterestDataForDateRange()
       ]);
+
+      const pawnProfit = interestData.pawns;
+      const creditProfit = interestData.credits;
+      const installmentProfit = interestData.installments;
 
       // Check if this request is still the latest one
       if (currentRequestId !== requestIdRef.current) {
