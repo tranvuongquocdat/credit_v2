@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetch-all';
 import { useStore } from '@/contexts/StoreContext';
 import { PawnStatus } from '@/models/pawn';
 
@@ -29,21 +30,28 @@ export function usePawnsSummary() {
         (supabase as any).rpc('calc_cash_fund_as_of', { p_store_id: storeId }),
       ]);
 
-      // 2. List pawn ids (ON_TIME & CLOSED) - using optimized view
-      const { data: activePawns } = await supabase
-        .from('pawns_by_store')
-        .select('id')
-        .eq('store_id', storeId)
-        .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST']);
+      // 2. List pawn ids (ON_TIME & CLOSED) - phân trang tránh cắt 1000 dòng khi store lớn
+      const [activePawns, closedPawns] = await Promise.all([
+        fetchAllRows(
+          supabase
+            .from('pawns_by_store')
+            .select('id')
+            .eq('store_id', storeId)
+            .in('status_code', ['ON_TIME', 'OVERDUE', 'LATE_INTEREST'])
+            .order('id')
+        ),
+        fetchAllRows(
+          supabase
+            .from('pawns_by_store')
+            .select('id')
+            .eq('store_id', storeId)
+            .eq('status_code', 'CLOSED')
+            .order('id')
+        )
+      ]);
 
-      const { data: closedPawns } = await supabase
-        .from('pawns_by_store')
-        .select('id')
-        .eq('store_id', storeId)
-        .eq('status_code', 'CLOSED');
-
-      const activeIds = activePawns?.map(p => p.id).filter(id => id !== null) ?? [];
-      const closedIds = closedPawns?.map(p => p.id).filter(id => id !== null) ?? [];
+      const activeIds = activePawns?.map((p: any) => p.id).filter((id: any) => id !== null) ?? [];
+      const closedIds = closedPawns?.map((p: any) => p.id).filter((id: any) => id !== null) ?? [];
       const allIds = [...activeIds, ...closedIds];
 
       let totalLoan = 0;
@@ -52,20 +60,21 @@ export function usePawnsSummary() {
       let totalCollectedInterest = 0;
 
       // 3. Principal, old debt, expected profit for active contracts
+      //    (fetchAllRows phân trang response RPC — PostgREST cũng cắt 1000 dòng với RPC)
       if (activeIds.length) {
-        const { data: principalRows } = await supabase.rpc('get_pawn_current_principal', {
+        const principalRows = await fetchAllRows(supabase.rpc('get_pawn_current_principal', {
           p_pawn_ids: activeIds,
-        });
+        }));
         totalLoan = principalRows?.reduce((s: number, r: any) => s + Number(r.current_principal || 0), 0) ?? 0;
 
-        const { data: debtRows } = await supabase.rpc('get_pawn_old_debt', {
+        const debtRows = await fetchAllRows(supabase.rpc('get_pawn_old_debt', {
           p_pawn_ids: activeIds,
-        });
+        }));
         totalOldDebt = debtRows?.reduce((s: number, r: any) => s + Number(r.old_debt || 0), 0) ?? 0;
 
-        const { data: expRows } = await (supabase.rpc as any)('get_pawn_expected_interest', {
+        const expRows = await fetchAllRows((supabase.rpc as any)('get_pawn_expected_interest', {
           p_pawn_ids: activeIds,
-        });
+        }));
         totalProfit = expRows?.reduce((s: number, r: any) => s + Number(r.expected_profit || 0), 0) ?? 0;
       }
 
@@ -77,11 +86,11 @@ export function usePawnsSummary() {
         // tháng → đóng lãi vào ngày cuối tháng không được cộng vào "Lãi phí đã thu".
         const start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
         const end   = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999);
-        const { data: paidRows } = await supabase.rpc('get_pawn_paid_interest', {
+        const paidRows = await fetchAllRows(supabase.rpc('get_pawn_paid_interest', {
           p_pawn_ids: allIds,
           p_start_date: start.toISOString(),
           p_end_date  : end.toISOString(),
-        });
+        }));
         totalCollectedInterest = paidRows?.reduce((s: number, r: any) => s + Number(r.paid_interest || 0), 0) ?? 0;
       }
 

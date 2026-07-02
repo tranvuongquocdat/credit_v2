@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Layout } from '@/components/Layout';
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/fetch-all';
 import { useStore } from '@/contexts/StoreContext';
 import { format, startOfDay, endOfDay, parse } from 'date-fns';
 import { RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -173,11 +174,12 @@ export default function LoanReportPage() {
           pawnQuery = pawnQuery.limit(500);
         }
 
-        const { data: pawnData, error: pawnError } = await pawnQuery;
+        // Có filter ngày: phân trang lấy đủ (tránh PostgREST cắt 1000 dòng); không filter: giữ limit 500
+        const pawnData = (startDate && endDate)
+          ? await fetchAllRows(pawnQuery.order('id'))
+          : (await pawnQuery).data;
 
-        if (pawnError) {
-          console.error('Error fetching pawns:', pawnError);
-        } else if (pawnData) {
+        if (pawnData) {
           for (const item of pawnData) {
             allRawData.push({ ...item, type: 'Cầm đồ' });
           }
@@ -213,11 +215,12 @@ export default function LoanReportPage() {
           creditQuery = creditQuery.limit(500);
         }
 
-        const { data: creditData, error: creditError } = await creditQuery;
+        // Có filter ngày: phân trang lấy đủ (tránh PostgREST cắt 1000 dòng); không filter: giữ limit 500
+        const creditData = (startDate && endDate)
+          ? await fetchAllRows(creditQuery.order('id'))
+          : (await creditQuery).data;
 
-        if (creditError) {
-          console.error('Error fetching credits:', creditError);
-        } else if (creditData) {
+        if (creditData) {
           for (const item of creditData) {
             allRawData.push({ ...item, type: 'Tín chấp' });
           }
@@ -252,11 +255,12 @@ export default function LoanReportPage() {
           installmentQuery = installmentQuery.limit(500);
         }
 
-        const { data: installmentData, error: installmentError } = await installmentQuery;
+        // Có filter ngày: phân trang lấy đủ (tránh PostgREST cắt 1000 dòng); không filter: giữ limit 500
+        const installmentData = (startDate && endDate)
+          ? await fetchAllRows(installmentQuery.order('id'))
+          : (await installmentQuery).data;
 
-        if (installmentError) {
-          console.error('Error fetching installments:', installmentError);
-        } else if (installmentData) {
+        if (installmentData) {
           for (const item of installmentData) {
             allRawData.push({ ...item, type: 'Trả góp' });
           }
