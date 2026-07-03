@@ -400,7 +400,8 @@ export async function createCredit(params: CreateCreditParams) {
         interest_period: params.interest_period,
         loan_date: loanDate,
         notes: params.notes,
-        status: (params.status || CreditStatus.ON_TIME) as NonNullable<Credit['status']>
+        status: (params.status || CreditStatus.ON_TIME) as NonNullable<Credit['status']>,
+        is_advance_payment: params.is_advance_payment ?? false
       } as any)
       .select(`
         *,
@@ -472,6 +473,7 @@ export async function updateCredit(id: string, params: UpdateCreditParams) {
     }
     if (params.notes !== undefined) updateData.notes = params.notes;
     if (params.status !== undefined) updateData.status = params.status as NonNullable<Credit['status']>;
+    if (params.is_advance_payment !== undefined) updateData.is_advance_payment = params.is_advance_payment;
     
     // Tự động cập nhật thời gian sửa đổi
     updateData.updated_at = new Date().toISOString();

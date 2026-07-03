@@ -1,8 +1,21 @@
--- Create credits_by_store view with pre-calculated status_code
--- This view mirrors the logic from get_credit_statuses RPC function
+-- Thêm cột is_advance_payment vào bảng credits (tín chấp)
+-- Đánh dấu hợp đồng thu lãi trước (trả lãi kỳ đầu ngay khi ký) hay không
+-- Mirror từ pawns.is_advance_payment bên v2 gold (migration 20260425000000)
+--
+-- CHẠY TAY TRÊN SUPABASE SQL EDITOR
 
+ALTER TABLE "public"."credits"
+  ADD COLUMN IF NOT EXISTS "is_advance_payment" boolean NOT NULL DEFAULT false;
+
+COMMENT ON COLUMN "public"."credits"."is_advance_payment"
+  IS 'true = hợp đồng thu lãi trước; hạn đóng lãi tính theo ngày đầu kỳ kế tiếp thay vì ngày cuối kỳ';
+
+-- ============================================================
+-- Rebuild credits_by_store view với logic thu lãi trước
 -- DROP trước vì c.* sẽ tự thêm cột mới (is_advance_payment) làm thay đổi thứ tự column,
 -- Postgres không cho CREATE OR REPLACE khi structure thay đổi.
+-- ============================================================
+
 DROP VIEW IF EXISTS credits_by_store;
 
 CREATE VIEW credits_by_store AS

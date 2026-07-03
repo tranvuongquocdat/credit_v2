@@ -576,6 +576,12 @@ export function PaymentHistoryModal({
                     </td>
                   </tr>
                   <tr>
+                    <td className="py-1 px-2 border font-bold">Hình thức</td>
+                    <td className={`py-1 px-2 text-right border font-medium ${(credit as any)?.is_advance_payment ? 'text-amber-600' : ''}`} colSpan={2}>
+                      {(credit as any)?.is_advance_payment ? 'Thu lãi trước' : 'Thu lãi sau'}
+                    </td>
+                  </tr>
+                  <tr>
                     <td className="py-1 px-2 border font-bold">Vay từ ngày</td>
                     <td className="py-1 px-2 text-right border">{loanDateFormatted}</td>
                     <td className="py-1 px-2 text-right border">{endDateFormatted}</td>

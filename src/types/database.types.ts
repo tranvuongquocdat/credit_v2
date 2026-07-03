@@ -239,6 +239,7 @@ export type Database = {
           interest_type: Database["public"]["Enums"]["interest_type"]
           interest_ui_type: string | null
           interest_value: number
+          is_advance_payment: boolean
           loan_amount: number
           loan_date: string
           loan_period: number
@@ -259,6 +260,7 @@ export type Database = {
           interest_type: Database["public"]["Enums"]["interest_type"]
           interest_ui_type?: string | null
           interest_value: number
+          is_advance_payment?: boolean
           loan_amount: number
           loan_date: string
           loan_period: number
@@ -279,6 +281,7 @@ export type Database = {
           interest_type?: Database["public"]["Enums"]["interest_type"]
           interest_ui_type?: string | null
           interest_value?: number
+          is_advance_payment?: boolean
           loan_amount?: number
           loan_date?: string
           loan_period?: number
@@ -1054,6 +1057,7 @@ export type Database = {
           interest_type: Database["public"]["Enums"]["interest_type"] | null
           interest_ui_type: string | null
           interest_value: number | null
+          is_advance_payment: boolean | null
           is_completed: boolean | null
           loan_amount: number | null
           loan_date: string | null

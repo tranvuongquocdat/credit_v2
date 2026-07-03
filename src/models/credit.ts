@@ -31,6 +31,7 @@ export interface Credit {
   interest_period: number;   // Kỳ lãi phí (VD: 10 ngày đóng lãi 1 lần)
   loan_date: string;         // Ngày vay
   debt_amount: number;      // Tiền nợ được tính toán khi check/uncheck kỳ đóng lãi
+  is_advance_payment?: boolean;  // true = hợp đồng thu lãi trước (hạn đóng tính theo ngày đầu kỳ kế)
   notes?: string | null;
   status?: CreditStatus | null;
   created_at?: string | null;
@@ -55,6 +56,7 @@ export interface CreateCreditParams {
   loan_date: string | Date;
   notes?: string;
   status?: CreditStatus;
+  is_advance_payment?: boolean;
 }
 
 export interface UpdateCreditParams {
@@ -76,6 +78,7 @@ export interface UpdateCreditParams {
   debt_amount?: number;      // Tiền nợ
   notes?: string;
   status?: CreditStatus;
+  is_advance_payment?: boolean;
 }
 
 // Thông tin hợp đồng với dữ liệu khách hàng
