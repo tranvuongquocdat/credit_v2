@@ -48,19 +48,32 @@ export function calculateUnpaidInterestAmount(credit: any, latestPaidDate: strin
   if (effectiveEndDate < firstUnpaidDate) {
     return 0;
   }
-  
+
+  const dailyRate = calculateDailyRateForCredit(credit);
+
+  // HĐ thu lãi trước: khi tới hạn (lastPaid+1) khách phải trả lump-sum cho cả kỳ kế.
+  // Nợ là fixed step, mỗi kỳ chưa đóng = lãi 1 kỳ → cyclesUnpaid × lãi 1 kỳ
+  if (credit.is_advance_payment) {
+    const interestPeriod = credit.interest_period || 30;
+    const daysSinceUnpaid = Math.floor(
+      (effectiveEndDate.getTime() - firstUnpaidDate.getTime()) / (1000 * 60 * 60 * 24)
+    );
+    if (daysSinceUnpaid < 0) return 0;
+    const cyclesUnpaid = Math.floor(daysSinceUnpaid / interestPeriod) + 1;
+    return Math.round(cyclesUnpaid * credit.loan_amount * dailyRate * interestPeriod);
+  }
+
+  // HĐ thường: lãi tích lũy theo ngày
   const unpaidDays = Math.floor(
     (effectiveEndDate.getTime() - firstUnpaidDate.getTime()) / (1000 * 60 * 60 * 24)
   ) + 1; // +1 to include end date
-  
+
   if (unpaidDays <= 0) {
     return 0;
   }
-  
-  // Use the existing interest calculator
-  const dailyRate = calculateDailyRateForCredit(credit);
+
   const totalUnpaidInterest = Math.round(credit.loan_amount * dailyRate * unpaidDays);
-  
+
   return totalUnpaidInterest;
 }
 
@@ -114,14 +127,29 @@ function calculateCreditReason(credit: any, latestPaidDate?: string | null): str
     
     // Only calculate if there are unpaid days
     if (effectiveEndDate >= firstUnpaidDate) {
-      const unpaidDays = Math.floor(
-        (effectiveEndDate.getTime() - firstUnpaidDate.getTime()) / (1000 * 60 * 60 * 24)
-      ) + 1; // +1 to include end date
-      
-      if (unpaidDays > 0) {
-        // Use existing interest calculator for accurate calculation
-        const dailyRate = calculateDailyRateForCredit(credit);
-        const lateAmount = Math.round(credit.loan_amount * dailyRate * unpaidDays);
+      const dailyRate = calculateDailyRateForCredit(credit);
+      let lateAmount = 0;
+
+      if (credit.is_advance_payment) {
+        // HĐ thu lãi trước: mỗi kỳ chưa đóng = lãi 1 kỳ (fixed step)
+        const interestPeriod = credit.interest_period || 30;
+        const daysSinceUnpaid = Math.floor(
+          (effectiveEndDate.getTime() - firstUnpaidDate.getTime()) / (1000 * 60 * 60 * 24)
+        );
+        if (daysSinceUnpaid >= 0) {
+          const cyclesUnpaid = Math.floor(daysSinceUnpaid / interestPeriod) + 1;
+          lateAmount = Math.round(cyclesUnpaid * credit.loan_amount * dailyRate * interestPeriod);
+        }
+      } else {
+        const unpaidDays = Math.floor(
+          (effectiveEndDate.getTime() - firstUnpaidDate.getTime()) / (1000 * 60 * 60 * 24)
+        ) + 1; // +1 to include end date
+        if (unpaidDays > 0) {
+          lateAmount = Math.round(credit.loan_amount * dailyRate * unpaidDays);
+        }
+      }
+
+      if (lateAmount > 0) {
         reasons.push(`Chậm ${formatCurrency(lateAmount)}`);
       }
     }

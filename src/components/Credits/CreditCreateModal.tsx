@@ -17,6 +17,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 // Không cần import CustomDateInput
 // Using regular input radio buttons instead of RadioGroup component
 import { createCredit } from '@/lib/credit';
+import { recordDailyPayments } from '@/lib/Credits/record_daily_payments';
 import { getCustomers, createCustomer } from '@/lib/customer';
 import { Customer } from '@/models/customer';
 import { CreateCreditParams, InterestType, CreditStatus } from '@/models/credit';
@@ -416,6 +417,7 @@ export function CreditCreateModal({
         status: CreditStatus.ON_TIME,
         notes: notes,
         store_id: currentStore.id, // Use store ID from context
+        is_advance_payment: advancePayment,
       };
       
       // Validate interest value
@@ -453,9 +455,18 @@ export function CreditCreateModal({
       
       // Call API to create credit
       const { data, error } = await createCredit(creditData);
-      
+
       if (error) throw error;
-      
+
+      // Thu lãi trước: ghi luôn payment cho trọn kỳ lãi đầu tiên (giống PawnCreateModal bên v2 gold)
+      if (advancePayment && data?.id) {
+        const interestPeriodDays = creditData.interest_period;
+        const loanDateObj = new Date(loanDate);
+        const endDateObj = new Date(loanDateObj);
+        endDateObj.setDate(loanDateObj.getDate() + interestPeriodDays - 1);
+        await recordDailyPayments(data.id, loanDate, endDateObj.toLocaleDateString('en-CA'));
+      }
+
       // Success - close modal and notify parent
       if (onSuccess && data?.id) {
         onSuccess(data.id);

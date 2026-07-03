@@ -313,6 +313,7 @@ export function CreditEditModal({
         setInterestPeriod(interestPeriodToDisplay.toString());
         setLoanDate(creditData.loan_date ? format(new Date(creditData.loan_date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
         setNotes(creditData.notes || '');
+        setAdvancePayment((creditData as any).is_advance_payment ?? false);
         setStatus(creditData.status as CreditStatus || CreditStatus.ON_TIME);
         setSelectedCustomerId(creditData.customer_id);
         
@@ -451,6 +452,7 @@ export function CreditEditModal({
         notes: notes, // Keep notes clean, don't append the interest type information
         status,
         store_id: currentStore.id, // Use store ID from context
+        is_advance_payment: advancePayment,
       };
       
       // Validate
@@ -833,14 +835,28 @@ export function CreditEditModal({
             
             <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-start">
               <Label htmlFor="notes" className="text-left sm:text-right font-medium sm:mt-2">Ghi chú</Label>
-              <Textarea 
+              <Textarea
                 id="notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
               />
             </div>
-            
+
+            <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
+              <div className="hidden sm:block"></div>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="advancePayment"
+                  checked={advancePayment}
+                  onChange={(e) => setAdvancePayment(e.target.checked)}
+                  className="mr-2"
+                />
+                <label htmlFor="advancePayment" className="text-sm sm:text-base">Thu lãi trước</label>
+              </div>
+            </div>
+
             {error && (
               <div className="text-red-500 text-center">{error}</div>
             )}
