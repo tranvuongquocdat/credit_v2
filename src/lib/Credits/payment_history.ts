@@ -86,7 +86,7 @@ export async function getCreditPaymentHistoryByDateRange(
     .eq('credit_id', creditId)
     .eq('transaction_type', 'payment')
     .gte('effective_date', startDate)
-    .lte('effective_date', endDate + 'T23:59:59Z')
+    .lte('effective_date', endDate + 'T23:59:59+07:00')
     .order('effective_date', { ascending: true });
 
   if (error) {
@@ -244,7 +244,7 @@ export async function hasPaymentOnDate(creditId: string, date: string): Promise<
     .eq('credit_id', creditId)
     .eq('transaction_type', 'payment')
     .gte('effective_date', date)
-    .lte('effective_date', date + 'T23:59:59Z')
+    .lte('effective_date', date + 'T23:59:59+07:00')
     .limit(1);
 
   if (error) {
