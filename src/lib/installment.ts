@@ -203,10 +203,12 @@ export async function getInstallments(
     
     if (filters?.end_date) {
       // Use updated_at for DELETED/CLOSED statuses, loan_date for others
+      // Kèm giờ cuối ngày VN: bound string ngày thuần bị Postgres hiểu là 00:00+07,
+      // loại mất record trong ngày cuối (HĐ cũ lưu 07:00+07, updated_at là giờ thực)
       if (filters.status === InstallmentStatus.DELETED || filters.status === InstallmentStatus.CLOSED) {
-        query = query.lte('updated_at', filters.end_date);
+        query = query.lte('updated_at', filters.end_date + 'T23:59:59+07:00');
       } else {
-        query = query.lte('loan_date', filters.end_date);
+        query = query.lte('loan_date', filters.end_date + 'T23:59:59+07:00');
       }
     }
     

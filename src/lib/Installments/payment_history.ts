@@ -60,7 +60,7 @@ export async function getinstallmentPaymentHistoryByDateRange(
     .eq('installment_id', installmentId)
     .eq('transaction_type', 'payment')
     .gte('effective_date', startDate)
-    .lte('effective_date', endDate + 'T23:59:59Z')
+    .lte('effective_date', endDate + 'T23:59:59+07:00')
     .order('effective_date', { ascending: true });
 
   if (error) {
@@ -234,7 +234,7 @@ export async function getAllValidPaymentHistory(
 
     // Thêm điều kiện lọc theo ngày nếu có
     if (endDate) {
-      query = query.lte('transaction_date', endDate + 'T23:59:59Z');
+      query = query.lte('transaction_date', endDate + 'T23:59:59+07:00');
     }
 
     const { data, error } = await query;
@@ -282,7 +282,7 @@ export async function getAllValidPaymentHistoryByDateRange(
       .eq('transaction_type', 'payment')
       .eq('is_deleted', false)
       .gte('transaction_date', startDate)
-      .lte('transaction_date', endDate + 'T23:59:59Z')
+      .lte('transaction_date', endDate + 'T23:59:59+07:00')
       .range(page * pageSize, (page + 1) * pageSize - 1)
       .order('transaction_date', { ascending: true });
 

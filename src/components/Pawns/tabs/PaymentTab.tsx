@@ -448,7 +448,7 @@ export function PaymentTab({
           .eq('transaction_type', 'payment')
           .eq('is_deleted', false)
           .gte('effective_date', startDate)
-          .lte('effective_date', endDate + 'T23:59:59Z')
+          .lte('effective_date', endDate + 'T23:59:59+07:00')
           .select();
         
         if (error) {
