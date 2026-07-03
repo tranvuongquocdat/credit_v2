@@ -27,7 +27,7 @@ export async function getUnpaidStartDate(creditId: string): Promise<string | nul
     // 3. Tính toán ngày bắt đầu chưa đóng
     const unpaidStartDate = new Date(latestPaymentPaidDate);
     unpaidStartDate.setDate(unpaidStartDate.getDate() + 1);
-    return unpaidStartDate.toISOString().split('T')[0];
+    return unpaidStartDate.toLocaleDateString('en-CA');
 
   } catch (error) {
     console.error('Error getting unpaid start date:', error);

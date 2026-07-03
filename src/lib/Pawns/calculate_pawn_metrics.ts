@@ -60,7 +60,7 @@ export async function calculatePawnMetrics(
         const loanEnd = new Date(loanStart.getTime() + (pawn.loan_period - 1) * 86400000);
         const { data } = await (supabase.rpc as any)('calc_pawn_expected_until', {
           p_pawn_id: pawn.id,
-          p_end_date: loanEnd.toISOString().slice(0, 10),
+          p_end_date: loanEnd.toLocaleDateString('en-CA'),
         });
         return Number(data ?? 0);
       })(),
@@ -69,7 +69,7 @@ export async function calculatePawnMetrics(
         if (typeof cached === 'number') return cached;
         const { data } = await (supabase.rpc as any)('calc_pawn_expected_until', {
           p_pawn_id: pawn.id,
-          p_end_date: new Date().toISOString().slice(0, 10),
+          p_end_date: new Date().toLocaleDateString('en-CA'),
         });
         return Number(data ?? 0);
       })(),

@@ -55,7 +55,7 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
     const formattedDigits = digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
     setFormattedCustomAmount(isNegative ? (digits ? `-${formattedDigits}` : '-') : formattedDigits);
   };
-  const today = useMemo(() => new Date().toISOString().split('T')[0], []); // Ngày hôm nay
+  const today = useMemo(() => new Date().toLocaleDateString('en-CA'), []); // Ngày hôm nay
   const { hasPermission } = usePermissions();
   const isClosed = pawn?.status === PawnStatus.CLOSED || pawn?.status === PawnStatus.DELETED;
   
@@ -73,7 +73,7 @@ export function RedeemTab({ pawn, onClose }: RedeemTabProps) {
     const loanEndDate = addDays(loanStartDate, pawn.loan_period - 1);
     
     // Format to YYYY-MM-DD
-    return loanEndDate.toISOString().split('T')[0];
+    return loanEndDate.toLocaleDateString('en-CA');
   }, [pawn?.loan_date, pawn?.loan_period, today]);
 
   // Mặc định là ngày hiện tại nếu ngày hiện tại nằm trong khoảng hợp đồng

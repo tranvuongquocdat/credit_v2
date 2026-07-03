@@ -34,7 +34,7 @@ export async function calculateCloseContractInterest(creditId: string, inputDate
     const startDate = new Date(loanStartDate);
     const endDate = new Date(startDate);
     endDate.setDate(startDate.getDate() + dailyAmounts.length - 1);
-    const loanEndDate = endDate.toISOString().split('T')[0];
+    const loanEndDate = endDate.toLocaleDateString('en-CA');
 
     // 5. Tạo periods và statuses để biết kỳ nào đã đóng
     const interestPeriod = credit.interest_period || 30;

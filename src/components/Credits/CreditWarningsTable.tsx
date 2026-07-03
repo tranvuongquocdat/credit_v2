@@ -10,16 +10,16 @@ import { calculateDailyRateForCredit } from "@/lib/interest-calculator";
 
 // Import the enhanced reason calculation
 function calculateCreditReason(credit: any, latestPaidDate?: string | null): string {
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toLocaleDateString('en-CA');
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  const tomorrowStr = tomorrow.toLocaleDateString('en-CA');
   
   // Contract end date calculation
   const contractStart = new Date(credit.loan_date);
   const contractEnd = new Date(contractStart);
   contractEnd.setDate(contractEnd.getDate() + credit.loan_period - 1);
-  const contractEndStr = contractEnd.toISOString().split('T')[0];
+  const contractEndStr = contractEnd.toLocaleDateString('en-CA');
   
   const nextPaymentDate = credit.next_payment_date;
   const statusCode = credit.status_code;

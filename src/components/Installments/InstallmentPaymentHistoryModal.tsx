@@ -254,7 +254,7 @@ export function InstallmentPaymentHistoryModal({
         const startDate = new Date(loanStartDate);
         const endDate = new Date(startDate);
         endDate.setDate(startDate.getDate() + dailyAmounts.length - 1);
-        const loanEndDate = endDate.toISOString().split('T')[0];
+        const loanEndDate = endDate.toLocaleDateString('en-CA');
         
         console.log('Loan period:', loanStartDate, '→', loanEndDate);
         

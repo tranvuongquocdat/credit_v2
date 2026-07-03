@@ -153,7 +153,7 @@ export const convertFromHistoryToTimeArray = (loanStartDate: string, loanEndDate
 
 // Helper function để format ngày theo định dạng YYYY-MM-DD
 const formatDate = (date: Date): string => {
-    return date.toISOString().split('T')[0];
+    return date.toLocaleDateString('en-CA');
 };
 
 /**

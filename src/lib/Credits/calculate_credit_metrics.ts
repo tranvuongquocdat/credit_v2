@@ -61,7 +61,7 @@ export async function calculateCreditMetrics(
         const loanEnd = new Date(loanStart.getTime() + (credit.loan_period - 1) * 86400000);
         const { data } = await (supabase.rpc as any)('calc_expected_until', {
           p_credit_id: credit.id,
-          p_end_date: loanEnd.toISOString().slice(0, 10),
+          p_end_date: loanEnd.toLocaleDateString('en-CA'),
         });
         return Number(data ?? 0);
       })(),
@@ -70,7 +70,7 @@ export async function calculateCreditMetrics(
         if (typeof cached === 'number') return cached;
         const { data } = await (supabase.rpc as any)('calc_expected_until', {
           p_credit_id: credit.id,
-          p_end_date: new Date().toISOString().slice(0, 10),
+          p_end_date: new Date().toLocaleDateString('en-CA'),
         });
         return Number(data ?? 0);
       })(),

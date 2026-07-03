@@ -125,7 +125,7 @@ async function getCreditsWithUnaccentedSearch(
     if (filters.status === 'due_tomorrow') {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+      const tomorrowStr = tomorrow.toLocaleDateString('en-CA');
       filteredData = creditData.filter((credit: any) => 
         credit.next_payment_date === tomorrowStr
       );
@@ -235,7 +235,7 @@ export async function getCredits(
             // Server-side filtering using next_payment_date from credits_by_store view
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
-            const tomorrowStr = tomorrow.toISOString().split('T')[0]; // YYYY-MM-DD format
+            const tomorrowStr = tomorrow.toLocaleDateString('en-CA'); // YYYY-MM-DD format
             query = query.eq('next_payment_date', tomorrowStr);
             break;
         }

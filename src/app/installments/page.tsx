@@ -25,6 +25,8 @@ import { InstallmentEditModal } from '@/components/Installments/InstallmentEditM
 import { InstallmentPaymentHistoryModal } from '@/components/Installments/InstallmentPaymentHistoryModal';
 
 // Import custom hooks
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query-keys';
 import { useInstallments } from '@/hooks/useInstallments';
 import { useInstallmentsSummary } from '@/hooks/useInstallmentsSummary';
 import { useAutoUpdateCashFund } from '@/hooks/useCashFundUpdater';
@@ -103,6 +105,8 @@ export default function InstallmentsPage() {
     refetch,
     filters,
   } = useInstallments();
+
+  const queryClient = useQueryClient();
   
   // Sử dụng custom hook để lấy dữ liệu tài chính
   const { data: financialSummary, refresh: refreshFinancial } = useInstallmentsSummary();
@@ -349,6 +353,8 @@ export default function InstallmentsPage() {
     if (hasDataChanged) {
       // Thêm độ trễ để đảm bảo database đã xử lý xong
       setTimeout(() => {
+        // Xoá cache paid-amounts (staleTime 1 phút) để cột "Còn phải đóng" cập nhật ngay
+        queryClient.invalidateQueries({ queryKey: queryKeys.installments.all });
         refetch();
         void triggerFinancialRefresh();
         triggerUpdate();

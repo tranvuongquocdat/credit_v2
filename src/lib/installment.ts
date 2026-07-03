@@ -132,7 +132,7 @@ async function getInstallmentsWithUnaccentedSearch(
         remaining_amount: downPayment,
         status: item.status_code as InstallmentStatus,
         due_date: calculateDueDate(loanDate, loanPeriod),
-        start_date: new Date(loanDate).toISOString().split('T')[0],
+        start_date: new Date(loanDate).toLocaleDateString('en-CA'),
         payment_due_date: item.payment_due_date || null,
         store_id: item.store_id || '',
         created_at: item.created_at || undefined,
@@ -339,7 +339,7 @@ export async function getInstallments(
         remaining_amount: downPayment,
         status: item.status_code as InstallmentStatus,
         due_date: calculateDueDate(loanDate, loanPeriod),
-        start_date: new Date(loanDate).toISOString().split('T')[0],
+        start_date: new Date(loanDate).toLocaleDateString('en-CA'),
         payment_due_date: item.payment_due_date || null,
         store_id: item.store_id || '',
         created_at: item.created_at || undefined,
@@ -380,10 +380,10 @@ function calculateDueDate(loanDate: string, loanPeriod: number): string {
   try {
     const date = new Date(loanDate);
     date.setDate(date.getDate() + loanPeriod - 1);
-    return date.toISOString().split('T')[0];
+    return date.toLocaleDateString('en-CA');
   } catch (error) {
     console.error('Error calculating due date:', error);
-    return new Date().toISOString().split('T')[0];
+    return new Date().toLocaleDateString('en-CA');
   }
 }
 
@@ -443,7 +443,7 @@ export async function getInstallmentById(id: string) {
       remaining_amount: downPayment,
       status: data.status_code as InstallmentStatus,
       due_date: calculateDueDate(loanDate, loanPeriod),
-      start_date: new Date(loanDate).toISOString().split('T')[0],
+      start_date: new Date(loanDate).toLocaleDateString('en-CA'),
       
       // Direct DB field references
       down_payment: downPayment,
@@ -581,7 +581,7 @@ export async function createInstallment(installment: CreateInstallmentParams) {
       remaining_amount: downPayment,
       status: data.status as InstallmentStatus,
       due_date: calculateDueDate(loanDate, loanPeriod),
-      start_date: new Date(loanDate).toISOString().split('T')[0],
+      start_date: new Date(loanDate).toLocaleDateString('en-CA'),
       payment_due_date: data.payment_due_date || null,
       
       // Direct DB field references
@@ -727,7 +727,7 @@ export async function updateInstallment(id: string, installment: Partial<Install
       remaining_amount: downPayment - (installment.amount_paid || 0),
       status: data.status as InstallmentStatus,
       due_date: calculateDueDate(loanDate, loanPeriod),
-      start_date: new Date(loanDate).toISOString().split('T')[0],
+      start_date: new Date(loanDate).toLocaleDateString('en-CA'),
       payment_due_date: data.payment_due_date || null,
       notes: data.notes || '',
       store_id: installment.store_id,
@@ -810,7 +810,7 @@ export async function updateInstallmentStatus(id: string, status: InstallmentSta
       remaining_amount: downPayment,
       status: data.status as InstallmentStatus,
       due_date: calculateDueDate(loanDate, loanPeriod),
-      start_date: new Date(loanDate).toISOString().split('T')[0],
+      start_date: new Date(loanDate).toLocaleDateString('en-CA'),
       payment_due_date: data.payment_due_date || null,
       notes: data.notes || '',
       created_at: data.created_at || undefined,

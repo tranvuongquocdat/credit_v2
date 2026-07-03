@@ -102,7 +102,7 @@ export function PaymentTabFast({
     if (currentIdx !== earliestUnpaidIdx) return;
 
     setEditingDatePeriodId(period.id);
-    const existing = periodTransactionDates[period.id] || period.paymentStartDate || new Date().toISOString().split('T')[0];
+    const existing = periodTransactionDates[period.id] || period.paymentStartDate || new Date().toLocaleDateString('en-CA');
     setSelectedDate(existing);
   };
 
@@ -146,7 +146,7 @@ export function PaymentTabFast({
         if (latestPaidDate) {
           const next = new Date(latestPaidDate);
           next.setDate(next.getDate() + 1);
-          startDate = next.toISOString().split('T')[0];
+          startDate = next.toLocaleDateString('en-CA');
         } else {
           startDate = installment.start_date;
         }
@@ -200,7 +200,7 @@ export function PaymentTabFast({
               is_deleted: false,
               created_by: userId,
               transaction_date: (() => {
-                const t = periodTransactionDates[periodId] || period.paymentStartDate || new Date().toISOString().split('T')[0];
+                const t = periodTransactionDates[periodId] || period.paymentStartDate || new Date().toLocaleDateString('en-CA');
                 return new Date(t).toISOString();
               })(),
             });
@@ -378,7 +378,7 @@ export function PaymentTabFast({
                           onClick={!hasPayments && !isDisabled && !isProcessingCheckbox && isEarliestUnpaid ? () => startDateEditing(period) : undefined}
                         >
                           {(() => {
-                            const dateStr = periodTransactionDates[period.id] || period.paymentStartDate || new Date().toISOString().split('T')[0];
+                            const dateStr = periodTransactionDates[period.id] || period.paymentStartDate || new Date().toLocaleDateString('en-CA');
                             return formatDate(dateStr);
                           })()}
                         </span>

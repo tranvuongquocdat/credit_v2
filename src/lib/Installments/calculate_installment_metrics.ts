@@ -104,11 +104,11 @@ async function calculateProfitCollectedInCurrentMonth(
     
     // Tính ngày cuối cùng của tháng trước
     const lastDayOfPreviousMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-    const lastDayOfPreviousMonthStr = lastDayOfPreviousMonth.toISOString().split('T')[0];
+    const lastDayOfPreviousMonthStr = lastDayOfPreviousMonth.toLocaleDateString('en-CA');
     
     // Tính ngày cuối cùng của tháng hiện tại
     const lastDayOfCurrentMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    const lastDayOfCurrentMonthStr = lastDayOfCurrentMonth.toISOString().split('T')[0];
+    const lastDayOfCurrentMonthStr = lastDayOfCurrentMonth.toLocaleDateString('en-CA');
     
     // Lấy toàn bộ lịch sử thanh toán với is_deleted=false từ đầu đến cuối tháng trước
     const historyToLastMonth = await getAllValidPaymentHistory(

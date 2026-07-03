@@ -42,16 +42,16 @@ export function calculateInstallmentReason(
   installment: InstallmentWithCustomer,
   buttonValues: number[]
 ): string {
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toLocaleDateString('en-CA');
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  const tomorrowStr = tomorrow.toLocaleDateString('en-CA');
   
   // Contract end date calculation
   const contractStart = new Date(installment.start_date);
   const contractEnd = new Date(contractStart);
   contractEnd.setDate(contractEnd.getDate() + installment.duration - 1);
-  const contractEndStr = contractEnd.toISOString().split('T')[0];
+  const contractEndStr = contractEnd.toLocaleDateString('en-CA');
   
   const paymentDueDate = installment.payment_due_date?.split('T')[0]; // Extract date part only
   const paymentPeriod = installment.payment_period || 10;
@@ -148,12 +148,12 @@ export async function getInstallmentWarnings(
       };
     }
 
-    const today = new Date().toISOString().split('T')[0]; // Use date only for comparison
+    const today = new Date().toLocaleDateString('en-CA'); // Use date only for comparison
     
     // Expand query scope to include tomorrow's contracts
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    const tomorrowStr = tomorrow.toLocaleDateString('en-CA');
     
     let installments: any[] = [];
     let error: any = null;
