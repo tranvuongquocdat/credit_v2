@@ -192,10 +192,10 @@ export async function hasInstallmentAnyPayments(installmentId: string) {
  */
 export async function countInstallmentWarnings(storeId?: string) {
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date().toLocaleDateString('en-CA');
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+    const tomorrowStr = tomorrow.toLocaleDateString('en-CA');
     
     // Single hybrid query: Use status-based filtering + payment timing
     const { data, error } = await supabase

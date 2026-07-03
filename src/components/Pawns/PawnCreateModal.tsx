@@ -483,7 +483,7 @@ export function PawnCreateModal({
         const dates: string[] = [];
         const cur = new Date(loanDateObj);
         while (cur <= endDateObj) {
-          dates.push(cur.toISOString().split('T')[0]);
+          dates.push(cur.toLocaleDateString('en-CA'));
           cur.setDate(cur.getDate() + 1);
         }
 

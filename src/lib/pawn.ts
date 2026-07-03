@@ -114,7 +114,7 @@ async function getPawnsWithUnaccentedSearch(
     if (filters.status === 'due_tomorrow') {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+      const tomorrowStr = tomorrow.toLocaleDateString('en-CA');
       filteredData = pawnData.filter((pawn: any) => 
         pawn.next_payment_date === tomorrowStr
       );
@@ -232,7 +232,7 @@ export async function getPawns(
           // Server-side filtering using next_payment_date from pawns_by_store view
           const tomorrow = new Date();
           tomorrow.setDate(tomorrow.getDate() + 1);
-          const tomorrowStr = tomorrow.toISOString().split('T')[0]; // YYYY-MM-DD format
+          const tomorrowStr = tomorrow.toLocaleDateString('en-CA'); // YYYY-MM-DD format
           query = query.eq('next_payment_date', tomorrowStr);
           break;
         default:

@@ -324,7 +324,7 @@ export default function InstallmentWarningsPage() {
       const loanStart = new Date(installment.start_date);
       const loanEnd = new Date(loanStart);
       loanEnd.setDate(loanStart.getDate() + dailyAmounts.length - 1);
-      const loanEndDate = loanEnd.toISOString().split('T')[0];
+      const loanEndDate = loanEnd.toLocaleDateString('en-CA');
       
       // Lấy periods chính xác
       const { periods: timePeriods, statuses } = convertFromHistoryToTimeArrayWithStatus(
@@ -396,7 +396,7 @@ export default function InstallmentWarningsPage() {
         const dailyAmount = Math.floor(periodAmount / actualPeriodDays);
         const lastDayAdjustment = periodAmount - (dailyAmount * actualPeriodDays);
         
-        console.log(`Period ${periodIndex + 1}: ${periodStartDate.toISOString().split('T')[0]} to ${periodEndDate.toISOString().split('T')[0]}, ${actualPeriodDays} days, amount: ${periodAmount}`);
+        console.log(`Period ${periodIndex + 1}: ${periodStartDate.toLocaleDateString('en-CA')} to ${periodEndDate.toLocaleDateString('en-CA')}, ${actualPeriodDays} days, amount: ${periodAmount}`);
         
         // 5. Tạo daily records cho kỳ này
         for (let dayOffset = 0; dayOffset < actualPeriodDays; dayOffset++) {

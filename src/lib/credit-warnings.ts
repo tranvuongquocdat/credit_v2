@@ -22,14 +22,14 @@ export function categorizeCreditReason(reason: string): CreditReasonFilter[] {
  * Calculate unpaid interest amount from first unpaid date to today (inclusive)
  */
 export function calculateUnpaidInterestAmount(credit: any, latestPaidDate: string | null): number {
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toLocaleDateString('en-CA');
   const statusCode = credit.status_code;
   
   // Contract end date calculation
   const contractStart = new Date(credit.loan_date);
   const contractEnd = new Date(contractStart);
   contractEnd.setDate(contractEnd.getDate() + credit.loan_period - 1);
-  const contractEndStr = contractEnd.toISOString().split('T')[0];
+  const contractEndStr = contractEnd.toLocaleDateString('en-CA');
   
   // First unpaid date
   const firstUnpaidDate = latestPaidDate 
@@ -68,16 +68,16 @@ export function calculateUnpaidInterestAmount(credit: any, latestPaidDate: strin
  * Calculate enhanced credit reason with late money amount
  */
 function calculateCreditReason(credit: any, latestPaidDate?: string | null): string {
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toLocaleDateString('en-CA');
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  const tomorrowStr = tomorrow.toLocaleDateString('en-CA');
   
   // Contract end date calculation
   const contractStart = new Date(credit.loan_date);
   const contractEnd = new Date(contractStart);
   contractEnd.setDate(contractEnd.getDate() + credit.loan_period - 1);
-  const contractEndStr = contractEnd.toISOString().split('T')[0];
+  const contractEndStr = contractEnd.toLocaleDateString('en-CA');
   
   const nextPaymentDate = credit.next_payment_date;
   const statusCode = credit.status_code;
@@ -166,7 +166,7 @@ export async function countCreditWarnings(storeId: string): Promise<{ count: num
     // Nếu chỉ đếm OVERDUE + LATE_INTEREST, badge sẽ lệch với số hợp đồng hiện trong list.
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    const tomorrowStr = tomorrow.toLocaleDateString('en-CA');
 
     const { data: credits, error: creditsError } = await supabase
       .from('credits_by_store')
@@ -204,10 +204,10 @@ export async function getCreditWarnings(
       };
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toLocaleDateString('en-CA');
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    const tomorrowStr = tomorrow.toLocaleDateString('en-CA');
 
     let credits: any[] = [];
     let creditsError: any = null;

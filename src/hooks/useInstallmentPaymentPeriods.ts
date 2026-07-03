@@ -40,7 +40,7 @@ export function useInstallmentPaymentPeriods(
         const startDateObj = new Date(loanStartDate!);
         const endDateObj = new Date(startDateObj);
         endDateObj.setDate(startDateObj.getDate() + dailyAmounts.length - 1);
-        const loanEndDate = endDateObj.toISOString().split("T")[0];
+        const loanEndDate = endDateObj.toLocaleDateString('en-CA');
 
         // 4. Split to periods + statuses
         const periodLen = paymentPeriod || 30;

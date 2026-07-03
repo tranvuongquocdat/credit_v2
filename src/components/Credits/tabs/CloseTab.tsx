@@ -32,7 +32,7 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
   const [isClosing, setIsClosing] = useState(false);
   const [loanAmount, setLoanAmount] = useState(0);
   const [payDebt, setPayDebt] = useState(true); // Track whether to pay debt or not
-  const today = useMemo(() => new Date().toISOString().split('T')[0], []); // Ngày hôm nay
+  const today = useMemo(() => new Date().toLocaleDateString('en-CA'), []); // Ngày hôm nay
   // Ngày bắt đầu hợp đồng
   const startDate = useMemo(() => {
     if (!credit?.loan_date) return today;
@@ -47,7 +47,7 @@ export function CloseTab({ credit, onClose }: CloseTabProps) {
     const loanEndDate = addDays(loanStartDate, credit.loan_period - 1);
     
     // Format to YYYY-MM-DD
-    return loanEndDate.toISOString().split('T')[0];
+    return loanEndDate.toLocaleDateString('en-CA');
   }, [credit?.loan_date, credit?.loan_period, today]);
 
   // Mặc định là ngày hiện tại nếu ngày hiện tại nằm trong khoảng hợp đồng

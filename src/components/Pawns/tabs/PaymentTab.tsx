@@ -90,7 +90,7 @@ export function PaymentTab({
         const startDate = new Date(loanStartDate);
         const endDate = new Date(startDate);
         endDate.setDate(startDate.getDate() + dailyAmounts.length - 1);
-        const loanEndDate = endDate.toISOString().split('T')[0];
+        const loanEndDate = endDate.toLocaleDateString('en-CA');
         
         console.log('Loan period:', loanStartDate, '→', loanEndDate);
         
@@ -261,7 +261,7 @@ export function PaymentTab({
         if (latestPaidDate) {
           const nextDay = new Date(latestPaidDate);
           nextDay.setDate(nextDay.getDate() + 1);
-          startDate = nextDay.toISOString().split('T')[0];
+          startDate = nextDay.toLocaleDateString('en-CA');
         } else {
           startDate = pawn.loan_date;
         }
@@ -325,7 +325,7 @@ export function PaymentTab({
         }
         
         console.log(`Created ${cycles.length} cycles:`, cycles.map(c => 
-          `${c.start.toISOString().split('T')[0]} → ${c.end.toISOString().split('T')[0]}`
+          `${c.start.toLocaleDateString('en-CA')} → ${c.end.toLocaleDateString('en-CA')}`
         ));
         
         // 7. Create records for each cycle

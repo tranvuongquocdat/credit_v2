@@ -61,7 +61,7 @@ export async function recordDailyPayments(
 
     // Tạo danh sách các ngày
     while (current <= end) {
-      dates.push(current.toISOString().split('T')[0]);
+      dates.push(current.toLocaleDateString('en-CA'));
       current.setDate(current.getDate() + 1);
     }
 
@@ -163,7 +163,7 @@ export async function recordDailyPaymentsWithCustomAmount(
 
     // Tạo danh sách các ngày
     while (current <= end) {
-      dates.push(current.toISOString().split('T')[0]);
+      dates.push(current.toLocaleDateString('en-CA'));
       current.setDate(current.getDate() + 1);
     }
 

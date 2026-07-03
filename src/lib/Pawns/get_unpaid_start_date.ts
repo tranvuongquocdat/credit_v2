@@ -33,7 +33,7 @@ export async function getUnpaidStartDate(pawnId: string): Promise<string | null>
     const startDate = new Date(loanStartDate);
     const endDate = new Date(startDate);
     endDate.setDate(startDate.getDate() + dailyAmounts.length - 1);
-    const loanEndDate = endDate.toISOString().split('T')[0];
+    const loanEndDate = endDate.toLocaleDateString('en-CA');
 
     // 5. Tạo periods và statuses
     const interestPeriod = pawn.interest_period || 30;
@@ -67,7 +67,7 @@ export async function getUnpaidStartDate(pawnId: string): Promise<string | null>
     const unpaidStartDate = new Date(latestPaidEndDate);
     unpaidStartDate.setDate(latestPaidEndDate.getDate() + 1);
     
-    return unpaidStartDate.toISOString().split('T')[0];
+    return unpaidStartDate.toLocaleDateString('en-CA');
 
   } catch (error) {
     console.error('Error getting unpaid start date:', error);
