@@ -219,6 +219,9 @@ export async function getInstallments(
     // Filter by status using the new status_code column from the view
     if (filters?.status) {
       switch (filters.status) {
+        case InstallmentStatus.DUE_TODAY:
+          query = query.eq('payment_due_date', new Date().toLocaleDateString('en-CA'));
+          break;
         case InstallmentStatus.DUE_TOMORROW:
           const tomorrow = new Date();
           tomorrow.setDate(tomorrow.getDate() + 1);

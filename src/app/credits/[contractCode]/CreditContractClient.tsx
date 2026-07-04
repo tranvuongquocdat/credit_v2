@@ -91,18 +91,20 @@ export function CreditContractClient({ contractCode }: CreditContractClientProps
   const [isCreditEditModalOpen, setIsCreditEditModalOpen] = useState(false);
   const [editCreditId, setEditCreditId] = useState<string>('');
   
-  // Client-side filter: Ngày mai đóng lãi
+  // Client-side filter: Hôm nay / Ngày mai đóng lãi
   const displayCredits = useMemo(() => {
-    if (filters?.status !== 'due_tomorrow') return credits;
-    const tomorrow = addDays(new Date().setHours(0,0,0,0) as any, 1);
+    if (filters?.status !== 'due_tomorrow' && filters?.status !== 'due_today') return credits;
+    const target = filters?.status === 'due_today'
+      ? (new Date().setHours(0, 0, 0, 0) as any)
+      : addDays(new Date().setHours(0, 0, 0, 0) as any, 1);
     return credits.filter(c => {
       const next = creditDetails[c.id]?.nextPayment;
       if (!next) return false;
-      return isSameDay(new Date(next), tomorrow);
+      return isSameDay(new Date(next), target);
     });
   }, [credits, filters?.status, creditDetails]);
 
-  const effectiveTotalItems = filters?.status === 'due_tomorrow' ? displayCredits.length : totalItems;
+  const effectiveTotalItems = (filters?.status === 'due_tomorrow' || filters?.status === 'due_today') ? displayCredits.length : totalItems;
   const totalPages = Math.ceil(effectiveTotalItems / itemsPerPage);
   
   // Handle search filters

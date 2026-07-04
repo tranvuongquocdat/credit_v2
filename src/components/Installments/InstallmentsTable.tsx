@@ -425,9 +425,9 @@ export function InstallmentsTable({
                 </TableCell>
                 <TableCell className="py-3 px-3 border-r border-gray-200 text-center">
                   {installment.nextPaymentDate === 'Hôm nay' ? (
-                    <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200">Hôm nay</Badge>
+                    <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200">Hôm nay</Badge>
                   ) : installment.nextPaymentDate === 'Ngày mai' ? (
-                    <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">Ngày mai</Badge>
+                    <Badge variant="outline" className="bg-indigo-100 text-indigo-800 border-indigo-200">Ngày mai</Badge>
                   ) : (
                     <Badge variant="outline" className={statusInfo.color}>
                       {statusInfo.label}
@@ -579,9 +579,9 @@ export function InstallmentsTable({
                   )}
                 </div>
                 {installment.nextPaymentDate === 'Hôm nay' ? (
-                  <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200">Hôm nay</Badge>
+                  <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200">Hôm nay</Badge>
                 ) : installment.nextPaymentDate === 'Ngày mai' ? (
-                  <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">Ngày mai</Badge>
+                  <Badge variant="outline" className="bg-indigo-100 text-indigo-800 border-indigo-200">Ngày mai</Badge>
                 ) : (
                   <Badge variant="outline" className={statusInfo.color}>
                     {statusInfo.label}

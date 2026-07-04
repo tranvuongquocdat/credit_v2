@@ -7,6 +7,7 @@ export enum InstallmentStatus {
   BAD_DEBT = "bad_debt",
   CLOSED = "closed",
   DELETED = "deleted",
+  DUE_TODAY = "due_today",
   DUE_TOMORROW = "due_tomorrow",
   FINISHED = "finished"
 }

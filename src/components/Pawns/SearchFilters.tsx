@@ -60,7 +60,8 @@ export function SearchFilters({
     [PawnStatus.ON_TIME]: { label: getDisplayLabelByBuild('dang_vay'), color: 'bg-green-100 text-green-800' },
     [PawnStatus.CLOSED]: { label: 'Đã đóng', color: 'bg-blue-100 text-blue-800' },
     [PawnStatus.DELETED]: { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
-    due_tomorrow: { label: 'Ngày mai đóng lãi', color: 'bg-amber-100 text-amber-800' },
+    due_today: { label: 'Hôm nay đóng lãi', color: 'bg-orange-100 text-orange-800' },
+    due_tomorrow: { label: 'Ngày mai đóng lãi', color: 'bg-indigo-100 text-indigo-800' },
     overdue: { label: 'Quá hạn', color: 'bg-red-100 text-red-800' },
     late_interest: { label: 'Trễ lãi', color: 'bg-red-100 text-red-800' },
   } as Record<string, { label: string; color: string }>;

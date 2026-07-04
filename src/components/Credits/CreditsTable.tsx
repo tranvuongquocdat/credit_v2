@@ -325,9 +325,9 @@ export function CreditsTable({
 
                     return (
                       dueLabel === 'today' ? (
-                        <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200 text-xs lg:text-sm px-1 lg:px-2">Hôm nay</Badge>
+                        <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200 text-xs lg:text-sm px-1 lg:px-2">Hôm nay</Badge>
                       ) : dueLabel === 'tomorrow' ? (
-                        <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200 text-xs lg:text-sm px-1 lg:px-2">Ngày mai</Badge>
+                        <Badge variant="outline" className="bg-indigo-100 text-indigo-800 border-indigo-200 text-xs lg:text-sm px-1 lg:px-2">Ngày mai</Badge>
                       ) : (
                         <Badge className={`${statusInfo.color} text-xs lg:text-sm px-1 lg:px-2`}>{statusInfo.label}</Badge>
                       )
@@ -503,8 +503,8 @@ export function CreditsTable({
                     today.setHours(0, 0, 0, 0);
                     nextDate.setHours(0, 0, 0, 0);
                     const diff = (nextDate.getTime() - today.getTime()) / (24 * 3600 * 1000);
-                    if (diff === 0) return <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200">Hôm nay</Badge>;
-                    if (diff === 1) return <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">Ngày mai</Badge>;
+                    if (diff === 0) return <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200">Hôm nay</Badge>;
+                    if (diff === 1) return <Badge variant="outline" className="bg-indigo-100 text-indigo-800 border-indigo-200">Ngày mai</Badge>;
                     return statusBadge;
                   })()}
                 </div>
