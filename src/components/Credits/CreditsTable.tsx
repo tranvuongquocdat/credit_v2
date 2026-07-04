@@ -324,15 +324,13 @@ export function CreditsTable({
                     }
 
                     return (
-                      <div className="flex flex-col items-center gap-1">
+                      dueLabel === 'today' ? (
+                        <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200 text-xs lg:text-sm px-1 lg:px-2">Hôm nay</Badge>
+                      ) : dueLabel === 'tomorrow' ? (
+                        <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200 text-xs lg:text-sm px-1 lg:px-2">Ngày mai</Badge>
+                      ) : (
                         <Badge className={`${statusInfo.color} text-xs lg:text-sm px-1 lg:px-2`}>{statusInfo.label}</Badge>
-                        {dueLabel === 'today' && (
-                          <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200 text-xs lg:text-sm px-1 lg:px-2">Hôm nay</Badge>
-                        )}
-                        {dueLabel === 'tomorrow' && (
-                          <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200 text-xs lg:text-sm px-1 lg:px-2">Ngày mai</Badge>
-                        )}
-                      </div>
+                      )
                     );
                   })()}
                 </TableCell>
@@ -493,22 +491,22 @@ export function CreditsTable({
                       {credit.customer?.name || "N/A"}
                     </span>
                   </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <Badge variant="outline" className={statusInfo.color}>
-                      {statusInfo.label}
-                    </Badge>
-                    {(() => {
-                      if (!financialDetail || financialDetail.isCompleted || !financialDetail.nextPayment) return null;
-                      const nextDate = new Date(financialDetail.nextPayment);
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
-                      nextDate.setHours(0, 0, 0, 0);
-                      const diff = (nextDate.getTime() - today.getTime()) / (24 * 3600 * 1000);
-                      if (diff === 0) return <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200">Hôm nay</Badge>;
-                      if (diff === 1) return <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">Ngày mai</Badge>;
-                      return null;
-                    })()}
-                  </div>
+                  {(() => {
+                    const statusBadge = (
+                      <Badge variant="outline" className={statusInfo.color}>
+                        {statusInfo.label}
+                      </Badge>
+                    );
+                    if (!financialDetail || financialDetail.isCompleted || !financialDetail.nextPayment) return statusBadge;
+                    const nextDate = new Date(financialDetail.nextPayment);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    nextDate.setHours(0, 0, 0, 0);
+                    const diff = (nextDate.getTime() - today.getTime()) / (24 * 3600 * 1000);
+                    if (diff === 0) return <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200">Hôm nay</Badge>;
+                    if (diff === 1) return <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">Ngày mai</Badge>;
+                    return statusBadge;
+                  })()}
                 </div>
 
                 {/* Contract Info */}

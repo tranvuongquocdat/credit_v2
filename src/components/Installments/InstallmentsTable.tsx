@@ -424,20 +424,15 @@ export function InstallmentsTable({
                   })()}
                 </TableCell>
                 <TableCell className="py-3 px-3 border-r border-gray-200 text-center">
-                  <div className="flex flex-col items-center gap-1">
-                    <Badge
-                      variant="outline"
-                      className={statusInfo.color}
-                    >
+                  {installment.nextPaymentDate === 'Hôm nay' ? (
+                    <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200">Hôm nay</Badge>
+                  ) : installment.nextPaymentDate === 'Ngày mai' ? (
+                    <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">Ngày mai</Badge>
+                  ) : (
+                    <Badge variant="outline" className={statusInfo.color}>
                       {statusInfo.label}
                     </Badge>
-                    {installment.nextPaymentDate === 'Hôm nay' && (
-                      <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200">Hôm nay</Badge>
-                    )}
-                    {installment.nextPaymentDate === 'Ngày mai' && (
-                      <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">Ngày mai</Badge>
-                    )}
-                  </div>
+                  )}
                 </TableCell>
                 <TableCell className="py-3 px-3 border-r border-gray-200 text-center hidden md:table-cell">
                   {installment.status === "CLOSED" ||
@@ -583,17 +578,15 @@ export function InstallmentsTable({
                     <AlertTriangleIcon className="h-4 w-4 text-red-500" />
                   )}
                 </div>
-                <div className="flex flex-col items-end gap-1">
+                {installment.nextPaymentDate === 'Hôm nay' ? (
+                  <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200">Hôm nay</Badge>
+                ) : installment.nextPaymentDate === 'Ngày mai' ? (
+                  <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">Ngày mai</Badge>
+                ) : (
                   <Badge variant="outline" className={statusInfo.color}>
                     {statusInfo.label}
                   </Badge>
-                  {installment.nextPaymentDate === 'Hôm nay' && (
-                    <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200">Hôm nay</Badge>
-                  )}
-                  {installment.nextPaymentDate === 'Ngày mai' && (
-                    <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">Ngày mai</Badge>
-                  )}
-                </div>
+                )}
               </div>
 
               {/* Contract Info */}
