@@ -144,14 +144,26 @@ async function getInstallmentsWithUnaccentedSearch(
       };
     });
     
+    // due_today/due_tomorrow không map được sang p_status của RPC → lọc client theo
+    // ngày (local VN) của payment_due_date. So theo ngày nên đúng cả HĐ cũ 07:00.
+    let installmentsResult = installments;
+    if (filters.status === InstallmentStatus.DUE_TODAY || filters.status === InstallmentStatus.DUE_TOMORROW) {
+      const target = new Date();
+      if (filters.status === InstallmentStatus.DUE_TOMORROW) target.setDate(target.getDate() + 1);
+      const targetStr = target.toLocaleDateString('en-CA');
+      installmentsResult = installments.filter((it: any) =>
+        it.payment_due_date && new Date(it.payment_due_date).toLocaleDateString('en-CA') === targetStr
+      );
+    }
+
     // For RPC, we get exact page results, so estimate total pages
-    const totalPages = installments.length === pageSize ? page + 1 : page;
-    
-    return { 
-      data: installments, 
-      error: null, 
-      count: installments.length, 
-      totalPages 
+    const totalPages = installmentsResult.length === pageSize ? page + 1 : page;
+
+    return {
+      data: installmentsResult,
+      error: null,
+      count: installmentsResult.length,
+      totalPages
     };
   } catch (error: any) {
     console.error('Error in unaccented search:', error);
@@ -219,15 +231,27 @@ export async function getInstallments(
     // Filter by status using the new status_code column from the view
     if (filters?.status) {
       switch (filters.status) {
-        case InstallmentStatus.DUE_TOMORROW:
-          const tomorrow = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          const yyyy = tomorrow.getFullYear();
-          const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
-          const dd = String(tomorrow.getDate()).padStart(2, '0');
-          const tomorrowStr = `${yyyy}-${mm}-${dd}`;
-          query = query.eq('payment_due_date', tomorrowStr);
+        case InstallmentStatus.DUE_TODAY: {
+          // payment_due_date là timestamptz (HĐ cũ 07:00+07, mới 00:00+07) → lọc theo
+          // khoảng cả ngày VN thay vì eq (eq so timestamp tuyệt đối nên trượt hết)
+          const start = new Date();
+          const end = new Date();
+          end.setDate(end.getDate() + 1);
+          query = query
+            .gte('payment_due_date', start.toLocaleDateString('en-CA') + 'T00:00:00+07:00')
+            .lt('payment_due_date', end.toLocaleDateString('en-CA') + 'T00:00:00+07:00');
           break;
+        }
+        case InstallmentStatus.DUE_TOMORROW: {
+          const start = new Date();
+          start.setDate(start.getDate() + 1);
+          const end = new Date();
+          end.setDate(end.getDate() + 2);
+          query = query
+            .gte('payment_due_date', start.toLocaleDateString('en-CA') + 'T00:00:00+07:00')
+            .lt('payment_due_date', end.toLocaleDateString('en-CA') + 'T00:00:00+07:00');
+          break;
+        }
         case InstallmentStatus.OVERDUE:
           query = query.eq('status_code', 'OVERDUE');
           break;

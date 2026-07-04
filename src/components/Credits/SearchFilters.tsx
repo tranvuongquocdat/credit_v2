@@ -55,7 +55,8 @@ export function SearchFilters({
     'overdue': { label: 'Quá hạn', color: 'bg-red-100 text-red-800' },
     'closed': { label: 'Đã đóng', color: 'bg-blue-100 text-blue-800' },
     'deleted': { label: 'Đã xóa', color: 'bg-gray-100 text-gray-800' },
-    'due_tomorrow': { label: 'Ngày mai đóng lãi', color: 'bg-amber-100 text-amber-800' },
+    'due_today': { label: 'Hôm nay đóng lãi', color: 'bg-orange-100 text-orange-800' },
+    'due_tomorrow': { label: 'Ngày mai đóng lãi', color: 'bg-indigo-100 text-indigo-800' },
   };
   const [filters, setFilters] = useState<SearchFilters>({
     contract_code: '',

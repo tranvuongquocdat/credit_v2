@@ -424,15 +424,18 @@ export function InstallmentsTable({
                   })()}
                 </TableCell>
                 <TableCell className="py-3 px-3 border-r border-gray-200 text-center">
-                  <Badge
-                    variant="outline"
-                    className={statusInfo.color}
-                  >
-                    {statusInfo.label}
-                  </Badge>
+                  {installment.nextPaymentDate === 'Hôm nay' ? (
+                    <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200">Hôm nay</Badge>
+                  ) : installment.nextPaymentDate === 'Ngày mai' ? (
+                    <Badge variant="outline" className="bg-indigo-100 text-indigo-800 border-indigo-200">Ngày mai</Badge>
+                  ) : (
+                    <Badge variant="outline" className={statusInfo.color}>
+                      {statusInfo.label}
+                    </Badge>
+                  )}
                 </TableCell>
                 <TableCell className="py-3 px-3 border-r border-gray-200 text-center hidden md:table-cell">
-                  {installment.status === "CLOSED" || 
+                  {installment.status === "CLOSED" ||
                    installment.nextPaymentDate == "Hoàn thành" || 
                    !installment.payment_due_date ? (
                     <div className="flex items-center justify-center gap-1">
@@ -575,9 +578,15 @@ export function InstallmentsTable({
                     <AlertTriangleIcon className="h-4 w-4 text-red-500" />
                   )}
                 </div>
-                <Badge variant="outline" className={statusInfo.color}>
-                  {statusInfo.label}
-                </Badge>
+                {installment.nextPaymentDate === 'Hôm nay' ? (
+                  <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200">Hôm nay</Badge>
+                ) : installment.nextPaymentDate === 'Ngày mai' ? (
+                  <Badge variant="outline" className="bg-indigo-100 text-indigo-800 border-indigo-200">Ngày mai</Badge>
+                ) : (
+                  <Badge variant="outline" className={statusInfo.color}>
+                    {statusInfo.label}
+                  </Badge>
+                )}
               </div>
 
               {/* Contract Info */}

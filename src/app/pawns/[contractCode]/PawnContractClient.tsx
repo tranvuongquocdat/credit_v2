@@ -99,16 +99,18 @@ export function PawnContractClient({ contractCode }: PawnContractClientProps) {
   
 
   const displayPawns = useMemo(() => {
-    if (filters?.status !== 'due_tomorrow') return pawns;
-    const tomorrow = addDays(new Date().setHours(0,0,0,0) as any, 1);
+    if (filters?.status !== 'due_tomorrow' && filters?.status !== 'due_today') return pawns;
+    const target = filters?.status === 'due_today'
+      ? (new Date().setHours(0, 0, 0, 0) as any)
+      : addDays(new Date().setHours(0, 0, 0, 0) as any, 1);
     return pawns.filter(p => {
       const next = pawnDetails[p.id]?.nextPayment;
       if (!next) return false;
-      return isSameDay(new Date(next), tomorrow);
+      return isSameDay(new Date(next), target);
     });
   }, [pawns, filters?.status, pawnDetails]);
 
-  const effectiveTotalItems = filters?.status === 'due_tomorrow' ? displayPawns.length : totalItems;
+  const effectiveTotalItems = (filters?.status === 'due_tomorrow' || filters?.status === 'due_today') ? displayPawns.length : totalItems;
   const totalPages = Math.ceil(effectiveTotalItems / itemsPerPage);
   
   

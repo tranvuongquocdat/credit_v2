@@ -309,8 +309,29 @@ export function CreditsTable({
                     // Use status_code from credits_by_store view
                     const statusCode = credit.status_code || 'ON_TIME';
                     const statusInfo = getCreditStatusInfo(statusCode);
-                    
-                    return <Badge className={`${statusInfo.color} text-xs lg:text-sm px-1 lg:px-2`}>{statusInfo.label}</Badge>;
+
+                    // Label Hôm nay/Ngày mai dựa trên ngày phải đóng lãi kế tiếp
+                    const det = calculatedDetails?.[credit.id];
+                    let dueLabel: 'today' | 'tomorrow' | null = null;
+                    if (det && !det.isCompleted && det.nextPayment) {
+                      const nextDate = new Date(det.nextPayment);
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      nextDate.setHours(0, 0, 0, 0);
+                      const diff = (nextDate.getTime() - today.getTime()) / (24 * 3600 * 1000);
+                      if (diff === 0) dueLabel = 'today';
+                      else if (diff === 1) dueLabel = 'tomorrow';
+                    }
+
+                    return (
+                      dueLabel === 'today' ? (
+                        <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200 text-xs lg:text-sm px-1 lg:px-2">Hôm nay</Badge>
+                      ) : dueLabel === 'tomorrow' ? (
+                        <Badge variant="outline" className="bg-indigo-100 text-indigo-800 border-indigo-200 text-xs lg:text-sm px-1 lg:px-2">Ngày mai</Badge>
+                      ) : (
+                        <Badge className={`${statusInfo.color} text-xs lg:text-sm px-1 lg:px-2`}>{statusInfo.label}</Badge>
+                      )
+                    );
                   })()}
                 </TableCell>
                 <TableCell className="py-3 px-1 lg:px-3 border-b border-r border-gray-200">
@@ -470,9 +491,22 @@ export function CreditsTable({
                       {credit.customer?.name || "N/A"}
                     </span>
                   </div>
-                  <Badge variant="outline" className={statusInfo.color}>
-                    {statusInfo.label}
-                  </Badge>
+                  {(() => {
+                    const statusBadge = (
+                      <Badge variant="outline" className={statusInfo.color}>
+                        {statusInfo.label}
+                      </Badge>
+                    );
+                    if (!financialDetail || financialDetail.isCompleted || !financialDetail.nextPayment) return statusBadge;
+                    const nextDate = new Date(financialDetail.nextPayment);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    nextDate.setHours(0, 0, 0, 0);
+                    const diff = (nextDate.getTime() - today.getTime()) / (24 * 3600 * 1000);
+                    if (diff === 0) return <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200">Hôm nay</Badge>;
+                    if (diff === 1) return <Badge variant="outline" className="bg-indigo-100 text-indigo-800 border-indigo-200">Ngày mai</Badge>;
+                    return statusBadge;
+                  })()}
                 </div>
 
                 {/* Contract Info */}
@@ -534,13 +568,21 @@ export function CreditsTable({
                 {/* Next Payment Date */}
                 <div className="mb-3 text-sm">
                   <span className="text-gray-600">Ngày phải đóng lãi phí: </span>
-                  <span className={`font-medium ${
-                    (financialDetail?.nextPayment === 'Hôm nay' || financialDetail?.nextPayment === 'Ngày mai') ? 'text-amber-500' :
-                    financialDetail?.nextPayment === 'Quá hạn' ? 'text-red-500' :
-                    'text-gray-900'
-                  }`}>
-                    {formatDate(financialDetail?.nextPayment) || 'N/A'}
-                  </span>
+                  {(() => {
+                    if (financialDetail?.isCompleted) {
+                      return <span className="font-medium text-green-600">Hoàn thành</span>;
+                    }
+                    if (!financialDetail?.nextPayment) {
+                      return <span className="font-medium text-gray-900">N/A</span>;
+                    }
+                    const nextDate = new Date(financialDetail.nextPayment);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    nextDate.setHours(0, 0, 0, 0);
+                    const diff = (nextDate.getTime() - today.getTime()) / (24 * 3600 * 1000);
+                    const cls = diff < 0 ? 'text-red-500' : (diff === 0 || diff === 1) ? 'text-amber-500' : 'text-gray-900';
+                    return <span className={`font-medium ${cls}`}>{formatDate(financialDetail.nextPayment)}</span>;
+                  })()}
                 </div>
 
                 {/* Action Buttons */}

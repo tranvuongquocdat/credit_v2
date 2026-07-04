@@ -109,13 +109,18 @@ async function getPawnsWithUnaccentedSearch(
       };
     });
     
-    // Handle special client-side filtering for due_tomorrow
+    // Handle special client-side filtering for due_today / due_tomorrow
     let filteredData = pawnData;
-    if (filters.status === 'due_tomorrow') {
+    if (filters.status === 'due_today') {
+      const todayStr = new Date().toLocaleDateString('en-CA');
+      filteredData = pawnData.filter((pawn: any) =>
+        pawn.next_payment_date === todayStr
+      );
+    } else if (filters.status === 'due_tomorrow') {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       const tomorrowStr = tomorrow.toLocaleDateString('en-CA');
-      filteredData = pawnData.filter((pawn: any) => 
+      filteredData = pawnData.filter((pawn: any) =>
         pawn.next_payment_date === tomorrowStr
       );
     }
@@ -227,6 +232,10 @@ export async function getPawns(
           break;
         case 'finished':
           query = query.eq('status_code', 'FINISHED');
+          break;
+        case 'due_today':
+          // Server-side filtering using next_payment_date from pawns_by_store view
+          query = query.eq('next_payment_date', new Date().toLocaleDateString('en-CA'));
           break;
         case 'due_tomorrow':
           // Server-side filtering using next_payment_date from pawns_by_store view
