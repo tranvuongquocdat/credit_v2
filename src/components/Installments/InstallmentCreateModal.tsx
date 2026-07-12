@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { AlertCircle } from 'lucide-react';
 import { createInstallment } from '@/lib/installment';
+import { confirmIfDuplicateContractCode } from '@/lib/contractCodeCheck';
 import { getCustomers, createCustomer } from '@/lib/customer';
 import { getEmployees } from '@/lib/employee';
 import { Customer } from '@/models/customer';
@@ -286,6 +287,17 @@ export function InstallmentCreateModal({
         throw new Error('Kỳ hạn trả nợ phải lớn hơn 0');
       }
       
+      // Cảnh báo trùng mã HĐ TRƯỚC khi tạo khách/HĐ (tránh tạo khách orphan nếu user huỷ)
+      const okDup = await confirmIfDuplicateContractCode({
+        source: 'installments',
+        storeId: currentStore?.id || '',
+        contractCode,
+      });
+      if (!okDup) {
+        setIsLoading(false);
+        return;
+      }
+
       // Get or create customer
       let finalCustomerId = selectedCustomerId;
       let finalCustomerName = '';

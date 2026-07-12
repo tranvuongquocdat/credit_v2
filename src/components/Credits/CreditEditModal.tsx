@@ -15,7 +15,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2 } from 'lucide-react';
 import { getCreditById, hasCreditAnyPayments, updateCredit } from '@/lib/credit';
-import { getCustomers } from '@/lib/customer';
+import { getCustomers, updateCustomer } from '@/lib/customer';
+import { confirmIfDuplicateContractCode } from '@/lib/contractCodeCheck';
 import { Customer } from '@/models/customer';
 import { UpdateCreditParams, InterestType, CreditStatus, Credit } from '@/models/credit';
 import { toast } from '@/components/ui/use-toast';
@@ -334,6 +335,11 @@ export function CreditEditModal({
         const customer = customersData?.find(c => c.id === creditData.customer_id);
         if (customer) {
           setCustomerName(customer.name);
+          // Contact lấy từ hồ sơ khách — credits KHÔNG lưu contact per-contract,
+          // mọi HĐ của khách đều join cùng record customers.
+          setIdNumber(customer.id_number || '');
+          setPhone(customer.phone || '');
+          setAddress((customer as any).address || '');
         }
       } catch (err) {
         console.error('Error loading data:', err);
@@ -484,11 +490,42 @@ export function CreditEditModal({
         return;
       }
       
+      // Cảnh báo nếu mã HĐ trùng 1 HĐ khác cùng cửa hàng (không chặn cứng)
+      const okDup = await confirmIfDuplicateContractCode({
+        source: 'credits',
+        storeId: currentStore?.id || '',
+        contractCode,
+        excludeId: creditId,
+      });
+      if (!okDup) {
+        setIsLoading(false);
+        return;
+      }
+
       // Call API to update credit
       const { data, error } = await updateCredit(creditId, updateData);
-      
+
       if (error) throw error;
-      
+
+      // Lưu contact (CCCD/SĐT/địa chỉ) về bảng customers — nguồn chuẩn duy nhất.
+      // credits KHÔNG có cột contact; mọi HĐ join customers nên sửa 1 lần áp cho tất cả.
+      // Best-effort: fail chỉ warn, không rollback HĐ.
+      if (selectedCustomerId) {
+        const { error: custErr } = await updateCustomer(selectedCustomerId, {
+          id_number: idNumber.trim() || null,
+          phone: phone.trim() || null,
+          address: address.trim() || null,
+        } as any);
+        if (custErr) {
+          console.error('updateCustomer failed:', custErr);
+          toast({
+            variant: 'destructive',
+            title: 'Đã lưu HĐ nhưng chưa cập nhật được hồ sơ khách',
+            description: (custErr as { message?: string })?.message || 'Thử lại ở trang Khách hàng.',
+          });
+        }
+      }
+
       // Success - close modal and notify parent
       if (onSuccess && data?.id) {
         onSuccess(data.id);

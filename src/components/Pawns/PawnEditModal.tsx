@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { DatePicker } from '@/components/ui/date-picker';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { getPawnById, hasPawnAnyPayments, updatePawn } from '@/lib/pawn';
+import { confirmIfDuplicateContractCode } from '@/lib/contractCodeCheck';
 import { getCustomers, updateCustomer } from '@/lib/customer';
 import { supabase } from '@/lib/supabase';
 import { getCollateralById, getCollateralsByStore } from '@/lib/collateral';
@@ -410,6 +411,18 @@ export function PawnEditModal({
         is_advance_payment: isAdvancePayment,
       };
       
+      // Cảnh báo nếu mã HĐ trùng 1 HĐ khác cùng cửa hàng (không chặn cứng)
+      const okDup = await confirmIfDuplicateContractCode({
+        source: 'pawns',
+        storeId: currentStore?.id || '',
+        contractCode,
+        excludeId: pawnId,
+      });
+      if (!okDup) {
+        setIsLoading(false);
+        return;
+      }
+
       // Call API to update pawn
       const { data, error } = await updatePawn(pawnId, updateData);
 

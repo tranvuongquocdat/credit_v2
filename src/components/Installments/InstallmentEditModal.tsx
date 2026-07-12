@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { AlertCircle } from 'lucide-react';
 import { getInstallmentById, updateInstallment } from '@/lib/installment';
+import { confirmIfDuplicateContractCode } from '@/lib/contractCodeCheck';
 import { getCustomers } from '@/lib/customer';
 import { getEmployees } from '@/lib/employee';
 import { hasInstallmentAnyPayments } from '@/lib/installmentPayment';
@@ -237,6 +238,18 @@ export function InstallmentEditModal({
         paymentDueDate.setDate(startDateObj.getDate() + parseInt(paymentPeriod || '10') - 1);
         installmentData.payment_due_date = format(paymentDueDate, 'yyyy-MM-dd');
       }
+      // Cảnh báo nếu mã HĐ trùng 1 HĐ khác cùng cửa hàng (không chặn cứng)
+      const okDup = await confirmIfDuplicateContractCode({
+        source: 'installments',
+        storeId: currentStore?.id || '',
+        contractCode,
+        excludeId: installmentId,
+      });
+      if (!okDup) {
+        setIsLoading(false);
+        return;
+      }
+
       // Call API to update installment
       const { error } = await updateInstallment(installmentId, installmentData);
       

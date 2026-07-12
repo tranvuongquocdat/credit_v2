@@ -18,7 +18,8 @@ import { DatePicker } from '@/components/ui/date-picker';
 // Using regular input radio buttons instead of RadioGroup component
 import { createCredit } from '@/lib/credit';
 import { recordDailyPayments } from '@/lib/Credits/record_daily_payments';
-import { getCustomers, createCustomer } from '@/lib/customer';
+import { getCustomers, createCustomer, updateCustomer } from '@/lib/customer';
+import { confirmIfDuplicateContractCode } from '@/lib/contractCodeCheck';
 import { Customer } from '@/models/customer';
 import { CreateCreditParams, InterestType, CreditStatus } from '@/models/credit';
 import { getStoreFinancialData } from '@/lib/store';
@@ -329,9 +330,20 @@ export function CreditCreateModal({
         throw new Error(`Quỹ tiền mặt không đủ. Hiện có ${fundStatus ? Math.floor(fundStatus.availableFund).toLocaleString() : 0} VND.`);
       }
       
+      // Cảnh báo trùng mã HĐ TRƯỚC khi tạo khách/HĐ (tránh tạo khách orphan nếu user huỷ)
+      const okDup = await confirmIfDuplicateContractCode({
+        source: 'credits',
+        storeId: currentStore.id,
+        contractCode,
+      });
+      if (!okDup) {
+        setIsLoading(false);
+        return;
+      }
+
       // For new customers, create a customer record first
       let finalCustomerId = selectedCustomerId;
-      
+
       if (customerType === 'new') {
         if (!customerName.trim()) {
           throw new Error('Vui lòng nhập tên khách hàng');
@@ -457,6 +469,24 @@ export function CreditCreateModal({
       const { data, error } = await createCredit(creditData);
 
       if (error) throw error;
+
+      // Khách có sẵn: đồng bộ ngược CCCD/SĐT/địa chỉ về hồ sơ khách nếu user sửa lúc tạo HĐ.
+      // (Khách mới đã lưu qua createCustomer ở trên.) Best-effort: fail chỉ warn.
+      if (customerType === 'existing' && finalCustomerId) {
+        const { error: custErr } = await updateCustomer(finalCustomerId, {
+          id_number: idNumber.trim() || null,
+          phone: phone.trim() || null,
+          address: address.trim() || null,
+        } as any);
+        if (custErr) {
+          console.error('updateCustomer failed:', custErr);
+          toast({
+            variant: 'destructive',
+            title: 'Đã tạo HĐ nhưng chưa cập nhật được hồ sơ khách',
+            description: (custErr as { message?: string })?.message || 'Thử lại ở trang Khách hàng.',
+          });
+        }
+      }
 
       // Thu lãi trước: ghi luôn payment cho trọn kỳ lãi đầu tiên (giống PawnCreateModal bên v2 gold)
       if (advancePayment && data?.id) {
