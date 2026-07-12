@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { DatePicker } from '@/components/ui/date-picker';
 import { createPawn } from '@/lib/pawn';
+import { confirmIfDuplicateContractCode } from '@/lib/contractCodeCheck';
 import { getExpectedMoney } from '@/lib/Pawns/get_expected_money';
 import { getCurrentUser } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
@@ -358,8 +359,19 @@ export function PawnCreateModal({
         throw new Error(`Quỹ tiền mặt không đủ. Hiện có ${Math.floor(fundData.availableFund).toLocaleString()} VND.`);
       }
       
+      // Cảnh báo trùng mã HĐ TRƯỚC khi tạo khách/HĐ (tránh tạo khách orphan nếu user huỷ)
+      const okDup = await confirmIfDuplicateContractCode({
+        source: 'pawns',
+        storeId: currentStore?.id || '',
+        contractCode,
+      });
+      if (!okDup) {
+        setIsLoading(false);
+        return;
+      }
+
       let finalCustomerId = selectedCustomerId;
-      
+
       if (customerType === 'new') {
         if (!customerName.trim()) {
           throw new Error('Vui lòng nhập tên khách hàng');
