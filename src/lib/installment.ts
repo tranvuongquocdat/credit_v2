@@ -421,7 +421,7 @@ export async function getInstallmentById(id: string) {
       .select(`
         *,
         customer:customers(
-          id, name, phone, address, blacklist_reason
+          id, name, id_number, phone, address, blacklist_reason
         )
       `)
       .eq('id', id)

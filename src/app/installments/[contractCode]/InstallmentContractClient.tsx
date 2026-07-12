@@ -333,9 +333,14 @@ export function InstallmentContractClient({ contractCode }: InstallmentContractC
             isOpen={isInstallmentEditModalOpen}
             onClose={() => setIsInstallmentEditModalOpen(false)}
             installmentId={editInstallmentId}
-            onSuccess={() => {
+            onSuccess={(updatedCode) => {
               setIsInstallmentEditModalOpen(false);
-              refetch();
+              // Đổi mã HĐ → URL/filter hiện tại không còn match, nhảy sang mã mới
+              if (updatedCode && updatedCode !== contractCode) {
+                router.replace(`/installments/${encodeURIComponent(updatedCode)}`);
+              } else {
+                refetch();
+              }
             }}
           />
         )}

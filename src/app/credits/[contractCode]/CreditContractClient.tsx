@@ -359,9 +359,14 @@ export function CreditContractClient({ contractCode }: CreditContractClientProps
             isOpen={isCreditEditModalOpen}
             onClose={() => setIsCreditEditModalOpen(false)}
             creditId={editCreditId}
-            onSuccess={() => {
+            onSuccess={(_, updatedCode) => {
               setIsCreditEditModalOpen(false);
-              refetch();
+              // Đổi mã HĐ → URL/filter hiện tại không còn match, nhảy sang mã mới
+              if (updatedCode && updatedCode !== contractCode) {
+                router.replace(`/credits/${encodeURIComponent(updatedCode)}`);
+              } else {
+                refetch();
+              }
             }}
           />
         )}
