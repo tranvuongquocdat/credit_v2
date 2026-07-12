@@ -459,6 +459,7 @@ export function CreditEditModal({
         status,
         store_id: currentStore.id, // Use store ID from context
         is_advance_payment: advancePayment,
+        contract_code: contractCode.trim(),
       };
       
       // Validate
@@ -555,7 +556,7 @@ export function CreditEditModal({
           <div className="py-8 text-center text-red-500">{error}</div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 py-4">
-            {/* Customer information - read only */}
+            {/* Customer information — contact sửa được, lưu về bảng customers khi submit */}
             <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
               <Label htmlFor="customerName" className="text-left sm:text-right font-medium">
                 Tên khách hàng
@@ -586,43 +587,39 @@ export function CreditEditModal({
             
             <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
               <Label htmlFor="contractCode" className="text-left sm:text-right font-medium">Mã HĐ</Label>
-              <Input 
+              <Input
                 id="contractCode"
                 value={contractCode}
                 onChange={(e) => setContractCode(e.target.value)}
                 placeholder="Mã hợp đồng"
-                disabled
               />
             </div>
             
             <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
               <Label htmlFor="idNumber" className="text-left sm:text-right font-medium">Số CCCD/Hộ chiếu</Label>
-              <Input 
+              <Input
                 id="idNumber"
                 value={idNumber}
                 onChange={(e) => setIdNumber(e.target.value)}
-                disabled
               />
             </div>
             
             <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
               <Label htmlFor="phone" className="text-left sm:text-right font-medium">SĐT</Label>
-              <Input 
+              <Input
                 id="phone"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                disabled
               />
             </div>
             
             <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-start">
               <Label htmlFor="address" className="text-left sm:text-right font-medium sm:mt-2">Địa chỉ</Label>
-              <Textarea 
+              <Textarea
                 id="address"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 rows={3}
-                disabled
               />
             </div>
             

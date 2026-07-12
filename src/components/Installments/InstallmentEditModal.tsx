@@ -16,7 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { AlertCircle } from 'lucide-react';
 import { getInstallmentById, updateInstallment } from '@/lib/installment';
 import { confirmIfDuplicateContractCode } from '@/lib/contractCodeCheck';
-import { getCustomers } from '@/lib/customer';
+import { getCustomers, updateCustomer } from '@/lib/customer';
 import { getEmployees } from '@/lib/employee';
 import { hasInstallmentAnyPayments } from '@/lib/installmentPayment';
 import { Installment } from '@/models/installment';
@@ -252,9 +252,20 @@ export function InstallmentEditModal({
 
       // Call API to update installment
       const { error } = await updateInstallment(installmentId, installmentData);
-      
+
       if (error) throw error;
-      
+
+      // Lưu contact (CCCD/SĐT/địa chỉ) về bảng customers — nguồn chuẩn duy nhất,
+      // updateInstallment không ghi các trường này. Best-effort: fail chỉ log.
+      if (!hasPayments && selectedCustomerId) {
+        const { error: custErr } = await updateCustomer(selectedCustomerId, {
+          id_number: idNumber.trim() || null,
+          phone: phone.trim() || null,
+          address: address.trim() || null,
+        } as any);
+        if (custErr) console.error('updateCustomer failed:', custErr);
+      }
+
       // Success - close modal and notify parent
       onSuccess();
       onClose();
