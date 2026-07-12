@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2 } from 'lucide-react';
 import { getCreditById, hasCreditAnyPayments, updateCredit } from '@/lib/credit';
-import { getCustomers, updateCustomer } from '@/lib/customer';
+import { getCustomers, getCustomerById, updateCustomer } from '@/lib/customer';
 import { confirmIfDuplicateContractCode } from '@/lib/contractCodeCheck';
 import { Customer } from '@/models/customer';
 import { UpdateCreditParams, InterestType, CreditStatus, Credit } from '@/models/credit';
@@ -32,7 +32,7 @@ interface CreditEditModalProps {
   isOpen: boolean;
   onClose: () => void;
   creditId: string;
-  onSuccess?: (creditId: string) => void;
+  onSuccess?: (creditId: string, updatedContractCode?: string) => void;
 }
 
 export function CreditEditModal({
@@ -50,6 +50,8 @@ export function CreditEditModal({
   const [idNumber, setIdNumber] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
+  // Baseline contact lúc load/đổi khách — chỉ ghi về customers khi user thực sự sửa
+  const [originalContact, setOriginalContact] = useState({ idNumber: '', phone: '', address: '' });
   const [collateral, setCollateral] = useState('');
   const [loanAmount, setLoanAmount] = useState<string>('');
   const [formattedLoanAmount, setFormattedLoanAmount] = useState<string>('');
@@ -241,6 +243,13 @@ export function CreditEditModal({
         setIdNumber(creditData.id_number || '');
         setPhone(creditData.phone || '');
         setAddress(creditData.address || '');
+        // Baseline = giá trị đang hiển thị, để lỡ fetch hồ sơ khách bên dưới fail
+        // thì dirty-check vẫn đúng (không ghi ngược snapshot cũ về customers)
+        setOriginalContact({
+          idNumber: creditData.id_number || '',
+          phone: creditData.phone || '',
+          address: creditData.address || '',
+        });
         setCollateral(creditData.collateral || '');
         const loanAmountStr = creditData.loan_amount?.toString() || '';
         setLoanAmount(loanAmountStr);
@@ -331,15 +340,26 @@ export function CreditEditModal({
         
         setCustomers(customersData || []);
         
-        // Find customer name from customers list
-        const customer = customersData?.find(c => c.id === creditData.customer_id);
-        if (customer) {
-          setCustomerName(customer.name);
-          // Contact lấy từ hồ sơ khách — credits KHÔNG lưu contact per-contract,
-          // mọi HĐ của khách đều join cùng record customers.
-          setIdNumber(customer.id_number || '');
-          setPhone(customer.phone || '');
-          setAddress((customer as any).address || '');
+        // Contact lấy từ hồ sơ khách — credits KHÔNG lưu contact per-contract,
+        // mọi HĐ của khách đều join cùng record customers. Query thẳng theo id,
+        // KHÔNG tìm trong list getCustomers ở trên (cap 1000 dòng, khách cũ có
+        // thể nằm ngoài list → dính seed stale từ snapshot credits).
+        const { data: liveCustomer } = await getCustomerById(creditData.customer_id);
+        if (liveCustomer) {
+          setCustomerName(liveCustomer.name);
+          setIdNumber(liveCustomer.id_number || '');
+          setPhone(liveCustomer.phone || '');
+          setAddress(liveCustomer.address || '');
+          setOriginalContact({
+            idNumber: liveCustomer.id_number || '',
+            phone: liveCustomer.phone || '',
+            address: liveCustomer.address || '',
+          });
+          // Đảm bảo khách của HĐ có trong dropdown — list getCustomers cap 1000
+          // dòng có thể không chứa khách cũ → select trống, required chặn submit
+          setCustomers(prev =>
+            prev.some(c => c.id === liveCustomer.id) ? prev : [liveCustomer, ...prev]
+          );
         }
       } catch (err) {
         console.error('Error loading data:', err);
@@ -459,6 +479,8 @@ export function CreditEditModal({
         status,
         store_id: currentStore.id, // Use store ID from context
         is_advance_payment: advancePayment,
+        // Mã HĐ rỗng thì không gửi (giữ mã cũ) — mã là key tra cứu/URL, không cho xoá trắng
+        ...(contractCode.trim() ? { contract_code: contractCode.trim() } : {}),
       };
       
       // Validate
@@ -507,15 +529,17 @@ export function CreditEditModal({
 
       if (error) throw error;
 
-      // Lưu contact (CCCD/SĐT/địa chỉ) về bảng customers — nguồn chuẩn duy nhất.
-      // credits KHÔNG có cột contact; mọi HĐ join customers nên sửa 1 lần áp cho tất cả.
+      // Lưu contact (CCCD/SĐT/địa chỉ) về bảng customers — nguồn chuẩn duy nhất,
+      // mọi HĐ join customers nên sửa 1 lần áp cho tất cả. CHỈ gửi field user
+      // thực sự sửa (so với baseline lúc load/đổi khách) — tránh clobber sửa đổi
+      // song song và tránh ghi null vào field chưa từng load đúng.
       // Best-effort: fail chỉ warn, không rollback HĐ.
-      if (selectedCustomerId) {
-        const { error: custErr } = await updateCustomer(selectedCustomerId, {
-          id_number: idNumber.trim() || null,
-          phone: phone.trim() || null,
-          address: address.trim() || null,
-        } as any);
+      const contactParams: { id_number?: string | null; phone?: string | null; address?: string | null } = {};
+      if (idNumber.trim() !== originalContact.idNumber.trim()) contactParams.id_number = idNumber.trim() || null;
+      if (phone.trim() !== originalContact.phone.trim()) contactParams.phone = phone.trim() || null;
+      if (address.trim() !== originalContact.address.trim()) contactParams.address = address.trim() || null;
+      if (selectedCustomerId && Object.keys(contactParams).length > 0) {
+        const { error: custErr } = await updateCustomer(selectedCustomerId, contactParams);
         if (custErr) {
           console.error('updateCustomer failed:', custErr);
           toast({
@@ -526,9 +550,10 @@ export function CreditEditModal({
         }
       }
 
-      // Success - close modal and notify parent
+      // Success - close modal and notify parent (kèm mã HĐ đã lưu để trang
+      // chi tiết /credits/[contractCode] redirect nếu user vừa đổi mã)
       if (onSuccess && data?.id) {
-        onSuccess(data.id);
+        onSuccess(data.id, contractCode.trim() || undefined);
       }
       onClose();
     } catch (err) {
@@ -555,7 +580,7 @@ export function CreditEditModal({
           <div className="py-8 text-center text-red-500">{error}</div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 py-4">
-            {/* Customer information - read only */}
+            {/* Customer information — contact sửa được, lưu về bảng customers khi submit */}
             <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
               <Label htmlFor="customerName" className="text-left sm:text-right font-medium">
                 Tên khách hàng
@@ -571,6 +596,12 @@ export function CreditEditModal({
                     setIdNumber(customer.id_number || '');
                     setPhone(customer.phone || '');
                     setAddress(customer.address || '');
+                    // Đổi khách → baseline mới, chưa coi là user sửa contact
+                    setOriginalContact({
+                      idNumber: customer.id_number || '',
+                      phone: customer.phone || '',
+                      address: customer.address || '',
+                    });
                   }
                 }}
                 required
@@ -586,43 +617,39 @@ export function CreditEditModal({
             
             <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
               <Label htmlFor="contractCode" className="text-left sm:text-right font-medium">Mã HĐ</Label>
-              <Input 
+              <Input
                 id="contractCode"
                 value={contractCode}
                 onChange={(e) => setContractCode(e.target.value)}
                 placeholder="Mã hợp đồng"
-                disabled
               />
             </div>
             
             <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
               <Label htmlFor="idNumber" className="text-left sm:text-right font-medium">Số CCCD/Hộ chiếu</Label>
-              <Input 
+              <Input
                 id="idNumber"
                 value={idNumber}
                 onChange={(e) => setIdNumber(e.target.value)}
-                disabled
               />
             </div>
             
             <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-center">
               <Label htmlFor="phone" className="text-left sm:text-right font-medium">SĐT</Label>
-              <Input 
+              <Input
                 id="phone"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                disabled
               />
             </div>
             
             <div className="flex flex-col sm:grid sm:grid-cols-[120px_1fr] md:grid-cols-[150px_1fr] gap-2 sm:gap-4 sm:items-start">
               <Label htmlFor="address" className="text-left sm:text-right font-medium sm:mt-2">Địa chỉ</Label>
-              <Textarea 
+              <Textarea
                 id="address"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 rows={3}
-                disabled
               />
             </div>
             

@@ -14,9 +14,10 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { AlertCircle } from 'lucide-react';
+import { toast } from '@/components/ui/use-toast';
 import { getInstallmentById, updateInstallment } from '@/lib/installment';
 import { confirmIfDuplicateContractCode } from '@/lib/contractCodeCheck';
-import { getCustomers } from '@/lib/customer';
+import { getCustomers, updateCustomer } from '@/lib/customer';
 import { getEmployees } from '@/lib/employee';
 import { hasInstallmentAnyPayments } from '@/lib/installmentPayment';
 import { Installment } from '@/models/installment';
@@ -30,7 +31,7 @@ interface InstallmentEditModalProps {
   isOpen: boolean;
   onClose: () => void;
   installmentId: string;
-  onSuccess: () => void;
+  onSuccess: (updatedContractCode?: string) => void;
 }
 
 export function InstallmentEditModal({ 
@@ -47,6 +48,8 @@ export function InstallmentEditModal({
   const [idNumber, setIdNumber] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
+  // Baseline contact lúc load/đổi khách — chỉ ghi về customers khi user thực sự sửa
+  const [originalContact, setOriginalContact] = useState({ idNumber: '', phone: '', address: '' });
   const [amountGiven, setAmountGiven] = useState<string>('');
   const [formattedAmountGiven, setFormattedAmountGiven] = useState<string>('');
   const [customerAmount, setCustomerAmount] = useState<string>('');
@@ -127,6 +130,11 @@ export function InstallmentEditModal({
         setIdNumber(installmentData.customer?.id_number || '');
         setPhone(installmentData.customer?.phone || '');
         setAddress(installmentData.customer?.address || '');
+        setOriginalContact({
+          idNumber: installmentData.customer?.id_number || '',
+          phone: installmentData.customer?.phone || '',
+          address: installmentData.customer?.address || '',
+        });
         if (installmentData) {
           setContractCode(installmentData.contract_code || '');
           setAmountGiven(installmentData.installment_amount?.toString() || '');
@@ -154,7 +162,15 @@ export function InstallmentEditModal({
           '' // status filter
         );
         if (customersError) throw new Error('Không thể tải danh sách khách hàng');
-        setCustomers(customersData || []);
+        // Đảm bảo khách của HĐ có trong dropdown — list getCustomers cap 1000
+        // dòng có thể không chứa khách cũ → select trống, required chặn submit
+        const customerList = customersData || [];
+        const loadedCustomer = installmentData.customer;
+        setCustomers(
+          loadedCustomer?.id && !customerList.some(c => c.id === loadedCustomer.id)
+            ? [loadedCustomer, ...customerList]
+            : customerList
+        );
         
         // Load employees
         const { data: employeesData, error: employeesError } = await getEmployees(1, 1000, '', currentStore?.id || '');
@@ -180,6 +196,12 @@ export function InstallmentEditModal({
       setIdNumber(selected.id_number || '');
       setPhone(selected.phone || '');
       setAddress(selected.address || '');
+      // Đổi khách → baseline mới, chưa coi là user sửa contact
+      setOriginalContact({
+        idNumber: selected.id_number || '',
+        phone: selected.phone || '',
+        address: selected.address || '',
+      });
     }
   };
   
@@ -220,11 +242,10 @@ export function InstallmentEditModal({
       // Only include these fields if no payments exist
       if (!hasPayments) {
         installmentData.customer_id = selectedCustomerId;
-        installmentData.customer_name = customerName;
-        installmentData.contract_code = contractCode;
-        installmentData.id_number = idNumber;
-        installmentData.phone = phone;
-        installmentData.address = address;
+        // Mã HĐ rỗng thì không gửi (giữ mã cũ) — mã là key tra cứu/URL.
+        // Contact (CCCD/SĐT/địa chỉ) KHÔNG gửi ở đây: updateInstallment bỏ qua
+        // các trường đó; đường ghi thật là updateCustomer bên dưới.
+        if (contractCode.trim()) installmentData.contract_code = contractCode.trim();
         installmentData.installment_amount = parseInt(amountGiven || '0');
         installmentData.down_payment = parseInt(customerAmount || '0');
         installmentData.interest_rate = parseFloat(interestRate || '0');
@@ -252,11 +273,33 @@ export function InstallmentEditModal({
 
       // Call API to update installment
       const { error } = await updateInstallment(installmentId, installmentData);
-      
+
       if (error) throw error;
-      
-      // Success - close modal and notify parent
-      onSuccess();
+
+      // Lưu contact (CCCD/SĐT/địa chỉ) về bảng customers — nguồn chuẩn duy nhất,
+      // updateInstallment không ghi các trường này. CHỈ gửi field user thực sự
+      // sửa (so với baseline lúc load/đổi khách) — tránh clobber sửa đổi song
+      // song và tránh ghi null vào field chưa từng load đúng.
+      // Best-effort: fail chỉ warn, không rollback HĐ.
+      const contactParams: { id_number?: string | null; phone?: string | null; address?: string | null } = {};
+      if (idNumber.trim() !== originalContact.idNumber.trim()) contactParams.id_number = idNumber.trim() || null;
+      if (phone.trim() !== originalContact.phone.trim()) contactParams.phone = phone.trim() || null;
+      if (address.trim() !== originalContact.address.trim()) contactParams.address = address.trim() || null;
+      if (!hasPayments && selectedCustomerId && Object.keys(contactParams).length > 0) {
+        const { error: custErr } = await updateCustomer(selectedCustomerId, contactParams);
+        if (custErr) {
+          console.error('updateCustomer failed:', custErr);
+          toast({
+            variant: 'destructive',
+            title: 'Đã lưu HĐ nhưng chưa cập nhật được hồ sơ khách',
+            description: (custErr as { message?: string })?.message || 'Thử lại ở trang Khách hàng.',
+          });
+        }
+      }
+
+      // Success - close modal and notify parent (kèm mã HĐ đã lưu để trang
+      // chi tiết /installments/[contractCode] redirect nếu user vừa đổi mã)
+      onSuccess(contractCode.trim() || undefined);
       onClose();
     } catch (err) {
       console.error('Error updating installment:', err);
